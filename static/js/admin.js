@@ -18,6 +18,7 @@ const userCount = document.getElementById('userCount');
 // Initialize the application
 async function init() {
     try {
+        await loadCurrentUser();
         await Promise.all([
             loadRoles(),
             loadResellerTiers(),
@@ -27,6 +28,46 @@ async function init() {
     } catch (error) {
         console.error('Initialization error:', error);
         showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+    }
+}
+
+// Load current user info
+async function loadCurrentUser() {
+    try {
+        const response = await fetch(`${API_URL}/me`);
+        if (!response.ok) {
+            throw new Error('Not authenticated');
+        }
+        const user = await response.json();
+        const currentUserElement = document.getElementById('currentUser');
+        if (currentUserElement) {
+            currentUserElement.textContent = `${user.full_name} (${user.role})`;
+        }
+    } catch (error) {
+        console.error('Error loading current user:', error);
+        window.location.href = '/login';
+    }
+}
+
+// Handle logout
+async function handleLogout() {
+    if (!confirm('คุณต้องการออกจากระบบหรือไม่?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/logout`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            window.location.href = '/login';
+        } else {
+            throw new Error('Logout failed');
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+        alert('เกิดข้อผิดพลาดในการออกจากระบบ');
     }
 }
 

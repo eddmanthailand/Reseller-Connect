@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import psycopg2.extras
 import hashlib
+from functools import wraps
 from database import get_db, init_db
 import os
 
@@ -12,12 +13,151 @@ CORS(app)
 # Initialize database on startup
 init_db()
 
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login_page'))
+        if session.get('role') not in ['Super Admin', 'Assistant Admin']:
+            return jsonify({'error': 'Unauthorized - Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
 def index():
+    """Redirect to dashboard if logged in, otherwise to login page"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login_page'))
+
+@app.route('/login')
+def login_page():
+    """Render login page"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """Main dashboard after login - routes based on role"""
+    role = session.get('role')
+    
+    if role in ['Super Admin', 'Assistant Admin']:
+        return redirect(url_for('admin_management'))
+    elif role == 'Reseller':
+        return render_template('reseller_dashboard.html')
+    else:
+        return redirect(url_for('login_page'))
+
+@app.route('/admin')
+@admin_required
+def admin_management():
     """Render the admin user management page"""
     return render_template('admin_user_management.html')
 
+@app.route('/api/login', methods=['POST'])
+def login():
+    """Handle user login"""
+    data = request.json
+    
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({'error': 'Missing username or password'}), 400
+    
+    username = data['username']
+    password = data['password']
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check user credentials
+        cursor.execute('''
+            SELECT 
+                u.id,
+                u.full_name,
+                u.username,
+                r.name as role,
+                u.reseller_tier_id,
+                rt.name as reseller_tier
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+            WHERE u.username = %s AND u.password = %s
+        ''', (username, password_hash))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'error': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}), 401
+        
+        # Set session
+        session['user_id'] = user['id']
+        session['username'] = user['username']
+        session['full_name'] = user['full_name']
+        session['role'] = user['role']
+        session['reseller_tier'] = user['reseller_tier']
+        
+        # Determine redirect URL based on role
+        if user['role'] in ['Super Admin', 'Assistant Admin']:
+            redirect_url = '/admin'
+        elif user['role'] == 'Reseller':
+            redirect_url = '/dashboard'
+        else:
+            redirect_url = '/dashboard'
+        
+        return jsonify({
+            'message': 'เข้าสู่ระบบสำเร็จ',
+            'user': {
+                'id': user['id'],
+                'full_name': user['full_name'],
+                'username': user['username'],
+                'role': user['role'],
+                'reseller_tier': user['reseller_tier']
+            },
+            'redirect': redirect_url
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    """Handle user logout"""
+    session.clear()
+    return jsonify({'message': 'ออกจากระบบสำเร็จ'}), 200
+
+@app.route('/api/me', methods=['GET'])
+@login_required
+def get_current_user():
+    """Get current logged in user info"""
+    return jsonify({
+        'id': session.get('user_id'),
+        'username': session.get('username'),
+        'full_name': session.get('full_name'),
+        'role': session.get('role'),
+        'reseller_tier': session.get('reseller_tier')
+    }), 200
+
 @app.route('/api/roles', methods=['GET'])
+@admin_required
 def get_roles():
     """Get all available roles"""
     conn = get_db()
@@ -29,6 +169,7 @@ def get_roles():
     return jsonify(roles)
 
 @app.route('/api/reseller-tiers', methods=['GET'])
+@admin_required
 def get_reseller_tiers():
     """Get all reseller tiers"""
     conn = get_db()
@@ -40,6 +181,7 @@ def get_reseller_tiers():
     return jsonify(tiers)
 
 @app.route('/api/users', methods=['GET'])
+@admin_required
 def get_users():
     """Get all users with their role information"""
     conn = get_db()
@@ -62,6 +204,7 @@ def get_users():
     return jsonify(users)
 
 @app.route('/api/users', methods=['POST'])
+@admin_required
 def create_user():
     """Create a new user"""
     data = request.json
@@ -135,6 +278,7 @@ def create_user():
             conn.close()
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@admin_required
 def delete_user(user_id):
     """Delete a user"""
     conn = None

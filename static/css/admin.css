@@ -133,6 +133,22 @@ body {
     background: #c82333;
 }
 
+.btn-logout {
+    padding: 8px 16px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-logout:hover {
+    background: #5a6268;
+}
+
 .table-wrapper {
     overflow-x: auto;
 }

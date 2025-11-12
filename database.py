@@ -69,16 +69,24 @@ def init_db():
                 (tier,)
             )
         
-        # Insert default admin user if not exists
-        cursor.execute('SELECT COUNT(*) FROM users WHERE username = %s', ('admin@system.com',))
+        # Insert or update Super Admin user
+        cursor.execute('SELECT COUNT(*) FROM users WHERE username = %s', ('superadmin',))
         count = cursor.fetchone()[0]
         
         if count == 0:
-            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            password_hash = hashlib.sha256('A0971exp11'.encode()).hexdigest()
             cursor.execute('''
                 INSERT INTO users (full_name, username, password, role_id)
                 VALUES (%s, %s, %s, (SELECT id FROM roles WHERE name = 'Super Admin'))
-            ''', ('Admin หลัก', 'admin@system.com', password_hash))
+            ''', ('Super Admin', 'superadmin', password_hash))
+        else:
+            # Update existing Super Admin password
+            password_hash = hashlib.sha256('A0971exp11'.encode()).hexdigest()
+            cursor.execute('''
+                UPDATE users 
+                SET password = %s, full_name = %s
+                WHERE username = %s
+            ''', (password_hash, 'Super Admin', 'superadmin'))
         
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
