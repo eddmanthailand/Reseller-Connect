@@ -92,15 +92,40 @@
             align-items: center;
         }
 
-        .header-content h1 {
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-icon {
+            width: 64px;
+            height: 64px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .header-icon svg {
+            width: 32px;
+            height: 32px;
+            stroke: white;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .header-text h1 {
             color: white;
             font-size: 32px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
-        .header-content p {
+        .header-text p {
             color: rgba(255, 255, 255, 0.9);
             font-size: 15px;
         }
@@ -128,6 +153,15 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-logout svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
         }
 
         .btn-logout:hover {
@@ -185,6 +219,15 @@
             padding-bottom: 12px;
             border-bottom: 2px solid rgba(255, 255, 255, 0.3);
             text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
         }
 
         .card p {
@@ -232,9 +275,22 @@
         }
 
         .coming-soon-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .coming-soon-icon svg {
+            width: 48px;
+            height: 48px;
+            stroke: white;
         }
 
         .coming-soon h3 {
@@ -261,7 +317,11 @@
                 padding: 28px 24px;
             }
 
-            .header-content h1 {
+            .header-content {
+                flex-direction: column;
+            }
+
+            .header-text h1 {
                 font-size: 26px;
             }
 
@@ -288,7 +348,7 @@
                 padding: 24px 20px;
             }
 
-            .header-content h1 {
+            .header-text h1 {
                 font-size: 24px;
             }
 
@@ -302,31 +362,66 @@
     <div class="container">
         <div class="header">
             <div class="header-content">
-                <h1>📊 Dashboard ตัวแทนจำหน่าย</h1>
-                <p>ยินดีต้อนรับเข้าสู่ระบบ</p>
+                <div class="header-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" x2="12" y1="20" y2="10"/>
+                        <line x1="18" x2="18" y1="20" y2="4"/>
+                        <line x1="6" x2="6" y1="20" y2="16"/>
+                    </svg>
+                </div>
+                <div class="header-text">
+                    <h1>Dashboard ตัวแทนจำหน่าย</h1>
+                    <p>ยินดีต้อนรับเข้าสู่ระบบ</p>
+                </div>
             </div>
             <div class="user-info">
                 <p id="currentUser">Loading...</p>
-                <button onclick="handleLogout()" class="btn-logout">🚪 ออกจากระบบ</button>
+                <button onclick="handleLogout()" class="btn-logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" x2="9" y1="12" y2="12"/>
+                    </svg>
+                    ออกจากระบบ
+                </button>
             </div>
         </div>
 
         <div class="dashboard-grid">
             <div class="card">
-                <h2>👤 ข้อมูลของฉัน</h2>
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    ข้อมูลของฉัน
+                </h2>
                 <p><strong>ชื่อ:</strong> <span id="userName">-</span></p>
                 <p><strong>Username:</strong> <span id="userUsername">-</span></p>
                 <p><strong>ระดับ:</strong> <span id="userTier" class="badge">-</span></p>
             </div>
 
             <div class="card">
-                <h2>💰 ยอดขาย</h2>
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    ยอดขาย
+                </h2>
                 <div class="stat-value">฿0</div>
                 <div class="stat-label">ยอดขายทั้งหมด</div>
             </div>
 
             <div class="card">
-                <h2>📦 คำสั่งซื้อ</h2>
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                        <path d="m3.3 7 8.7 5 8.7-5"/>
+                        <path d="M12 22V12"/>
+                    </svg>
+                    คำสั่งซื้อ
+                </h2>
                 <div class="stat-value">0</div>
                 <div class="stat-label">คำสั่งซื้อทั้งหมด</div>
             </div>
@@ -334,7 +429,11 @@
 
         <div class="card">
             <div class="coming-soon">
-                <div class="coming-soon-icon">🚧</div>
+                <div class="coming-soon-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
                 <h3>กำลังพัฒนาระบบ</h3>
                 <p>ฟีเจอร์ต่างๆ กำลังอยู่ระหว่างการพัฒนา</p>
                 <p style="margin-top: 12px; opacity: 0.8;">เร็วๆ นี้...</p>
