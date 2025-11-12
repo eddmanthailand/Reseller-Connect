@@ -383,10 +383,15 @@ async function loadProducts() {
                 day: 'numeric'
             });
 
+            const imageHtml = product.image_url 
+                ? `<img src="${product.image_url}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.2);">`
+                : `<div style="width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📦</div>`;
+            
             row.innerHTML = `
+                <td>${imageHtml}</td>
                 <td><strong>${product.parent_sku || '-'}</strong></td>
                 <td>${product.name || '-'}</td>
-                <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <td style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     ${product.description || '-'}
                 </td>
                 <td>

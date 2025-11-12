@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 from flask_cors import CORS
 import psycopg2.extras
 import bcrypt
 from functools import wraps
 from database import get_db, init_db
 import os
+from replit.object_storage import Client
 
 app = Flask(__name__)
 
@@ -477,10 +478,10 @@ def create_product():
         
         # Insert product
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, description)
-            VALUES (%s, %s, %s)
+            INSERT INTO products (name, parent_sku, description, image_url)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        ''', (data['name'], data['parent_sku'], data.get('description', '')))
+        ''', (data['name'], data['parent_sku'], data.get('description', ''), data.get('image_url')))
         
         product_id = cursor.fetchone()['id']
         
@@ -587,6 +588,69 @@ def delete_product(product_id):
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/upload-image', methods=['POST'])
+@admin_required
+def upload_image():
+    """Upload product image to Replit Object Storage"""
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Allowed extensions
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': 'Invalid file type. Allowed: png, jpg, jpeg, gif, webp'}), 400
+        
+        # Initialize Object Storage client
+        storage_client = Client()
+        
+        # Generate unique filename
+        import uuid
+        unique_filename = f"products/{uuid.uuid4()}.{file_ext}"
+        
+        # Upload to Object Storage
+        storage_client.upload_from_bytes(unique_filename, file.read())
+        
+        # Return the image URL (relative path)
+        image_url = f"/storage/{unique_filename}"
+        
+        return jsonify({
+            'message': 'Image uploaded successfully',
+            'image_url': image_url
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/storage/<path:filename>')
+def serve_image(filename):
+    """Serve images from Object Storage"""
+    try:
+        storage_client = Client()
+        image_data = storage_client.download_as_bytes(filename)
+        
+        # Determine content type
+        content_type = 'image/jpeg'
+        if filename.endswith('.png'):
+            content_type = 'image/png'
+        elif filename.endswith('.gif'):
+            content_type = 'image/gif'
+        elif filename.endswith('.webp'):
+            content_type = 'image/webp'
+        
+        from io import BytesIO
+        return send_file(BytesIO(image_data), mimetype=content_type)
+        
+    except Exception as e:
+        return jsonify({'error': 'Image not found'}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

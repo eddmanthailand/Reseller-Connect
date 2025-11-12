@@ -395,6 +395,25 @@
                             <label class="form-label">คำอธิบาย (ไม่บังคับ)</label>
                             <textarea id="product_description" class="form-input" rows="3" placeholder="รายละเอียดสินค้า..."></textarea>
                         </div>
+                        <div style="margin-top: 16px;">
+                            <label class="form-label">รูปภาพสินค้า (ไม่บังคับ)</label>
+                            <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                <input type="file" id="product_image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" style="flex: 1;">
+                                <button type="button" id="upload-image-btn" class="btn-primary" style="white-space: nowrap;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" x2="12" y1="3" y2="15"/>
+                                    </svg>
+                                    อัพโหลด
+                                </button>
+                            </div>
+                            <div id="image-preview" style="margin-top: 12px; display: none;">
+                                <img id="preview-img" src="" alt="Preview" style="max-width: 200px; max-height: 200px; border-radius: 12px; border: 2px solid rgba(255, 255, 255, 0.3);">
+                                <input type="hidden" id="image_url" value="">
+                            </div>
+                            <div id="upload-status" style="margin-top: 8px; font-size: 13px; opacity: 0.8;"></div>
+                        </div>
                     </div>
 
                     <!-- ส่วนที่ 2: ตัวเลือกสินค้า (Options & Values) -->
@@ -468,6 +487,56 @@
 
         // Load current user
         loadCurrentUser();
+
+        // Image upload handler
+        document.getElementById('upload-image-btn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('product_image');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('กรุณาเลือกรูปภาพก่อน');
+                return;
+            }
+            
+            const statusDiv = document.getElementById('upload-status');
+            const uploadBtn = document.getElementById('upload-image-btn');
+            
+            try {
+                uploadBtn.disabled = true;
+                statusDiv.textContent = '⏳ กำลังอัพโหลด...';
+                statusDiv.style.color = 'rgba(59, 130, 246, 0.9)';
+                
+                const formData = new FormData();
+                formData.append('image', file);
+                
+                const response = await fetch(API_URL + '/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Set image URL
+                    document.getElementById('image_url').value = result.image_url;
+                    
+                    // Show preview
+                    const previewImg = document.getElementById('preview-img');
+                    previewImg.src = result.image_url;
+                    document.getElementById('image-preview').style.display = 'block';
+                    
+                    statusDiv.textContent = '✓ อัพโหลดสำเร็จ!';
+                    statusDiv.style.color = 'rgba(34, 197, 94, 0.9)';
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                statusDiv.textContent = `✗ เกิดข้อผิดพลาด: ${error.message}`;
+                statusDiv.style.color = 'rgba(239, 68, 68, 0.9)';
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
 
         // Add option block
         document.getElementById('add-option-btn').addEventListener('click', () => {
@@ -657,6 +726,7 @@
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
+            const imageUrl = document.getElementById('image_url').value.trim();
 
             if (!name || !parentSku) {
                 alert('กรุณากรอกชื่อสินค้าและ SKU หลัก');
@@ -670,6 +740,7 @@
                 name,
                 parent_sku: parentSku,
                 description,
+                image_url: imageUrl || null,
                 options: options.map(opt => ({
                     name: opt.name,
                     values: opt.values.map((v, idx) => ({ value: v, sort_order: idx }))
