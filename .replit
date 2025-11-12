@@ -1,6 +1,7 @@
 modules = ["python-3.11"]
 [agent]
 expertMode = true
+integrations = ["python_database:1.0.0"]
 
 [workflows]
 runButton = "Project"
@@ -31,7 +32,7 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 43397
+localPort = 40891
 externalPort = 3000
 
 [nix]
