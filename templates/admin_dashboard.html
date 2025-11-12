@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>📊 Dashboard</h2>
+                <p id="currentUser">Loading...</p>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="home">
+                    <span class="icon">🏠</span>
+                    <span>หน้าหลัก</span>
+                </a>
+                <a href="#" class="nav-item" data-page="users">
+                    <span class="icon">👥</span>
+                    <span>Admin User Management</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <span class="icon">⚙️</span>
+                    <span>ตั้งค่า</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button onclick="handleLogout()" class="btn-logout">
+                    <span class="icon">🚪</span>
+                    <span>ออกจากระบบ</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Home Page -->
+            <div id="page-home" class="page-content active">
+                <div class="page-header">
+                    <h1>ยินดีต้อนรับสู่ Admin Dashboard</h1>
+                    <p>จัดการระบบตัวแทนจำหน่ายของคุณ</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-content">
+                            <h3 id="totalUsers">0</h3>
+                            <p>ผู้ใช้ทั้งหมด</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">🔐</div>
+                        <div class="stat-content">
+                            <h3 id="adminCount">0</h3>
+                            <p>ผู้ดูแลระบบ</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">🏪</div>
+                        <div class="stat-content">
+                            <h3 id="resellerCount">0</h3>
+                            <p>ตัวแทนจำหน่าย</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">⭐</div>
+                        <div class="stat-content">
+                            <h3 id="silverCount">0</h3>
+                            <p>Silver Tier</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📋 ภาพรวมระบบ</h2>
+                    <p>ระบบจัดการตัวแทนจำหน่ายพร้อมใช้งาน คุณสามารถจัดการผู้ใช้งาน ตั้งค่าระบบ และดูข้อมูลสถิติได้จากเมนูด้านซ้าย</p>
+                    
+                    <div style="margin-top: 20px;">
+                        <h3 style="font-size: 16px; margin-bottom: 10px;">ฟีเจอร์หลัก:</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>👥 Admin User Management</strong> - สร้างและจัดการผู้ใช้งานในระบบ
+                            </li>
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>🔐 Role-Based Access Control</strong> - จัดการสิทธิ์ตามบทบาท
+                            </li>
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>⭐ Reseller Tier Management</strong> - กำหนดระดับตัวแทนจำหน่าย
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin User Management Page -->
+            <div id="page-users" class="page-content">
+                <div class="page-header">
+                    <h1>👥 Admin User Management</h1>
+                    <p>สร้างและจัดการผู้ใช้งานในระบบ</p>
+                </div>
+
+                <div class="content-wrapper">
+                    <!-- ส่วนที่ 1: Form สร้างผู้ใช้ใหม่ -->
+                    <div class="card">
+                        <h2>➕ สร้างผู้ใช้ใหม่</h2>
+                        
+                        <div id="alertBox" class="alert"></div>
+
+                        <form id="createUserForm">
+                            <div class="form-group">
+                                <label for="fullName">Full Name <span style="color: red;">*</span></label>
+                                <input type="text" id="fullName" name="fullName" required placeholder="ชื่อ-นามสกุล">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="username">Username (Email) <span style="color: red;">*</span></label>
+                                <input type="email" id="username" name="username" required placeholder="user@example.com">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="password">Password <span style="color: red;">*</span></label>
+                                <input type="password" id="password" name="password" required placeholder="รหัสผ่าน">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="role">Assign Role <span style="color: red;">*</span></label>
+                                <select id="role" name="role" required>
+                                    <option value="">-- เลือกบทบาท --</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group hidden" id="resellerTierGroup">
+                                <label for="resellerTier">Reseller Tier <span style="color: red;">*</span></label>
+                                <select id="resellerTier" name="resellerTier">
+                                    <option value="">-- เลือก Tier --</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn">Create User</button>
+                        </form>
+                    </div>
+
+                    <!-- ส่วนที่ 2: List ผู้ใช้ที่มีอยู่ -->
+                    <div class="card">
+                        <h2>👥 รายชื่อผู้ใช้งาน (<span id="userCount">0</span>)</h2>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Full Name</th>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="userTableBody">
+                                    <!-- User rows will be inserted here by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page-content">
+                <div class="page-header">
+                    <h1>⚙️ ตั้งค่าระบบ</h1>
+                    <p>กำหนดค่าและการตั้งค่าระบบ</p>
+                </div>
+
+                <div class="card">
+                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                        <h3 style="font-size: 24px; margin-bottom: 10px; color: #333;">🚧 กำลังพัฒนา</h3>
+                        <p>ฟีเจอร์การตั้งค่ากำลังอยู่ระหว่างการพัฒนา</p>
+                        <p style="margin-top: 10px; color: #999;">เร็วๆ นี้...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
