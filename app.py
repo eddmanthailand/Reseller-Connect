@@ -22,6 +22,15 @@ CORS(app)
 # Initialize database on startup
 init_db()
 
+# Disable caching for HTML responses to ensure updates are visible
+@app.after_request
+def add_header(response):
+    if response.content_type and 'text/html' in response.content_type:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 # Authentication decorator
 def login_required(f):
     @wraps(f)
