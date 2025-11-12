@@ -78,6 +78,7 @@ def create_user():
     # Hash password
     password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
     
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -134,6 +135,7 @@ def create_user():
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     """Delete a user"""
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
