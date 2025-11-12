@@ -7,7 +7,16 @@ from database import get_db, init_db
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SESSION_SECRET', 'dev-secret-key-change-in-production')
+
+# SESSION_SECRET is required for production security
+session_secret = os.environ.get('SESSION_SECRET')
+if not session_secret:
+    raise RuntimeError(
+        "SESSION_SECRET environment variable is required. "
+        "Please configure a strong session secret for security."
+    )
+app.secret_key = session_secret
+
 CORS(app)
 
 # Initialize database on startup
