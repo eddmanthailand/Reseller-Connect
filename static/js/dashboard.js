@@ -255,6 +255,11 @@ function switchPage(pageName) {
             page.classList.remove('active');
         }
     });
+
+    // Load products data when switching to products page
+    if (pageName === 'products') {
+        loadProducts();
+    }
 }
 
 // Handle create user form submission
@@ -327,6 +332,114 @@ async function deleteUser(userId, userName) {
     } catch (error) {
         console.error('Error deleting user:', error);
         showAlert('เกิดข้อผิดพลาดในการลบผู้ใช้', 'error');
+    }
+}
+
+// Load products
+async function loadProducts() {
+    const productTableBody = document.getElementById('productTableBody');
+    const productCountElement = document.getElementById('productCount');
+    
+    if (!productTableBody) return;
+
+    try {
+        const response = await fetch(`${API_URL}/products`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to load products');
+        }
+
+        const products = await response.json();
+        
+        // Update product count
+        if (productCountElement) {
+            productCountElement.textContent = products.length;
+        }
+
+        // Clear and populate table
+        productTableBody.innerHTML = '';
+        
+        if (products.length === 0) {
+            productTableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px;">
+                        <div style="opacity: 0.6;">ยังไม่มีสินค้าในระบบ</div>
+                        <div style="margin-top: 10px;">
+                            <a href="/admin/products/create" style="color: rgba(255, 255, 255, 0.9);">สร้างสินค้าแรกของคุณ</a>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        products.forEach(product => {
+            const row = document.createElement('tr');
+            
+            const createdDate = new Date(product.created_at);
+            const formattedDate = createdDate.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+
+            row.innerHTML = `
+                <td><strong>${product.parent_sku || '-'}</strong></td>
+                <td>${product.name || '-'}</td>
+                <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${product.description || '-'}
+                </td>
+                <td>
+                    <span style="background: rgba(139, 92, 246, 0.2); padding: 4px 12px; border-radius: 12px; font-size: 13px;">
+                        ${product.sku_count || 0} SKUs
+                    </span>
+                </td>
+                <td>${formattedDate}</td>
+                <td>
+                    <button onclick="deleteProduct(${product.id}, '${product.name}')" 
+                            class="btn-delete" 
+                            style="background: rgba(239, 68, 68, 0.2); color: rgb(239, 68, 68); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        ลบ
+                    </button>
+                </td>
+            `;
+            
+            productTableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading products:', error);
+        productTableBody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 40px;">
+                    <div style="color: rgb(239, 68, 68); opacity: 0.8;">เกิดข้อผิดพลาดในการโหลดข้อมูลสินค้า</div>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Delete product
+async function deleteProduct(productId, productName) {
+    if (!confirm(`คุณต้องการลบสินค้า "${productName}" ใช่หรือไม่?\n\nการลบสินค้าจะลบ SKUs ทั้งหมดที่เกี่ยวข้องด้วย`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/products/${productId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert('ลบสินค้าสำเร็จ!');
+            await loadProducts();
+        } else {
+            alert(result.error || 'เกิดข้อผิดพลาด');
+        }
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('เกิดข้อผิดพลาดในการลบสินค้า');
     }
 }
 

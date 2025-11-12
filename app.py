@@ -86,8 +86,8 @@ def admin_management():
 @app.route('/admin/products')
 @admin_required
 def product_list():
-    """Render the product list page"""
-    return render_template('product_list.html')
+    """Redirect to admin dashboard (Product Management is now integrated)"""
+    return redirect(url_for('admin_management'))
 
 @app.route('/admin/products/create')
 @admin_required
