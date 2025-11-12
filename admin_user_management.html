@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin User Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group.hidden {
+            display: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table thead {
+            background: #f8f9fa;
+        }
+
+        table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            color: #555;
+            font-size: 14px;
+        }
+
+        table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.super-admin {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .badge.assistant-admin {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .badge.reseller {
+            background: #28a745;
+            color: white;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        @media (max-width: 968px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Admin User Management</h1>
+            <p>สร้างและจัดการผู้ใช้งานในระบบ (Super Admin Only)</p>
+        </div>
+
+        <div class="content-wrapper">
+            <!-- ส่วนที่ 1: Form สร้างผู้ใช้ใหม่ -->
+            <div class="card">
+                <h2>➕ สร้างผู้ใช้ใหม่</h2>
+                
+                <div id="alertBox" class="alert"></div>
+
+                <form id="createUserForm">
+                    <div class="form-group">
+                        <label for="fullName">Full Name <span style="color: red;">*</span></label>
+                        <input type="text" id="fullName" name="fullName" required placeholder="ชื่อ-นามสกุล">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username">Username (Email) <span style="color: red;">*</span></label>
+                        <input type="email" id="username" name="username" required placeholder="user@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password <span style="color: red;">*</span></label>
+                        <input type="password" id="password" name="password" required placeholder="รหัสผ่าน">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="role">Assign Role <span style="color: red;">*</span></label>
+                        <select id="role" name="role" required>
+                            <option value="">-- เลือกบทบาท --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group hidden" id="resellerTierGroup">
+                        <label for="resellerTier">Reseller Tier <span style="color: red;">*</span></label>
+                        <select id="resellerTier" name="resellerTier">
+                            <option value="">-- เลือก Tier --</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn">Create User</button>
+                </form>
+            </div>
+
+            <!-- ส่วนที่ 2: List ผู้ใช้ที่มีอยู่ -->
+            <div class="card">
+                <h2>👥 รายชื่อผู้ใช้งาน</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Full Name</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        <!-- Data will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock Data
+        const roles = [
+            { id: 1, name: 'Super Admin' },
+            { id: 2, name: 'Assistant Admin' },
+            { id: 3, name: 'Reseller' }
+        ];
+
+        const resellerTiers = [
+            { id: 1, name: 'Bronze' },
+            { id: 2, name: 'Silver' }
+        ];
+
+        let mockUsers = [
+            { id: 100, name: 'Admin หลัก', username: 'admin@system.com', role: 'Super Admin' }
+        ];
+
+        // Initialize: Populate Role Dropdown
+        const roleSelect = document.getElementById('role');
+        roles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.name;
+            option.textContent = role.name;
+            roleSelect.appendChild(option);
+        });
+
+        // Initialize: Populate Reseller Tier Dropdown
+        const resellerTierSelect = document.getElementById('resellerTier');
+        resellerTiers.forEach(tier => {
+            const option = document.createElement('option');
+            option.value = tier.name;
+            option.textContent = tier.name;
+            resellerTierSelect.appendChild(option);
+        });
+
+        // Show/Hide Reseller Tier based on selected role
+        roleSelect.addEventListener('change', function() {
+            const resellerTierGroup = document.getElementById('resellerTierGroup');
+            if (this.value === 'Reseller') {
+                resellerTierGroup.classList.remove('hidden');
+                resellerTierSelect.required = true;
+            } else {
+                resellerTierGroup.classList.add('hidden');
+                resellerTierSelect.required = false;
+                resellerTierSelect.value = '';
+            }
+        });
+
+        // Render User Table
+        function renderUserTable() {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '';
+
+            mockUsers.forEach(user => {
+                const tr = document.createElement('tr');
+                
+                const roleBadgeClass = user.role.toLowerCase().replace(/\s+/g, '-');
+                
+                tr.innerHTML = `
+                    <td>${user.name}</td>
+                    <td>${user.username}</td>
+                    <td><span class="badge ${roleBadgeClass}">${user.role}</span></td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Show Alert Message
+        function showAlert(message, type = 'success') {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert ${type}`;
+            alertBox.style.display = 'block';
+
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 3000);
+        }
+
+        // Handle Form Submit
+        document.getElementById('createUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = {
+                id: mockUsers.length + 100,
+                name: document.getElementById('fullName').value,
+                username: document.getElementById('username').value,
+                role: document.getElementById('role').value,
+                resellerTier: document.getElementById('resellerTier').value || null
+            };
+
+            // Add user to mock data
+            mockUsers.push(formData);
+
+            // Re-render table
+            renderUserTable();
+
+            // Show success message
+            let message = `สร้างผู้ใช้ "${formData.name}" สำเร็จ!`;
+            if (formData.resellerTier) {
+                message += ` (Tier: ${formData.resellerTier})`;
+            }
+            showAlert(message);
+
+            // Reset form
+            this.reset();
+            document.getElementById('resellerTierGroup').classList.add('hidden');
+            resellerTierSelect.required = false;
+        });
+
+        // Initial render
+        renderUserTable();
+    </script>
+</body>
+</html>
