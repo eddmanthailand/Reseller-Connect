@@ -71,8 +71,8 @@ def dashboard():
 @app.route('/admin')
 @admin_required
 def admin_management():
-    """Render the admin user management page"""
-    return render_template('admin_user_management.html')
+    """Render the admin dashboard"""
+    return render_template('admin_dashboard.html')
 
 @app.route('/api/login', methods=['POST'])
 def login():
