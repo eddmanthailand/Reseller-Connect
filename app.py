@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import psycopg2.extras
-import hashlib
+import bcrypt
 from functools import wraps
 from database import get_db, init_db
 import os
@@ -75,7 +75,6 @@ def login():
     
     username = data['username']
     password = data['password']
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
     
     conn = None
     cursor = None
@@ -83,24 +82,26 @@ def login():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Check user credentials
+        # Get user by username
         cursor.execute('''
             SELECT 
                 u.id,
                 u.full_name,
                 u.username,
+                u.password,
                 r.name as role,
                 u.reseller_tier_id,
                 rt.name as reseller_tier
             FROM users u
             JOIN roles r ON u.role_id = r.id
             LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
-            WHERE u.username = %s AND u.password = %s
-        ''', (username, password_hash))
+            WHERE u.username = %s
+        ''', (username,))
         
         user = cursor.fetchone()
         
-        if not user:
+        # Verify password with bcrypt
+        if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
             return jsonify({'error': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}), 401
         
         # Set session
@@ -218,8 +219,8 @@ def create_user():
         if field not in data or not data[field]:
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
-    # Hash password
-    password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+    # Hash password with bcrypt
+    password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     conn = None
     cursor = None

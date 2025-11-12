@@ -1,6 +1,6 @@
 import psycopg2
 import psycopg2.extras
-import hashlib
+import bcrypt
 import os
 from datetime import datetime
 
@@ -74,14 +74,15 @@ def init_db():
         count = cursor.fetchone()[0]
         
         if count == 0:
-            password_hash = hashlib.sha256('A0971exp11'.encode()).hexdigest()
+            # Hash password with bcrypt
+            password_hash = bcrypt.hashpw('A0971exp11'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             cursor.execute('''
                 INSERT INTO users (full_name, username, password, role_id)
                 VALUES (%s, %s, %s, (SELECT id FROM roles WHERE name = 'Super Admin'))
             ''', ('Super Admin', 'superadmin', password_hash))
         else:
-            # Update existing Super Admin password
-            password_hash = hashlib.sha256('A0971exp11'.encode()).hexdigest()
+            # Update existing Super Admin password with bcrypt
+            password_hash = bcrypt.hashpw('A0971exp11'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             cursor.execute('''
                 UPDATE users 
                 SET password = %s, full_name = %s
