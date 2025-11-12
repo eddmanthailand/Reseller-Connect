@@ -78,16 +78,18 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 
 ### November 12, 2025 - Product Management Module (SPU/SKU System)
 - **Database Architecture:** Added 5 new tables for advanced product management
-  - `products` (SPU - parent products)
+  - `products` (SPU - parent products with `image_url` column for product images)
   - `options` (product attributes like color, size)
   - `option_values` (attribute values with sort_order for custom ordering)
   - `skus` (product variants)
   - `sku_values_map` (relationship mapping between SKUs and option values)
 - **Backend API Endpoints:**
-  - `GET /api/products` - List all products with SKU counts
+  - `GET /api/products` - List all products with SKU counts and images
   - `GET /api/products/<id>` - Get detailed product info with options and SKUs
-  - `POST /api/products` - Create new product with options, values, and SKUs
+  - `POST /api/products` - Create new product with options, values, SKUs, and image
   - `DELETE /api/products/<id>` - Delete product with cascade
+  - `POST /api/products/upload-image` - Upload product image to Replit Object Storage
+  - `GET /api/products/images/<filename>` - Serve product images
 - **Frontend Implementation:**
   - Product Management page integrated into Admin Dashboard (SPA navigation)
   - Product List displayed within dashboard with live data loading
@@ -98,6 +100,12 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - Drag-and-drop value reordering with SortableJS (preserves custom order via sort_order field)
   - Variant Matrix Generation via Cartesian Product algorithm
   - Bulk Actions: Master Price and Master Stock to update all variants at once
+  - **Image Upload:** Full integration with Replit Object Storage
+    - Upload product images (PNG, JPG, GIF, WebP)
+    - Real-time image preview (200x200px) before form submission
+    - Product list displays 50x50px rounded thumbnails
+    - Placeholder icon (📦) when no image is uploaded
+    - Secure file storage with unique filenames
   - Glassmorphism design matching existing system aesthetic
   - Modern SVG icons throughout
   - Single Page Application navigation for seamless UX
@@ -113,3 +121,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`
   - `Pragma: no-cache`
   - `Expires: 0`
+- **JavaScript Architecture:** Fixed duplicate constant declarations
+  - Unified API_URL management using `window.API_URL` pattern
+  - dashboard.js reads from `window.API_URL || '/api'`
+  - All templates properly initialize API_URL without conflicts

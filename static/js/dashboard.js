@@ -1,5 +1,5 @@
-// API Base URL
-const API_URL = '/api';
+// API Base URL (use window.API_URL set by template, fallback to '/api')
+const API_URL = window.API_URL || '/api';
 
 // Global data
 let roles = [];

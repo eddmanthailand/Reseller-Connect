@@ -53,6 +53,81 @@ def init_db():
             )
         ''')
         
+        # Create products table (SPU - parent product)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                parent_sku VARCHAR(100) UNIQUE NOT NULL,
+                description TEXT,
+                image_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create options table (product attributes like color, size)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS options (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Create option_values table (attribute values with sort_order)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS option_values (
+                id SERIAL PRIMARY KEY,
+                option_id INTEGER NOT NULL,
+                value VARCHAR(100) NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (option_id) REFERENCES options(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Create skus table (product variants)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS skus (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                sku_code VARCHAR(100) UNIQUE NOT NULL,
+                price DECIMAL(10, 2) DEFAULT 0,
+                stock INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Create sku_values_map table (many-to-many relationship)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sku_values_map (
+                id SERIAL PRIMARY KEY,
+                sku_id INTEGER NOT NULL,
+                option_value_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sku_id) REFERENCES skus(id) ON DELETE CASCADE,
+                FOREIGN KEY (option_value_id) REFERENCES option_values(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Migration: Add image_url column to products table if it doesn't exist
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'products' AND column_name = 'image_url'
+                ) THEN
+                    ALTER TABLE products ADD COLUMN image_url TEXT;
+                END IF;
+            END $$;
+        ''')
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:
