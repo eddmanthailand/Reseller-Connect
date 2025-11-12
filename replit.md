@@ -1,8 +1,8 @@
-# Admin User Management System
+# Admin User Management & Product Management System
 
 ## Overview
 
-This is a full-stack admin user management system built with Flask and Neon PostgreSQL. Its primary purpose is to allow Super Admins to create, view, and delete users with various roles (Super Admin, Assistant Admin, Reseller) and assign reseller tiers. The system features a modern, responsive web interface with real-time API integration, aiming for a professional and secure user management solution.
+This is a full-stack reseller/distributor application built with Flask and Neon PostgreSQL. The system allows Super Admins to manage users with various roles (Super Admin, Assistant Admin, Reseller), assign reseller tiers, and manage products with advanced SPU/SKU variant management. The system features a modern glassmorphism UI design with real-time API integration, aiming for a professional and secure business management solution.
 
 ## User Preferences
 
@@ -23,6 +23,14 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 - **Admin Dashboard:** Multi-page layout, sidebar navigation, real-time statistics (Total Users, Admin Count, Reseller Count, Silver Tier Count), full CRUD for user management, placeholder settings page.
 - **Reseller Dashboard:** Dedicated dashboard for reseller users displaying user info and tier level.
 - **User Management:** Create, view, delete users; assign roles (Super Admin, Assistant Admin, Reseller); assign reseller tiers; dynamic form validation.
+- **Product Management (SPU/SKU System):** 
+  - Create products with parent SKU (SPU)
+  - Dynamic options/attributes system (color, size, material, etc.)
+  - Drag-and-drop value ordering with SortableJS (not alphabetical)
+  - Auto-generate SKU variants via Cartesian product
+  - Bulk actions: Master Price and Master Stock to apply to all variants
+  - View product list with SKU counts
+  - Delete products with cascade deletion
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET` from environment variables, route protection, input validation.
 
 ### System Design Choices
@@ -34,9 +42,18 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 - **API Design:** RESTful API endpoints for clear separation of concerns.
 
 ### Database Schema
+
+**User Management:**
 - **roles:** `id`, `name` (Super Admin, Assistant Admin, Reseller)
 - **reseller_tiers:** `id`, `name` (Bronze, Silver)
 - **users:** `id`, `full_name`, `username`, `password` (bcrypt hashed), `role_id` (FK to roles), `reseller_tier_id` (NULL FK to reseller_tiers), `created_at`
+
+**Product Management (5-Table SPU/SKU Architecture):**
+- **products:** `id`, `name`, `parent_sku` (UNIQUE), `description`, `created_at`, `updated_at` (SPU - parent product)
+- **options:** `id`, `product_id` (FK to products), `name` (e.g., "Color", "Size"), `created_at` (product attributes)
+- **option_values:** `id`, `option_id` (FK to options), `value` (e.g., "Red", "S", "M"), `sort_order` (for drag-and-drop ordering), `created_at`
+- **skus:** `id`, `product_id` (FK to products), `sku_code` (UNIQUE), `price`, `stock`, `created_at`, `updated_at` (SKU variants)
+- **sku_values_map:** `id`, `sku_id` (FK to skus), `option_value_id` (FK to option_values), `created_at` (Many-to-Many relationship)
 
 ## External Dependencies
 
@@ -55,3 +72,33 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 - **Vanilla JavaScript**: For client-side logic.
 - **CSS Grid**: For responsive layouts.
 - **Fetch API**: For HTTP requests to the backend.
+- **SortableJS (1.15.0)**: For drag-and-drop functionality in product variant ordering.
+
+## Recent Changes
+
+### November 12, 2025 - Product Management Module (SPU/SKU System)
+- **Database Architecture:** Added 5 new tables for advanced product management
+  - `products` (SPU - parent products)
+  - `options` (product attributes like color, size)
+  - `option_values` (attribute values with sort_order for custom ordering)
+  - `skus` (product variants)
+  - `sku_values_map` (relationship mapping between SKUs and option values)
+- **Backend API Endpoints:**
+  - `GET /api/products` - List all products with SKU counts
+  - `GET /api/products/<id>` - Get detailed product info with options and SKUs
+  - `POST /api/products` - Create new product with options, values, and SKUs
+  - `DELETE /api/products/<id>` - Delete product with cascade
+- **Frontend Pages:**
+  - Product List (`/admin/products`) - View all products, SKU counts, delete products
+  - Product Creation (`/admin/products/create`) - Full SPU/SKU creation workflow
+- **Key Features Implemented:**
+  - Dynamic options/attributes system (add unlimited options)
+  - Drag-and-drop value reordering with SortableJS (preserves custom order via sort_order field)
+  - Variant Matrix Generation via Cartesian Product algorithm
+  - Bulk Actions: Master Price and Master Stock to update all variants at once
+  - Glassmorphism design matching existing system aesthetic
+  - Modern SVG icons throughout
+- **Routes Added:**
+  - `/admin/products` - Product list page
+  - `/admin/products/create` - Product creation page
+- **Navigation:** Added "Product Management" menu item to Admin Dashboard sidebar

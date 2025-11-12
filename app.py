@@ -74,6 +74,18 @@ def admin_management():
     """Render the admin dashboard"""
     return render_template('admin_dashboard.html')
 
+@app.route('/admin/products')
+@admin_required
+def product_list():
+    """Render the product list page"""
+    return render_template('product_list.html')
+
+@app.route('/admin/products/create')
+@admin_required
+def product_create():
+    """Render the product creation page"""
+    return render_template('product_create.html')
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login"""
@@ -307,6 +319,255 @@ def delete_user(user_id):
         conn.commit()
         
         return jsonify({'message': 'User deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== PRODUCT MANAGEMENT ROUTES ====================
+
+@app.route('/api/products', methods=['GET'])
+@admin_required
+def get_products():
+    """Get all products with their basic information"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT 
+                p.id,
+                p.name,
+                p.parent_sku,
+                p.description,
+                p.created_at,
+                COUNT(DISTINCT s.id) as sku_count
+            FROM products p
+            LEFT JOIN skus s ON p.id = s.product_id
+            GROUP BY p.id, p.name, p.parent_sku, p.description, p.created_at
+            ORDER BY p.created_at DESC
+        ''')
+        
+        products = [dict(row) for row in cursor.fetchall()]
+        return jsonify(products), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>', methods=['GET'])
+@admin_required
+def get_product(product_id):
+    """Get detailed product information including options and SKUs"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get product basic info
+        cursor.execute('SELECT * FROM products WHERE id = %s', (product_id,))
+        product = cursor.fetchone()
+        
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        product = dict(product)
+        
+        # Get options and their values
+        cursor.execute('''
+            SELECT 
+                o.id,
+                o.name,
+                json_agg(
+                    json_build_object(
+                        'id', ov.id,
+                        'value', ov.value,
+                        'sort_order', ov.sort_order
+                    ) ORDER BY ov.sort_order
+                ) as values
+            FROM options o
+            LEFT JOIN option_values ov ON o.id = ov.option_id
+            WHERE o.product_id = %s
+            GROUP BY o.id, o.name
+            ORDER BY o.id
+        ''', (product_id,))
+        
+        options = [dict(row) for row in cursor.fetchall()]
+        product['options'] = options
+        
+        # Get SKUs with their option values
+        cursor.execute('''
+            SELECT 
+                s.id,
+                s.sku_code,
+                s.price,
+                s.stock,
+                json_agg(
+                    json_build_object(
+                        'option_id', o.id,
+                        'option_name', o.name,
+                        'value_id', ov.id,
+                        'value', ov.value
+                    )
+                ) as option_values
+            FROM skus s
+            LEFT JOIN sku_values_map svm ON s.id = svm.sku_id
+            LEFT JOIN option_values ov ON svm.option_value_id = ov.id
+            LEFT JOIN options o ON ov.option_id = o.id
+            WHERE s.product_id = %s
+            GROUP BY s.id, s.sku_code, s.price, s.stock
+            ORDER BY s.sku_code
+        ''', (product_id,))
+        
+        skus = [dict(row) for row in cursor.fetchall()]
+        product['skus'] = skus
+        
+        return jsonify(product), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products', methods=['POST'])
+@admin_required
+def create_product():
+    """Create a new product with options, values, and SKUs"""
+    data = request.json
+    
+    # Validate required fields
+    if not data or 'name' not in data or 'parent_sku' not in data:
+        return jsonify({'error': 'Missing required fields: name, parent_sku'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if parent_sku already exists
+        cursor.execute('SELECT id FROM products WHERE parent_sku = %s', (data['parent_sku'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Parent SKU already exists'}), 400
+        
+        # Insert product
+        cursor.execute('''
+            INSERT INTO products (name, parent_sku, description)
+            VALUES (%s, %s, %s)
+            RETURNING id
+        ''', (data['name'], data['parent_sku'], data.get('description', '')))
+        
+        product_id = cursor.fetchone()['id']
+        
+        # Insert options and values
+        options_data = data.get('options', [])
+        option_value_ids_map = {}  # Map to store option_value_ids for SKU generation
+        
+        for option in options_data:
+            if not option.get('name') or not option.get('values'):
+                continue
+            
+            # Insert option
+            cursor.execute('''
+                INSERT INTO options (product_id, name)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (product_id, option['name']))
+            
+            option_id = cursor.fetchone()['id']
+            option_value_ids_map[option_id] = []
+            
+            # Insert option values with sort_order
+            for idx, value_data in enumerate(option['values']):
+                cursor.execute('''
+                    INSERT INTO option_values (option_id, value, sort_order)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                ''', (option_id, value_data['value'], value_data.get('sort_order', idx)))
+                
+                value_id = cursor.fetchone()['id']
+                option_value_ids_map[option_id].append(value_id)
+        
+        # Insert SKUs if provided
+        skus_data = data.get('skus', [])
+        for sku_data in skus_data:
+            if not sku_data.get('sku_code'):
+                continue
+            
+            # Insert SKU
+            cursor.execute('''
+                INSERT INTO skus (product_id, sku_code, price, stock)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            ''', (
+                product_id,
+                sku_data['sku_code'],
+                sku_data.get('price', 0),
+                sku_data.get('stock', 0)
+            ))
+            
+            sku_id = cursor.fetchone()['id']
+            
+            # Map SKU to option values
+            for value_id in sku_data.get('option_value_ids', []):
+                cursor.execute('''
+                    INSERT INTO sku_values_map (sku_id, option_value_id)
+                    VALUES (%s, %s)
+                ''', (sku_id, value_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Product created successfully',
+            'product_id': product_id
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>', methods=['DELETE'])
+@admin_required
+def delete_product(product_id):
+    """Delete a product and all related data (cascade)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Delete product (cascade will handle related data)
+        cursor.execute('DELETE FROM products WHERE id = %s', (product_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Product deleted successfully'}), 200
         
     except Exception as e:
         if conn:
