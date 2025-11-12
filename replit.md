@@ -14,6 +14,27 @@ Full-stack admin user management system built with Flask and Neon PostgreSQL. Al
 
 ## Recent Changes
 
+### November 12, 2025 - Custom Login Authentication System
+- **Implemented Complete Session-Based Authentication**
+  - Created professional login page with gradient design
+  - Session management using Flask sessions
+  - Login/logout API endpoints with credential validation
+  - Custom authentication decorators (`login_required`, `admin_required`)
+  - Role-based redirects: Super Admin/Assistant Admin → `/admin`, Reseller → `/dashboard`
+  - All admin routes now protected with authentication middleware
+  - Current user info display with logout functionality
+
+- **Updated Super Admin Credentials**
+  - Username: `superadmin`
+  - Password: `A0971exp11` (SHA-256 hashed)
+  - Removed old admin@system.com account
+
+- **Created Reseller Dashboard**
+  - Dashboard page for reseller users
+  - Displays user info and tier level
+  - Coming soon placeholders for sales and order features
+  - Logout functionality
+
 ### November 12, 2025 - Neon PostgreSQL Migration
 - **Migrated from SQLite to Neon PostgreSQL database**
   - Converted all SQL queries from SQLite syntax (?) to PostgreSQL (%s)
@@ -43,7 +64,18 @@ Full-stack admin user management system built with Flask and Neon PostgreSQL. Al
 
 **API Endpoints:**
 ```
-GET  /                      - Render admin management page
+# Authentication Routes
+GET  /login                 - Login page
+POST /api/login             - Authenticate user & create session
+POST /api/logout            - Clear session & logout
+GET  /api/me                - Get current user info
+
+# Protected Routes (require login)
+GET  /                      - Redirect to login or appropriate dashboard
+GET  /admin                 - Admin panel (Super Admin & Assistant Admin only)
+GET  /dashboard             - Reseller dashboard (Reseller role only)
+
+# Admin API (require admin role)
 GET  /api/roles             - List all roles
 GET  /api/reseller-tiers    - List all reseller tiers
 GET  /api/users             - List all users with role info
@@ -52,8 +84,11 @@ DELETE /api/users/<id>      - Delete user
 ```
 
 **Security:**
+- Session-based authentication with Flask sessions
 - Password hashing with SHA-256 (note: should upgrade to bcrypt for production)
-- Session secret from environment variable
+- Session secret from environment variable (has default for dev)
+- Route protection with `login_required` and `admin_required` decorators
+- Role-based access control
 - Input validation on all endpoints
 - SQL injection prevention via parameterized queries
 
@@ -79,19 +114,24 @@ DELETE /api/users/<id>      - Delete user
    - created_at (TIMESTAMP)
 
 **Default Data:**
-- Admin user: admin@system.com / admin123 (Super Admin role)
+- Super Admin user: `superadmin` / `A0971exp11` (Super Admin role)
 - 3 roles and 2 reseller tiers pre-seeded
 
 ### Frontend Architecture
 
 **Template System:** Jinja2 (Flask)
-- Main template: `templates/admin_user_management.html`
+- Login page: `templates/login.html`
+- Admin panel: `templates/admin_user_management.html`
+- Reseller dashboard: `templates/reseller_dashboard.html`
 
 **Static Assets:**
 - CSS: `static/css/admin.css` - Modern gradient design with responsive grid
 - JavaScript: `static/js/admin.js` - API integration with fetch(), no frameworks
 
 **UI Features:**
+- Login page with username/password authentication
+- Session-based authentication with automatic redirects
+- Current user info display with logout button
 - Form validation (required fields, email format)
 - Dynamic show/hide of Reseller Tier field based on role selection
 - Real-time user list updates after create/delete operations
@@ -103,10 +143,12 @@ DELETE /api/users/<id>      - Delete user
 ### File Structure
 
 ```
-├── app.py                           # Flask application & API routes
+├── app.py                           # Flask application, API routes & auth
 ├── database.py                      # Database connection & initialization
 ├── templates/
-│   └── admin_user_management.html  # Main admin interface
+│   ├── login.html                  # Login page
+│   ├── admin_user_management.html  # Admin panel (Super Admin/Assistant Admin)
+│   └── reseller_dashboard.html     # Reseller dashboard
 ├── static/
 │   ├── css/
 │   │   └── admin.css               # Styling
@@ -152,6 +194,8 @@ DELETE /api/users/<id>      - Delete user
 2. Server starts on `http://0.0.0.0:5000`
 3. Database automatically initializes on first run
 4. Access via Replit webview at port 5000
+5. Login with `superadmin` / `A0971exp11`
+6. Super Admin redirects to `/admin`, Reseller redirects to `/dashboard`
 
 ### Making Database Changes
 1. Update schema in `database.py` (init_db function)
@@ -160,18 +204,24 @@ DELETE /api/users/<id>      - Delete user
 
 ### Testing
 - Manual testing via web interface
+- Login at `/login` with Super Admin credentials
+- Test role-based redirects (Admin → `/admin`, Reseller → `/dashboard`)
+- Verify authentication protects all admin routes
 - Check workflow logs for database connection status
 - Verify API endpoints return correct JSON responses
 
 ## Known Limitations & Future Improvements
 
 ### Security (Identified by Architect Review)
-1. **No Authentication/Authorization** - Anyone can access admin endpoints
-   - Recommended: Implement login system with session-based auth
-   - Check user role before allowing admin actions
+1. **SESSION_SECRET Configuration** - Currently uses fallback default value
+   - Recommended: Configure strong SESSION_SECRET for production deployment
+   - Use environment variable in production
 
 2. **Weak Password Hashing** - SHA-256 without salt
-   - Recommended: Upgrade to bcrypt or Argon2
+   - Recommended: Upgrade to bcrypt or Argon2 for production
+
+3. **API Error Messages** - Some endpoints may leak internal exception details
+   - Recommended: Tighten error responses to avoid information disclosure
 
 ### Code Quality Improvements
 1. **Connection Management** - Currently using manual connection handling
@@ -182,6 +232,7 @@ DELETE /api/users/<id>      - Delete user
 
 3. **Testing** - No automated tests
    - Add: Integration tests for all API endpoints
+   - Add: Tests for login/logout flow and role-based access control
 
 ### Features for Production
 1. User editing functionality (currently only create/delete)
@@ -194,12 +245,14 @@ DELETE /api/users/<id>      - Delete user
 ## Deployment Notes
 
 - **Current State:** Development server (Flask debug mode)
+- **Authentication:** ✅ Custom login system implemented with session-based auth
 - **For Production:** 
   - Use production WSGI server (Gunicorn recommended)
   - Disable Flask debug mode
-  - Implement authentication before deploying
-  - Use environment-specific SESSION_SECRET
+  - **CRITICAL:** Configure strong SESSION_SECRET environment variable
+  - Upgrade to bcrypt/Argon2 password hashing
   - Consider rate limiting on API endpoints
+  - Tighten error message responses
 
 ## Additional Notes
 
