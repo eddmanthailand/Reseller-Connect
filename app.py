@@ -79,6 +79,7 @@ def create_user():
     password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
     
     conn = None
+    cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -86,8 +87,6 @@ def create_user():
         # Check if username already exists
         cursor.execute('SELECT id FROM users WHERE username = %s', (data['username'],))
         if cursor.fetchone():
-            cursor.close()
-            conn.close()
             return jsonify({'error': 'Username already exists'}), 400
         
         # Insert new user
@@ -119,8 +118,6 @@ def create_user():
         user = dict(cursor.fetchone())
         
         conn.commit()
-        cursor.close()
-        conn.close()
         
         return jsonify({
             'message': 'User created successfully',
@@ -131,11 +128,17 @@ def create_user():
         if conn:
             conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     """Delete a user"""
     conn = None
+    cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -143,15 +146,11 @@ def delete_user(user_id):
         # Check if user exists
         cursor.execute('SELECT id FROM users WHERE id = %s', (user_id,))
         if not cursor.fetchone():
-            cursor.close()
-            conn.close()
             return jsonify({'error': 'User not found'}), 404
         
         # Delete user
         cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
         conn.commit()
-        cursor.close()
-        conn.close()
         
         return jsonify({'message': 'User deleted successfully'}), 200
         
@@ -159,6 +158,11 @@ def delete_user(user_id):
         if conn:
             conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
