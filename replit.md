@@ -14,6 +14,27 @@ Full-stack admin user management system built with Flask and Neon PostgreSQL. Al
 
 ## Recent Changes
 
+### November 12, 2025 - Production Security & Server Upgrades
+- **Upgraded Password Security to bcrypt**
+  - Migrated from SHA-256 to bcrypt for all password hashing
+  - Super Admin password now uses bcrypt with salt
+  - Login endpoint verifies passwords with bcrypt.checkpw()
+  - New user creation uses bcrypt hashing
+  - Production-grade password security in place
+
+- **Configured Production SESSION_SECRET**
+  - Strong 64-character SESSION_SECRET generated
+  - Environment variable configuration (no hardcoded fallback)
+  - Application fails fast if SESSION_SECRET is missing
+  - Clear error message for missing configuration
+
+- **Deployed Gunicorn Production Server**
+  - Replaced Flask development server with Gunicorn
+  - 4 workers for concurrent request handling
+  - --reuse-port flag for better performance
+  - Deployment config set to autoscale
+  - Production-ready server configuration
+
 ### November 12, 2025 - Custom Login Authentication System
 - **Implemented Complete Session-Based Authentication**
   - Created professional login page with gradient design
@@ -26,7 +47,7 @@ Full-stack admin user management system built with Flask and Neon PostgreSQL. Al
 
 - **Updated Super Admin Credentials**
   - Username: `superadmin`
-  - Password: `A0971exp11` (SHA-256 hashed)
+  - Password: `A0971exp11` (bcrypt hashed)
   - Removed old admin@system.com account
 
 - **Created Reseller Dashboard**
@@ -85,8 +106,8 @@ DELETE /api/users/<id>      - Delete user
 
 **Security:**
 - Session-based authentication with Flask sessions
-- Password hashing with SHA-256 (note: should upgrade to bcrypt for production)
-- Session secret from environment variable (has default for dev)
+- Password hashing with bcrypt (production-grade with salt)
+- SESSION_SECRET required from environment variable (no fallback)
 - Route protection with `login_required` and `admin_required` decorators
 - Role-based access control
 - Input validation on all endpoints
@@ -108,7 +129,7 @@ DELETE /api/users/<id>      - Delete user
    - id (SERIAL PRIMARY KEY)
    - full_name (VARCHAR)
    - username (VARCHAR UNIQUE) - Email address
-   - password (VARCHAR) - SHA-256 hashed
+   - password (VARCHAR) - bcrypt hashed
    - role_id (INTEGER FK → roles.id)
    - reseller_tier_id (INTEGER NULL FK → reseller_tiers.id)
    - created_at (TIMESTAMP)
@@ -166,6 +187,8 @@ DELETE /api/users/<id>      - Delete user
 - **flask-cors** (6.0.1) - CORS support for API
 - **psycopg2-binary** (2.9.11) - PostgreSQL adapter
 - **python-dotenv** (1.2.1) - Environment variable management
+- **bcrypt** (5.0.0) - Password hashing
+- **gunicorn** (23.0.0) - Production WSGI server
 
 ### Database Service
 - **Replit PostgreSQL** (Neon-backed)
@@ -180,19 +203,17 @@ DELETE /api/users/<id>      - Delete user
 
 ## Environment Variables
 
-### Required (Auto-configured by Replit)
-- `DATABASE_URL` - PostgreSQL connection string
-- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - DB credentials
-
-### Optional
-- `SESSION_SECRET` - Flask session encryption key (has default for dev)
+### Required
+- `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - DB credentials (auto-configured by Replit)
+- `SESSION_SECRET` - Flask session encryption key (64-character hex string, REQUIRED for security)
 
 ## Development Workflow
 
 ### Running the Application
-1. Workflow "Admin User Management" runs: `python app.py`
-2. Server starts on `http://0.0.0.0:5000`
-3. Database automatically initializes on first run
+1. Workflow "Admin User Management" runs: `gunicorn --bind 0.0.0.0:5000 --workers 4 --reuse-port app:app`
+2. Gunicorn production server starts with 4 workers on `http://0.0.0.0:5000`
+3. Database automatically initializes on first run (across all workers)
 4. Access via Replit webview at port 5000
 5. Login with `superadmin` / `A0971exp11`
 6. Super Admin redirects to `/admin`, Reseller redirects to `/dashboard`
@@ -213,15 +234,8 @@ DELETE /api/users/<id>      - Delete user
 ## Known Limitations & Future Improvements
 
 ### Security (Identified by Architect Review)
-1. **SESSION_SECRET Configuration** - Currently uses fallback default value
-   - Recommended: Configure strong SESSION_SECRET for production deployment
-   - Use environment variable in production
-
-2. **Weak Password Hashing** - SHA-256 without salt
-   - Recommended: Upgrade to bcrypt or Argon2 for production
-
-3. **API Error Messages** - Some endpoints may leak internal exception details
-   - Recommended: Tighten error responses to avoid information disclosure
+1. **API Error Messages** - Some endpoints may leak internal exception details
+   - Recommended: Tighten error responses to avoid information disclosure in production
 
 ### Code Quality Improvements
 1. **Connection Management** - Currently using manual connection handling
@@ -244,15 +258,17 @@ DELETE /api/users/<id>      - Delete user
 
 ## Deployment Notes
 
-- **Current State:** Development server (Flask debug mode)
-- **Authentication:** ✅ Custom login system implemented with session-based auth
-- **For Production:** 
-  - Use production WSGI server (Gunicorn recommended)
-  - Disable Flask debug mode
-  - **CRITICAL:** Configure strong SESSION_SECRET environment variable
-  - Upgrade to bcrypt/Argon2 password hashing
+- **Current State:** Production-ready with Gunicorn server
+- **Authentication:** ✅ Custom login system with session-based auth and bcrypt
+- **Security:** ✅ bcrypt password hashing, required SESSION_SECRET
+- **Server:** ✅ Gunicorn with 4 workers, autoscale deployment config
+- **For Production Deployment:** 
+  - ✅ SESSION_SECRET configured (strong 64-character secret)
+  - ✅ bcrypt password hashing implemented
+  - ✅ Gunicorn production server running
   - Consider rate limiting on API endpoints
   - Tighten error message responses
+  - Set up monitoring and logging
 
 ## Additional Notes
 
