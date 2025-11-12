@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - สร้างสินค้าใหม่</title>
+    <!-- โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลดฟอนต์ Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- โหลด SortableJS สำหรับ Drag-and-Drop -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        /* ตั้งค่าฟอนต์หลัก */
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* สไตล์สำหรับ Tag ค่าตัวเลือก */
+        .option-value-tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: theme('colors.blue.100');
+            color: theme('colors.blue.800');
+            border-radius: theme('borderRadius.full');
+            padding: theme('spacing.1') theme('spacing.3');
+            margin-right: theme('spacing.2');
+            margin-bottom: theme('spacing.2');
+            font-size: theme('fontSize.sm');
+            font-weight: 500;
+            cursor: grab; /* เปลี่ยน cursor เป็น 'grab' เพื่อบอกว่าลากได้ */
+            transition: all 0.2s ease;
+        }
+
+        /* สไตล์สำหรับปุ่มลบ Tag */
+        .remove-tag-btn {
+            margin-left: theme('spacing.2');
+            color: theme('colors.blue.500');
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        .remove-tag-btn:hover {
+            color: theme('colors.red.600');
+        }
+
+        /* สไตล์สำหรับช่อง Input Tag */
+        .tag-input {
+            border: none;
+            outline: none;
+            padding: theme('spacing.1');
+            background-color: transparent;
+            min-width: 120px;
+        }
+        .tag-input:focus {
+            ring: 0;
+            border: none;
+            outline: none;
+        }
+
+        /* สไตล์สำหรับพื้นที่ลากและวาง */
+        .sortable-list {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: theme('spacing.2');
+            border: 1px solid theme('colors.gray.300');
+            border-radius: theme('borderRadius.md');
+            background-color: theme('colors.white');
+            min-height: 50px; /* ความสูงขั้นต่ำ */
+        }
+        
+        /* สไตล์สำหรับเงาของ item ที่กำลังลาก (Ghost) */
+        .sortable-ghost {
+            opacity: 0.4;
+            background: theme('colors.blue.200');
+        }
+
+        /* สไตล์สำหรับตาราง Variant */
+        .variants-table th,
+        .variants-table td {
+            padding: theme('spacing.3') theme('spacing.4');
+            border-bottom: 1px solid theme('colors.gray.200');
+            text-align: left;
+            font-size: theme('fontSize.sm');
+        }
+        .variants-table th {
+            background-color: theme('colors.gray.50');
+            font-weight: 600;
+            color: theme('colors.gray.600');
+        }
+        .variants-table td {
+            background-color: theme('colors.white');
+        }
+        .variants-table input[type="text"],
+        .variants-table input[type="number"] {
+            width: 100%;
+            border: 1px solid theme('colors.gray.300');
+            border-radius: theme('borderRadius.md');
+            padding: theme('spacing.2');
+            font-size: theme('fontSize.sm');
+        }
+        .variants-table input:focus {
+            border-color: theme('colors.blue.500');
+            ring: 1px;
+            ring-color: theme('colors.blue.500');
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container max-w-6xl mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <div class="mb-8 p-6 bg-white shadow-md rounded-2xl border border-gray-200">
+            <h1 class="text-3xl font-bold text-gray-800">สร้างสินค้าใหม่</h1>
+            <p class="text-gray-600 mt-1">กรอกข้อมูลสินค้าหลัก (SPU) และสร้างตัวเลือกสินค้าย่อย (SKU)</p>
+        </div>
+
+        <div class="space-y-8">
+            <!-- ส่วนที่ 1: ข้อมูลสินค้าหลัก (SPU) -->
+            <div class="bg-white p-6 md:p-8 shadow-lg rounded-2xl border border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3 mb-6">1. ข้อมูลสินค้าหลัก (SPU)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="product_name" class="block text-sm font-medium text-gray-700 mb-1">ชื่อสินค้า</label>
+                        <input type="text" id="product_name" placeholder="เช่น เสื้อยืดคอกลม Premium Cotton" class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label for="parent_sku" class="block text-sm font-medium text-gray-700 mb-1">SKU หลัก (Parent Code)</label>
+                        <input type="text" id="parent_sku" placeholder="เช่น TSHIRT-001 (ใช้อ้างอิงสินค้ากลุ่มนี้)" class="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ส่วนที่ 2: ตัวเลือกสินค้า (Options & Values) -->
+            <div class="bg-white p-6 md:p-8 shadow-lg rounded-2xl border border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3 mb-6">2. ตัวเลือกสินค้า (Options)</h2>
+                <div id="options-container" class="space-y-6">
+                    <!-- Option Blocks จะถูกเพิ่มที่นี่โดย JS -->
+                </div>
+                <button id="add-option-btn" type="button" class="mt-6 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200">
+                    + เพิ่มคุณสมบัติ (เช่น สี, ขนาด)
+                </button>
+            </div>
+
+            <!-- ส่วนที่ 3: สร้าง Variants -->
+            <div class="bg-white p-6 md:p-8 shadow-lg rounded-2xl border border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3 mb-6">3. สร้างรายการสินค้าย่อย (SKU Variants)</h2>
+                <button id="generate-variants-btn" class="w-full px-6 py-3 bg-green-600 text-white font-bold text-lg rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition duration-200">
+                    สร้างตาราง Variant Matrix
+                </button>
+            </div>
+
+            <!-- ส่วนที่ 4: ตาราง Variant Matrix (ซ่อนไว้ตอนแรก) -->
+            <div id="variants-section" class="bg-white p-6 md:p-8 shadow-lg rounded-2xl border border-gray-200 hidden">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3 mb-6">4. กรอกข้อมูล Variant Matrix</h2>
+                
+                <!-- Master Inputs (Bulk Actions) -->
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="master_price" class="block text-sm font-medium text-gray-700 mb-1">Master Price</label>
+                        <div class="flex">
+                            <input type="number" id="master_price" placeholder="299" class="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 z-10">
+                            <button id="btn_apply_price" type="button" class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-r-lg hover:bg-gray-700 -ml-px">Apply to All</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="master_stock" class="block text-sm font-medium text-gray-700 mb-1">Master Stock</label>
+                        <div class="flex">
+                            <input type="number" id="master_stock" placeholder="50" class="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 z-10">
+                            <button id="btn_apply_stock" type="button" class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-r-lg hover:bg-gray-700 -ml-px">Apply to All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Container สำหรับตาราง -->
+                <div id="variants-table-container" class="overflow-x-auto">
+                    <!-- ตาราง Variant จะถูกสร้างที่นี่โดย JS -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Template สำหรับ Option Block (ซ่อนไว้ใช้ clone) -->
+    <template id="option-block-template">
+        <div class="option-block bg-gray-50 p-4 border border-gray-200 rounded-lg shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+                <input type="text" class="option-name-input text-lg font-semibold text-gray-700 border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent" placeholder="ชื่อคุณสมบัติ (เช่น สี)">
+                <button type="button" class="remove-option-btn text-gray-500 hover:text-red-600 font-bold">X ปิด</button>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">ค่าของคุณสมบัติ (ลากเพื่อสลับลำดับ)</label>
+                <div class="sortable-list">
+                    <!-- Tags จะถูกเพิ่มที่นี่ -->
+                    <input type="text" class="tag-input" placeholder="พิมพ์ค่าแล้วกด Enter (เช่น แดง)">
+                </div>
+            </div>
+        </div>
+    </template>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const optionsContainer = document.getElementById('options-container');
+            const addOptionBtn = document.getElementById('add-option-btn');
+            const generateVariantsBtn = document.getElementById('generate-variants-btn');
+            const variantsSection = document.getElementById('variants-section');
+            const variantsTableContainer = document.getElementById('variants-table-container');
+            const optionTemplate = document.getElementById('option-block-template');
+
+            // --- ส่วนที่ 2: การจัดการ Options และ Values ---
+
+            // 2.1 เพิ่ม Option Block ใหม่
+            addOptionBtn.addEventListener('click', () => {
+                const newOptionBlock = optionTemplate.content.cloneNode(true);
+                const blockWrapper = newOptionBlock.querySelector('.option-block');
+                const sortableList = newOptionBlock.querySelector('.sortable-list');
+                const tagInput = newOptionBlock.querySelector('.tag-input');
+                const removeOptionBtn = newOptionBlock.querySelector('.remove-option-btn');
+
+                // กำหนด ID เฉพาะสำหรับ Option นี้
+                const optionId = `opt_${Date.now()}`;
+                blockWrapper.dataset.optionId = optionId;
+
+                // 2.2 ทำให้ List สามารถลากและวาง (Drag-and-Drop) ได้
+                new Sortable(sortableList, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost', // Class สำหรับเงาตอนลาก
+                    draggable: '.option-value-tag', // ระบุว่า item ไหนลากได้
+                    // onEnd: (evt) => {
+                    //     // Logic การอัปเดตลำดับใน data model (ถ้ามี)
+                    //     console.log('ลำดับใหม่:', Array.from(sortableList.children)
+                    //         .filter(c => c.classList.contains('option-value-tag'))
+                    //         .map(t => t.dataset.value)
+                    //     );
+                    // }
+                });
+
+                // 2.3 การทำงานของช่อง Input Tag (พิมพ์แล้ว Enter)
+                tagInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                        e.preventDefault();
+                        const value = e.target.value.trim();
+                        addTag(value, sortableList, tagInput);
+                        e.target.value = '';
+                    }
+                });
+
+                // 2.4 ปุ่มลบ Option Block
+                removeOptionBtn.addEventListener('click', () => {
+                    blockWrapper.remove();
+                });
+
+                optionsContainer.appendChild(newOptionBlock);
+            });
+
+            // 2.5 ฟังก์ชันสำหรับเพิ่ม Tag (Value)
+            function addTag(value, listElement, inputElement) {
+                const tag = document.createElement('span');
+                tag.className = 'option-value-tag';
+                tag.dataset.value = value;
+                tag.textContent = value;
+                
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'remove-tag-btn';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.addEventListener('click', () => {
+                    tag.remove();
+                });
+
+                tag.appendChild(removeBtn);
+                listElement.insertBefore(tag, inputElement);
+            }
+
+
+            // --- ส่วนที่ 3 & 4: การสร้าง Variant Matrix ---
+            
+            generateVariantsBtn.addEventListener('click', () => {
+                const options = [];
+                // 3.1 อ่านข้อมูล Option และ Value ทั้งหมดจาก UI
+                // **สำคัญ:** อ่านค่าตามลำดับที่แสดงผล (ที่ผ่านการลากสลับแล้ว)
+                optionsContainer.querySelectorAll('.option-block').forEach(block => {
+                    const optionName = block.querySelector('.option-name-input').value.trim();
+                    const values = [];
+                    block.querySelectorAll('.option-value-tag').forEach(tag => {
+                        values.push(tag.dataset.value);
+                    });
+
+                    if (optionName && values.length > 0) {
+                        options.push({ name: optionName, values: values });
+                    }
+                });
+
+                if (options.length === 0) {
+                    variantsTableContainer.innerHTML = `<p class="text-red-500">โปรดเพิ่มคุณสมบัติและค่าอย่างน้อย 1 รายการ</p>`;
+                    variantsSection.classList.remove('hidden');
+                    return;
+                }
+
+                // 3.2 สร้าง Combinations (Cartesian Product)
+                const combinations = cartesianProduct(options.map(o => o.values));
+
+                // 3.3 สร้างตาราง HTML
+                let tableHtml = `<table class="min-w-full variants-table"><thead><tr>`;
+                
+                // สร้าง Headers (ชื่อ Option)
+                options.forEach(opt => {
+                    tableHtml += `<th>${opt.name}</th>`;
+                });
+                // สร้าง Headers (SKU, Price, Stock)
+                tableHtml += `<th>SKU ย่อย</th><th>Price</th><th>Stock</th>`;
+                tableHtml += `</tr></thead><tbody>`;
+
+                // 3.4 สร้าง Rows (แต่ละ Combination)
+                combinations.forEach(combo => {
+                    // สร้าง SKU ย่อยอัตโนมัติ (เช่น RED-M)
+                    const autoSku = combo.join('-').toUpperCase().replace(/\s+/g, '');
+
+                    tableHtml += `<tr>`;
+                    // คอลัมน์สำหรับค่า Option (เช่น "แดง", "M")
+                    combo.forEach(value => {
+                        tableHtml += `<td>${value}</td>`;
+                    });
+                    
+                    // คอลัมน์สำหรับ Input
+                    tableHtml += `<td><input type="text" class="variant-sku" placeholder="${autoSku}" value="${autoSku}"></td>`;
+                    tableHtml += `<td><input type="number" class="variant-price" placeholder="0.00"></td>`;
+                    tableHtml += `<td><input type="number" class="variant-stock" placeholder="0"></td>`;
+                    tableHtml += `</tr>`;
+                });
+
+                tableHtml += `</tbody></table>`;
+                variantsTableContainer.innerHTML = tableHtml;
+                variantsSection.classList.remove('hidden');
+            });
+
+            // 3.5 ฟังก์ชัน Cartesian Product (หัวใจของการจับคู่)
+            function cartesianProduct(arrays) {
+                return arrays.reduce((a, b) => 
+                    a.flatMap(x => b.map(y => [x, y].flat()))
+                , [[]]);
+            }
+
+
+            // --- ส่วนที่ 5: Bulk Actions (Master Inputs) ---
+            
+            const masterPriceInput = document.getElementById('master_price');
+            const applyPriceBtn = document.getElementById('btn_apply_price');
+            const masterStockInput = document.getElementById('master_stock');
+            const applyStockBtn = document.getElementById('btn_apply_stock');
+
+            // 5.1 Apply Master Price
+            applyPriceBtn.addEventListener('click', () => {
+                const price = masterPriceInput.value;
+                if (price) {
+                    variantsTableContainer.querySelectorAll('.variant-price').forEach(input => {
+                        input.value = price;
+                    });
+                }
+            });
+
+            // 5.2 Apply Master Stock
+            applyStockBtn.addEventListener('click', () => {
+                const stock = masterStockInput.value;
+                if (stock) {
+                    variantsTableContainer.querySelectorAll('.variant-stock').forEach(input => {
+                        input.value = stock;
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
