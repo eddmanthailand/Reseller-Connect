@@ -359,7 +359,14 @@ def get_products():
                 p.parent_sku,
                 p.description,
                 p.created_at,
-                COUNT(DISTINCT s.id) as sku_count
+                COUNT(DISTINCT s.id) as sku_count,
+                (
+                    SELECT pi.image_url 
+                    FROM product_images pi 
+                    WHERE pi.product_id = p.id 
+                    ORDER BY pi.sort_order ASC 
+                    LIMIT 1
+                ) as first_image_url
             FROM products p
             LEFT JOIN skus s ON p.id = s.product_id
             GROUP BY p.id, p.name, p.parent_sku, p.description, p.created_at
@@ -395,6 +402,17 @@ def get_product(product_id):
             return jsonify({'error': 'Product not found'}), 404
         
         product = dict(product)
+        
+        # Get product images
+        cursor.execute('''
+            SELECT id, image_url, sort_order
+            FROM product_images
+            WHERE product_id = %s
+            ORDER BY sort_order ASC
+        ''', (product_id,))
+        
+        images = [dict(row) for row in cursor.fetchall()]
+        product['images'] = images
         
         # Get options and their values
         cursor.execute('''
@@ -478,12 +496,20 @@ def create_product():
         
         # Insert product
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, description, image_url)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO products (name, parent_sku, description)
+            VALUES (%s, %s, %s)
             RETURNING id
-        ''', (data['name'], data['parent_sku'], data.get('description', ''), data.get('image_url')))
+        ''', (data['name'], data['parent_sku'], data.get('description', '')))
         
         product_id = cursor.fetchone()['id']
+        
+        # Insert product images if provided
+        image_urls = data.get('image_urls', [])
+        for idx, image_url in enumerate(image_urls):
+            cursor.execute('''
+                INSERT INTO product_images (product_id, image_url, sort_order)
+                VALUES (%s, %s, %s)
+            ''', (product_id, image_url, idx))
         
         # Insert options and values
         options_data = data.get('options', [])
@@ -558,6 +584,50 @@ def create_product():
         if conn:
             conn.close()
 
+@app.route('/api/products/<int:product_id>/images/reorder', methods=['PUT'])
+@admin_required
+def reorder_product_images(product_id):
+    """Reorder product images"""
+    data = request.json
+    
+    if not data or 'image_ids' not in data:
+        return jsonify({'error': 'Missing image_ids array'}), 400
+    
+    image_ids = data['image_ids']
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Update sort_order for each image
+        for idx, image_id in enumerate(image_ids):
+            cursor.execute('''
+                UPDATE product_images 
+                SET sort_order = %s 
+                WHERE id = %s AND product_id = %s
+            ''', (idx, image_id, product_id))
+        
+        conn.commit()
+        
+        return jsonify({'message': 'Images reordered successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/products/<int:product_id>', methods=['DELETE'])
 @admin_required
 def delete_product(product_id):
@@ -589,42 +659,52 @@ def delete_product(product_id):
         if conn:
             conn.close()
 
-@app.route('/api/upload-image', methods=['POST'])
+@app.route('/api/upload-images', methods=['POST'])
 @admin_required
-def upload_image():
-    """Upload product image to Replit Object Storage"""
+def upload_images():
+    """Upload multiple product images to Replit Object Storage"""
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
+        if 'images' not in request.files:
+            return jsonify({'error': 'No image files provided'}), 400
         
-        file = request.files['image']
+        files = request.files.getlist('images')
         
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        if not files or len(files) == 0:
+            return jsonify({'error': 'No files selected'}), 400
         
         # Allowed extensions
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
-        if file_ext not in allowed_extensions:
-            return jsonify({'error': 'Invalid file type. Allowed: png, jpg, jpeg, gif, webp'}), 400
+        uploaded_images = []
         
         # Initialize Object Storage client
         storage_client = Client()
-        
-        # Generate unique filename
         import uuid
-        unique_filename = f"products/{uuid.uuid4()}.{file_ext}"
         
-        # Upload to Object Storage
-        storage_client.upload_from_bytes(unique_filename, file.read())
+        for file in files:
+            if file.filename == '':
+                continue
+            
+            file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            
+            if file_ext not in allowed_extensions:
+                continue
+            
+            # Generate unique filename
+            unique_filename = f"products/{uuid.uuid4()}.{file_ext}"
+            
+            # Upload to Object Storage
+            storage_client.upload_from_bytes(unique_filename, file.read())
+            
+            # Store image URL
+            image_url = f"/storage/{unique_filename}"
+            uploaded_images.append(image_url)
         
-        # Return the image URL (relative path)
-        image_url = f"/storage/{unique_filename}"
+        if len(uploaded_images) == 0:
+            return jsonify({'error': 'No valid images uploaded'}), 400
         
         return jsonify({
-            'message': 'Image uploaded successfully',
-            'image_url': image_url
+            'message': f'{len(uploaded_images)} image(s) uploaded successfully',
+            'image_urls': uploaded_images
         }), 200
         
     except Exception as e:

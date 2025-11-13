@@ -383,8 +383,8 @@ async function loadProducts() {
                 day: 'numeric'
             });
 
-            const imageHtml = product.image_url 
-                ? `<img src="${product.image_url}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.2);">`
+            const imageHtml = product.first_image_url 
+                ? `<img src="${product.first_image_url}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.2);">`
                 : `<div style="width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📦</div>`;
             
             row.innerHTML = `

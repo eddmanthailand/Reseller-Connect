@@ -115,15 +115,27 @@ def init_db():
             )
         ''')
         
-        # Migration: Add image_url column to products table if it doesn't exist
+        # Create product_images table (multiple images per product with ordering)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_images (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Migration: Drop image_url column from products table if it exists
         cursor.execute('''
             DO $$
             BEGIN
-                IF NOT EXISTS (
+                IF EXISTS (
                     SELECT 1 FROM information_schema.columns 
                     WHERE table_name = 'products' AND column_name = 'image_url'
                 ) THEN
-                    ALTER TABLE products ADD COLUMN image_url TEXT;
+                    ALTER TABLE products DROP COLUMN image_url;
                 END IF;
             END $$;
         ''')
