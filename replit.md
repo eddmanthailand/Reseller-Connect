@@ -125,3 +125,8 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - Unified API_URL management using `window.API_URL` pattern
   - dashboard.js reads from `window.API_URL || '/api'`
   - All templates properly initialize API_URL without conflicts
+- **UI/UX Improvement (November 13, 2025):**
+  - Changed Product Creation page to full-page layout (removed sidebar)
+  - New sticky header with back button, page title, user info, and logout button
+  - Increased max-width to 1400px for better data entry experience
+  - Clean, spacious interface optimized for form filling
