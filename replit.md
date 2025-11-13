@@ -48,8 +48,9 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 - **reseller_tiers:** `id`, `name` (Bronze, Silver)
 - **users:** `id`, `full_name`, `username`, `password` (bcrypt hashed), `role_id` (FK to roles), `reseller_tier_id` (NULL FK to reseller_tiers), `created_at`
 
-**Product Management (5-Table SPU/SKU Architecture):**
+**Product Management (6-Table SPU/SKU Architecture):**
 - **products:** `id`, `name`, `parent_sku` (UNIQUE), `description`, `created_at`, `updated_at` (SPU - parent product)
+- **product_images:** `id`, `product_id` (FK to products), `image_url`, `sort_order`, `created_at` (product images with drag-and-drop ordering)
 - **options:** `id`, `product_id` (FK to products), `name` (e.g., "Color", "Size"), `created_at` (product attributes)
 - **option_values:** `id`, `option_id` (FK to options), `value` (e.g., "Red", "S", "M"), `sort_order` (for drag-and-drop ordering), `created_at`
 - **skus:** `id`, `product_id` (FK to products), `sku_code` (UNIQUE), `price`, `stock`, `created_at`, `updated_at` (SKU variants)
@@ -130,3 +131,31 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - New sticky header with back button, page title, user info, and logout button
   - Increased max-width to 1400px for better data entry experience
   - Clean, spacious interface optimized for form filling
+
+### November 13, 2025 - Multiple Product Image Upload with Drag-and-Drop Ordering
+- **Database Migration:**
+  - Migrated from single `image_url` column in products table to dedicated `product_images` table
+  - New table supports unlimited images per product with `sort_order` field for custom ordering
+  - Each product can now have multiple images with drag-and-drop reordering capability
+- **Backend Enhancements:**
+  - Updated `POST /api/upload-images` - Accept multiple files, return array of URLs
+  - New `PUT /api/products/<id>/images/reorder` - Update image sort order
+  - Modified all product CRUD endpoints to handle `image_urls` array instead of single image_url
+  - Fixed database migration issues with duplicate sequence errors
+- **Frontend Implementation:**
+  - Multiple file input with `<input type="file" multiple>` in product creation form
+  - Image gallery preview with real-time display (200x200px thumbnails)
+  - Drag-and-drop reordering using SortableJS for intuitive image management
+  - Visual feedback: hover effects, drag cursors, and sortable handles
+  - Product list displays first image as 50x50px thumbnail
+  - Automatic image upload on file selection with progress feedback
+- **File Storage:**
+  - Full integration with Replit Object Storage
+  - Supports PNG, JPG, GIF, WebP formats
+  - Unique filename generation to prevent conflicts
+  - **IMPORTANT:** Requires manual Object Storage bucket creation via Replit UI
+- **Key Features:**
+  - Upload multiple images simultaneously
+  - Drag-and-drop to reorder images in gallery
+  - First image displayed as product thumbnail in list view
+  - Seamless integration with existing SPU/SKU workflow
