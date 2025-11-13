@@ -142,20 +142,27 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - New `PUT /api/products/<id>/images/reorder` - Update image sort order
   - Modified all product CRUD endpoints to handle `image_urls` array instead of single image_url
   - Fixed database migration issues with duplicate sequence errors
-- **Frontend Implementation:**
+- **Frontend Implementation (Deferred Upload Pattern):**
   - Multiple file input with `<input type="file" multiple>` in product creation form
-  - Image gallery preview with real-time display (200x200px thumbnails)
-  - Drag-and-drop reordering using SortableJS for intuitive image management
+  - **Client-side preview using FileReader API** - No upload until form submission
+  - Centralized `imageState` object manages File objects and preview data URLs
+  - Image gallery shows local previews (data URLs) with real-time display (120px thumbnails)
+  - Drag-and-drop reordering using SortableJS reorders both File objects and preview arrays in sync
   - Visual feedback: hover effects, drag cursors, and sortable handles
   - Product list displays first image as 50x50px thumbnail
-  - Automatic image upload on file selection with progress feedback
+  - **Deferred upload workflow:** Select images → Preview locally → Submit form → Upload images → Save product
+  - File validation: Type checking (image/*) and size limit (5MB per file)
+  - Progress feedback during submission: "กำลังอัพโหลดรูปภาพ..." → "กำลังบันทึกข้อมูลสินค้า..."
 - **File Storage:**
   - Full integration with Replit Object Storage
   - Supports PNG, JPG, GIF, WebP formats
   - Unique filename generation to prevent conflicts
   - **IMPORTANT:** Requires manual Object Storage bucket creation via Replit UI
+  - **Zero orphaned files:** Images only uploaded on successful form submission (prevents storage waste)
 - **Key Features:**
-  - Upload multiple images simultaneously
-  - Drag-and-drop to reorder images in gallery
+  - Preview multiple images locally before upload (no network calls until save)
+  - Drag-and-drop to reorder preview images
+  - Remove images from queue before upload
   - First image displayed as product thumbnail in list view
+  - Atomic upload + save: Images upload only when saving product (prevents orphaned files)
   - Seamless integration with existing SPU/SKU workflow
