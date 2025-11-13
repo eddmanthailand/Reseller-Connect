@@ -331,6 +331,11 @@
             gap: 20px;
         }
 
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         .header-right {
             display: flex;
             align-items: center;
@@ -394,18 +399,10 @@
                         </div>
                         <div style="margin-top: 16px;">
                             <label class="form-label">รูปภาพสินค้า (ไม่บังคับ - สามารถเลือกหลายรูป)</label>
-                            <div style="display: flex; gap: 12px; align-items: flex-start;">
-                                <input type="file" id="product_images" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" style="flex: 1;" multiple>
-                                <button type="button" id="upload-images-btn" class="btn-primary" style="white-space: nowrap;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                        <polyline points="17 8 12 3 7 8"/>
-                                        <line x1="12" x2="12" y1="3" y2="15"/>
-                                    </svg>
-                                    อัพโหลดรูปภาพ
-                                </button>
+                            <input type="file" id="product_images" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" multiple>
+                            <div id="upload-status" style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7);">
+                                💡 เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)
                             </div>
-                            <div id="upload-status" style="margin-top: 8px; font-size: 13px; opacity: 0.8;"></div>
                             
                             <!-- Image Gallery with Drag & Drop -->
                             <div id="images-gallery" style="margin-top: 16px; display: none;">
@@ -494,72 +491,78 @@
         // Load current user
         loadCurrentUser();
 
-        // Store uploaded image URLs
-        let uploadedImageUrls = [];
+        // Centralized image state management
+        const imageState = {
+            files: [],        // Array of File objects
+            previews: [],     // Array of preview data URLs
+            sortable: null    // SortableJS instance
+        };
 
-        // Multiple images upload handler
-        document.getElementById('upload-images-btn').addEventListener('click', async () => {
-            const fileInput = document.getElementById('product_images');
-            const files = fileInput.files;
+        // Handle file selection
+        document.getElementById('product_images').addEventListener('change', async (e) => {
+            const newFiles = Array.from(e.target.files);
             
-            if (!files || files.length === 0) {
-                alert('กรุณาเลือกรูปภาพก่อน');
-                return;
-            }
+            if (newFiles.length === 0) return;
             
             const statusDiv = document.getElementById('upload-status');
-            const uploadBtn = document.getElementById('upload-images-btn');
+            statusDiv.textContent = `⏳ กำลังสร้างตัวอย่าง ${newFiles.length} รูป...`;
+            statusDiv.style.color = 'rgba(59, 130, 246, 0.9)';
             
             try {
-                uploadBtn.disabled = true;
-                statusDiv.textContent = `⏳ กำลังอัพโหลด ${files.length} รูป...`;
-                statusDiv.style.color = 'rgba(59, 130, 246, 0.9)';
-                
-                const formData = new FormData();
-                for (let file of files) {
-                    formData.append('images', file);
+                // Generate previews for new files
+                for (let file of newFiles) {
+                    // Validate file type
+                    if (!file.type.startsWith('image/')) {
+                        alert(`ไฟล์ ${file.name} ไม่ใช่รูปภาพ`);
+                        continue;
+                    }
+                    
+                    // Validate file size (max 5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert(`ไฟล์ ${file.name} ใหญ่เกิน 5MB`);
+                        continue;
+                    }
+                    
+                    // Create preview using FileReader
+                    const preview = await createPreview(file);
+                    
+                    // Add to state
+                    imageState.files.push(file);
+                    imageState.previews.push(preview);
                 }
                 
-                const response = await fetch(API_URL + '/upload-images', {
-                    method: 'POST',
-                    body: formData
-                });
+                // Render gallery
+                renderImageGallery();
                 
-                const result = await response.json();
+                statusDiv.textContent = `✓ เพิ่ม ${newFiles.length} รูปแล้ว (จะอัพโหลดเมื่อกดบันทึก)`;
+                statusDiv.style.color = 'rgba(34, 197, 94, 0.9)';
                 
-                if (response.ok) {
-                    // Add new images to array
-                    uploadedImageUrls.push(...result.image_urls);
-                    
-                    // Render gallery
-                    renderImageGallery();
-                    
-                    // Clear file input
-                    fileInput.value = '';
-                    
-                    statusDiv.textContent = `✓ อัพโหลด ${result.image_urls.length} รูปสำเร็จ!`;
-                    statusDiv.style.color = 'rgba(34, 197, 94, 0.9)';
-                    
-                    setTimeout(() => {
-                        statusDiv.textContent = '';
-                    }, 3000);
-                } else {
-                    throw new Error(result.error || 'Upload failed');
-                }
+                setTimeout(() => {
+                    statusDiv.textContent = '💡 เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)';
+                    statusDiv.style.color = 'rgba(255,255,255,0.7)';
+                }, 3000);
             } catch (error) {
                 statusDiv.textContent = `✗ เกิดข้อผิดพลาด: ${error.message}`;
                 statusDiv.style.color = 'rgba(239, 68, 68, 0.9)';
-            } finally {
-                uploadBtn.disabled = false;
             }
         });
 
-        // Render image gallery with drag & drop
+        // Create preview from File object using FileReader
+        function createPreview(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Render image gallery with drag & drop (using previews)
         function renderImageGallery() {
             const gallery = document.getElementById('images-gallery');
             const container = document.getElementById('sortable-images');
             
-            if (uploadedImageUrls.length === 0) {
+            if (imageState.previews.length === 0) {
                 gallery.style.display = 'none';
                 return;
             }
@@ -567,13 +570,13 @@
             gallery.style.display = 'block';
             container.innerHTML = '';
             
-            uploadedImageUrls.forEach((url, index) => {
+            imageState.previews.forEach((previewUrl, index) => {
                 const imageCard = document.createElement('div');
                 imageCard.className = 'image-card';
-                imageCard.setAttribute('data-url', url);
+                imageCard.setAttribute('data-index', index);
                 imageCard.innerHTML = `
                     <div style="position: relative; border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); cursor: move;">
-                        <img src="${url}" alt="Product" style="width: 100%; height: 120px; object-fit: cover;">
+                        <img src="${previewUrl}" alt="Preview" style="width: 100%; height: 120px; object-fit: cover;">
                         <div style="position: absolute; top: 4px; right: 4px;">
                             <button type="button" onclick="removeImage(${index})" class="btn-danger" style="padding: 4px; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.9);">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -588,19 +591,25 @@
                 container.appendChild(imageCard);
             });
             
-            // Initialize SortableJS for drag & drop
-            if (window.sortableImages) {
-                window.sortableImages.destroy();
+            // Destroy existing Sortable instance
+            if (imageState.sortable) {
+                imageState.sortable.destroy();
             }
-            window.sortableImages = new Sortable(container, {
+            
+            // Initialize SortableJS for drag & drop
+            imageState.sortable = new Sortable(container, {
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 onEnd: function(evt) {
-                    // Update array order based on new position
                     const oldIndex = evt.oldIndex;
                     const newIndex = evt.newIndex;
-                    const [movedItem] = uploadedImageUrls.splice(oldIndex, 1);
-                    uploadedImageUrls.splice(newIndex, 0, movedItem);
+                    
+                    // Reorder both files and previews arrays
+                    const [movedFile] = imageState.files.splice(oldIndex, 1);
+                    imageState.files.splice(newIndex, 0, movedFile);
+                    
+                    const [movedPreview] = imageState.previews.splice(oldIndex, 1);
+                    imageState.previews.splice(newIndex, 0, movedPreview);
                     
                     // Re-render to update "รูปหลัก" badge
                     renderImageGallery();
@@ -611,7 +620,8 @@
         // Remove image function
         function removeImage(index) {
             if (confirm('ต้องการลบรูปนี้หรือไม่?')) {
-                uploadedImageUrls.splice(index, 1);
+                imageState.files.splice(index, 1);
+                imageState.previews.splice(index, 1);
                 renderImageGallery();
             }
         }
@@ -797,10 +807,11 @@
             });
         });
 
-        // Form submission
+        // Form submission with deferred image upload
         document.getElementById('productForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Step 1: Validate form fields
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
@@ -810,22 +821,56 @@
                 return;
             }
 
-            const options = collectOptionsData();
-            const skus = collectSkusData(options);
-
-            const productData = {
-                name,
-                parent_sku: parentSku,
-                description,
-                image_urls: uploadedImageUrls,
-                options: options.map(opt => ({
-                    name: opt.name,
-                    values: opt.values.map((v, idx) => ({ value: v, sort_order: idx }))
-                })),
-                skus
-            };
-
+            const submitBtn = document.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
             try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึก...';
+                
+                // Step 2: Upload images first (if any)
+                let imageUrls = [];
+                if (imageState.files.length > 0) {
+                    submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดรูปภาพ...';
+                    
+                    const formData = new FormData();
+                    imageState.files.forEach(file => {
+                        formData.append('images', file);
+                    });
+                    
+                    const uploadResponse = await fetch(`${API_URL}/upload-images`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!uploadResponse.ok) {
+                        const uploadError = await uploadResponse.json();
+                        throw new Error(uploadError.error || 'อัพโหลดรูปภาพล้มเหลว');
+                    }
+                    
+                    const uploadResult = await uploadResponse.json();
+                    imageUrls = uploadResult.image_urls || [];
+                }
+                
+                // Step 3: Prepare product data
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึกข้อมูลสินค้า...';
+                
+                const options = collectOptionsData();
+                const skus = collectSkusData(options);
+
+                const productData = {
+                    name,
+                    parent_sku: parentSku,
+                    description,
+                    image_urls: imageUrls,
+                    options: options.map(opt => ({
+                        name: opt.name,
+                        values: opt.values.map((v, idx) => ({ value: v, sort_order: idx }))
+                    })),
+                    skus
+                };
+
+                // Step 4: Submit product data
                 const response = await fetch(`${API_URL}/products`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -835,14 +880,16 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    alert('บันทึกสินค้าสำเร็จ!');
+                    alert('✓ บันทึกสินค้าสำเร็จ!');
                     window.location.href = '/admin/products';
                 } else {
-                    alert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'));
+                    throw new Error(result.error || 'บันทึกข้อมูลล้มเหลว');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                alert('✗ เกิดข้อผิดพลาด: ' + error.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
             }
         });
 
