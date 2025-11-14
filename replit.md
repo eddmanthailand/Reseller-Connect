@@ -50,7 +50,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
 
 **Product Management (6-Table SPU/SKU Architecture):**
 - **products:** `id`, `name`, `parent_sku` (UNIQUE), `description`, `created_at`, `updated_at` (SPU - parent product)
-- **product_images:** `id`, `product_id` (FK to products), `image_url`, `sort_order`, `created_at` (product images with drag-and-drop ordering)
+- **product_images:** `id` (SERIAL with auto-increment), `product_id` (FK to products), `image_url`, `sort_order`, `created_at` (product images with drag-and-drop ordering)
 - **options:** `id`, `product_id` (FK to products), `name` (e.g., "Color", "Size"), `created_at` (product attributes)
 - **option_values:** `id`, `option_id` (FK to options), `value` (e.g., "Red", "S", "M"), `sort_order` (for drag-and-drop ordering), `created_at`
 - **skus:** `id`, `product_id` (FK to products), `sku_code` (UNIQUE), `price`, `stock`, `created_at`, `updated_at` (SKU variants)
@@ -166,3 +166,17 @@ The backend is built with Flask 3.1.2 and Flask-CORS, utilizing a Neon PostgreSQ
   - First image displayed as product thumbnail in list view
   - Atomic upload + save: Images upload only when saving product (prevents orphaned files)
   - Seamless integration with existing SPU/SKU workflow
+
+### November 14, 2025 - Bug Fix: Product Creation Form
+- **Critical Bug Fixed:**
+  - User reported error when pressing Enter in Options value input: "null value in column id of relation product_images violates not-null constraint"
+  - Root cause: `product_images` table had `id` column as `integer NOT NULL` without auto-increment
+  - Database migration applied to fix schema issue
+- **Database Schema Fix:**
+  - Created sequence `product_images_id_seq` for auto-incrementing IDs
+  - Modified `product_images.id` column to use `nextval('product_images_id_seq')` as default value
+  - This ensures new image records get auto-generated IDs without manual specification
+- **Impact:**
+  - Product creation form now works correctly when adding option values with Enter key
+  - Image uploads no longer fail with null ID constraint violations
+  - No code changes required - pure database schema fix
