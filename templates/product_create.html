@@ -626,6 +626,20 @@
             }
         }
 
+        // Event delegation for tag input to prevent form submit and handle dynamic inputs
+        document.getElementById('options-container').addEventListener('keydown', (e) => {
+            // Only handle Enter key on tag-input elements
+            if (e.key === 'Enter' && e.target.classList.contains('tag-input')) {
+                e.preventDefault();
+                const value = e.target.value.trim();
+                if (value) {
+                    const sortableList = e.target.closest('.sortable-list');
+                    addTag(sortableList, value);
+                    e.target.value = '';
+                }
+            }
+        });
+
         // Add option block
         document.getElementById('add-option-btn').addEventListener('click', () => {
             addOptionBlock();
@@ -664,19 +678,6 @@
                 ghostClass: 'sortable-ghost',
                 filter: '.tag-input',
                 onMove: (evt) => evt.related.className.indexOf('tag-input') === -1
-            });
-
-            // Tag input handler
-            const tagInput = sortableList.querySelector('.tag-input');
-            tagInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const value = tagInput.value.trim();
-                    if (value) {
-                        addTag(sortableList, value);
-                        tagInput.value = '';
-                    }
-                }
             });
         }
 
