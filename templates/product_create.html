@@ -626,17 +626,21 @@
             }
         }
 
-        // Event delegation for tag input to prevent form submit and handle dynamic inputs
-        document.getElementById('options-container').addEventListener('keydown', (e) => {
-            // Only handle Enter key on tag-input elements
-            if (e.key === 'Enter' && e.target.classList.contains('tag-input')) {
+        // Prevent Enter key from submitting form on ANY input field
+        document.getElementById('productForm').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
                 e.preventDefault();
-                const value = e.target.value.trim();
-                if (value) {
-                    const sortableList = e.target.closest('.sortable-list');
-                    addTag(sortableList, value);
-                    e.target.value = '';
+                e.stopPropagation();
+                
+                if (e.target.classList.contains('tag-input')) {
+                    const value = e.target.value.trim();
+                    if (value) {
+                        const sortableList = e.target.closest('.sortable-list');
+                        addTag(sortableList, value);
+                        e.target.value = '';
+                    }
                 }
+                return false;
             }
         });
 
