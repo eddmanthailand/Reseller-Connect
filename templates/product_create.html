@@ -629,18 +629,25 @@
         // Prevent Enter key from submitting form on ANY input field
         document.getElementById('productForm').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
-                console.log('Enter detected on input:', e.target.className);
                 e.preventDefault();
                 e.stopPropagation();
                 
-                if (e.target.classList.contains('tag-input')) {
+                // If Enter on option name input, focus to tag input
+                if (e.target.classList.contains('option-name-input')) {
+                    const optionBlock = e.target.closest('.option-block');
+                    const tagInput = optionBlock.querySelector('.tag-input');
+                    if (tagInput) {
+                        tagInput.focus();
+                    }
+                }
+                // If Enter on tag input, add tag
+                else if (e.target.classList.contains('tag-input')) {
                     const value = e.target.value.trim();
-                    console.log('Tag input value:', value);
                     if (value) {
                         const sortableList = e.target.closest('.sortable-list');
-                        console.log('Adding tag to sortableList:', sortableList);
                         addTag(sortableList, value);
                         e.target.value = '';
+                        e.target.focus();
                     }
                 }
                 return false;
