@@ -400,10 +400,24 @@ async function loadProducts() {
                     </span>
                 </td>
                 <td>${formattedDate}</td>
-                <td>
+                <td style="display: flex; gap: 8px;">
+                    <a href="/admin/products/edit/${product.id}" 
+                       class="btn-edit" 
+                       style="background: rgba(59, 130, 246, 0.2); color: rgb(59, 130, 246); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                            <path d="m15 5 4 4"/>
+                        </svg>
+                        แก้ไข
+                    </a>
                     <button onclick="deleteProduct(${product.id}, '${product.name}')" 
                             class="btn-delete" 
-                            style="background: rgba(239, 68, 68, 0.2); color: rgb(239, 68, 68); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            style="background: rgba(239, 68, 68, 0.2); color: rgb(239, 68, 68); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"/>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        </svg>
                         ลบ
                     </button>
                 </td>
