@@ -1212,12 +1212,20 @@
         // Load existing product data
         async function loadProductData() {
             try {
+                console.log('Loading product ID:', productId);
+                console.log('API URL:', `${API_URL}/products/${productId}`);
+                
                 const response = await fetch(`${API_URL}/products/${productId}`);
+                console.log('Response status:', response.status);
+                
                 if (!response.ok) {
-                    throw new Error('ไม่พบข้อมูลสินค้า');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('API Error:', errorData);
+                    throw new Error(errorData.error || 'ไม่พบข้อมูลสินค้า');
                 }
                 
                 const product = await response.json();
+                console.log('Product loaded:', product);
                 
                 // Populate basic fields
                 document.getElementById('product_name').value = product.name || '';
