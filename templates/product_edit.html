@@ -1241,13 +1241,7 @@
                 // Load size chart if exists
                 if (product.size_chart_image_url) {
                     sizeChartState.preview = product.size_chart_image_url;
-                    const previewEl = document.getElementById('size_chart_preview');
-                    if (previewEl) {
-                        previewEl.innerHTML = `
-                            <img src="${product.size_chart_image_url}" alt="Size Chart" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
-                            <button type="button" onclick="removeSizeChart()" style="margin-top: 8px;" class="btn-primary btn-gray btn-sm">ลบตารางไซส์</button>
-                        `;
-                    }
+                    showSizeChartPreview(product.size_chart_image_url);
                 }
                 
                 // Load options and values
