@@ -96,6 +96,12 @@ def product_create():
     """Render the product creation page"""
     return render_template('product_create.html')
 
+@app.route('/admin/products/edit/<int:product_id>')
+@admin_required
+def product_edit(product_id):
+    """Render the product edit page"""
+    return render_template('product_edit.html')
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login"""
@@ -618,6 +624,136 @@ def reorder_product_images(product_id):
         conn.commit()
         
         return jsonify({'message': 'Images reordered successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>', methods=['PUT'])
+@admin_required
+def update_product(product_id):
+    """Update an existing product with options, values, and SKUs"""
+    data = request.json
+    
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Missing required field: name'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Update basic product information
+        cursor.execute('''
+            UPDATE products 
+            SET name = %s, description = %s, size_chart_image_url = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (data['name'], data.get('description', ''), data.get('size_chart_image_url'), product_id))
+        
+        # Delete existing SKUs (cascade deletes sku_values_map)
+        cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))
+        
+        # Delete existing options (cascade deletes option_values)
+        cursor.execute('DELETE FROM options WHERE product_id = %s', (product_id,))
+        
+        # Delete existing product images
+        cursor.execute('DELETE FROM product_images WHERE product_id = %s', (product_id,))
+        
+        # Insert new product images
+        image_urls = data.get('image_urls', [])
+        for idx, image_url in enumerate(image_urls):
+            cursor.execute('''
+                INSERT INTO product_images (product_id, image_url, sort_order)
+                VALUES (%s, %s, %s)
+            ''', (product_id, image_url, idx))
+        
+        # Insert new options and values
+        options_data = data.get('options', [])
+        options_map = []  # List of {name, value_ids} for ordered lookup
+        
+        for option in options_data:
+            if not option.get('name') or not option.get('values'):
+                continue
+            
+            # Insert option
+            cursor.execute('''
+                INSERT INTO options (product_id, name)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (product_id, option['name']))
+            
+            option_id = cursor.fetchone()['id']
+            option_name = option['name']
+            value_to_id = {}  # Map for this option: {value_name: value_id}
+            
+            # Insert option values with sort_order
+            for idx, value_data in enumerate(option['values']):
+                value_name = value_data['value']
+                cursor.execute('''
+                    INSERT INTO option_values (option_id, value, sort_order)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                ''', (option_id, value_name, value_data.get('sort_order', idx)))
+                
+                value_id = cursor.fetchone()['id']
+                value_to_id[value_name] = value_id
+            
+            options_map.append({
+                'name': option_name,
+                'value_to_id': value_to_id,
+                'values_order': [v['value'] for v in option['values']]
+            })
+        
+        # Insert new SKUs
+        skus_data = data.get('skus', [])
+        for sku_data in skus_data:
+            if not sku_data.get('sku_code'):
+                continue
+            
+            # Insert SKU
+            cursor.execute('''
+                INSERT INTO skus (product_id, sku_code, price, stock)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            ''', (
+                product_id,
+                sku_data['sku_code'],
+                sku_data.get('price', 0),
+                sku_data.get('stock', 0)
+            ))
+            
+            sku_id = cursor.fetchone()['id']
+            
+            # Map SKU to option values using variant_values (maintains option context)
+            variant_values = sku_data.get('variant_values', [])
+            if len(variant_values) == len(options_map):
+                for idx, value_name in enumerate(variant_values):
+                    option = options_map[idx]
+                    if value_name in option['value_to_id']:
+                        value_id = option['value_to_id'][value_name]
+                        cursor.execute('''
+                            INSERT INTO sku_values_map (sku_id, option_value_id)
+                            VALUES (%s, %s)
+                        ''', (sku_id, value_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Product updated successfully',
+            'product_id': product_id
+        }), 200
         
     except Exception as e:
         if conn:
