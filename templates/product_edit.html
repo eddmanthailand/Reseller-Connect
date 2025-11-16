@@ -1227,10 +1227,16 @@
                 const product = await response.json();
                 console.log('Product loaded:', product);
                 
-                // Populate basic fields
-                document.getElementById('product_name').value = product.name || '';
-                document.getElementById('parent_sku').value = product.parent_sku || '';
-                document.getElementById('description').value = product.description || '';
+                // Populate basic fields with null checks
+                const productNameEl = document.getElementById('product_name');
+                const parentSkuEl = document.getElementById('parent_sku');
+                const descriptionEl = document.getElementById('description');
+                
+                console.log('Elements found:', { productNameEl, parentSkuEl, descriptionEl });
+                
+                if (productNameEl) productNameEl.value = product.name || '';
+                if (parentSkuEl) parentSkuEl.value = product.parent_sku || '';
+                if (descriptionEl) descriptionEl.value = product.description || '';
                 
                 // Load existing product images
                 if (product.images && product.images.length > 0) {
@@ -1308,8 +1314,10 @@
             });
         }
         
-        // Load product data on page load
-        loadProductData();
+        // Load product data on page load (wait for DOM to be ready)
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProductData();
+        });
 
         function collectSkusData(options) {
             const skus = [];
