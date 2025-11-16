@@ -358,6 +358,7 @@ def get_products():
                 p.name,
                 p.parent_sku,
                 p.description,
+                p.size_chart_image_url,
                 p.created_at,
                 COUNT(DISTINCT s.id) as sku_count,
                 (
@@ -369,7 +370,7 @@ def get_products():
                 ) as first_image_url
             FROM products p
             LEFT JOIN skus s ON p.id = s.product_id
-            GROUP BY p.id, p.name, p.parent_sku, p.description, p.created_at
+            GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.created_at
             ORDER BY p.created_at DESC
         ''')
         
@@ -496,10 +497,10 @@ def create_product():
         
         # Insert product
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, description)
-            VALUES (%s, %s, %s)
+            INSERT INTO products (name, parent_sku, description, size_chart_image_url)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        ''', (data['name'], data['parent_sku'], data.get('description', '')))
+        ''', (data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url')))
         
         product_id = cursor.fetchone()['id']
         
