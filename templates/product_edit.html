@@ -1230,7 +1230,7 @@
                 // Populate basic fields with null checks
                 const productNameEl = document.getElementById('product_name');
                 const parentSkuEl = document.getElementById('parent_sku');
-                const descriptionEl = document.getElementById('description');
+                const descriptionEl = document.getElementById('product_description');
                 
                 console.log('Elements found:', { productNameEl, parentSkuEl, descriptionEl });
                 
@@ -1243,7 +1243,7 @@
                     product.images.forEach((img, idx) => {
                         imageState.previews.push(img.image_url);
                     });
-                    renderImagePreviews();
+                    renderImageGallery();
                 }
                 
                 // Load size chart if exists
