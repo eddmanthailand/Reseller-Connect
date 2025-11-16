@@ -140,6 +140,19 @@ def init_db():
             END $$;
         ''')
         
+        # Migration: Add size_chart_image_url column to products table if not exists
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'products' AND column_name = 'size_chart_image_url'
+                ) THEN
+                    ALTER TABLE products ADD COLUMN size_chart_image_url TEXT;
+                END IF;
+            END $$;
+        ''')
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:
