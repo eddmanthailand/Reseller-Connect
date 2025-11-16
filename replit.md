@@ -31,6 +31,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - Multiple product image uploads with drag-and-drop reordering.
   - Optional size chart image upload with free aspect ratio cropping.
   - Client-side image preview and deferred upload pattern to prevent orphaned files.
+  - **Edit Product (Full CRUD):** Load existing product data, populate form with images/options/SKUs, update via PUT endpoint with proper data integrity (deletes old SKUs/options/images before reinsertion, uses options_map to prevent value collision).
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
