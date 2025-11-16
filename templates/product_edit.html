@@ -1212,27 +1212,19 @@
         // Load existing product data
         async function loadProductData() {
             try {
-                console.log('Loading product ID:', productId);
-                console.log('API URL:', `${API_URL}/products/${productId}`);
-                
                 const response = await fetch(`${API_URL}/products/${productId}`);
-                console.log('Response status:', response.status);
                 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    console.error('API Error:', errorData);
                     throw new Error(errorData.error || 'ไม่พบข้อมูลสินค้า');
                 }
                 
                 const product = await response.json();
-                console.log('Product loaded:', product);
                 
                 // Populate basic fields with null checks
                 const productNameEl = document.getElementById('product_name');
                 const parentSkuEl = document.getElementById('parent_sku');
                 const descriptionEl = document.getElementById('product_description');
-                
-                console.log('Elements found:', { productNameEl, parentSkuEl, descriptionEl });
                 
                 if (productNameEl) productNameEl.value = product.name || '';
                 if (parentSkuEl) parentSkuEl.value = product.parent_sku || '';
@@ -1250,10 +1242,12 @@
                 if (product.size_chart_image_url) {
                     sizeChartState.preview = product.size_chart_image_url;
                     const previewEl = document.getElementById('size_chart_preview');
-                    previewEl.innerHTML = `
-                        <img src="${product.size_chart_image_url}" alt="Size Chart" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
-                        <button type="button" onclick="removeSizeChart()" style="margin-top: 8px;" class="btn-primary btn-gray btn-sm">ลบตารางไซส์</button>
-                    `;
+                    if (previewEl) {
+                        previewEl.innerHTML = `
+                            <img src="${product.size_chart_image_url}" alt="Size Chart" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                            <button type="button" onclick="removeSizeChart()" style="margin-top: 8px;" class="btn-primary btn-gray btn-sm">ลบตารางไซส์</button>
+                        `;
+                    }
                 }
                 
                 // Load options and values
