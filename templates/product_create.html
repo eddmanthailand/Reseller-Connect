@@ -8,7 +8,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <style>
         .option-value-tag {
             display: inline-flex;
@@ -347,6 +349,87 @@
             font-size: 14px;
             opacity: 0.9;
         }
+
+        .crop-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .crop-modal.active {
+            display: flex;
+        }
+
+        .crop-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .crop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .crop-header h3 {
+            margin: 0;
+            color: #667eea;
+            font-size: 20px;
+        }
+
+        .crop-image-container {
+            max-width: 800px;
+            max-height: 500px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .crop-image-container img {
+            max-width: 100%;
+            display: block;
+        }
+
+        .crop-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .size-chart-preview {
+            margin-top: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+        }
+
+        .size-chart-preview img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .size-chart-preview.has-image {
+            border-style: solid;
+            border-color: rgba(139, 92, 246, 0.5);
+            background: rgba(139, 92, 246, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -417,6 +500,26 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Size Chart Section -->
+                        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                            <label class="form-label">ตารางไซส์ (ไม่บังคับ)</label>
+                            <input type="file" id="size_chart_image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input">
+                            <div style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7);">
+                                💡 อัปโหลดรูปตารางไซส์สินค้า - ขนาดอิสระ (สำหรับสินค้าเสื้อผ้า รองเท้า ฯลฯ)
+                            </div>
+                            
+                            <!-- Size Chart Preview -->
+                            <div id="size-chart-preview" class="size-chart-preview" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <p style="margin: 0; font-size: 14px; font-weight: 500;">ตัวอย่างตารางไซส์</p>
+                                    <button type="button" onclick="removeSizeChart()" class="btn-primary btn-danger" style="padding: 4px 12px; font-size: 12px;">
+                                        ลบ
+                                    </button>
+                                </div>
+                                <img id="size-chart-preview-img" src="" alt="Size Chart Preview">
+                            </div>
+                        </div>
                     </div>
 
                     <!-- ส่วนที่ 2: ตัวเลือกสินค้า (Options & Values) -->
@@ -484,6 +587,30 @@
         </main>
     </div>
 
+    <!-- Crop Modal -->
+    <div id="cropModal" class="crop-modal">
+        <div class="crop-container">
+            <div class="crop-header">
+                <h3 id="cropModalTitle">ครอปรูปภาพ</h3>
+                <button onclick="closeCropModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+            </div>
+            <div class="crop-image-container">
+                <img id="cropImage" src="" alt="Image to crop">
+            </div>
+            <div class="crop-actions">
+                <button onclick="closeCropModal()" class="btn-primary btn-gray">
+                    ยกเลิก
+                </button>
+                <button onclick="confirmCrop()" class="btn-primary btn-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    ตกลง
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/dashboard.js"></script>
     <script>
         let optionIndex = 0;
@@ -497,6 +624,146 @@
             previews: [],     // Array of preview data URLs
             sortable: null    // SortableJS instance
         };
+
+        // Size chart state management
+        const sizeChartState = {
+            file: null,
+            preview: null,
+            croppedBlob: null
+        };
+
+        // Cropper instance
+        let cropperInstance = null;
+        let currentCropType = null; // 'product' or 'size_chart'
+        let pendingProductImageFile = null;
+
+        // Handle size chart image selection
+        document.getElementById('size_chart_image').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                alert('กรุณาเลือกไฟล์รูปภาพ');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('ไฟล์ใหญ่เกิน 5MB');
+                return;
+            }
+
+            currentCropType = 'size_chart';
+            openCropModal(file, 'ครอปตารางไซส์', NaN); // Free aspect ratio
+        });
+
+        // Open crop modal
+        function openCropModal(file, title, aspectRatio) {
+            const modal = document.getElementById('cropModal');
+            const modalTitle = document.getElementById('cropModalTitle');
+            const cropImage = document.getElementById('cropImage');
+
+            modalTitle.textContent = title;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                cropImage.src = e.target.result;
+                modal.classList.add('active');
+
+                // Destroy previous cropper instance
+                if (cropperInstance) {
+                    cropperInstance.destroy();
+                }
+
+                // Initialize new cropper
+                cropperInstance = new Cropper(cropImage, {
+                    aspectRatio: aspectRatio,
+                    viewMode: 1,
+                    guides: true,
+                    center: true,
+                    highlight: true,
+                    background: false,
+                    autoCropArea: 0.8,
+                    movable: true,
+                    zoomable: true,
+                    scalable: true
+                });
+
+                pendingProductImageFile = file;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Close crop modal
+        function closeCropModal() {
+            const modal = document.getElementById('cropModal');
+            modal.classList.remove('active');
+            
+            if (cropperInstance) {
+                cropperInstance.destroy();
+                cropperInstance = null;
+            }
+
+            // Clear file input if cancelled
+            if (currentCropType === 'size_chart') {
+                document.getElementById('size_chart_image').value = '';
+            }
+
+            currentCropType = null;
+            pendingProductImageFile = null;
+        }
+
+        // Confirm crop
+        function confirmCrop() {
+            if (!cropperInstance) return;
+
+            cropperInstance.getCroppedCanvas({
+                maxWidth: 2000,
+                maxHeight: 2000,
+                fillColor: '#fff',
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high'
+            }).toBlob((blob) => {
+                if (currentCropType === 'size_chart') {
+                    // Save size chart
+                    sizeChartState.file = pendingProductImageFile;
+                    sizeChartState.croppedBlob = blob;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        sizeChartState.preview = e.target.result;
+                        showSizeChartPreview(e.target.result);
+                    };
+                    reader.readAsDataURL(blob);
+                }
+
+                closeCropModal();
+            }, 'image/jpeg', 0.9);
+        }
+
+        // Show size chart preview
+        function showSizeChartPreview(dataUrl) {
+            const previewContainer = document.getElementById('size-chart-preview');
+            const previewImg = document.getElementById('size-chart-preview-img');
+            
+            previewImg.src = dataUrl;
+            previewContainer.style.display = 'block';
+            previewContainer.classList.add('has-image');
+        }
+
+        // Remove size chart
+        function removeSizeChart() {
+            if (!confirm('ต้องการลบตารางไซส์หรือไม่?')) return;
+
+            sizeChartState.file = null;
+            sizeChartState.preview = null;
+            sizeChartState.croppedBlob = null;
+
+            const previewContainer = document.getElementById('size-chart-preview');
+            previewContainer.style.display = 'none';
+            previewContainer.classList.remove('has-image');
+
+            document.getElementById('size_chart_image').value = '';
+        }
 
         // Handle file selection
         document.getElementById('product_images').addEventListener('change', async (e) => {
@@ -867,6 +1134,34 @@
                     imageUrls = uploadResult.image_urls || [];
                 }
                 
+                // Step 2.5: Upload size chart image (if any)
+                let sizeChartImageUrl = null;
+                if (sizeChartState.croppedBlob) {
+                    submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดตารางไซส์...';
+                    
+                    const sizeChartFormData = new FormData();
+                    // Create file from blob with original name
+                    const sizeChartFile = new File(
+                        [sizeChartState.croppedBlob], 
+                        sizeChartState.file.name,
+                        { type: 'image/jpeg' }
+                    );
+                    sizeChartFormData.append('images', sizeChartFile);
+                    
+                    const sizeChartUploadResponse = await fetch(`${API_URL}/upload-images`, {
+                        method: 'POST',
+                        body: sizeChartFormData
+                    });
+                    
+                    if (!sizeChartUploadResponse.ok) {
+                        const uploadError = await sizeChartUploadResponse.json();
+                        throw new Error(uploadError.error || 'อัพโหลดตารางไซส์ล้มเหลว');
+                    }
+                    
+                    const sizeChartUploadResult = await sizeChartUploadResponse.json();
+                    sizeChartImageUrl = sizeChartUploadResult.image_urls?.[0] || null;
+                }
+                
                 // Step 3: Prepare product data
                 submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึกข้อมูลสินค้า...';
                 
@@ -878,6 +1173,7 @@
                     parent_sku: parentSku,
                     description,
                     image_urls: imageUrls,
+                    size_chart_image_url: sizeChartImageUrl,
                     options: options.map(opt => ({
                         name: opt.name,
                         values: opt.values.map((v, idx) => ({ value: v, sort_order: idx }))
