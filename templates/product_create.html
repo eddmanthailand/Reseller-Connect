@@ -895,14 +895,14 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    alert('✓ บันทึกสินค้าสำเร็จ!');
+                    alert('บันทึกสำเร็จ');
                     window.location.href = '/admin/products';
                 } else {
                     throw new Error(result.error || 'บันทึกข้อมูลล้มเหลว');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('✗ เกิดข้อผิดพลาด: ' + error.message);
+                alert('เกิดข้อผิดพลาด: ' + error.message);
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalBtnText;
             }
