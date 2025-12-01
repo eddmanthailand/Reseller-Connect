@@ -43,7 +43,7 @@
                     </span>
                     <span>Admin User Management</span>
                 </a>
-                <a href="#" class="nav-item" data-page="products">
+                <a href="#" class="nav-item has-submenu" data-page="products">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
@@ -53,6 +53,17 @@
                     </span>
                     <span>Product Management</span>
                 </a>
+                <div class="submenu" id="products-submenu">
+                    <a href="/admin/brands" class="submenu-item">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>
+                                <path d="M7 7h.01"/>
+                            </svg>
+                        </span>
+                        <span>🏷️ จัดการแบรนด์</span>
+                    </a>
+                </div>
                 <a href="#" class="nav-item" data-page="settings">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -268,9 +279,9 @@
                                 <thead>
                                     <tr>
                                         <th>รูปภาพ</th>
+                                        <th>แบรนด์</th>
                                         <th>Parent SKU</th>
                                         <th>ชื่อสินค้า</th>
-                                        <th>คำอธิบาย</th>
                                         <th>จำนวน SKUs</th>
                                         <th>สร้างเมื่อ</th>
                                         <th>Actions</th>

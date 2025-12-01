@@ -102,6 +102,12 @@ def product_edit(product_id):
     """Render the product edit page"""
     return render_template('product_edit.html')
 
+@app.route('/admin/brands')
+@admin_required
+def brand_management():
+    """Render the brand management page"""
+    return render_template('brand_management.html')
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login"""
@@ -346,12 +352,12 @@ def delete_user(user_id):
         if conn:
             conn.close()
 
-# ==================== PRODUCT MANAGEMENT ROUTES ====================
+# ==================== BRAND MANAGEMENT ROUTES ====================
 
-@app.route('/api/products', methods=['GET'])
+@app.route('/api/brands', methods=['GET'])
 @admin_required
-def get_products():
-    """Get all products with their basic information"""
+def get_brands():
+    """Get all brands"""
     conn = None
     cursor = None
     try:
@@ -359,12 +365,262 @@ def get_products():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         cursor.execute('''
+            SELECT b.id, b.name, b.description, b.created_at,
+                   COUNT(DISTINCT p.id) as product_count
+            FROM brands b
+            LEFT JOIN products p ON b.id = p.brand_id
+            GROUP BY b.id, b.name, b.description, b.created_at
+            ORDER BY b.name ASC
+        ''')
+        
+        brands = [dict(row) for row in cursor.fetchall()]
+        return jsonify(brands), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/brands', methods=['POST'])
+@admin_required
+def create_brand():
+    """Create a new brand (Super Admin only)"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can create brands'}), 403
+    
+    data = request.json
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Brand name is required'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if brand already exists
+        cursor.execute('SELECT id FROM brands WHERE name = %s', (data['name'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Brand name already exists'}), 400
+        
+        cursor.execute('''
+            INSERT INTO brands (name, description)
+            VALUES (%s, %s)
+            RETURNING id, name, description, created_at
+        ''', (data['name'], data.get('description', '')))
+        
+        brand = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(brand), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/brands/<int:brand_id>', methods=['PUT'])
+@admin_required
+def update_brand(brand_id):
+    """Update a brand (Super Admin only)"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can update brands'}), 403
+    
+    data = request.json
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Brand name is required'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if brand exists
+        cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Brand not found'}), 404
+        
+        # Check for duplicate name
+        cursor.execute('SELECT id FROM brands WHERE name = %s AND id != %s', (data['name'], brand_id))
+        if cursor.fetchone():
+            return jsonify({'error': 'Brand name already exists'}), 400
+        
+        cursor.execute('''
+            UPDATE brands SET name = %s, description = %s
+            WHERE id = %s
+            RETURNING id, name, description, created_at
+        ''', (data['name'], data.get('description', ''), brand_id))
+        
+        brand = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(brand), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/brands/<int:brand_id>', methods=['DELETE'])
+@admin_required
+def delete_brand(brand_id):
+    """Delete a brand (Super Admin only, only if no products)"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can delete brands'}), 403
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if brand exists
+        cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Brand not found'}), 404
+        
+        # Check if brand has products
+        cursor.execute('SELECT COUNT(*) as count FROM products WHERE brand_id = %s', (brand_id,))
+        count = cursor.fetchone()['count']
+        if count > 0:
+            return jsonify({'error': f'Cannot delete brand with {count} products. Please move or delete products first.'}), 400
+        
+        # Delete brand
+        cursor.execute('DELETE FROM brands WHERE id = %s', (brand_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Brand deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin-brand-access/<int:user_id>', methods=['GET'])
+@admin_required
+def get_admin_brands(user_id):
+    """Get brands assigned to an admin user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT b.id, b.name
+            FROM brands b
+            JOIN admin_brand_access aba ON b.id = aba.brand_id
+            WHERE aba.user_id = %s
+            ORDER BY b.name ASC
+        ''', (user_id,))
+        
+        brands = [dict(row) for row in cursor.fetchall()]
+        return jsonify(brands), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin-brand-access/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_admin_brands(user_id):
+    """Update brands assigned to an admin user (Super Admin only)"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can assign brands'}), 403
+    
+    data = request.json
+    if not data or 'brand_ids' not in data:
+        return jsonify({'error': 'Brand IDs required'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if user exists and is Assistant Admin
+        cursor.execute('''
+            SELECT u.id, r.name as role FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Delete existing assignments
+        cursor.execute('DELETE FROM admin_brand_access WHERE user_id = %s', (user_id,))
+        
+        # Insert new assignments
+        for brand_id in data['brand_ids']:
+            cursor.execute('''
+                INSERT INTO admin_brand_access (user_id, brand_id)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, brand_id) DO NOTHING
+            ''', (user_id, brand_id))
+        
+        conn.commit()
+        
+        return jsonify({'message': 'Brands assigned successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== PRODUCT MANAGEMENT ROUTES ====================
+
+@app.route('/api/products', methods=['GET'])
+@admin_required
+def get_products():
+    """Get all products with their basic information (filtered by brand for Assistant Admin)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        
+        # Build query with brand info
+        base_query = '''
             SELECT 
                 p.id,
                 p.name,
                 p.parent_sku,
                 p.description,
                 p.size_chart_image_url,
+                p.brand_id,
+                b.name as brand_name,
                 p.created_at,
                 COUNT(DISTINCT s.id) as sku_count,
                 (
@@ -376,9 +632,27 @@ def get_products():
                 ) as first_image_url
             FROM products p
             LEFT JOIN skus s ON p.id = s.product_id
-            GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.created_at
-            ORDER BY p.created_at DESC
-        ''')
+            LEFT JOIN brands b ON p.brand_id = b.id
+        '''
+        
+        # Filter by brand for Assistant Admin
+        if user_role == 'Assistant Admin':
+            base_query += '''
+                WHERE p.brand_id IN (
+                    SELECT brand_id FROM admin_brand_access WHERE user_id = %s
+                )
+            '''
+            base_query += '''
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.created_at
+                ORDER BY p.created_at DESC
+            '''
+            cursor.execute(base_query, (user_id,))
+        else:
+            base_query += '''
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.created_at
+                ORDER BY p.created_at DESC
+            '''
+            cursor.execute(base_query)
         
         products = [dict(row) for row in cursor.fetchall()]
         return jsonify(products), 200
@@ -490,23 +764,33 @@ def create_product():
     if not data or 'name' not in data or 'parent_sku' not in data:
         return jsonify({'error': 'Missing required fields: name, parent_sku'}), 400
     
+    # Validate brand_id is provided
+    brand_id = data.get('brand_id')
+    if not brand_id:
+        return jsonify({'error': 'Missing required field: brand_id'}), 400
+    
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        # Check if brand exists
+        cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Brand not found'}), 400
+        
         # Check if parent_sku already exists
         cursor.execute('SELECT id FROM products WHERE parent_sku = %s', (data['parent_sku'],))
         if cursor.fetchone():
             return jsonify({'error': 'Parent SKU already exists'}), 400
         
-        # Insert product
+        # Insert product with brand_id
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, description, size_chart_image_url)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
-        ''', (data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url')))
+        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url')))
         
         product_id = cursor.fetchone()['id']
         
@@ -644,23 +928,33 @@ def update_product(product_id):
     if not data or 'name' not in data:
         return jsonify({'error': 'Missing required field: name'}), 400
     
+    # Validate brand_id is provided
+    brand_id = data.get('brand_id')
+    if not brand_id:
+        return jsonify({'error': 'Missing required field: brand_id'}), 400
+    
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        # Check if brand exists
+        cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Brand not found'}), 400
+        
         # Check if product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
             return jsonify({'error': 'Product not found'}), 404
         
-        # Update basic product information
+        # Update basic product information including brand_id
         cursor.execute('''
             UPDATE products 
-            SET name = %s, description = %s, size_chart_image_url = %s, updated_at = CURRENT_TIMESTAMP
+            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        ''', (data['name'], data.get('description', ''), data.get('size_chart_image_url'), product_id))
+        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), product_id))
         
         # Delete existing SKUs (cascade deletes sku_values_map)
         cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))

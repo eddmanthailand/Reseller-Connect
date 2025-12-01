@@ -209,6 +209,16 @@ function setupEventListeners() {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetPage = item.dataset.page;
+            
+            // Handle submenu toggle
+            if (item.classList.contains('has-submenu')) {
+                item.classList.toggle('expanded');
+                const submenu = document.getElementById(`${targetPage}-submenu`);
+                if (submenu) {
+                    submenu.classList.toggle('open');
+                }
+            }
+            
             switchPage(targetPage);
         });
     });
@@ -362,7 +372,7 @@ async function loadProducts() {
         if (products.length === 0) {
             productTableBody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 40px;">
+                    <td colspan="7" style="text-align: center; padding: 40px;">
                         <div style="opacity: 0.6;">ยังไม่มีสินค้าในระบบ</div>
                         <div style="margin-top: 10px;">
                             <a href="/admin/products/create" style="color: rgba(255, 255, 255, 0.9);">สร้างสินค้าแรกของคุณ</a>
@@ -387,13 +397,15 @@ async function loadProducts() {
                 ? `<img src="${product.first_image_url}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.2);">`
                 : `<div style="width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📦</div>`;
             
+            const brandHtml = product.brand_name 
+                ? `<span style="background: rgba(168, 85, 247, 0.2); padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 500;">${product.brand_name}</span>`
+                : `<span style="opacity: 0.5; font-size: 12px;">ไม่ระบุ</span>`;
+            
             row.innerHTML = `
                 <td>${imageHtml}</td>
+                <td>${brandHtml}</td>
                 <td><strong>${product.parent_sku || '-'}</strong></td>
                 <td>${product.name || '-'}</td>
-                <td style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${product.description || '-'}
-                </td>
                 <td>
                     <span style="background: rgba(139, 92, 246, 0.2); padding: 4px 12px; border-radius: 12px; font-size: 13px;">
                         ${product.sku_count || 0} SKUs
@@ -429,7 +441,7 @@ async function loadProducts() {
         console.error('Error loading products:', error);
         productTableBody.innerHTML = `
             <tr>
-                <td colspan="6" style="text-align: center; padding: 40px;">
+                <td colspan="7" style="text-align: center; padding: 40px;">
                     <div style="color: rgb(239, 68, 68); opacity: 0.8;">เกิดข้อผิดพลาดในการโหลดข้อมูลสินค้า</div>
                 </td>
             </tr>

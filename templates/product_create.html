@@ -466,6 +466,18 @@
                     <!-- ส่วนที่ 1: ข้อมูลสินค้าหลัก (SPU) -->
                     <div class="section-card">
                         <h2 class="section-title">1. ข้อมูลสินค้าหลัก (SPU)</h2>
+                        
+                        <!-- Brand Selection - First Row -->
+                        <div style="margin-bottom: 20px;">
+                            <label class="form-label">🏷️ แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                            <select id="brand_id" class="form-input" required style="cursor: pointer;">
+                                <option value="">-- เลือกแบรนด์ --</option>
+                            </select>
+                            <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
+                                หากยังไม่มีแบรนด์ <a href="/admin/brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
+                            </p>
+                        </div>
+                        
                         <div class="grid-2-cols">
                             <div>
                                 <label class="form-label">ชื่อสินค้า</label>
@@ -613,10 +625,32 @@
 
     <script src="/static/js/dashboard.js"></script>
     <script>
+        const API_URL = '/api';
         let optionIndex = 0;
 
         // Load current user
         loadCurrentUser();
+        
+        // Load brands for dropdown
+        async function loadBrands() {
+            try {
+                const response = await fetch(`${API_URL}/brands`);
+                if (!response.ok) throw new Error('Failed to load brands');
+                
+                const brands = await response.json();
+                const brandSelect = document.getElementById('brand_id');
+                
+                brands.forEach(brand => {
+                    const option = document.createElement('option');
+                    option.value = brand.id;
+                    option.textContent = brand.name;
+                    brandSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading brands:', error);
+            }
+        }
+        loadBrands();
 
         // Centralized image state management
         const imageState = {
@@ -1120,9 +1154,15 @@
             e.preventDefault();
 
             // Step 1: Validate form fields
+            const brandId = document.getElementById('brand_id').value;
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
+
+            if (!brandId) {
+                alert('กรุณาเลือกแบรนด์');
+                return;
+            }
 
             if (!name || !parentSku) {
                 alert('กรุณากรอกชื่อสินค้าและ SKU หลัก');
@@ -1195,6 +1235,7 @@
                 const skus = collectSkusData(options);
 
                 const productData = {
+                    brand_id: parseInt(brandId),
                     name,
                     parent_sku: parentSku,
                     description,

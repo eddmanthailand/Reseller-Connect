@@ -22,6 +22,9 @@ def init_db():
     cursor = conn.cursor()
     
     try:
+        # Use advisory lock to prevent race conditions with multiple workers
+        cursor.execute("SELECT pg_advisory_lock(12345)")
+        
         # Create roles table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS roles (
@@ -53,6 +56,29 @@ def init_db():
             )
         ''')
         
+        # Create brands table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS brands (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) UNIQUE NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create admin_brand_access table (which admin can manage which brands)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admin_brand_access (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                brand_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE CASCADE,
+                UNIQUE(user_id, brand_id)
+            )
+        ''')
+        
         # Create products table (SPU - parent product)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS products (
@@ -64,6 +90,19 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        ''')
+        
+        # Migration: Add brand_id column to products table if not exists
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'products' AND column_name = 'brand_id'
+                ) THEN
+                    ALTER TABLE products ADD COLUMN brand_id INTEGER REFERENCES brands(id);
+                END IF;
+            END $$;
         ''')
         
         # Create options table (product attributes like color, size)
@@ -192,9 +231,17 @@ def init_db():
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         
+        # Release advisory lock
+        cursor.execute("SELECT pg_advisory_unlock(12345)")
+        
     except Exception as e:
         conn.rollback()
         print(f"❌ Error initializing database: {e}")
+        # Make sure to release lock on error too
+        try:
+            cursor.execute("SELECT pg_advisory_unlock(12345)")
+        except:
+            pass
         raise
     finally:
         cursor.close()

@@ -21,17 +21,26 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 - **Admin Dashboard:** Multi-page layout, sidebar navigation, real-time statistics, full CRUD for user management, placeholder settings page.
 - **Reseller Dashboard:** Dedicated dashboard for reseller users displaying user info and tier level.
 - **User Management:** Create, view, delete users; assign roles (Super Admin, Assistant Admin, Reseller); assign reseller tiers; dynamic form validation.
+- **Brand Management System:**
+  - Full CRUD for brand management (Create, Read, Update, Delete).
+  - Brands table with name and description fields.
+  - Brand is a required field when creating/editing products (positioned at top of product form).
+  - Role-based brand access control for Assistant Admins via `admin_brand_access` table.
+  - Super Admin can see and manage all brands; Assistant Admin sees only assigned brands.
+  - Brand assignment endpoint: `/api/users/{user_id}/brands`.
+  - Submenu navigation under Product Management for brand management page.
 - **Product Management (SPU/SKU System):**
-  - Create products with parent SKU (SPU).
+  - Create products with parent SKU (SPU) and required brand selection.
   - Dynamic options/attributes system with drag-and-drop value ordering using SortableJS.
   - Auto-generate SKU variants via Cartesian product.
   - Bulk actions for Master Price and Master Stock application to all variants.
-  - View product list with SKU counts.
+  - View product list with SKU counts and brand column.
   - Delete products with cascade deletion.
   - Multiple product image uploads with drag-and-drop reordering.
   - Optional size chart image upload with free aspect ratio cropping.
   - Client-side image preview and deferred upload pattern to prevent orphaned files.
-  - **Edit Product (Full CRUD):** Load existing product data, populate form with images/options/SKUs, update via PUT endpoint with proper data integrity (deletes old SKUs/options/images before reinsertion, uses options_map to prevent value collision).
+  - **Edit Product (Full CRUD):** Load existing product data, populate form with brand/images/options/SKUs, update via PUT endpoint with proper data integrity (deletes old SKUs/options/images before reinsertion, uses options_map to prevent value collision).
+  - Products filtered by brand access for Assistant Admin users.
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -44,7 +53,8 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 
 ### Database Schema
 **User Management:** `roles`, `reseller_tiers`, `users`
-**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `size_chart_image_url`.
+**Brand Management:** `brands`, `admin_brand_access` (for role-based brand access control)
+**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands) and `size_chart_image_url`.
 
 ## External Dependencies
 

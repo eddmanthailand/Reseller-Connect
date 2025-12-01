@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จัดการแบรนด์ - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .brand-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .brand-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .brand-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .brand-info p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .brand-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .product-count {
+            background: rgba(59, 130, 246, 0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .brand-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-edit {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn-edit:hover {
+            background: rgba(59, 130, 246, 1);
+        }
+        
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 1);
+        }
+        
+        .add-brand-form {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr auto;
+            gap: 16px;
+            align-items: end;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .btn-add {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, rgba(30, 27, 75, 0.95), rgba(88, 28, 135, 0.95));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 32px;
+            width: 100%;
+            max-width: 500px;
+            margin: 20px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .modal-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 24px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        .btn-cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            margin-bottom: 24px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .brand-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+            
+            .brand-stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container" style="display: block; padding: 40px;">
+        <a href="/admin" class="back-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+            กลับไปหน้า Dashboard
+        </a>
+        
+        <div class="page-header" style="margin-bottom: 32px;">
+            <h1>🏷️ จัดการแบรนด์</h1>
+            <p>สร้างและจัดการแบรนด์สินค้าในระบบ</p>
+        </div>
+        
+        <div class="add-brand-form" id="addBrandForm">
+            <h3 style="margin-bottom: 16px; font-size: 16px;">➕ เพิ่มแบรนด์ใหม่</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="brandName">ชื่อแบรนด์ *</label>
+                    <input type="text" id="brandName" placeholder="เช่น Nike, Adidas">
+                </div>
+                <div class="form-group">
+                    <label for="brandDescription">คำอธิบาย (ไม่บังคับ)</label>
+                    <input type="text" id="brandDescription" placeholder="คำอธิบายแบรนด์สั้นๆ">
+                </div>
+                <button class="btn-add" onclick="addBrand()">
+                    <span>เพิ่มแบรนด์</span>
+                </button>
+            </div>
+        </div>
+        
+        <div id="brandList">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                </svg>
+                <p>กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ แก้ไขแบรนด์</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="editBrandName">ชื่อแบรนด์ *</label>
+                <input type="text" id="editBrandName" placeholder="ชื่อแบรนด์">
+            </div>
+            <div class="form-group">
+                <label for="editBrandDescription">คำอธิบาย</label>
+                <textarea id="editBrandDescription" rows="3" placeholder="คำอธิบายแบรนด์"></textarea>
+            </div>
+            <input type="hidden" id="editBrandId">
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-save" onclick="saveBrand()">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let brands = [];
+        
+        async function loadBrands() {
+            try {
+                const response = await fetch(`${API_URL}/brands`);
+                if (!response.ok) throw new Error('Failed to load brands');
+                
+                brands = await response.json();
+                renderBrands();
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('brandList').innerHTML = `
+                    <div class="empty-state">
+                        <p>❌ เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderBrands() {
+            const container = document.getElementById('brandList');
+            
+            if (brands.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                        </svg>
+                        <p>ยังไม่มีแบรนด์ในระบบ</p>
+                        <p style="font-size: 14px; margin-top: 8px;">เริ่มต้นด้วยการเพิ่มแบรนด์แรกของคุณ</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = brands.map(brand => `
+                <div class="brand-card">
+                    <div class="brand-info">
+                        <h3>${escapeHtml(brand.name)}</h3>
+                        <p>${brand.description ? escapeHtml(brand.description) : 'ไม่มีคำอธิบาย'}</p>
+                    </div>
+                    <div class="brand-stats">
+                        <span class="product-count">📦 ${brand.product_count || 0} สินค้า</span>
+                        <div class="brand-actions">
+                            <button class="btn-edit" onclick="editBrand(${brand.id})">✏️ แก้ไข</button>
+                            <button class="btn-delete" onclick="deleteBrand(${brand.id}, '${escapeHtml(brand.name)}', ${brand.product_count || 0})">🗑️ ลบ</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        async function addBrand() {
+            const name = document.getElementById('brandName').value.trim();
+            const description = document.getElementById('brandDescription').value.trim();
+            
+            if (!name) {
+                alert('กรุณากรอกชื่อแบรนด์');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/brands`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to create brand');
+                }
+                
+                document.getElementById('brandName').value = '';
+                document.getElementById('brandDescription').value = '';
+                
+                loadBrands();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        function editBrand(id) {
+            const brand = brands.find(b => b.id === id);
+            if (!brand) return;
+            
+            document.getElementById('editBrandId').value = id;
+            document.getElementById('editBrandName').value = brand.name;
+            document.getElementById('editBrandDescription').value = brand.description || '';
+            
+            document.getElementById('editModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+        
+        async function saveBrand() {
+            const id = document.getElementById('editBrandId').value;
+            const name = document.getElementById('editBrandName').value.trim();
+            const description = document.getElementById('editBrandDescription').value.trim();
+            
+            if (!name) {
+                alert('กรุณากรอกชื่อแบรนด์');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/brands/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to update brand');
+                }
+                
+                closeModal();
+                loadBrands();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        async function deleteBrand(id, name, productCount) {
+            if (productCount > 0) {
+                alert(`ไม่สามารถลบแบรนด์ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในแบรนด์นี้\n\nกรุณาย้ายหรือลบสินค้าก่อน`);
+                return;
+            }
+            
+            if (!confirm(`ต้องการลบแบรนด์ "${name}" หรือไม่?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/brands/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to delete brand');
+                }
+                
+                loadBrands();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        document.getElementById('brandName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addBrand();
+            }
+        });
+        
+        loadBrands();
+    </script>
+</body>
+</html>
