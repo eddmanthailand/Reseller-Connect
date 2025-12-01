@@ -824,7 +824,7 @@
             });
         }
 
-        // Render image gallery with drag & drop (using previews)
+        // Render image gallery with drag & drop (using previews) + Lazy Loading
         function renderImageGallery() {
             const gallery = document.getElementById('images-gallery');
             const container = document.getElementById('sortable-images');
@@ -835,53 +835,79 @@
             }
             
             gallery.style.display = 'block';
-            container.innerHTML = '';
             
-            imageState.previews.forEach((previewUrl, index) => {
-                const imageCard = document.createElement('div');
-                imageCard.className = 'image-card';
-                imageCard.setAttribute('data-index', index);
-                imageCard.innerHTML = `
-                    <div style="position: relative; border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); cursor: move;">
-                        <img src="${previewUrl}" alt="Preview" style="width: 100%; height: 120px; object-fit: cover;">
-                        <div style="position: absolute; top: 4px; right: 4px;">
-                            <button type="button" onclick="removeImage(${index})" class="btn-danger" style="padding: 4px; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.9);">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="18" x2="6" y1="6" y2="18"/>
-                                    <line x1="6" x2="18" y1="6" y2="18"/>
-                                </svg>
-                            </button>
+            // Only update cards that changed
+            const existingCards = container.querySelectorAll('.image-card');
+            
+            // If count differs, clear and rebuild (else: reorder only)
+            if (existingCards.length !== imageState.previews.length) {
+                container.innerHTML = '';
+                
+                imageState.previews.forEach((previewUrl, index) => {
+                    const imageCard = document.createElement('div');
+                    imageCard.className = 'image-card';
+                    imageCard.setAttribute('data-index', index);
+                    imageCard.innerHTML = `
+                        <div style="position: relative; border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); cursor: move;">
+                            <img src="${previewUrl}" alt="Preview" loading="lazy" style="width: 100%; height: 120px; object-fit: cover; background: rgba(255,255,255,0.05);" onload="this.style.background='transparent'">
+                            <div style="position: absolute; top: 4px; right: 4px;">
+                                <button type="button" onclick="removeImage(${index})" class="btn-danger" style="padding: 4px; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.9);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" x2="6" y1="6" y2="18"/>
+                                        <line x1="6" x2="18" y1="6" y2="18"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            ${index === 0 ? '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(59, 130, 246, 0.9); color: white; text-align: center; padding: 4px; font-size: 11px; font-weight: 600;">รูปหลัก</div>' : ''}
                         </div>
-                        ${index === 0 ? '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(59, 130, 246, 0.9); color: white; text-align: center; padding: 4px; font-size: 11px; font-weight: 600;">รูปหลัก</div>' : ''}
-                    </div>
-                `;
-                container.appendChild(imageCard);
-            });
-            
-            // Destroy existing Sortable instance
-            if (imageState.sortable) {
-                imageState.sortable.destroy();
+                    `;
+                    container.appendChild(imageCard);
+                });
             }
             
-            // Initialize SortableJS for drag & drop
-            imageState.sortable = new Sortable(container, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                onEnd: function(evt) {
-                    const oldIndex = evt.oldIndex;
-                    const newIndex = evt.newIndex;
-                    
-                    // Reorder both files and previews arrays
-                    const [movedFile] = imageState.files.splice(oldIndex, 1);
-                    imageState.files.splice(newIndex, 0, movedFile);
-                    
-                    const [movedPreview] = imageState.previews.splice(oldIndex, 1);
-                    imageState.previews.splice(newIndex, 0, movedPreview);
-                    
-                    // Re-render to update "รูปหลัก" badge
-                    renderImageGallery();
-                }
+            // Update data-index attributes for reordered items
+            container.querySelectorAll('.image-card').forEach((card, idx) => {
+                card.setAttribute('data-index', idx);
             });
+            
+            // Reset Sortable if count changed, otherwise keep instance
+            if (imageState.sortable && existingCards.length !== imageState.previews.length) {
+                imageState.sortable.destroy();
+                imageState.sortable = null;
+            }
+            
+            // Only initialize Sortable once (reuse instance)
+            if (!imageState.sortable) {
+                imageState.sortable = new Sortable(container, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function(evt) {
+                        const oldIndex = evt.oldIndex;
+                        const newIndex = evt.newIndex;
+                        
+                        // Reorder both files and previews arrays
+                        const [movedFile] = imageState.files.splice(oldIndex, 1);
+                        imageState.files.splice(newIndex, 0, movedFile);
+                        
+                        const [movedPreview] = imageState.previews.splice(oldIndex, 1);
+                        imageState.previews.splice(newIndex, 0, movedPreview);
+                        
+                        // Update primary image badge only (more efficient)
+                        container.querySelectorAll('.image-card').forEach((card, idx) => {
+                            const badge = card.querySelector('div:nth-child(1) > div:last-child');
+                            if (badge && badge.textContent === 'รูปหลัก') {
+                                badge.remove();
+                            }
+                            if (idx === 0 && !card.querySelector('div:nth-child(1) > div:last-child')) {
+                                const newBadge = document.createElement('div');
+                                newBadge.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; background: rgba(59, 130, 246, 0.9); color: white; text-align: center; padding: 4px; font-size: 11px; font-weight: 600;';
+                                newBadge.textContent = 'รูปหลัก';
+                                card.querySelector('div:nth-child(1)').appendChild(newBadge);
+                            }
+                        });
+                    }
+                });
+            }
         }
 
         // Remove image function
