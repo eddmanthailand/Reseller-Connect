@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar (Same as before) -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Dashboard</h2>
+                <p id="currentUser">Loading...</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="home">หน้าหลัก</a>
+                <a href="#" class="nav-item" data-page="users">จัดการผู้ใช้งาน</a>
+                <a href="#" class="nav-item" data-page="products">จัดการสินค้า</a>
+                <a href="#" class="nav-item" data-page="settings">ตั้งค่า (แบรนด์)</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button onclick="handleLogout()" class="btn-logout">ออกจากระบบ</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Home Page -->
+            <div id="page-home" class="page-content active">
+                <div class="page-header">
+                    <h1>ยินดีต้อนรับ</h1>
+                    <div id="dashboardBrandInfo" style="margin-top:10px; font-size:14px; color:#efefef;"></div>
+                </div>
+                <!-- Stats cards... -->
+            </div>
+
+            <!-- User Management Page -->
+            <div id="page-users" class="page-content">
+                <div class="page-header">
+                    <h1>👥 จัดการผู้ใช้งาน</h1>
+                </div>
+                <div class="content-wrapper">
+                    <div class="card">
+                        <h2>➕ สร้างผู้ใช้ใหม่</h2>
+                        <div id="alertBox" class="alert"></div>
+                        <form id="createUserForm">
+                            <div class="form-group">
+                                <label>ชื่อ-นามสกุล</label>
+                                <input type="text" name="fullName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" name="username" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" name="password" required>
+                            </div>
+                            <div class="form-group">
+                                <label>บทบาท (Role)</label>
+                                <select id="role" name="role" required>
+                                    <option value="">-- เลือกบทบาท --</option>
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                            
+                            <!-- BRAND SELECT (For Assistant Admin) -->
+                            <div class="form-group hidden" id="brandGroup">
+                                <label>แบรนด์ที่ดูแล (เฉพาะผู้ช่วย Admin)</label>
+                                <select id="managedBrand" name="managedBrand">
+                                    <option value="">-- เลือกแบรนด์ --</option>
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+
+                            <!-- TIER SELECT (For Reseller) -->
+                            <div class="form-group hidden" id="resellerTierGroup">
+                                <label>ระดับสมาชิก (Tier)</label>
+                                <select id="resellerTier" name="resellerTier">
+                                    <option value="">-- เลือก Tier --</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn">สร้างผู้ใช้</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h2>รายชื่อผู้ใช้</h2>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ชื่อ</th>
+                                        <th>Role</th>
+                                        <th>สังกัด/ระดับ</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="userTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Management -->
+            <div id="page-products" class="page-content">
+                <div class="page-header">
+                    <h1>📦 จัดการสินค้า</h1>
+                    <a href="/admin/products/create" class="btn" style="width:auto; display:inline-block;">+ สร้างสินค้าใหม่</a>
+                </div>
+                <div class="card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>รูป</th>
+                                    <th>SKU หลัก</th>
+                                    <th>ชื่อสินค้า</th>
+                                    <th>แบรนด์</th>
+                                    <th>จำนวน SKU</th>
+                                    <th>จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings / Brand Management -->
+            <div id="page-settings" class="page-content">
+                <div class="page-header"><h1>⚙️ จัดการแบรนด์</h1></div>
+                <div class="content-wrapper">
+                    <div class="card">
+                        <h2>เพิ่มแบรนด์ใหม่</h2>
+                        <form id="createBrandForm">
+                            <div class="form-group">
+                                <label>ชื่อแบรนด์</label>
+                                <input type="text" id="newBrandName" required placeholder="เช่น Nike, Adidas">
+                            </div>
+                            <button type="submit" class="btn">บันทึกแบรนด์</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h2>รายชื่อแบรนด์</h2>
+                        <ul id="brandList" style="list-style:none; padding:0;">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
