@@ -19,8 +19,8 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 ### Feature Specifications
 - **Authentication:** Custom login, session management, bcrypt password hashing, role-based redirects.
 - **Admin Dashboard:** Multi-page layout, sidebar navigation, real-time statistics, full CRUD for user management, placeholder settings page.
-- **Reseller Dashboard:** Dedicated dashboard for reseller users displaying user info and tier level.
-- **User Management:** Create, view, delete users; assign roles (Super Admin, Assistant Admin, Reseller); assign reseller tiers; dynamic form validation.
+- **Reseller Dashboard:** Dedicated dashboard for reseller users displaying user info, tier level, and active products with prices. Role-gated API endpoints ensure security.
+- **User Management:** Create, view, edit, delete users; assign roles (Super Admin, Assistant Admin, Reseller); assign reseller tiers; dynamic form validation; edit user modal with real-time validation.
 - **Brand Management System:**
   - Full CRUD for brand management (Create, Read, Update, Delete).
   - Brands table with name and description fields.
@@ -41,6 +41,14 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - Client-side image preview and deferred upload pattern to prevent orphaned files.
   - **Edit Product (Full CRUD):** Load existing product data, populate form with brand/images/options/SKUs, update via PUT endpoint with proper data integrity (deletes old SKUs/options/images before reinsertion, uses options_map to prevent value collision).
   - Products filtered by brand access for Assistant Admin users.
+- **Product Status System:**
+  - Status column with values: active (default), inactive, draft.
+  - PATCH endpoint for updating product status.
+  - Clickable status badges in admin UI that cycle through states.
+- **Category System:**
+  - Normalized database tables: `categories`, `product_categories`.
+  - Full CRUD API endpoints for category management.
+  - Foreign-key constraints for data integrity.
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -54,7 +62,8 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 ### Database Schema
 **User Management:** `roles`, `reseller_tiers`, `users`
 **Brand Management:** `brands`, `admin_brand_access` (for role-based brand access control)
-**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands) and `size_chart_image_url`.
+**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands), `size_chart_image_url`, and `status` (active/inactive/draft, default active).
+**Category Management:** `categories`, `product_categories` (junction table for product-category associations)
 
 ## External Dependencies
 
