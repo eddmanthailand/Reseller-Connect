@@ -282,6 +282,7 @@
                                         <th>แบรนด์</th>
                                         <th>Parent SKU</th>
                                         <th>ชื่อสินค้า</th>
+                                        <th>สถานะ</th>
                                         <th>จำนวน SKUs</th>
                                         <th>สร้างเมื่อ</th>
                                         <th>Actions</th>
@@ -289,7 +290,7 @@
                                 </thead>
                                 <tbody id="productTableBody">
                                     <tr>
-                                        <td colspan="7" style="text-align: center; padding: 40px;">
+                                        <td colspan="8" style="text-align: center; padding: 40px;">
                                             <div style="opacity: 0.6;">กำลังโหลดข้อมูล...</div>
                                         </td>
                                     </tr>
@@ -317,6 +318,49 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>แก้ไขผู้ใช้</h2>
+                <button class="modal-close" onclick="closeEditUserModal()">&times;</button>
+            </div>
+            <form id="editUserForm" onsubmit="handleEditUser(event)">
+                <input type="hidden" id="editUserId">
+                
+                <div class="form-group">
+                    <label for="editFullName">Full Name</label>
+                    <input type="text" id="editFullName" required placeholder="ชื่อ-นามสกุล">
+                </div>
+                
+                <div class="form-group">
+                    <label for="editUsername">Username (Email)</label>
+                    <input type="email" id="editUsername" required placeholder="user@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="editPassword">Password (เว้นว่างถ้าไม่ต้องการเปลี่ยน)</label>
+                    <input type="password" id="editPassword" placeholder="รหัสผ่านใหม่">
+                </div>
+                
+                <div class="form-group">
+                    <label for="editRole">Role</label>
+                    <select id="editRole" required></select>
+                </div>
+                
+                <div class="form-group hidden" id="editResellerTierGroup">
+                    <label for="editResellerTier">Reseller Tier</label>
+                    <select id="editResellerTier"></select>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">ยกเลิก</button>
+                    <button type="submit" class="btn">บันทึก</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="/static/js/dashboard.js"></script>

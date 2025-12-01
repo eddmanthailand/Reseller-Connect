@@ -192,6 +192,54 @@ def init_db():
             END $$;
         ''')
         
+        # Migration: Add status column to products table if not exists
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'products' AND column_name = 'status'
+                ) THEN
+                    ALTER TABLE products ADD COLUMN status VARCHAR(20) DEFAULT 'active';
+                END IF;
+            END $$;
+        ''')
+        
+        # Create categories table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                parent_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create unique constraint for category name (considering hierarchy)
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'categories_name_parent_unique'
+                ) THEN
+                    ALTER TABLE categories ADD CONSTRAINT categories_name_parent_unique 
+                    UNIQUE (name, parent_id);
+                END IF;
+            END $$;
+        ''')
+        
+        # Create product_categories table (many-to-many relationship)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_categories (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(product_id, category_id)
+            )
+        ''')
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:

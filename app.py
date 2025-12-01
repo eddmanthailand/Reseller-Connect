@@ -224,6 +224,86 @@ def get_reseller_tiers():
     conn.close()
     return jsonify(tiers)
 
+@app.route('/api/reseller/products', methods=['GET'])
+@login_required
+def get_reseller_products():
+    """Get active products for resellers with basic info"""
+    user_role = session.get('role')
+    if user_role not in ['Reseller', 'Super Admin', 'Assistant Admin']:
+        return jsonify({'error': 'Unauthorized access'}), 403
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT 
+                p.id,
+                p.name,
+                p.parent_sku,
+                b.name as brand_name,
+                (
+                    SELECT pi.image_url 
+                    FROM product_images pi 
+                    WHERE pi.product_id = p.id 
+                    ORDER BY pi.sort_order ASC 
+                    LIMIT 1
+                ) as image_url,
+                COUNT(DISTINCT s.id) as sku_count,
+                MIN(s.price) as min_price,
+                MAX(s.price) as max_price
+            FROM products p
+            LEFT JOIN skus s ON p.id = s.product_id
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE COALESCE(p.status, 'active') = 'active'
+            GROUP BY p.id, p.name, p.parent_sku, b.name
+            ORDER BY p.name ASC
+        ''')
+        
+        products = [dict(row) for row in cursor.fetchall()]
+        return jsonify(products), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/stats', methods=['GET'])
+@login_required
+def get_reseller_stats():
+    """Get statistics for reseller dashboard"""
+    user_role = session.get('role')
+    if user_role not in ['Reseller', 'Super Admin', 'Assistant Admin']:
+        return jsonify({'error': 'Unauthorized access'}), 403
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT COUNT(*) as product_count
+            FROM products
+            WHERE COALESCE(status, 'active') = 'active'
+        ''')
+        
+        stats = dict(cursor.fetchone())
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/users', methods=['GET'])
 @admin_required
 def get_users():
@@ -310,6 +390,128 @@ def create_user():
             'message': 'User created successfully',
             'user': user
         }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+@admin_required
+def get_user(user_id):
+    """Get a single user by ID"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.role_id, u.reseller_tier_id,
+                   r.name as role, rt.name as reseller_tier
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+            WHERE u.id = %s
+        ''', (user_id,))
+        
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify(dict(user)), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    """Update an existing user"""
+    data = request.json
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if user exists
+        cursor.execute('SELECT id, username FROM users WHERE id = %s', (user_id,))
+        existing_user = cursor.fetchone()
+        if not existing_user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Check if username is being changed and if it's already taken
+        if 'username' in data and data['username'] != existing_user['username']:
+            cursor.execute('SELECT id FROM users WHERE username = %s AND id != %s', (data['username'], user_id))
+            if cursor.fetchone():
+                return jsonify({'error': 'Username already exists'}), 400
+        
+        # Build update query
+        update_fields = []
+        update_values = []
+        
+        if 'full_name' in data:
+            update_fields.append('full_name = %s')
+            update_values.append(data['full_name'])
+        
+        if 'username' in data:
+            update_fields.append('username = %s')
+            update_values.append(data['username'])
+        
+        if 'role_id' in data:
+            update_fields.append('role_id = %s')
+            update_values.append(data['role_id'])
+        
+        if 'reseller_tier_id' in data:
+            update_fields.append('reseller_tier_id = %s')
+            update_values.append(data['reseller_tier_id'] if data['reseller_tier_id'] else None)
+        
+        if 'password' in data and data['password']:
+            password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            update_fields.append('password = %s')
+            update_values.append(password_hash)
+        
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        update_values.append(user_id)
+        cursor.execute(f'''
+            UPDATE users SET {', '.join(update_fields)}
+            WHERE id = %s
+        ''', update_values)
+        
+        conn.commit()
+        
+        # Fetch updated user
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, r.name as role, rt.name as reseller_tier
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+            WHERE u.id = %s
+        ''', (user_id,))
+        
+        updated_user = dict(cursor.fetchone())
+        
+        return jsonify({
+            'message': 'User updated successfully',
+            'user': updated_user
+        }), 200
         
     except Exception as e:
         if conn:
@@ -596,6 +798,153 @@ def update_admin_brands(user_id):
         if conn:
             conn.close()
 
+# ==================== CATEGORY MANAGEMENT ROUTES ====================
+
+@app.route('/api/categories', methods=['GET'])
+@admin_required
+def get_categories():
+    """Get all categories with hierarchy"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, parent_id, sort_order, created_at
+            FROM categories
+            ORDER BY parent_id NULLS FIRST, sort_order, name
+        ''')
+        
+        categories = [dict(row) for row in cursor.fetchall()]
+        return jsonify(categories), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/categories', methods=['POST'])
+@admin_required
+def create_category():
+    """Create a new category"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Category name is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        parent_id = data.get('parent_id') if data.get('parent_id') else None
+        sort_order = data.get('sort_order', 0)
+        
+        cursor.execute('''
+            INSERT INTO categories (name, parent_id, sort_order)
+            VALUES (%s, %s, %s)
+            RETURNING id, name, parent_id, sort_order, created_at
+        ''', (data['name'], parent_id, sort_order))
+        
+        category = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(category), 201
+        
+    except psycopg2.errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': 'Category with this name already exists'}), 409
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/categories/<int:category_id>', methods=['PUT'])
+@admin_required
+def update_category(category_id):
+    """Update a category"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Category name is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        parent_id = data.get('parent_id') if data.get('parent_id') else None
+        sort_order = data.get('sort_order', 0)
+        
+        cursor.execute('''
+            UPDATE categories
+            SET name = %s, parent_id = %s, sort_order = %s
+            WHERE id = %s
+            RETURNING id, name, parent_id, sort_order, created_at
+        ''', (data['name'], parent_id, sort_order, category_id))
+        
+        category = cursor.fetchone()
+        if not category:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        conn.commit()
+        return jsonify(dict(category)), 200
+        
+    except psycopg2.errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': 'Category with this name already exists'}), 409
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/categories/<int:category_id>', methods=['DELETE'])
+@admin_required
+def delete_category(category_id):
+    """Delete a category"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM categories WHERE id = %s RETURNING id', (category_id,))
+        deleted = cursor.fetchone()
+        
+        if not deleted:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Category deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== PRODUCT MANAGEMENT ROUTES ====================
 
 @app.route('/api/products', methods=['GET'])
@@ -621,6 +970,7 @@ def get_products():
                 p.size_chart_image_url,
                 p.brand_id,
                 b.name as brand_name,
+                COALESCE(p.status, 'active') as status,
                 p.created_at,
                 COUNT(DISTINCT s.id) as sku_count,
                 (
@@ -643,13 +993,13 @@ def get_products():
                 )
             '''
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.created_at
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query, (user_id,))
         else:
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.created_at
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query)
@@ -785,12 +1135,13 @@ def create_product():
         if cursor.fetchone():
             return jsonify({'error': 'Parent SKU already exists'}), 400
         
-        # Insert product with brand_id
+        # Insert product with brand_id and status
+        status = data.get('status', 'active')
         cursor.execute('''
-            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url')))
+        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url'), status))
         
         product_id = cursor.fetchone()['id']
         
@@ -949,12 +1300,13 @@ def update_product(product_id):
         if not cursor.fetchone():
             return jsonify({'error': 'Product not found'}), 404
         
-        # Update basic product information including brand_id
+        # Update basic product information including brand_id and status
+        status = data.get('status', 'active')
         cursor.execute('''
             UPDATE products 
-            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, updated_at = CURRENT_TIMESTAMP
+            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, status = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), product_id))
+        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), status, product_id))
         
         # Delete existing SKUs (cascade deletes sku_values_map)
         cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))
@@ -1048,6 +1400,44 @@ def update_product(product_id):
             'message': 'Product updated successfully',
             'product_id': product_id
         }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>/status', methods=['PATCH'])
+@admin_required
+def update_product_status(product_id):
+    """Quick update product status"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if status not in ['active', 'inactive', 'draft']:
+            return jsonify({'error': 'Invalid status. Must be active, inactive, or draft'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE products SET status = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            RETURNING id
+        ''', (status, product_id))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Status updated successfully', 'status': status}), 200
         
     except Exception as e:
         if conn:

@@ -166,6 +166,7 @@ function renderUsers() {
                 ${user.reseller_tier ? `<br><small style="color: #666;">Tier: ${user.reseller_tier}</small>` : ''}
             </td>
             <td>
+                <button class="btn-edit" onclick="openEditUserModal(${user.id})" style="margin-right: 8px;">Edit</button>
                 <button class="btn-delete" onclick="deleteUser(${user.id}, '${user.full_name}')">Delete</button>
             </td>
         `;
@@ -345,6 +346,119 @@ async function deleteUser(userId, userName) {
     }
 }
 
+// Open edit user modal
+async function openEditUserModal(userId) {
+    const modal = document.getElementById('editUserModal');
+    if (!modal) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${userId}`);
+        if (!response.ok) throw new Error('Failed to load user');
+        
+        const user = await response.json();
+        
+        document.getElementById('editUserId').value = user.id;
+        document.getElementById('editFullName').value = user.full_name;
+        document.getElementById('editUsername').value = user.username;
+        document.getElementById('editPassword').value = '';
+        
+        const editRoleSelect = document.getElementById('editRole');
+        editRoleSelect.innerHTML = '';
+        roles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.id;
+            option.textContent = role.name;
+            option.dataset.roleName = role.name;
+            if (role.id === user.role_id) option.selected = true;
+            editRoleSelect.appendChild(option);
+        });
+        
+        const editTierSelect = document.getElementById('editResellerTier');
+        const editTierGroup = document.getElementById('editResellerTierGroup');
+        editTierSelect.innerHTML = '<option value="">-- เลือก Tier --</option>';
+        resellerTiers.forEach(tier => {
+            const option = document.createElement('option');
+            option.value = tier.id;
+            option.textContent = tier.name;
+            if (tier.id === user.reseller_tier_id) option.selected = true;
+            editTierSelect.appendChild(option);
+        });
+        
+        if (user.role === 'Reseller') {
+            editTierGroup.classList.remove('hidden');
+        } else {
+            editTierGroup.classList.add('hidden');
+        }
+        
+        editRoleSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.dataset.roleName === 'Reseller') {
+                editTierGroup.classList.remove('hidden');
+            } else {
+                editTierGroup.classList.add('hidden');
+            }
+        });
+        
+        modal.classList.add('active');
+    } catch (error) {
+        console.error('Error loading user:', error);
+        showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูลผู้ใช้', 'error');
+    }
+}
+
+// Close edit user modal
+function closeEditUserModal() {
+    const modal = document.getElementById('editUserModal');
+    if (modal) modal.classList.remove('active');
+}
+
+// Handle edit user form submission
+async function handleEditUser(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('editUserId').value;
+    const editRoleSelect = document.getElementById('editRole');
+    const selectedRole = editRoleSelect.options[editRoleSelect.selectedIndex];
+    
+    const userData = {
+        full_name: document.getElementById('editFullName').value,
+        username: document.getElementById('editUsername').value,
+        role_id: parseInt(editRoleSelect.value)
+    };
+    
+    const password = document.getElementById('editPassword').value;
+    if (password) userData.password = password;
+    
+    if (selectedRole.dataset.roleName === 'Reseller') {
+        const tierValue = document.getElementById('editResellerTier').value;
+        userData.reseller_tier_id = tierValue ? parseInt(tierValue) : null;
+    } else {
+        userData.reseller_tier_id = null;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('แก้ไขผู้ใช้สำเร็จ!', 'success');
+            closeEditUserModal();
+            await loadUsers();
+            updateStats();
+        } else {
+            showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating user:', error);
+        showAlert('เกิดข้อผิดพลาดในการแก้ไขผู้ใช้', 'error');
+    }
+}
+
 // Load products
 async function loadProducts() {
     const productTableBody = document.getElementById('productTableBody');
@@ -372,7 +486,7 @@ async function loadProducts() {
         if (products.length === 0) {
             productTableBody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; padding: 40px;">
+                    <td colspan="8" style="text-align: center; padding: 40px;">
                         <div style="opacity: 0.6;">ยังไม่มีสินค้าในระบบ</div>
                         <div style="margin-top: 10px;">
                             <a href="/admin/products/create" style="color: rgba(255, 255, 255, 0.9);">สร้างสินค้าแรกของคุณ</a>
@@ -401,11 +515,21 @@ async function loadProducts() {
                 ? `<span style="background: rgba(168, 85, 247, 0.2); padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 500;">${product.brand_name}</span>`
                 : `<span style="opacity: 0.5; font-size: 12px;">ไม่ระบุ</span>`;
             
+            const status = product.status || 'active';
+            const statusConfig = {
+                'active': { label: 'Active', color: '#4ade80', bg: 'rgba(40, 167, 69, 0.2)' },
+                'inactive': { label: 'Inactive', color: '#9ca3af', bg: 'rgba(107, 114, 128, 0.2)' },
+                'draft': { label: 'Draft', color: '#fcd34d', bg: 'rgba(253, 186, 20, 0.2)' }
+            };
+            const statusStyle = statusConfig[status] || statusConfig['active'];
+            const statusBadge = `<span class="status-badge" style="background: ${statusStyle.bg}; color: ${statusStyle.color}; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; cursor: pointer;" onclick="cycleProductStatus(${product.id}, '${status}')">${statusStyle.label}</span>`;
+            
             row.innerHTML = `
                 <td>${imageHtml}</td>
                 <td>${brandHtml}</td>
                 <td><strong>${product.parent_sku || '-'}</strong></td>
                 <td>${product.name || '-'}</td>
+                <td>${statusBadge}</td>
                 <td>
                     <span style="background: rgba(139, 92, 246, 0.2); padding: 4px 12px; border-radius: 12px; font-size: 13px;">
                         ${product.sku_count || 0} SKUs
@@ -441,7 +565,7 @@ async function loadProducts() {
         console.error('Error loading products:', error);
         productTableBody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 40px;">
+                <td colspan="8" style="text-align: center; padding: 40px;">
                     <div style="color: rgb(239, 68, 68); opacity: 0.8;">เกิดข้อผิดพลาดในการโหลดข้อมูลสินค้า</div>
                 </td>
             </tr>
@@ -471,6 +595,32 @@ async function deleteProduct(productId, productName) {
     } catch (error) {
         console.error('Error deleting product:', error);
         alert('เกิดข้อผิดพลาดในการลบสินค้า');
+    }
+}
+
+// Cycle product status (active -> inactive -> draft -> active)
+async function cycleProductStatus(productId, currentStatus) {
+    const statusOrder = ['active', 'inactive', 'draft'];
+    const currentIndex = statusOrder.indexOf(currentStatus);
+    const newStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
+    
+    try {
+        const response = await fetch(`${API_URL}/products/${productId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            await loadProducts();
+        } else {
+            alert(result.error || 'เกิดข้อผิดพลาด');
+        }
+    } catch (error) {
+        console.error('Error updating product status:', error);
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะสินค้า');
     }
 }
 
