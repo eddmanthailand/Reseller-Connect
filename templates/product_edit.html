@@ -699,9 +699,10 @@
 
         // Centralized image state management
         const imageState = {
-            files: [],        // Array of File objects
-            previews: [],     // Array of preview data URLs
-            sortable: null    // SortableJS instance
+            files: [],           // Array of File objects (for NEW images only)
+            previews: [],        // Array of preview URLs (both existing and new)
+            existingUrls: [],    // Array of existing image URLs from server
+            sortable: null       // SortableJS instance
         };
 
         // Size chart state management
@@ -1222,8 +1223,11 @@
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึก...';
                 
-                // Step 2: Upload images first (if any)
+                // Step 2: Build final image URLs list (existing + new uploads)
                 let imageUrls = [];
+                let newUploadedUrls = [];
+                
+                // Upload NEW images first (if any)
                 if (imageState.files.length > 0) {
                     submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดรูปภาพ...';
                     
@@ -1243,11 +1247,31 @@
                     }
                     
                     const uploadResult = await uploadResponse.json();
-                    imageUrls = uploadResult.image_urls || [];
+                    newUploadedUrls = uploadResult.image_urls || [];
                 }
                 
-                // Step 2.5: Upload size chart image (if any)
-                let sizeChartImageUrl = null;
+                // Build final URL list in correct order from previews
+                // previews contains both existing URLs (start with /storage/) and data URLs (new files)
+                let newUploadIndex = 0;
+                imageState.previews.forEach(preview => {
+                    if (preview.startsWith('/storage/')) {
+                        // This is an existing image - keep it
+                        imageUrls.push(preview);
+                    } else if (preview.startsWith('data:')) {
+                        // This is a new image - use the uploaded URL
+                        if (newUploadIndex < newUploadedUrls.length) {
+                            imageUrls.push(newUploadedUrls[newUploadIndex]);
+                            newUploadIndex++;
+                        }
+                    }
+                });
+                
+                // Step 2.5: Handle size chart image
+                // Keep existing URL if no new upload, or upload new one
+                let sizeChartImageUrl = sizeChartState.preview && sizeChartState.preview.startsWith('/storage/') 
+                    ? sizeChartState.preview  // Keep existing
+                    : null;
+                    
                 if (sizeChartState.croppedBlob) {
                     submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดตารางไซส์...';
                     
@@ -1349,6 +1373,7 @@
                 if (product.images && product.images.length > 0) {
                     product.images.forEach((img, idx) => {
                         imageState.previews.push(img.image_url);
+                        imageState.existingUrls.push(img.image_url);  // Track existing URLs
                     });
                     renderImageGallery();
                 }
