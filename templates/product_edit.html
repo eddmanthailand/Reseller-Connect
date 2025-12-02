@@ -1692,9 +1692,15 @@
         
         function collectCustomizationsData() {
             const customizations = [];
+            const container = document.getElementById('customizations-container');
+            console.log('Customizations container:', container);
+            console.log('Container HTML:', container ? container.innerHTML.substring(0, 500) : 'NOT FOUND');
+            
             const groups = document.querySelectorAll('#customizations-container .option-block');
+            console.log('Found customization groups:', groups.length);
             
             groups.forEach((group, idx) => {
+                console.log('Processing group', idx, ':', group);
                 const name = group.querySelector('.customization-name-input').value.trim();
                 if (!name) return;
                 
