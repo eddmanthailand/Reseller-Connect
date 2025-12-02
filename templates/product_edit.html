@@ -1823,11 +1823,15 @@
                 }
                 
                 // Load options and values
+                console.log('Loading product options:', product.options);
                 if (product.options && product.options.length > 0) {
                     product.options.forEach(option => {
                         addOptionBlock();
-                        const optionBlocks = document.querySelectorAll('.option-block');
+                        // Use specific container to avoid confusion with customization blocks
+                        const optionBlocks = document.querySelectorAll('#options-container .option-block');
                         const lastBlock = optionBlocks[optionBlocks.length - 1];
+                        
+                        console.log('Processing option:', option.name, 'values:', option.values);
                         
                         // Set option name
                         const nameInput = lastBlock.querySelector('.option-name-input');
@@ -1844,8 +1848,11 @@
                     
                     // Trigger variant generation after loading options
                     setTimeout(() => {
+                        console.log('Triggering variant generation...');
                         document.getElementById('generate-variants-btn').click();
-                    }, 200);
+                    }, 300);
+                } else {
+                    console.log('No options found for this product');
                 }
                 
                 // Load SKUs (will be populated after variant table is generated)
