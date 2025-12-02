@@ -58,6 +58,14 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - Normalized database tables: `categories`, `product_categories`.
   - Full CRUD API endpoints for category management.
   - Foreign-key constraints for data integrity.
+- **Product Customization Options (Dec 2025):**
+  - Non-SKU variations like button types, embroidery options that don't affect inventory.
+  - Stored in `product_customizations` and `customization_choices` tables.
+  - Each customization group has: name, is_required flag, allow_multiple flag.
+  - Each choice has: name, optional extra_price for price adjustments.
+  - Full CRUD API endpoints at `/api/products/:id/customizations`.
+  - UI sections in product create/edit forms with dynamic JavaScript management.
+  - Customizations saved after product creation/update.
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -73,6 +81,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 **Brand Management:** `brands`, `admin_brand_access` (for role-based brand access control)
 **Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands), `size_chart_image_url`, and `status` (active/inactive/draft, default active).
 **Category Management:** `categories`, `product_categories` (junction table for product-category associations)
+**Product Customizations:** `product_customizations`, `customization_choices` (for non-SKU product variations with optional pricing)
 
 ## External Dependencies
 
