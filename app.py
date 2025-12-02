@@ -1008,6 +1008,37 @@ def get_products():
             cursor.execute(base_query)
         
         products = [dict(row) for row in cursor.fetchall()]
+        
+        # Fetch SKUs for each product (for collapsible display)
+        for product in products:
+            # Convert Decimal to float for JSON serialization (check is not None for zero values)
+            if product.get('min_price') is not None:
+                product['min_price'] = float(product['min_price'])
+            if product.get('max_price') is not None:
+                product['max_price'] = float(product['max_price'])
+            if product.get('total_stock') is not None:
+                product['total_stock'] = int(product['total_stock'])
+            
+            cursor.execute('''
+                SELECT 
+                    s.id,
+                    s.sku_code,
+                    s.price::float as price,
+                    s.stock::int as stock,
+                    COALESCE(
+                        STRING_AGG(o.name || ':' || ov.value, ' / ' ORDER BY o.id, ov.sort_order),
+                        ''
+                    ) as variant_name
+                FROM skus s
+                LEFT JOIN sku_values_map svm ON s.id = svm.sku_id
+                LEFT JOIN option_values ov ON svm.option_value_id = ov.id
+                LEFT JOIN options o ON ov.option_id = o.id
+                WHERE s.product_id = %s
+                GROUP BY s.id, s.sku_code, s.price, s.stock
+                ORDER BY s.id
+            ''', (product['id'],))
+            product['skus'] = [dict(row) for row in cursor.fetchall()]
+        
         return jsonify(products), 200
         
     except Exception as e:

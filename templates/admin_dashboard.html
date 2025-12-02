@@ -437,6 +437,50 @@
         </div>
     </div>
 
+    <!-- Edit Price Modal -->
+    <div id="editPriceModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>แก้ไขราคา</h2>
+                <button class="modal-close" onclick="closeEditPriceModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-search-bar">
+                    <input type="text" id="priceModalSearch" placeholder="ชื่อตัวเลือกย่อย/Seller SKU/Shop SKU" class="modal-search-input">
+                </div>
+                <div class="modal-sku-list" id="priceModalSkuList">
+                    <!-- SKU rows will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeEditPriceModal()">ยกเลิก</button>
+                <button type="button" class="btn" onclick="saveAllPrices()">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Stock Modal -->
+    <div id="editStockModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>แก้ไขสต็อก</h2>
+                <button class="modal-close" onclick="closeEditStockModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-search-bar">
+                    <input type="text" id="stockModalSearch" placeholder="ชื่อตัวเลือกย่อย/Seller SKU/Shop SKU" class="modal-search-input">
+                </div>
+                <div class="modal-sku-list" id="stockModalSkuList">
+                    <!-- SKU rows will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeEditStockModal()">ยกเลิก</button>
+                <button type="button" class="btn" onclick="saveAllStock()">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/dashboard.js"></script>
 </body>
 </html>

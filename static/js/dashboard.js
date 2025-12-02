@@ -757,12 +757,16 @@ function renderProducts() {
                 </span>
             </td>
             <td>
-                <div class="inline-edit">
+                <button class="edit-price-btn" onclick="openEditPriceModal(${product.id})">
                     <span style="font-size: 11px;">${priceDisplay}</span>
-                </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
             </td>
             <td>
-                <span style="font-size: 11px;">${totalStock.toLocaleString()}</span>
+                <button class="edit-stock-btn" onclick="openEditStockModal(${product.id})">
+                    <span style="font-size: 11px;">${totalStock.toLocaleString()}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
             </td>
             <td>
                 <label class="toggle-switch">
@@ -1057,6 +1061,218 @@ function showAlert(message, type) {
     setTimeout(() => {
         alertBox.classList.remove('show');
     }, 5000);
+}
+
+// ========== Price/Stock Modal Functions ==========
+let currentEditingProduct = null;
+
+// Open Edit Price Modal
+function openEditPriceModal(productId) {
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return;
+    
+    currentEditingProduct = product;
+    const modal = document.getElementById('editPriceModal');
+    const skuList = document.getElementById('priceModalSkuList');
+    
+    // Render SKU list
+    skuList.innerHTML = '';
+    
+    if (!product.skus || product.skus.length === 0) {
+        skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">ไม่มี SKU สำหรับสินค้านี้</div>';
+    } else {
+        product.skus.forEach(sku => {
+            const itemHtml = `
+                <div class="modal-sku-item" data-sku-id="${sku.id}">
+                    <div class="modal-sku-image-placeholder">📦</div>
+                    <div class="modal-sku-info">
+                        <div class="modal-sku-name">${product.name}${sku.variant_name ? ',' + sku.variant_name : ''}</div>
+                        <div class="modal-sku-code">Seller SKU: ${sku.sku_code || '-'}</div>
+                    </div>
+                    <div class="modal-sku-inputs">
+                        <div class="modal-sku-input-group">
+                            <label>฿</label>
+                            <input type="number" class="modal-sku-input sku-price-input" 
+                                   data-sku-id="${sku.id}" 
+                                   value="${sku.price || 0}" 
+                                   min="0" step="0.01">
+                        </div>
+                    </div>
+                </div>
+            `;
+            skuList.innerHTML += itemHtml;
+        });
+    }
+    
+    // Setup search filter
+    const searchInput = document.getElementById('priceModalSearch');
+    searchInput.value = '';
+    searchInput.oninput = () => filterModalSkus('priceModalSkuList', searchInput.value);
+    
+    modal.classList.add('active');
+}
+
+// Close Edit Price Modal
+function closeEditPriceModal() {
+    const modal = document.getElementById('editPriceModal');
+    modal.classList.remove('active');
+    currentEditingProduct = null;
+}
+
+// Save all prices
+async function saveAllPrices() {
+    const inputs = document.querySelectorAll('#priceModalSkuList .sku-price-input');
+    const updates = [];
+    
+    inputs.forEach(input => {
+        const skuId = input.dataset.skuId;
+        const priceVal = parseFloat(input.value);
+        const price = isNaN(priceVal) || priceVal < 0 ? 0 : Math.round(priceVal * 100) / 100;
+        updates.push({ skuId, price });
+    });
+    
+    if (updates.length === 0) {
+        closeEditPriceModal();
+        return;
+    }
+    
+    try {
+        const results = await Promise.all(updates.map(async u => {
+            const response = await fetch(`${API_URL}/skus/${u.skuId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ price: u.price })
+            });
+            return response.ok;
+        }));
+        
+        const failedCount = results.filter(r => !r).length;
+        
+        if (failedCount === 0) {
+            showAlert('บันทึกราคาสำเร็จ', 'success');
+        } else {
+            showAlert(`บันทึกสำเร็จ ${results.length - failedCount}/${results.length} รายการ`, 'error');
+        }
+        
+        closeEditPriceModal();
+        await loadProducts();
+    } catch (error) {
+        console.error('Error saving prices:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึกราคา', 'error');
+    }
+}
+
+// Open Edit Stock Modal
+function openEditStockModal(productId) {
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return;
+    
+    currentEditingProduct = product;
+    const modal = document.getElementById('editStockModal');
+    const skuList = document.getElementById('stockModalSkuList');
+    
+    // Render SKU list
+    skuList.innerHTML = '';
+    
+    if (!product.skus || product.skus.length === 0) {
+        skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">ไม่มี SKU สำหรับสินค้านี้</div>';
+    } else {
+        product.skus.forEach(sku => {
+            const itemHtml = `
+                <div class="modal-sku-item" data-sku-id="${sku.id}">
+                    <div class="modal-sku-image-placeholder">📦</div>
+                    <div class="modal-sku-info">
+                        <div class="modal-sku-name">${product.name}${sku.variant_name ? ',' + sku.variant_name : ''}</div>
+                        <div class="modal-sku-code">Seller SKU: ${sku.sku_code || '-'}</div>
+                    </div>
+                    <div class="modal-sku-inputs">
+                        <div class="modal-sku-input-group">
+                            <label>สินค้าพร้อมส่ง</label>
+                            <input type="number" class="modal-sku-input sku-stock-input" 
+                                   data-sku-id="${sku.id}" 
+                                   value="${sku.stock || 0}" 
+                                   min="0" step="1">
+                        </div>
+                    </div>
+                </div>
+            `;
+            skuList.innerHTML += itemHtml;
+        });
+    }
+    
+    // Setup search filter
+    const searchInput = document.getElementById('stockModalSearch');
+    searchInput.value = '';
+    searchInput.oninput = () => filterModalSkus('stockModalSkuList', searchInput.value);
+    
+    modal.classList.add('active');
+}
+
+// Close Edit Stock Modal
+function closeEditStockModal() {
+    const modal = document.getElementById('editStockModal');
+    modal.classList.remove('active');
+    currentEditingProduct = null;
+}
+
+// Save all stock
+async function saveAllStock() {
+    const inputs = document.querySelectorAll('#stockModalSkuList .sku-stock-input');
+    const updates = [];
+    
+    inputs.forEach(input => {
+        const skuId = input.dataset.skuId;
+        const stockVal = parseInt(input.value);
+        const stock = isNaN(stockVal) || stockVal < 0 ? 0 : stockVal;
+        updates.push({ skuId, stock });
+    });
+    
+    if (updates.length === 0) {
+        closeEditStockModal();
+        return;
+    }
+    
+    try {
+        const results = await Promise.all(updates.map(async u => {
+            const response = await fetch(`${API_URL}/skus/${u.skuId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stock: u.stock })
+            });
+            return response.ok;
+        }));
+        
+        const failedCount = results.filter(r => !r).length;
+        
+        if (failedCount === 0) {
+            showAlert('บันทึกสต็อกสำเร็จ', 'success');
+        } else {
+            showAlert(`บันทึกสำเร็จ ${results.length - failedCount}/${results.length} รายการ`, 'error');
+        }
+        
+        closeEditStockModal();
+        await loadProducts();
+    } catch (error) {
+        console.error('Error saving stock:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึกสต็อก', 'error');
+    }
+}
+
+// Filter modal SKUs by search term
+function filterModalSkus(listId, searchTerm) {
+    const items = document.querySelectorAll(`#${listId} .modal-sku-item`);
+    const term = searchTerm.toLowerCase();
+    
+    items.forEach(item => {
+        const name = item.querySelector('.modal-sku-name')?.textContent.toLowerCase() || '';
+        const code = item.querySelector('.modal-sku-code')?.textContent.toLowerCase() || '';
+        
+        if (name.includes(term) || code.includes(term)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
 }
 
 // Initialize on page load
