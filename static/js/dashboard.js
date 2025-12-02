@@ -238,6 +238,11 @@ function setupEventListeners() {
     // Navigation
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
+            // Allow external links to navigate normally
+            if (item.classList.contains('nav-link-external')) {
+                return; // Let the browser handle the link
+            }
+            
             e.preventDefault();
             const targetPage = item.dataset.page;
             
