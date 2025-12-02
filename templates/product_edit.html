@@ -467,15 +467,26 @@
                     <div class="section-card">
                         <h2 class="section-title">1. ข้อมูลสินค้าหลัก (SPU)</h2>
                         
-                        <!-- Brand Selection - First Row -->
-                        <div style="margin-bottom: 20px;">
-                            <label class="form-label">🏷️ แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
-                            <select id="brand_id" class="form-input" required style="cursor: pointer;">
-                                <option value="">-- เลือกแบรนด์ --</option>
-                            </select>
-                            <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
-                                หากยังไม่มีแบรนด์ <a href="/admin/brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
-                            </p>
+                        <!-- Brand & Category Selection - First Row -->
+                        <div class="grid-2-cols" style="margin-bottom: 20px;">
+                            <div>
+                                <label class="form-label">🏷️ แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                                <select id="brand_id" class="form-input" required style="cursor: pointer;">
+                                    <option value="">-- เลือกแบรนด์ --</option>
+                                </select>
+                                <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
+                                    หากยังไม่มีแบรนด์ <a href="/admin/brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
+                                </p>
+                            </div>
+                            <div>
+                                <label class="form-label">📂 หมวดหมู่</label>
+                                <select id="category_id" class="form-input" style="cursor: pointer;">
+                                    <option value="">-- เลือกหมวดหมู่ (ไม่บังคับ) --</option>
+                                </select>
+                                <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
+                                    หากยังไม่มีหมวดหมู่ <a href="/admin/categories" style="color: rgba(139, 92, 246, 0.9);">สร้างหมวดหมู่ใหม่</a>
+                                </p>
+                            </div>
                         </div>
                         
                         <div class="grid-2-cols">
@@ -658,6 +669,31 @@
                 });
             } catch (error) {
                 console.error('Error loading brands:', error);
+            }
+        }
+
+        // Load categories for dropdown
+        async function loadCategories(selectedCategoryId = null) {
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+                if (!response.ok) throw new Error('Failed to load categories');
+                
+                const categories = await response.json();
+                const categorySelect = document.getElementById('category_id');
+                
+                categorySelect.innerHTML = '<option value="">-- เลือกหมวดหมู่ (ไม่บังคับ) --</option>';
+                
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    option.textContent = category.name;
+                    if (selectedCategoryId && category.id == selectedCategoryId) {
+                        option.selected = true;
+                    }
+                    categorySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading categories:', error);
             }
         }
 
@@ -1164,6 +1200,7 @@
 
             // Step 1: Validate form fields
             const brandId = document.getElementById('brand_id').value;
+            const categoryId = document.getElementById('category_id').value;
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
@@ -1245,6 +1282,7 @@
 
                 const productData = {
                     brand_id: parseInt(brandId),
+                    category_id: categoryId ? parseInt(categoryId) : null,
                     name,
                     parent_sku: parentSku,
                     description,
@@ -1294,6 +1332,9 @@
                 
                 // Load brands and select current brand
                 await loadBrands(product.brand_id);
+                
+                // Load categories and select current category
+                await loadCategories(product.category_id);
                 
                 // Populate basic fields with null checks
                 const productNameEl = document.getElementById('product_name');

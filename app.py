@@ -108,6 +108,12 @@ def brand_management():
     """Render the brand management page"""
     return render_template('brand_management.html')
 
+@app.route('/admin/categories')
+@admin_required
+def category_management():
+    """Render the category management page"""
+    return render_template('category_management.html')
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login"""
@@ -803,7 +809,7 @@ def update_admin_brands(user_id):
 @app.route('/api/categories', methods=['GET'])
 @admin_required
 def get_categories():
-    """Get all categories with hierarchy"""
+    """Get all categories with hierarchy and product counts"""
     conn = None
     cursor = None
     try:
@@ -811,9 +817,12 @@ def get_categories():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         cursor.execute('''
-            SELECT id, name, parent_id, sort_order, created_at
-            FROM categories
-            ORDER BY parent_id NULLS FIRST, sort_order, name
+            SELECT c.id, c.name, c.parent_id, c.sort_order, c.created_at,
+                   COUNT(pc.product_id) as product_count
+            FROM categories c
+            LEFT JOIN product_categories pc ON c.id = pc.category_id
+            GROUP BY c.id, c.name, c.parent_id, c.sort_order, c.created_at
+            ORDER BY c.parent_id NULLS FIRST, c.sort_order, c.name
         ''')
         
         categories = [dict(row) for row in cursor.fetchall()]
@@ -1068,6 +1077,15 @@ def get_product(product_id):
         
         product = dict(product)
         
+        # Get product category
+        cursor.execute('''
+            SELECT category_id FROM product_categories
+            WHERE product_id = %s
+            LIMIT 1
+        ''', (product_id,))
+        category_row = cursor.fetchone()
+        product['category_id'] = category_row['category_id'] if category_row else None
+        
         # Get product images
         cursor.execute('''
             SELECT id, image_url, sort_order
@@ -1178,6 +1196,16 @@ def create_product():
         ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url'), status))
         
         product_id = cursor.fetchone()['id']
+        
+        # Insert product category if provided
+        category_id = data.get('category_id')
+        if category_id:
+            cursor.execute('SELECT id FROM categories WHERE id = %s', (category_id,))
+            if cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO product_categories (product_id, category_id)
+                    VALUES (%s, %s)
+                ''', (product_id, category_id))
         
         # Insert product images if provided
         image_urls = data.get('image_urls', [])
@@ -1341,6 +1369,17 @@ def update_product(product_id):
             SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, status = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), status, product_id))
+        
+        # Update product category
+        cursor.execute('DELETE FROM product_categories WHERE product_id = %s', (product_id,))
+        category_id = data.get('category_id')
+        if category_id:
+            cursor.execute('SELECT id FROM categories WHERE id = %s', (category_id,))
+            if cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO product_categories (product_id, category_id)
+                    VALUES (%s, %s)
+                ''', (product_id, category_id))
         
         # Delete existing SKUs (cascade deletes sku_values_map)
         cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))

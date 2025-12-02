@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>หมวดหมู่สินค้า - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .category-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .category-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .category-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .category-info p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .category-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .product-count {
+            background: rgba(59, 130, 246, 0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #ffffff;
+        }
+        
+        .category-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-edit {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn-edit:hover {
+            background: rgba(59, 130, 246, 1);
+        }
+        
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 1);
+        }
+        
+        .add-category-form {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 16px;
+            align-items: end;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .form-group select option {
+            background: #1e1b4b;
+            color: white;
+        }
+        
+        .btn-add {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, rgba(30, 27, 75, 0.95), rgba(88, 28, 135, 0.95));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 32px;
+            width: 100%;
+            max-width: 500px;
+            margin: 20px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .modal-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 24px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        .btn-cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            margin-bottom: 24px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            color: white;
+        }
+        
+        .parent-badge {
+            background: rgba(139, 92, 246, 0.3);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-left: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .category-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+            
+            .category-stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container" style="display: block; padding: 40px;">
+        <a href="/admin" class="back-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+            กลับไปหน้า Dashboard
+        </a>
+        
+        <div class="page-header" style="margin-bottom: 32px;">
+            <h1>📂 หมวดหมู่สินค้า</h1>
+            <p>สร้างและจัดการหมวดหมู่สินค้าในระบบ</p>
+        </div>
+        
+        <div class="add-category-form" id="addCategoryForm">
+            <h3 style="margin-bottom: 16px; font-size: 16px;">➕ เพิ่มหมวดหมู่ใหม่</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="categoryName">ชื่อหมวดหมู่ *</label>
+                    <input type="text" id="categoryName" placeholder="เช่น เสื้อผ้า, รองเท้า">
+                </div>
+                <div class="form-group">
+                    <label for="parentCategory">หมวดหมู่หลัก (ไม่บังคับ)</label>
+                    <select id="parentCategory">
+                        <option value="">-- ไม่มี (เป็นหมวดหมู่หลัก) --</option>
+                    </select>
+                </div>
+                <button class="btn-add" onclick="addCategory()">
+                    <span>เพิ่มหมวดหมู่</span>
+                </button>
+            </div>
+        </div>
+        
+        <div id="categoryList">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 3H6a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/>
+                    <path d="M18 3h-4a2 2 0 0 0-2 2v4c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/>
+                </svg>
+                <p>กำลังโหลดข้อมูล...</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ แก้ไขหมวดหมู่</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="editCategoryName">ชื่อหมวดหมู่ *</label>
+                <input type="text" id="editCategoryName" placeholder="ชื่อหมวดหมู่">
+            </div>
+            <div class="form-group">
+                <label for="editParentCategory">หมวดหมู่หลัก</label>
+                <select id="editParentCategory">
+                    <option value="">-- ไม่มี (เป็นหมวดหมู่หลัก) --</option>
+                </select>
+            </div>
+            <input type="hidden" id="editCategoryId">
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-save" onclick="saveCategory()">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let categories = [];
+        
+        async function loadCategories() {
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+                if (!response.ok) throw new Error('Failed to load categories');
+                
+                categories = await response.json();
+                renderCategories();
+                updateParentDropdowns();
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('categoryList').innerHTML = `
+                    <div class="empty-state">
+                        <p>❌ เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateParentDropdowns() {
+            const addSelect = document.getElementById('parentCategory');
+            const editSelect = document.getElementById('editParentCategory');
+            
+            const options = '<option value="">-- ไม่มี (เป็นหมวดหมู่หลัก) --</option>' + 
+                categories.map(cat => `<option value="${cat.id}">${escapeHtml(cat.name)}</option>`).join('');
+            
+            addSelect.innerHTML = options;
+            editSelect.innerHTML = options;
+        }
+        
+        function getParentName(parentId) {
+            if (!parentId) return null;
+            const parent = categories.find(c => c.id === parentId);
+            return parent ? parent.name : null;
+        }
+        
+        function renderCategories() {
+            const container = document.getElementById('categoryList');
+            
+            if (categories.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 3H6a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/>
+                            <path d="M18 3h-4a2 2 0 0 0-2 2v4c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/>
+                        </svg>
+                        <p>ยังไม่มีหมวดหมู่ในระบบ</p>
+                        <p style="font-size: 14px; margin-top: 8px;">เริ่มต้นด้วยการเพิ่มหมวดหมู่แรกของคุณ</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = categories.map(category => {
+                const parentName = getParentName(category.parent_id);
+                const parentBadge = parentName ? `<span class="parent-badge">⬆️ ${escapeHtml(parentName)}</span>` : '';
+                
+                return `
+                <div class="category-card">
+                    <div class="category-info">
+                        <h3>${escapeHtml(category.name)}${parentBadge}</h3>
+                        <p>${category.parent_id ? 'หมวดหมู่ย่อย' : 'หมวดหมู่หลัก'}</p>
+                    </div>
+                    <div class="category-stats">
+                        <span class="product-count">📦 ${category.product_count || 0} สินค้า</span>
+                        <div class="category-actions">
+                            <button class="btn-edit" onclick="editCategory(${category.id})">✏️ แก้ไข</button>
+                            <button class="btn-delete" onclick="deleteCategory(${category.id}, '${escapeHtml(category.name)}', ${category.product_count || 0})">🗑️ ลบ</button>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        async function addCategory() {
+            const name = document.getElementById('categoryName').value.trim();
+            const parentId = document.getElementById('parentCategory').value || null;
+            
+            if (!name) {
+                alert('กรุณากรอกชื่อหมวดหมู่');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, parent_id: parentId ? parseInt(parentId) : null })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to create category');
+                }
+                
+                document.getElementById('categoryName').value = '';
+                document.getElementById('parentCategory').value = '';
+                
+                loadCategories();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        function editCategory(id) {
+            const category = categories.find(c => c.id === id);
+            if (!category) return;
+            
+            document.getElementById('editCategoryId').value = id;
+            document.getElementById('editCategoryName').value = category.name;
+            document.getElementById('editParentCategory').value = category.parent_id || '';
+            
+            document.getElementById('editModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+        
+        async function saveCategory() {
+            const id = document.getElementById('editCategoryId').value;
+            const name = document.getElementById('editCategoryName').value.trim();
+            const parentId = document.getElementById('editParentCategory').value || null;
+            
+            if (!name) {
+                alert('กรุณากรอกชื่อหมวดหมู่');
+                return;
+            }
+            
+            if (parentId && parseInt(parentId) === parseInt(id)) {
+                alert('ไม่สามารถเลือกตัวเองเป็นหมวดหมู่หลักได้');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, parent_id: parentId ? parseInt(parentId) : null })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to update category');
+                }
+                
+                closeModal();
+                loadCategories();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        async function deleteCategory(id, name, productCount) {
+            if (productCount > 0) {
+                alert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในหมวดหมู่นี้\n\nกรุณาย้ายหรือลบสินค้าก่อน`);
+                return;
+            }
+            
+            const hasChildren = categories.some(c => c.parent_id === id);
+            if (hasChildren) {
+                alert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมีหมวดหมู่ย่อยอยู่\n\nกรุณาลบหมวดหมู่ย่อยก่อน`);
+                return;
+            }
+            
+            if (!confirm(`ต้องการลบหมวดหมู่ "${name}" หรือไม่?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/categories/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to delete category');
+                }
+                
+                loadCategories();
+                
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+        
+        document.getElementById('categoryName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCategory();
+            }
+        });
+        
+        loadCategories();
+    </script>
+</body>
+</html>
