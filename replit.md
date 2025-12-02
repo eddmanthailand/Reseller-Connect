@@ -75,6 +75,16 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - User management supports manual tier override for VIP customers via `tier_manual_override` column.
   - Reseller dashboard displays prices after tier discount with original price strikethrough and discount badge.
   - API endpoints: GET/POST `/api/products/:id/tier-pricing` for tier pricing CRUD.
+- **Tier Settings & Auto-Upgrade System (Dec 2025):**
+  - Dedicated tier settings page at `/admin/tier-settings` for configuring upgrade thresholds.
+  - `total_purchases` column in users table tracks accumulated purchase amounts.
+  - Configurable upgrade thresholds per tier (e.g., Bronze=0, Silver=10000, Gold=50000, Platinum=200000).
+  - Automatic tier upgrade when reseller's total purchases reach threshold (unless manual override is set).
+  - API endpoints: PUT `/api/reseller-tiers/:id` and `/api/reseller-tiers/bulk` for threshold management.
+  - API endpoint: POST `/api/users/:id/add-purchase` to add purchase amount and trigger auto-upgrade check.
+  - API endpoint: POST `/api/users/check-tier-upgrades` to batch check and upgrade all resellers.
+  - API endpoint: GET `/api/resellers` to list all resellers with tier and purchase info.
+  - Resellers table shows current tier, total purchases, and manual override status.
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices

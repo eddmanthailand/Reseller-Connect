@@ -2156,5 +2156,291 @@ def update_user_tier_override(user_id):
         if conn:
             conn.close()
 
+@app.route('/admin/tier-settings')
+@admin_required
+def tier_settings_page():
+    """Tier settings management page"""
+    return render_template('tier_settings.html')
+
+@app.route('/api/reseller-tiers/<int:tier_id>', methods=['PUT'])
+@admin_required
+def update_reseller_tier(tier_id):
+    """Update reseller tier settings (upgrade_threshold, description)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM reseller_tiers WHERE id = %s', (tier_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Tier not found'}), 404
+        
+        upgrade_threshold = data.get('upgrade_threshold', 0)
+        description = data.get('description', '')
+        
+        cursor.execute('''
+            UPDATE reseller_tiers 
+            SET upgrade_threshold = %s, description = %s
+            WHERE id = %s
+            RETURNING id, name, level_rank, upgrade_threshold, description, is_manual_only
+        ''', (upgrade_threshold, description, tier_id))
+        
+        updated = dict(cursor.fetchone())
+        if updated.get('upgrade_threshold'):
+            updated['upgrade_threshold'] = float(updated['upgrade_threshold'])
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Tier updated successfully',
+            'tier': updated
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-tiers/bulk', methods=['PUT'])
+@admin_required
+def update_reseller_tiers_bulk():
+    """Bulk update reseller tier thresholds"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        tiers = data.get('tiers', [])
+        
+        if not tiers:
+            return jsonify({'error': 'No tiers provided'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        updated_tiers = []
+        for tier_data in tiers:
+            tier_id = tier_data.get('id')
+            upgrade_threshold = tier_data.get('upgrade_threshold', 0)
+            description = tier_data.get('description', '')
+            
+            cursor.execute('''
+                UPDATE reseller_tiers 
+                SET upgrade_threshold = %s, description = %s
+                WHERE id = %s
+                RETURNING id, name, level_rank, upgrade_threshold, description, is_manual_only
+            ''', (upgrade_threshold, description, tier_id))
+            
+            result = cursor.fetchone()
+            if result:
+                tier_dict = dict(result)
+                if tier_dict.get('upgrade_threshold'):
+                    tier_dict['upgrade_threshold'] = float(tier_dict['upgrade_threshold'])
+                updated_tiers.append(tier_dict)
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Tiers updated successfully',
+            'tiers': updated_tiers
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/users/<int:user_id>/add-purchase', methods=['POST'])
+@admin_required
+def add_user_purchase(user_id):
+    """Add purchase amount to user's total and check for tier upgrade"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        amount = data.get('amount', 0)
+        
+        if amount <= 0:
+            return jsonify({'error': 'Amount must be positive'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT u.id, u.total_purchases, u.reseller_tier_id, u.tier_manual_override, r.name as role_name
+            FROM users u 
+            JOIN roles r ON r.id = u.role_id 
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user['role_name'] != 'Reseller':
+            return jsonify({'error': 'User is not a reseller'}), 400
+        
+        new_total = float(user['total_purchases'] or 0) + float(amount)
+        
+        cursor.execute('''
+            UPDATE users SET total_purchases = %s WHERE id = %s
+        ''', (new_total, user_id))
+        
+        tier_upgraded = False
+        new_tier_name = None
+        
+        if not user['tier_manual_override']:
+            cursor.execute('''
+                SELECT id, name, upgrade_threshold 
+                FROM reseller_tiers 
+                WHERE upgrade_threshold <= %s AND is_manual_only = FALSE
+                ORDER BY level_rank DESC
+                LIMIT 1
+            ''', (new_total,))
+            new_tier = cursor.fetchone()
+            
+            if new_tier and new_tier['id'] != user['reseller_tier_id']:
+                cursor.execute('''
+                    UPDATE users SET reseller_tier_id = %s WHERE id = %s
+                ''', (new_tier['id'], user_id))
+                tier_upgraded = True
+                new_tier_name = new_tier['name']
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Purchase added successfully',
+            'new_total': new_total,
+            'tier_upgraded': tier_upgraded,
+            'new_tier': new_tier_name
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/users/check-tier-upgrades', methods=['POST'])
+@admin_required
+def check_all_tier_upgrades():
+    """Check and upgrade tiers for all resellers based on their total purchases"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, upgrade_threshold, level_rank
+            FROM reseller_tiers 
+            WHERE is_manual_only = FALSE
+            ORDER BY level_rank DESC
+        ''')
+        tiers = cursor.fetchall()
+        
+        cursor.execute('''
+            SELECT u.id, u.username, u.total_purchases, u.reseller_tier_id, rt.name as current_tier
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE r.name = 'Reseller' AND u.tier_manual_override = FALSE
+        ''')
+        resellers = cursor.fetchall()
+        
+        upgraded_users = []
+        
+        for reseller in resellers:
+            total = float(reseller['total_purchases'] or 0)
+            
+            new_tier = None
+            for tier in tiers:
+                threshold = float(tier['upgrade_threshold'] or 0)
+                if total >= threshold:
+                    new_tier = tier
+                    break
+            
+            if new_tier and new_tier['id'] != reseller['reseller_tier_id']:
+                cursor.execute('''
+                    UPDATE users SET reseller_tier_id = %s WHERE id = %s
+                ''', (new_tier['id'], reseller['id']))
+                upgraded_users.append({
+                    'user_id': reseller['id'],
+                    'username': reseller['username'],
+                    'old_tier': reseller['current_tier'],
+                    'new_tier': new_tier['name'],
+                    'total_purchases': total
+                })
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': f'Checked {len(resellers)} resellers, upgraded {len(upgraded_users)}',
+            'upgraded_users': upgraded_users
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/resellers', methods=['GET'])
+@admin_required
+def get_resellers_list():
+    """Get all resellers with their tier and purchase info"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT u.id, u.username, u.full_name, u.total_purchases, 
+                   u.tier_manual_override, rt.name as tier_name, rt.level_rank
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE r.name = 'Reseller'
+            ORDER BY rt.level_rank DESC, u.total_purchases DESC
+        ''')
+        resellers = cursor.fetchall()
+        
+        result = []
+        for r in resellers:
+            r_dict = dict(r)
+            if r_dict.get('total_purchases'):
+                r_dict['total_purchases'] = float(r_dict['total_purchases'])
+            result.append(r_dict)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
