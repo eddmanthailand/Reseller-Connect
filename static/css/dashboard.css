@@ -435,6 +435,19 @@ body.sidebar-collapsed .sidebar-toggle {
     font-size: var(--font-base);
 }
 
+/* Grid Utilities */
+.grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .grid-2-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Stats Grid */
 .stats-grid {
     display: grid;
