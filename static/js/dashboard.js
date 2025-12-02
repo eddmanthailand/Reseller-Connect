@@ -1395,7 +1395,7 @@ async function openAssignBrandsModal(userId, userName) {
         allBrands = await brandsResponse.json();
         
         // Load user's current assigned brands
-        const userBrandsResponse = await fetch(`${API_URL}/users/${userId}/brands`);
+        const userBrandsResponse = await fetch(`${API_URL}/admin-brand-access/${userId}`);
         const userBrands = await userBrandsResponse.json();
         const assignedBrandIds = userBrands.map(b => b.id);
         
@@ -1441,8 +1441,8 @@ async function handleAssignBrands(event) {
     const brandIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
     try {
-        const response = await fetch(`${API_URL}/users/${userId}/brands`, {
-            method: 'POST',
+        const response = await fetch(`${API_URL}/admin-brand-access/${userId}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ brand_ids: brandIds })
         });
