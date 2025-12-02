@@ -41,6 +41,37 @@ def init_db():
             )
         ''')
         
+        # Migration: Add new columns to reseller_tiers table
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'reseller_tiers' AND column_name = 'level_rank'
+                ) THEN
+                    ALTER TABLE reseller_tiers ADD COLUMN level_rank INTEGER DEFAULT 1;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'reseller_tiers' AND column_name = 'upgrade_threshold'
+                ) THEN
+                    ALTER TABLE reseller_tiers ADD COLUMN upgrade_threshold DECIMAL(12, 2) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'reseller_tiers' AND column_name = 'description'
+                ) THEN
+                    ALTER TABLE reseller_tiers ADD COLUMN description TEXT;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'reseller_tiers' AND column_name = 'is_manual_only'
+                ) THEN
+                    ALTER TABLE reseller_tiers ADD COLUMN is_manual_only BOOLEAN DEFAULT FALSE;
+                END IF;
+            END $$;
+        ''')
+        
         # Create users table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
@@ -54,6 +85,19 @@ def init_db():
                 FOREIGN KEY (role_id) REFERENCES roles(id),
                 FOREIGN KEY (reseller_tier_id) REFERENCES reseller_tiers(id)
             )
+        ''')
+        
+        # Migration: Add tier_manual_override column to users table
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'tier_manual_override'
+                ) THEN
+                    ALTER TABLE users ADD COLUMN tier_manual_override BOOLEAN DEFAULT FALSE;
+                END IF;
+            END $$;
         ''')
         
         # Create brands table
@@ -265,6 +309,19 @@ def init_db():
             )
         ''')
         
+        # Create product_tier_pricing table (discount percentage per product per tier)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_tier_pricing (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                tier_id INTEGER NOT NULL REFERENCES reseller_tiers(id) ON DELETE CASCADE,
+                discount_percent DECIMAL(5, 2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(product_id, tier_id)
+            )
+        ''')
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:
@@ -273,13 +330,22 @@ def init_db():
                 (role,)
             )
         
-        # Insert default reseller tiers
-        tiers = ['Bronze', 'Silver']
-        for tier in tiers:
-            cursor.execute(
-                'INSERT INTO reseller_tiers (name) VALUES (%s) ON CONFLICT (name) DO NOTHING',
-                (tier,)
-            )
+        # Insert default reseller tiers with level_rank and is_manual_only
+        tiers_data = [
+            {'name': 'Bronze', 'level_rank': 1, 'is_manual_only': False, 'description': 'ระดับเริ่มต้น'},
+            {'name': 'Silver', 'level_rank': 2, 'is_manual_only': False, 'description': 'ระดับกลาง'},
+            {'name': 'Gold', 'level_rank': 3, 'is_manual_only': False, 'description': 'ระดับสูง'},
+            {'name': 'Platinum', 'level_rank': 4, 'is_manual_only': True, 'description': 'ระดับสูงสุด (Manual เท่านั้น)'}
+        ]
+        for tier in tiers_data:
+            cursor.execute('''
+                INSERT INTO reseller_tiers (name, level_rank, is_manual_only, description) 
+                VALUES (%s, %s, %s, %s) 
+                ON CONFLICT (name) DO UPDATE SET 
+                    level_rank = EXCLUDED.level_rank,
+                    is_manual_only = EXCLUDED.is_manual_only,
+                    description = EXCLUDED.description
+            ''', (tier['name'], tier['level_rank'], tier['is_manual_only'], tier['description']))
         
         # Insert or update Super Admin user
         cursor.execute('SELECT COUNT(*) FROM users WHERE username = %s', ('superadmin',))

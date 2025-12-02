@@ -405,6 +405,9 @@ async function openEditUserModal(userId) {
         
         const editTierSelect = document.getElementById('editResellerTier');
         const editTierGroup = document.getElementById('editResellerTierGroup');
+        const editManualOverrideGroup = document.getElementById('editManualOverrideGroup');
+        const editManualOverride = document.getElementById('editManualOverride');
+        
         editTierSelect.innerHTML = '<option value="">-- เลือก Tier --</option>';
         resellerTiers.forEach(tier => {
             const option = document.createElement('option');
@@ -414,18 +417,24 @@ async function openEditUserModal(userId) {
             editTierSelect.appendChild(option);
         });
         
+        editManualOverride.checked = user.tier_manual_override === true;
+        
         if (user.role === 'Reseller') {
             editTierGroup.classList.remove('hidden');
+            editManualOverrideGroup.classList.remove('hidden');
         } else {
             editTierGroup.classList.add('hidden');
+            editManualOverrideGroup.classList.add('hidden');
         }
         
         editRoleSelect.addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
             if (selectedOption.dataset.roleName === 'Reseller') {
                 editTierGroup.classList.remove('hidden');
+                editManualOverrideGroup.classList.remove('hidden');
             } else {
                 editTierGroup.classList.add('hidden');
+                editManualOverrideGroup.classList.add('hidden');
             }
         });
         
@@ -462,8 +471,10 @@ async function handleEditUser(event) {
     if (selectedRole.dataset.roleName === 'Reseller') {
         const tierValue = document.getElementById('editResellerTier').value;
         userData.reseller_tier_id = tierValue ? parseInt(tierValue) : null;
+        userData.tier_manual_override = document.getElementById('editManualOverride').checked;
     } else {
         userData.reseller_tier_id = null;
+        userData.tier_manual_override = false;
     }
     
     try {

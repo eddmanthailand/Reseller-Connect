@@ -373,6 +373,24 @@
             margin-bottom: 8px;
         }
 
+        .product-original-price {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: line-through;
+            margin-bottom: 2px;
+        }
+        
+        .product-discount-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            margin-left: 6px;
+        }
+        
         .product-price {
             font-size: 16px;
             font-weight: 700;
@@ -597,11 +615,30 @@
                         ? `<img src="${product.image_url}" alt="${product.name}" class="product-image">`
                         : `<div class="product-placeholder">📦</div>`;
                     
-                    const priceHtml = product.min_price
+                    const hasDiscount = product.discount_percent > 0;
+                    
+                    // Original price
+                    const originalPriceHtml = product.min_price
                         ? (product.min_price === product.max_price
                             ? `฿${parseFloat(product.min_price).toLocaleString()}`
                             : `฿${parseFloat(product.min_price).toLocaleString()} - ฿${parseFloat(product.max_price).toLocaleString()}`)
+                        : null;
+                    
+                    // Discounted price
+                    const discountedPriceHtml = product.min_price_discounted
+                        ? (product.min_price_discounted === product.max_price_discounted
+                            ? `฿${parseFloat(product.min_price_discounted).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})}`
+                            : `฿${parseFloat(product.min_price_discounted).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})} - ฿${parseFloat(product.max_price_discounted).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2})}`)
                         : 'ราคายังไม่กำหนด';
+                    
+                    const discountBadge = hasDiscount 
+                        ? `<span class="product-discount-badge">-${product.discount_percent}%</span>` 
+                        : '';
+                    
+                    const priceSection = hasDiscount && originalPriceHtml
+                        ? `<div class="product-original-price">${originalPriceHtml}</div>
+                           <div class="product-price">${discountedPriceHtml}${discountBadge}</div>`
+                        : `<div class="product-price">${originalPriceHtml || 'ราคายังไม่กำหนด'}</div>`;
                     
                     return `
                         <div class="product-card">
@@ -610,7 +647,7 @@
                                 <div class="product-brand">${product.brand_name || 'ไม่ระบุแบรนด์'}</div>
                                 <div class="product-name">${product.name}</div>
                                 <div class="product-sku">SKU: ${product.parent_sku}</div>
-                                <div class="product-price">${priceHtml}</div>
+                                ${priceSection}
                                 <span class="product-sku-count">${product.sku_count || 0} รายการ</span>
                             </div>
                         </div>

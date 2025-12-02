@@ -221,28 +221,63 @@ def get_roles():
 @app.route('/api/reseller-tiers', methods=['GET'])
 @admin_required
 def get_reseller_tiers():
-    """Get all reseller tiers"""
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute('SELECT id, name FROM reseller_tiers')
-    tiers = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return jsonify(tiers)
+    """Get all reseller tiers with their details (admin only)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, level_rank, upgrade_threshold, description, is_manual_only
+            FROM reseller_tiers 
+            ORDER BY level_rank ASC
+        ''')
+        
+        tiers = cursor.fetchall()
+        result = []
+        for tier in tiers:
+            tier_dict = dict(tier)
+            if tier_dict.get('upgrade_threshold'):
+                tier_dict['upgrade_threshold'] = float(tier_dict['upgrade_threshold'])
+            result.append(tier_dict)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/reseller/products', methods=['GET'])
 @login_required
 def get_reseller_products():
-    """Get active products for resellers with basic info"""
+    """Get active products for resellers with basic info and tier pricing"""
     user_role = session.get('role')
     if user_role not in ['Reseller', 'Super Admin', 'Assistant Admin']:
         return jsonify({'error': 'Unauthorized access'}), 403
+    
+    user_id = session.get('user_id')
     
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user's reseller tier
+        user_tier_id = None
+        discount_percent = 0
+        
+        cursor.execute('''
+            SELECT reseller_tier_id FROM users WHERE id = %s
+        ''', (user_id,))
+        user_result = cursor.fetchone()
+        if user_result and user_result['reseller_tier_id']:
+            user_tier_id = user_result['reseller_tier_id']
         
         cursor.execute('''
             SELECT 
@@ -259,16 +294,41 @@ def get_reseller_products():
                 ) as image_url,
                 COUNT(DISTINCT s.id) as sku_count,
                 MIN(s.price) as min_price,
-                MAX(s.price) as max_price
+                MAX(s.price) as max_price,
+                (
+                    SELECT ptp.discount_percent
+                    FROM product_tier_pricing ptp
+                    WHERE ptp.product_id = p.id AND ptp.tier_id = %s
+                ) as discount_percent
             FROM products p
             LEFT JOIN skus s ON p.id = s.product_id
             LEFT JOIN brands b ON p.brand_id = b.id
             WHERE COALESCE(p.status, 'active') = 'active'
             GROUP BY p.id, p.name, p.parent_sku, b.name
             ORDER BY p.name ASC
-        ''')
+        ''', (user_tier_id,))
         
-        products = [dict(row) for row in cursor.fetchall()]
+        products = []
+        for row in cursor.fetchall():
+            product = dict(row)
+            discount = float(product['discount_percent']) if product['discount_percent'] else 0
+            
+            # Calculate discounted prices
+            if product['min_price']:
+                min_price = float(product['min_price'])
+                product['min_price_discounted'] = min_price * (1 - discount / 100)
+            else:
+                product['min_price_discounted'] = None
+                
+            if product['max_price']:
+                max_price = float(product['max_price'])
+                product['max_price_discounted'] = max_price * (1 - discount / 100)
+            else:
+                product['max_price_discounted'] = None
+            
+            product['discount_percent'] = discount
+            products.append(product)
+        
         return jsonify(products), 200
         
     except Exception as e:
@@ -419,6 +479,7 @@ def get_user(user_id):
         
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.role_id, u.reseller_tier_id,
+                   u.tier_manual_override,
                    r.name as role, rt.name as reseller_tier
             FROM users u
             JOIN roles r ON u.role_id = r.id
@@ -486,6 +547,10 @@ def update_user(user_id):
         if 'reseller_tier_id' in data:
             update_fields.append('reseller_tier_id = %s')
             update_values.append(data['reseller_tier_id'] if data['reseller_tier_id'] else None)
+        
+        if 'tier_manual_override' in data:
+            update_fields.append('tier_manual_override = %s')
+            update_values.append(data['tier_manual_override'])
         
         if 'password' in data and data['password']:
             password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -1897,6 +1962,199 @@ def serve_image(filename):
         
     except Exception as e:
         return jsonify({'error': 'Image not found'}), 404
+
+# ==================== RESELLER TIER PRICING ENDPOINTS ====================
+
+@app.route('/api/products/<int:product_id>/tier-pricing', methods=['GET'])
+@login_required
+def get_product_tier_pricing(product_id):
+    """Get tier pricing for a specific product"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Get tier pricing
+        cursor.execute('''
+            SELECT ptp.id, ptp.tier_id, rt.name as tier_name, rt.level_rank,
+                   ptp.discount_percent
+            FROM product_tier_pricing ptp
+            JOIN reseller_tiers rt ON rt.id = ptp.tier_id
+            WHERE ptp.product_id = %s
+            ORDER BY rt.level_rank ASC
+        ''', (product_id,))
+        
+        pricing = cursor.fetchall()
+        result = []
+        for p in pricing:
+            p_dict = dict(p)
+            if p_dict.get('discount_percent'):
+                p_dict['discount_percent'] = float(p_dict['discount_percent'])
+            result.append(p_dict)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>/tier-pricing', methods=['POST', 'PUT'])
+@admin_required
+def save_product_tier_pricing(product_id):
+    """Save tier pricing for a product (all tiers required)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data or 'pricing' not in data:
+            return jsonify({'error': 'Missing pricing data'}), 400
+        
+        pricing_data = data['pricing']
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Get all tiers
+        cursor.execute('SELECT id, name FROM reseller_tiers ORDER BY level_rank')
+        tiers = cursor.fetchall()
+        
+        # Validate all tiers have pricing
+        tier_ids_required = set(t['id'] for t in tiers)
+        tier_ids_provided = set(p['tier_id'] for p in pricing_data if p.get('tier_id'))
+        
+        if tier_ids_required != tier_ids_provided:
+            missing = tier_ids_required - tier_ids_provided
+            cursor.execute('SELECT name FROM reseller_tiers WHERE id = ANY(%s)', (list(missing),))
+            missing_names = [r['name'] for r in cursor.fetchall()]
+            return jsonify({'error': f'Missing pricing for tiers: {", ".join(missing_names)}'}), 400
+        
+        # Delete existing pricing
+        cursor.execute('DELETE FROM product_tier_pricing WHERE product_id = %s', (product_id,))
+        
+        # Insert new pricing
+        for p in pricing_data:
+            discount = p.get('discount_percent', 0)
+            if discount is None or discount < 0:
+                discount = 0
+            if discount > 100:
+                discount = 100
+                
+            cursor.execute('''
+                INSERT INTO product_tier_pricing (product_id, tier_id, discount_percent)
+                VALUES (%s, %s, %s)
+            ''', (product_id, p['tier_id'], discount))
+        
+        conn.commit()
+        
+        # Return updated pricing
+        cursor.execute('''
+            SELECT ptp.id, ptp.tier_id, rt.name as tier_name, rt.level_rank,
+                   ptp.discount_percent
+            FROM product_tier_pricing ptp
+            JOIN reseller_tiers rt ON rt.id = ptp.tier_id
+            WHERE ptp.product_id = %s
+            ORDER BY rt.level_rank ASC
+        ''', (product_id,))
+        
+        pricing = cursor.fetchall()
+        result = []
+        for p in pricing:
+            p_dict = dict(p)
+            if p_dict.get('discount_percent'):
+                p_dict['discount_percent'] = float(p_dict['discount_percent'])
+            result.append(p_dict)
+        
+        return jsonify({
+            'message': 'Tier pricing saved successfully',
+            'pricing': result
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/users/<int:user_id>/tier-override', methods=['PATCH'])
+@admin_required
+def update_user_tier_override(user_id):
+    """Update user tier with manual override option"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if user exists and is a reseller
+        cursor.execute('''
+            SELECT u.id, r.name as role_name 
+            FROM users u 
+            JOIN roles r ON r.id = u.role_id 
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if user['role_name'] != 'Reseller':
+            return jsonify({'error': 'User is not a reseller'}), 400
+        
+        tier_id = data.get('reseller_tier_id')
+        manual_override = data.get('tier_manual_override', False)
+        
+        if tier_id:
+            # Verify tier exists
+            cursor.execute('SELECT id FROM reseller_tiers WHERE id = %s', (tier_id,))
+            if not cursor.fetchone():
+                return jsonify({'error': 'Tier not found'}), 404
+        
+        cursor.execute('''
+            UPDATE users 
+            SET reseller_tier_id = %s, tier_manual_override = %s
+            WHERE id = %s
+            RETURNING id, reseller_tier_id, tier_manual_override
+        ''', (tier_id, manual_override, user_id))
+        
+        updated = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify({
+            'message': 'User tier updated successfully',
+            'user': updated
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

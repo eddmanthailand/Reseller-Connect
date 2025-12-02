@@ -66,6 +66,15 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - Full CRUD API endpoints at `/api/products/:id/customizations`.
   - UI sections in product create/edit forms with dynamic JavaScript management.
   - Customizations saved after product creation/update.
+- **4-Tier Reseller Pricing System (Dec 2025):**
+  - Four reseller tiers: Bronze (level 1), Silver (level 2), Gold (level 3), Platinum (level 4, VIP manual-only).
+  - Enhanced `reseller_tiers` table with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only` columns.
+  - `product_tier_pricing` table stores discount percentages per product/tier combination.
+  - Products require discount percentages for all tiers before saving.
+  - Tier pricing UI integrated into product create/edit forms with visual tier badges.
+  - User management supports manual tier override for VIP customers via `tier_manual_override` column.
+  - Reseller dashboard displays prices after tier discount with original price strikethrough and discount badge.
+  - API endpoints: GET/POST `/api/products/:id/tier-pricing` for tier pricing CRUD.
 - **Security:** bcrypt for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -77,11 +86,12 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 - **API Design:** RESTful API endpoints for clear separation of concerns.
 
 ### Database Schema
-**User Management:** `roles`, `reseller_tiers`, `users`
+**User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override` column)
 **Brand Management:** `brands`, `admin_brand_access` (for role-based brand access control)
 **Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands), `size_chart_image_url`, and `status` (active/inactive/draft, default active).
 **Category Management:** `categories`, `product_categories` (junction table for product-category associations)
 **Product Customizations:** `product_customizations`, `customization_choices` (for non-SKU product variations with optional pricing)
+**Tier Pricing:** `product_tier_pricing` (stores discount_percent per product/tier combination)
 
 ## External Dependencies
 
