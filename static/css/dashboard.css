@@ -1420,13 +1420,13 @@ tr:hover td {
 }
 
 .action-btn.btn-edit-sm {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.5);
+    color: #ffffff;
 }
 
 .action-btn.btn-delete-sm {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
+    background: rgba(239, 68, 68, 0.5);
+    color: #ffffff;
 }
 
 .action-btn:hover {
@@ -1435,11 +1435,11 @@ tr:hover td {
 
 /* SKU Count Badge */
 .sku-count-badge {
-    background: rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.4);
     padding: 2px 8px;
     border-radius: 10px;
     font-size: var(--font-xs);
-    color: #a78bfa;
+    color: #ffffff;
     cursor: pointer;
 }
 
