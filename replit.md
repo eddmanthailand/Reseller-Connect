@@ -67,7 +67,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
   - UI sections in product create/edit forms with dynamic JavaScript management.
   - Customizations saved after product creation/update.
 - **4-Tier Reseller Pricing System (Dec 2025):**
-  - Four reseller tiers: Bronze (level 1), Silver (level 2), Gold (level 3), Platinum (level 4, VIP manual-only).
+  - Four reseller tiers: Bronze (level 1), Silver (level 2), Gold (level 3), Platinum (level 4).
   - Enhanced `reseller_tiers` table with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only` columns.
   - `product_tier_pricing` table stores discount percentages per product/tier combination.
   - Products require discount percentages for all tiers before saving.
