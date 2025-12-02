@@ -489,117 +489,510 @@ async function handleEditUser(event) {
     }
 }
 
-// Load products
+// Product Management State
+let allProducts = [];
+let filteredProducts = [];
+let selectedProducts = new Set();
+let currentStatusFilter = 'all';
+let brands = [];
+let categories = [];
+
+// Load products with Lazada-style features
 async function loadProducts() {
     const productTableBody = document.getElementById('productTableBody');
-    const productCountElement = document.getElementById('productCount');
-    
     if (!productTableBody) return;
 
     try {
         const response = await fetch(`${API_URL}/products`);
+        if (!response.ok) throw new Error('Failed to load products');
+
+        allProducts = await response.json();
         
-        if (!response.ok) {
-            throw new Error('Failed to load products');
-        }
-
-        const products = await response.json();
+        // Load brands and categories for filters
+        await loadFiltersData();
         
-        // Update product count
-        if (productCountElement) {
-            productCountElement.textContent = products.length;
-        }
-
-        // Clear and populate table
-        productTableBody.innerHTML = '';
+        // Apply filters and render
+        applyFiltersAndRender();
         
-        if (products.length === 0) {
-            productTableBody.innerHTML = `
-                <tr>
-                    <td colspan="8" style="text-align: center; padding: 40px;">
-                        <div style="opacity: 0.6;">ยังไม่มีสินค้าในระบบ</div>
-                        <div style="margin-top: 10px;">
-                            <a href="/admin/products/create" style="color: rgba(255, 255, 255, 0.9);">สร้างสินค้าแรกของคุณ</a>
-                        </div>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        products.forEach(product => {
-            const row = document.createElement('tr');
-            
-            const createdDate = new Date(product.created_at);
-            const formattedDate = createdDate.toLocaleDateString('th-TH', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-
-            const imageHtml = product.first_image_url 
-                ? `<img src="${product.first_image_url}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.2);">`
-                : `<div style="width: 50px; height: 50px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📦</div>`;
-            
-            const brandHtml = product.brand_name 
-                ? `<span style="background: rgba(168, 85, 247, 0.2); padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 500;">${product.brand_name}</span>`
-                : `<span style="opacity: 0.5; font-size: 12px;">ไม่ระบุ</span>`;
-            
-            const status = product.status || 'active';
-            const statusConfig = {
-                'active': { label: 'Active', color: '#4ade80', bg: 'rgba(40, 167, 69, 0.2)' },
-                'inactive': { label: 'Inactive', color: '#9ca3af', bg: 'rgba(107, 114, 128, 0.2)' },
-                'draft': { label: 'Draft', color: '#fcd34d', bg: 'rgba(253, 186, 20, 0.2)' }
-            };
-            const statusStyle = statusConfig[status] || statusConfig['active'];
-            const statusBadge = `<span class="status-badge" style="background: ${statusStyle.bg}; color: ${statusStyle.color}; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; cursor: pointer;" onclick="cycleProductStatus(${product.id}, '${status}')">${statusStyle.label}</span>`;
-            
-            row.innerHTML = `
-                <td>${imageHtml}</td>
-                <td>${brandHtml}</td>
-                <td><strong>${product.parent_sku || '-'}</strong></td>
-                <td>${product.name || '-'}</td>
-                <td>${statusBadge}</td>
-                <td>
-                    <span style="background: rgba(139, 92, 246, 0.2); padding: 4px 12px; border-radius: 12px; font-size: 13px;">
-                        ${product.sku_count || 0} SKUs
-                    </span>
-                </td>
-                <td>${formattedDate}</td>
-                <td style="display: flex; gap: 8px;">
-                    <a href="/admin/products/edit/${product.id}" 
-                       class="btn-edit" 
-                       style="background: rgba(59, 130, 246, 0.2); color: rgb(59, 130, 246); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                            <path d="m15 5 4 4"/>
-                        </svg>
-                        แก้ไข
-                    </a>
-                    <button onclick="deleteProduct(${product.id}, '${product.name}')" 
-                            class="btn-delete" 
-                            style="background: rgba(239, 68, 68, 0.2); color: rgb(239, 68, 68); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18"/>
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                        </svg>
-                        ลบ
-                    </button>
-                </td>
-            `;
-            
-            productTableBody.appendChild(row);
-        });
+        // Setup filter event listeners
+        setupProductFilters();
+        
     } catch (error) {
         console.error('Error loading products:', error);
         productTableBody.innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px;">
+                <td colspan="7" style="text-align: center; padding: 40px;">
                     <div style="color: rgb(239, 68, 68); opacity: 0.8;">เกิดข้อผิดพลาดในการโหลดข้อมูลสินค้า</div>
                 </td>
             </tr>
         `;
+    }
+}
+
+// Load filter data (brands and categories)
+async function loadFiltersData() {
+    try {
+        // Load brands
+        const brandsRes = await fetch(`${API_URL}/brands`);
+        if (brandsRes.ok) {
+            brands = await brandsRes.json();
+            const brandSelect = document.getElementById('filterBrand');
+            if (brandSelect) {
+                brandSelect.innerHTML = '<option value="">ทุกแบรนด์</option>';
+                brands.forEach(brand => {
+                    brandSelect.innerHTML += `<option value="${brand.id}">${brand.name}</option>`;
+                });
+            }
+        }
+        
+        // Load categories (use tree endpoint and flatten)
+        try {
+            const categoriesRes = await fetch(`${API_URL}/categories/tree`);
+            if (categoriesRes.ok) {
+                const categoryTree = await categoriesRes.json();
+                categories = flattenCategoryTree(categoryTree);
+                const categorySelect = document.getElementById('filterCategory');
+                if (categorySelect) {
+                    categorySelect.innerHTML = '<option value="">ทุกหมวดหมู่</option>';
+                    categories.forEach(cat => {
+                        categorySelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                    });
+                }
+            }
+        } catch (e) {
+            console.log('Categories not available, skipping...');
+        }
+    } catch (error) {
+        console.error('Error loading filter data:', error);
+    }
+}
+
+// Flatten category tree to array
+function flattenCategoryTree(tree, result = []) {
+    if (!tree || !Array.isArray(tree)) return result;
+    tree.forEach(cat => {
+        result.push({ id: cat.id, name: cat.name });
+        if (cat.children && cat.children.length > 0) {
+            flattenCategoryTree(cat.children, result);
+        }
+    });
+    return result;
+}
+
+// Setup product filter event listeners
+function setupProductFilters() {
+    // Status tabs
+    document.querySelectorAll('.status-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentStatusFilter = tab.dataset.status;
+            applyFiltersAndRender();
+        });
+    });
+    
+    // Search
+    const searchInput = document.getElementById('searchProduct');
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => applyFiltersAndRender(), 300));
+    }
+    
+    // Brand filter
+    const brandFilter = document.getElementById('filterBrand');
+    if (brandFilter) {
+        brandFilter.addEventListener('change', () => applyFiltersAndRender());
+    }
+    
+    // Category filter
+    const categoryFilter = document.getElementById('filterCategory');
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', () => applyFiltersAndRender());
+    }
+    
+    // Sort
+    const sortSelect = document.getElementById('sortBy');
+    if (sortSelect) {
+        sortSelect.addEventListener('change', () => applyFiltersAndRender());
+    }
+}
+
+// Debounce helper
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Apply filters and render products
+function applyFiltersAndRender() {
+    const searchTerm = document.getElementById('searchProduct')?.value.toLowerCase() || '';
+    const brandId = document.getElementById('filterBrand')?.value || '';
+    const categoryId = document.getElementById('filterCategory')?.value || '';
+    const sortBy = document.getElementById('sortBy')?.value || 'newest';
+    
+    // Filter
+    filteredProducts = allProducts.filter(product => {
+        // Status filter
+        if (currentStatusFilter !== 'all' && product.status !== currentStatusFilter) {
+            return false;
+        }
+        
+        // Search filter
+        if (searchTerm) {
+            const searchMatch = 
+                (product.name || '').toLowerCase().includes(searchTerm) ||
+                (product.parent_sku || '').toLowerCase().includes(searchTerm);
+            if (!searchMatch) return false;
+        }
+        
+        // Brand filter
+        if (brandId && product.brand_id != brandId) {
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Sort
+    filteredProducts.sort((a, b) => {
+        switch (sortBy) {
+            case 'oldest':
+                return new Date(a.created_at) - new Date(b.created_at);
+            case 'name_asc':
+                return (a.name || '').localeCompare(b.name || '');
+            case 'name_desc':
+                return (b.name || '').localeCompare(a.name || '');
+            default: // newest
+                return new Date(b.created_at) - new Date(a.created_at);
+        }
+    });
+    
+    // Update counts
+    updateStatusCounts();
+    
+    // Render
+    renderProducts();
+}
+
+// Update status tab counts
+function updateStatusCounts() {
+    const counts = {
+        all: allProducts.length,
+        active: allProducts.filter(p => p.status === 'active').length,
+        inactive: allProducts.filter(p => p.status === 'inactive').length,
+        draft: allProducts.filter(p => p.status === 'draft').length
+    };
+    
+    document.getElementById('countAll').textContent = counts.all;
+    document.getElementById('countActive').textContent = counts.active;
+    document.getElementById('countInactive').textContent = counts.inactive;
+    document.getElementById('countDraft').textContent = counts.draft;
+    document.getElementById('productCount').textContent = counts.all;
+}
+
+// Render products table
+function renderProducts() {
+    const productTableBody = document.getElementById('productTableBody');
+    if (!productTableBody) return;
+    
+    productTableBody.innerHTML = '';
+    
+    if (filteredProducts.length === 0) {
+        productTableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px;">
+                    <div style="opacity: 0.6;">ยังไม่มีสินค้าในระบบ</div>
+                    <div style="margin-top: 10px;">
+                        <a href="/admin/products/create" style="color: rgba(255, 255, 255, 0.9);">สร้างสินค้าแรกของคุณ</a>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    filteredProducts.forEach(product => {
+        const row = document.createElement('tr');
+        row.className = 'product-row-parent';
+        row.dataset.productId = product.id;
+
+        const imageHtml = product.first_image_url 
+            ? `<img src="${product.first_image_url}" alt="${product.name}" class="product-thumb">`
+            : `<div class="product-thumb-placeholder">📦</div>`;
+        
+        const status = product.status || 'active';
+        const isActive = status === 'active';
+        
+        const minPrice = product.min_price || 0;
+        const maxPrice = product.max_price || 0;
+        const priceDisplay = minPrice === maxPrice 
+            ? `฿${minPrice.toLocaleString()}`
+            : `฿${minPrice.toLocaleString()} - ฿${maxPrice.toLocaleString()}`;
+        
+        const totalStock = product.total_stock || 0;
+        
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" class="row-checkbox product-checkbox" 
+                       data-product-id="${product.id}" 
+                       ${selectedProducts.has(product.id) ? 'checked' : ''}
+                       onchange="toggleProductSelection(${product.id}, this.checked)">
+            </td>
+            <td>${imageHtml}</td>
+            <td>
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <strong style="font-size: 12px;">${product.name || '-'}</strong>
+                    <span style="font-size: 11px; opacity: 0.7;">SKU: ${product.parent_sku || '-'}</span>
+                    ${product.brand_name ? `<span style="font-size: 10px; opacity: 0.6; background: rgba(168, 85, 247, 0.2); padding: 2px 6px; border-radius: 4px; display: inline-block; width: fit-content;">${product.brand_name}</span>` : ''}
+                </div>
+                <span class="sku-count-badge" onclick="toggleSkuRows(${product.id})" style="margin-left: 8px;">
+                    ${product.sku_count || 0} SKUs
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-left: 2px;"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+            </td>
+            <td>
+                <div class="inline-edit">
+                    <span style="font-size: 11px;">${priceDisplay}</span>
+                </div>
+            </td>
+            <td>
+                <span style="font-size: 11px;">${totalStock.toLocaleString()}</span>
+            </td>
+            <td>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleProductStatus(${product.id}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </td>
+            <td>
+                <div class="action-btns">
+                    <a href="/admin/products/edit/${product.id}" class="action-btn btn-edit-sm">แก้ไข</a>
+                    <button onclick="deleteProduct(${product.id}, '${(product.name || '').replace(/'/g, "\\'")}')" class="action-btn btn-delete-sm">ลบ</button>
+                </div>
+            </td>
+        `;
+        
+        productTableBody.appendChild(row);
+        
+        // Add SKU rows (hidden by default)
+        if (product.skus && product.skus.length > 0) {
+            product.skus.forEach(sku => {
+                const skuRow = document.createElement('tr');
+                skuRow.className = 'sku-row';
+                skuRow.dataset.parentId = product.id;
+                
+                skuRow.innerHTML = `
+                    <td></td>
+                    <td></td>
+                    <td style="padding-left: 48px;">
+                        <span class="sku-indicator">└</span>
+                        <span style="font-size: 11px;">${sku.sku_code || '-'}</span>
+                        <span style="font-size: 10px; opacity: 0.6; margin-left: 8px;">${sku.variant_name || ''}</span>
+                    </td>
+                    <td>
+                        <div class="inline-edit">
+                            <input type="text" class="inline-edit-input" value="${sku.price || 0}" 
+                                   onblur="updateSkuPrice(${sku.id}, this.value)"
+                                   onkeypress="if(event.key==='Enter') this.blur()">
+                        </div>
+                    </td>
+                    <td>
+                        <div class="inline-edit">
+                            <input type="text" class="inline-edit-input" value="${sku.stock || 0}" 
+                                   onblur="updateSkuStock(${sku.id}, this.value)"
+                                   onkeypress="if(event.key==='Enter') this.blur()">
+                        </div>
+                    </td>
+                    <td>
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${sku.is_active !== false ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </td>
+                    <td></td>
+                `;
+                
+                productTableBody.appendChild(skuRow);
+            });
+        }
+    });
+}
+
+// Toggle SKU rows visibility
+function toggleSkuRows(productId) {
+    const parentRow = document.querySelector(`tr[data-product-id="${productId}"]`);
+    const skuRows = document.querySelectorAll(`tr.sku-row[data-parent-id="${productId}"]`);
+    
+    const isExpanded = parentRow.classList.contains('expanded');
+    
+    if (isExpanded) {
+        parentRow.classList.remove('expanded');
+        skuRows.forEach(row => row.classList.remove('show'));
+    } else {
+        parentRow.classList.add('expanded');
+        skuRows.forEach(row => row.classList.add('show'));
+    }
+}
+
+// Toggle product selection
+function toggleProductSelection(productId, isSelected) {
+    if (isSelected) {
+        selectedProducts.add(productId);
+    } else {
+        selectedProducts.delete(productId);
+    }
+    updateBulkActionsBar();
+}
+
+// Toggle select all
+function toggleSelectAll(checkbox) {
+    const isChecked = checkbox.checked;
+    selectedProducts.clear();
+    
+    if (isChecked) {
+        filteredProducts.forEach(p => selectedProducts.add(p.id));
+    }
+    
+    document.querySelectorAll('.product-checkbox').forEach(cb => {
+        cb.checked = isChecked;
+    });
+    
+    updateBulkActionsBar();
+}
+
+// Update bulk actions bar
+function updateBulkActionsBar() {
+    const bar = document.getElementById('bulkActionsBar');
+    const countSpan = document.getElementById('selectedCount');
+    
+    if (selectedProducts.size > 0) {
+        bar.classList.add('show');
+        countSpan.textContent = selectedProducts.size;
+    } else {
+        bar.classList.remove('show');
+    }
+}
+
+// Bulk update status
+async function bulkUpdateStatus(newStatus) {
+    if (selectedProducts.size === 0) return;
+    
+    const ids = Array.from(selectedProducts);
+    
+    try {
+        await Promise.all(ids.map(id => 
+            fetch(`${API_URL}/products/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            })
+        ));
+        
+        selectedProducts.clear();
+        document.getElementById('selectAllProducts').checked = false;
+        updateBulkActionsBar();
+        await loadProducts();
+    } catch (error) {
+        console.error('Error bulk updating status:', error);
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ');
+    }
+}
+
+// Bulk delete
+async function bulkDelete() {
+    if (selectedProducts.size === 0) return;
+    
+    if (!confirm(`คุณต้องการลบ ${selectedProducts.size} รายการที่เลือกหรือไม่?`)) {
+        return;
+    }
+    
+    const ids = Array.from(selectedProducts);
+    
+    try {
+        await Promise.all(ids.map(id => 
+            fetch(`${API_URL}/products/${id}`, { method: 'DELETE' })
+        ));
+        
+        selectedProducts.clear();
+        document.getElementById('selectAllProducts').checked = false;
+        updateBulkActionsBar();
+        await loadProducts();
+        alert('ลบสินค้าสำเร็จ!');
+    } catch (error) {
+        console.error('Error bulk deleting:', error);
+        alert('เกิดข้อผิดพลาดในการลบสินค้า');
+    }
+}
+
+// Toggle product status (via toggle switch)
+async function toggleProductStatus(productId, isActive) {
+    const newStatus = isActive ? 'active' : 'inactive';
+    
+    try {
+        const response = await fetch(`${API_URL}/products/${productId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update status');
+        }
+        
+        // Update local state
+        const product = allProducts.find(p => p.id === productId);
+        if (product) {
+            product.status = newStatus;
+        }
+        updateStatusCounts();
+        
+    } catch (error) {
+        console.error('Error updating product status:', error);
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ');
+        // Reload to reset state
+        await loadProducts();
+    }
+}
+
+// Update SKU price inline
+async function updateSkuPrice(skuId, newPrice) {
+    try {
+        const response = await fetch(`${API_URL}/skus/${skuId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ price: parseFloat(newPrice) || 0 })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update price');
+        }
+    } catch (error) {
+        console.error('Error updating SKU price:', error);
+        alert('เกิดข้อผิดพลาดในการอัพเดทราคา');
+    }
+}
+
+// Update SKU stock inline
+async function updateSkuStock(skuId, newStock) {
+    try {
+        const response = await fetch(`${API_URL}/skus/${skuId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stock: parseInt(newStock) || 0 })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update stock');
+        }
+    } catch (error) {
+        console.error('Error updating SKU stock:', error);
+        alert('เกิดข้อผิดพลาดในการอัพเดทสต็อก');
     }
 }
 

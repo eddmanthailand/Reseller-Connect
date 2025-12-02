@@ -960,7 +960,7 @@ def get_products():
         user_role = session.get('role')
         user_id = session.get('user_id')
         
-        # Build query with brand info
+        # Build query with brand info, price range and stock
         base_query = '''
             SELECT 
                 p.id,
@@ -973,6 +973,9 @@ def get_products():
                 COALESCE(p.status, 'active') as status,
                 p.created_at,
                 COUNT(DISTINCT s.id) as sku_count,
+                COALESCE(MIN(s.price), 0) as min_price,
+                COALESCE(MAX(s.price), 0) as max_price,
+                COALESCE(SUM(s.stock), 0) as total_stock,
                 (
                     SELECT pi.image_url 
                     FROM product_images pi 
@@ -1469,6 +1472,71 @@ def delete_product(product_id):
         conn.commit()
         
         return jsonify({'message': 'Product deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/skus/<int:sku_id>', methods=['PATCH'])
+@admin_required
+def update_sku(sku_id):
+    """Update SKU price and/or stock (inline editing)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        updates = []
+        params = []
+        
+        if 'price' in data:
+            try:
+                price = round(float(data['price']), 2)
+                if price < 0:
+                    return jsonify({'error': 'Price cannot be negative'}), 400
+                updates.append('price = %s')
+                params.append(price)
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid price value'}), 400
+        
+        if 'stock' in data:
+            try:
+                stock = int(data['stock'])
+                if stock < 0:
+                    return jsonify({'error': 'Stock cannot be negative'}), 400
+                updates.append('stock = %s')
+                params.append(stock)
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid stock value'}), 400
+        
+        if not updates:
+            return jsonify({'error': 'No valid fields to update'}), 400
+        
+        params.append(sku_id)
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute(f'''
+            UPDATE skus SET {', '.join(updates)}
+            WHERE id = %s
+            RETURNING id
+        ''', tuple(params))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'SKU not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'SKU updated successfully'}), 200
         
     except Exception as e:
         if conn:

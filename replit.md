@@ -11,7 +11,16 @@ This is a full-stack reseller/distributor application built with Flask and Neon 
 ## System Architecture
 
 ### UI/UX Decisions
-The system features a modern, responsive glassmorphism design with frosted glass effects, animated gradient backgrounds, smooth transitions, and a consistent purple to pink gradient color scheme. It uses the Inter font family and modern line-style SVG icons. A multi-page dashboard with a professional sidebar enhances user experience for sections like Home, Admin User Management, and Settings.
+The system features a modern, responsive glassmorphism design with frosted glass effects, animated gradient backgrounds, smooth transitions, and a consistent purple to pink gradient color scheme. It uses the Inter font family with compact font sizing for dense data views, and modern line-style SVG icons. A multi-page dashboard with a collapsible sidebar (toggle via hamburger button, state persisted in localStorage) enhances user experience for sections like Home, Admin User Management, Product Management, and Settings.
+
+**Lazada-Style Product Management UI (Dec 2025):**
+- Compact font sizes for dense data display (CSS variables --font-xs to --font-3xl)
+- Status tabs with live counts (All/Active/Inactive/Draft)
+- Advanced filter bar (search by name/SKU, brand filter, category filter, sort options)
+- Bulk actions toolbar (select multiple products → activate/deactivate/delete)
+- Toggle switches for quick status changes
+- Collapsible SKU variants (click SKU count badge to expand/collapse inline)
+- Inline editing for SKU price and stock (direct in-table editing with validation)
 
 ### Technical Implementations
 The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL database. It employs a custom session-based authentication system with bcrypt for password hashing and role-based access control. All admin routes are protected, and input validation is applied to API endpoints. The frontend uses Jinja2 templates, vanilla JavaScript, and CSS Grid for a responsive layout, making asynchronous Fetch API requests.

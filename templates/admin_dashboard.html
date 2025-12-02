@@ -256,50 +256,115 @@
 
             <!-- Product Management Page -->
             <div id="page-products" class="page-content">
-                <div class="page-header">
-                    <h1>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 10px;">
-                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
-                            <path d="m3.3 7 8.7 5 8.7-5"/>
-                            <path d="M12 22V12"/>
-                        </svg>
-                        Product Management
-                    </h1>
-                    <p>จัดการสินค้าและ SKU Variants</p>
-                </div>
-
-                <div class="content-wrapper">
-                    <!-- Header with Create Button -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h2 style="margin: 0;">รายการสินค้า (<span id="productCount">0</span>)</h2>
-                        <a href="/admin/products/create" class="btn" style="text-decoration: none; display: inline-block;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px;">
+                <div class="page-header" style="padding: 20px 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h1 style="font-size: 20px; margin-bottom: 4px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                                    <path d="m3.3 7 8.7 5 8.7-5"/>
+                                    <path d="M12 22V12"/>
+                                </svg>
+                                จัดการสินค้า
+                            </h1>
+                            <p style="font-size: 12px;">จัดการสินค้าและ SKU Variants</p>
+                        </div>
+                        <a href="/admin/products/create" class="btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; font-size: 13px; width: auto;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19"/>
                                 <line x1="5" y1="12" x2="19" y2="12"/>
                             </svg>
-                            สร้างสินค้าใหม่
+                            เพิ่มสินค้าใหม่
                         </a>
+                    </div>
+                </div>
+
+                <div class="content-wrapper" style="display: block;">
+                    <!-- Product Stats Header -->
+                    <div class="product-stats-header">
+                        <div class="stats-left">
+                            <div class="product-count">
+                                <span id="productCount">0</span> <span>สินค้า</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Tabs -->
+                    <div class="status-tabs">
+                        <button class="status-tab active" data-status="all">
+                            ทั้งหมด <span class="count" id="countAll">0</span>
+                        </button>
+                        <button class="status-tab" data-status="active">
+                            แอคทีฟ <span class="count" id="countActive">0</span>
+                        </button>
+                        <button class="status-tab" data-status="inactive">
+                            ไม่ใช้งาน <span class="count" id="countInactive">0</span>
+                        </button>
+                        <button class="status-tab" data-status="draft">
+                            แบบร่าง <span class="count" id="countDraft">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="search-box">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="m21 21-4.3-4.3"/>
+                            </svg>
+                            <input type="text" id="searchProduct" placeholder="ค้นหาชื่อสินค้า, SKU...">
+                        </div>
+                        <select id="filterBrand">
+                            <option value="">ทุกแบรนด์</option>
+                        </select>
+                        <select id="filterCategory">
+                            <option value="">ทุกหมวดหมู่</option>
+                        </select>
+                        <select id="sortBy">
+                            <option value="newest">ใหม่ล่าสุด</option>
+                            <option value="oldest">เก่าที่สุด</option>
+                            <option value="name_asc">ชื่อ A-Z</option>
+                            <option value="name_desc">ชื่อ Z-A</option>
+                        </select>
+                    </div>
+
+                    <!-- Bulk Actions Bar -->
+                    <div class="bulk-actions-bar" id="bulkActionsBar">
+                        <span class="selected-count">เลือก <span id="selectedCount">0</span> รายการ</span>
+                        <button class="bulk-btn btn-activate" onclick="bulkUpdateStatus('active')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                            เปิดใช้งาน
+                        </button>
+                        <button class="bulk-btn btn-deactivate" onclick="bulkUpdateStatus('inactive')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            ปิดใช้งาน
+                        </button>
+                        <button class="bulk-btn btn-bulk-delete" onclick="bulkDelete()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                            ลบ
+                        </button>
                     </div>
 
                     <!-- Products List Card -->
-                    <div class="card">
-                        <div class="table-wrapper">
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div class="table-wrapper" style="border: none; border-radius: 0;">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>รูปภาพ</th>
-                                        <th>แบรนด์</th>
-                                        <th>Parent SKU</th>
-                                        <th>ชื่อสินค้า</th>
-                                        <th>สถานะ</th>
-                                        <th>จำนวน SKUs</th>
-                                        <th>สร้างเมื่อ</th>
-                                        <th>Actions</th>
+                                        <th style="width: 40px;">
+                                            <input type="checkbox" class="row-checkbox" id="selectAllProducts" onchange="toggleSelectAll(this)">
+                                        </th>
+                                        <th style="width: 50px;">รูป</th>
+                                        <th>สินค้า</th>
+                                        <th style="width: 100px;">ราคา</th>
+                                        <th style="width: 80px;">สต็อก</th>
+                                        <th style="width: 60px;">สถานะ</th>
+                                        <th style="width: 100px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="productTableBody">
                                     <tr>
-                                        <td colspan="8" style="text-align: center; padding: 40px;">
+                                        <td colspan="7" style="text-align: center; padding: 40px;">
                                             <div style="opacity: 0.6;">กำลังโหลดข้อมูล...</div>
                                         </td>
                                     </tr>
