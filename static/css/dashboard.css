@@ -66,6 +66,42 @@ body::after {
     z-index: 1;
 }
 
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 150;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.sidebar-toggle svg {
+    stroke: white;
+    transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed ~ .sidebar-toggle svg,
+body.sidebar-collapsed .sidebar-toggle svg {
+    transform: rotate(90deg);
+}
+
 /* Sidebar Styles */
 .sidebar {
     width: var(--sidebar-width);
@@ -79,8 +115,73 @@ body::after {
     position: fixed;
     height: 100vh;
     overflow-y: auto;
+    overflow-x: hidden;
     transition: all 0.3s ease;
     z-index: 100;
+}
+
+/* Collapsed Sidebar */
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed);
+}
+
+.sidebar.collapsed .sidebar-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-header {
+    padding: 30px 16px;
+}
+
+.sidebar.collapsed .sidebar-logo h2 {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-nav {
+    padding: 24px 10px;
+}
+
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 14px;
+}
+
+.sidebar.collapsed .nav-item .icon {
+    margin-right: 0;
+}
+
+.sidebar.collapsed .submenu {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-footer {
+    padding: 20px 10px;
+}
+
+.sidebar.collapsed .btn-logout {
+    justify-content: center;
+    padding: 14px;
+}
+
+.sidebar.collapsed .btn-logout .icon {
+    margin-right: 0;
+}
+
+/* Main content adjustment when sidebar is collapsed */
+.main-content {
+    margin-left: var(--sidebar-width);
+    transition: margin-left 0.3s ease;
+}
+
+body.sidebar-collapsed .main-content {
+    margin-left: var(--sidebar-collapsed);
+}
+
+body.sidebar-collapsed .sidebar-toggle {
+    left: calc(var(--sidebar-collapsed) + 10px);
 }
 
 .sidebar-header {

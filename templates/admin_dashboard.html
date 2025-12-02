@@ -8,8 +8,17 @@
 </head>
 <body>
     <div class="dashboard-container">
+        <!-- Sidebar Toggle Button -->
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" x2="21" y1="6" y2="6"/>
+                <line x1="3" x2="21" y1="12" y2="12"/>
+                <line x1="3" x2="21" y1="18" y2="18"/>
+            </svg>
+        </button>
+
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -17,9 +26,9 @@
                         <line x1="18" x2="18" y1="20" y2="4"/>
                         <line x1="6" x2="6" y1="20" y2="16"/>
                     </svg>
-                    <h2>Dashboard</h2>
+                    <h2 class="sidebar-text">Dashboard</h2>
                 </div>
-                <p id="currentUser">Loading...</p>
+                <p id="currentUser" class="sidebar-text">Loading...</p>
             </div>
             
             <nav class="sidebar-nav">
@@ -30,7 +39,7 @@
                             <polyline points="9 22 9 12 15 12 15 22"/>
                         </svg>
                     </span>
-                    <span>หน้าหลัก</span>
+                    <span class="sidebar-text">หน้าหลัก</span>
                 </a>
                 <a href="#" class="nav-item" data-page="users">
                     <span class="icon">
@@ -41,7 +50,7 @@
                             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                         </svg>
                     </span>
-                    <span>Admin User Management</span>
+                    <span class="sidebar-text">Admin User Management</span>
                 </a>
                 <a href="#" class="nav-item has-submenu" data-page="products">
                     <span class="icon">
@@ -51,7 +60,7 @@
                             <path d="M12 22V12"/>
                         </svg>
                     </span>
-                    <span>Product Management</span>
+                    <span class="sidebar-text">Product Management</span>
                 </a>
                 <div class="submenu" id="products-submenu">
                     <a href="/admin/brands" class="submenu-item">
@@ -61,7 +70,7 @@
                                 <path d="M7 7h.01"/>
                             </svg>
                         </span>
-                        <span>🏷️ จัดการแบรนด์</span>
+                        <span class="sidebar-text">จัดการแบรนด์</span>
                     </a>
                 </div>
                 <a href="#" class="nav-item" data-page="settings">
@@ -71,7 +80,7 @@
                             <circle cx="12" cy="12" r="3"/>
                         </svg>
                     </span>
-                    <span>ตั้งค่า</span>
+                    <span class="sidebar-text">ตั้งค่า</span>
                 </a>
             </nav>
 
@@ -84,7 +93,7 @@
                             <line x1="21" x2="9" y1="12" y2="12"/>
                         </svg>
                     </span>
-                    <span>ออกจากระบบ</span>
+                    <span class="sidebar-text">ออกจากระบบ</span>
                 </button>
             </div>
         </aside>

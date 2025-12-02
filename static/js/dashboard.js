@@ -1,6 +1,33 @@
 // API Base URL (use window.API_URL set by template, fallback to '/api')
 const API_URL = window.API_URL || '/api';
 
+// Sidebar Toggle Function
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const body = document.body;
+    
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        body.classList.toggle('sidebar-collapsed');
+        
+        // Save state to localStorage
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('sidebarCollapsed', isCollapsed);
+    }
+}
+
+// Restore sidebar state on page load
+function restoreSidebarState() {
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    const sidebar = document.getElementById('sidebar');
+    const body = document.body;
+    
+    if (isCollapsed && sidebar) {
+        sidebar.classList.add('collapsed');
+        body.classList.add('sidebar-collapsed');
+    }
+}
+
 // Global data
 let roles = [];
 let resellerTiers = [];
@@ -22,6 +49,9 @@ const pages = document.querySelectorAll('.page-content');
 // Initialize the application
 async function init() {
     try {
+        // Restore sidebar state first
+        restoreSidebarState();
+        
         await loadCurrentUser();
         await Promise.all([
             loadRoles(),
