@@ -254,6 +254,31 @@
                     <!-- ส่วนที่ 2: List ผู้ใช้ที่มีอยู่ -->
                     <div class="card">
                         <h2>👥 รายชื่อผู้ใช้งาน (<span id="userCount">0</span>)</h2>
+                        
+                        <!-- Filter Bar -->
+                        <div class="user-filter-bar">
+                            <div class="search-box">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"/>
+                                    <path d="m21 21-4.3-4.3"/>
+                                </svg>
+                                <input type="text" id="searchUser" placeholder="ค้นหาชื่อ, อีเมล...">
+                            </div>
+                            <select id="filterRole">
+                                <option value="">ทุก Role</option>
+                                <option value="Super Admin">Super Admin</option>
+                                <option value="Assistant Admin">Assistant Admin</option>
+                                <option value="Reseller">Reseller</option>
+                            </select>
+                            <select id="filterTier">
+                                <option value="">ทุก Tier</option>
+                                <option value="Bronze">Bronze</option>
+                                <option value="Silver">Silver</option>
+                                <option value="Gold">Gold</option>
+                                <option value="Platinum">Platinum</option>
+                            </select>
+                        </div>
+                        
                         <div class="table-wrapper">
                             <table>
                                 <thead>
@@ -261,6 +286,7 @@
                                         <th>Full Name</th>
                                         <th>Username</th>
                                         <th>Role</th>
+                                        <th>แบรนด์ที่รับผิดชอบ</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -460,6 +486,34 @@
                 
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">ยกเลิก</button>
+                    <button type="submit" class="btn">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assign Brands Modal -->
+    <div id="assignBrandsModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>🏷️ กำหนดแบรนด์</h2>
+                <button class="modal-close" onclick="closeAssignBrandsModal()">&times;</button>
+            </div>
+            <form id="assignBrandsForm" onsubmit="handleAssignBrands(event)">
+                <input type="hidden" id="assignBrandsUserId">
+                <div class="modal-body">
+                    <p style="margin-bottom: 16px; opacity: 0.8;">
+                        กำหนดแบรนด์ที่ <strong id="assignBrandsUserName"></strong> สามารถจัดการได้
+                    </p>
+                    <div id="brandCheckboxList" class="brand-checkbox-list">
+                        <!-- Brand checkboxes will be inserted here -->
+                    </div>
+                    <p id="noBrandsMessage" style="text-align: center; opacity: 0.6; display: none;">
+                        ยังไม่มีแบรนด์ในระบบ กรุณาสร้างแบรนด์ก่อน
+                    </p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAssignBrandsModal()">ยกเลิก</button>
                     <button type="submit" class="btn">บันทึก</button>
                 </div>
             </form>

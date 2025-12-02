@@ -373,7 +373,7 @@ def get_reseller_stats():
 @app.route('/api/users', methods=['GET'])
 @admin_required
 def get_users():
-    """Get all users with their role information"""
+    """Get all users with their role information and assigned brands for Assistant Admins"""
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute('''
@@ -389,6 +389,32 @@ def get_users():
         ORDER BY u.created_at DESC
     ''')
     users = [dict(row) for row in cursor.fetchall()]
+    
+    # Get assigned brands for Assistant Admins
+    assistant_admin_ids = [u['id'] for u in users if u['role'] == 'Assistant Admin']
+    if assistant_admin_ids:
+        cursor.execute('''
+            SELECT aba.user_id, b.id, b.name
+            FROM admin_brand_access aba
+            JOIN brands b ON aba.brand_id = b.id
+            WHERE aba.user_id = ANY(%s)
+            ORDER BY b.name
+        ''', (assistant_admin_ids,))
+        brand_access = cursor.fetchall()
+        
+        # Group brands by user_id
+        user_brands = {}
+        for ba in brand_access:
+            user_id = ba['user_id']
+            if user_id not in user_brands:
+                user_brands[user_id] = []
+            user_brands[user_id].append({'id': ba['id'], 'name': ba['name']})
+        
+        # Add assigned_brands to each user
+        for user in users:
+            if user['role'] == 'Assistant Admin':
+                user['assigned_brands'] = user_brands.get(user['id'], [])
+    
     cursor.close()
     conn.close()
     return jsonify(users)

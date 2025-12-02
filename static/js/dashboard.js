@@ -167,19 +167,64 @@ async function loadUsers() {
     }
 }
 
+// Filter users based on search, role, and tier
+function getFilteredUsers() {
+    const searchTerm = document.getElementById('searchUser')?.value.toLowerCase() || '';
+    const roleFilter = document.getElementById('filterRole')?.value || '';
+    const tierFilter = document.getElementById('filterTier')?.value || '';
+    
+    return users.filter(user => {
+        // Search filter
+        const matchesSearch = !searchTerm || 
+            user.full_name.toLowerCase().includes(searchTerm) ||
+            user.username.toLowerCase().includes(searchTerm);
+        
+        // Role filter
+        const matchesRole = !roleFilter || user.role === roleFilter;
+        
+        // Tier filter
+        const matchesTier = !tierFilter || user.reseller_tier === tierFilter;
+        
+        return matchesSearch && matchesRole && matchesTier;
+    });
+}
+
+// Render brand tags for user
+function renderBrandTags(brands) {
+    if (!brands || brands.length === 0) {
+        return '<span class="no-brands">-</span>';
+    }
+    
+    const maxShow = 2;
+    let html = '<div class="brand-tags">';
+    
+    brands.slice(0, maxShow).forEach(brand => {
+        html += `<span class="brand-tag">${brand.name}</span>`;
+    });
+    
+    if (brands.length > maxShow) {
+        html += `<span class="brand-tag brand-tag-more">+${brands.length - maxShow}</span>`;
+    }
+    
+    html += '</div>';
+    return html;
+}
+
 // Render users in table
 function renderUsers() {
     if (!userTableBody) return;
 
     userTableBody.innerHTML = '';
     
-    if (users.length === 0) {
-        userTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">ไม่มีข้อมูลผู้ใช้</td></tr>';
+    const filteredUsers = getFilteredUsers();
+    
+    if (filteredUsers.length === 0) {
+        userTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">ไม่มีข้อมูลผู้ใช้</td></tr>';
         if (userCount) userCount.textContent = '0';
         return;
     }
 
-    users.forEach(user => {
+    filteredUsers.forEach(user => {
         const row = document.createElement('tr');
         
         // Get role badge class
@@ -188,24 +233,45 @@ function renderUsers() {
         else if (user.role === 'Assistant Admin') badgeClass += ' badge-assistant-admin';
         else if (user.role === 'Reseller') badgeClass += ' badge-reseller';
         
+        // Brand column content
+        let brandColumn = '<span class="no-brands">-</span>';
+        if (user.role === 'Assistant Admin') {
+            brandColumn = renderBrandTags(user.assigned_brands);
+        }
+        
+        // Actions column
+        let actionsHtml = `
+            <button class="btn-edit" onclick="openEditUserModal(${user.id})" style="margin-right: 8px;">Edit</button>
+            <button class="btn-delete" onclick="deleteUser(${user.id}, '${user.full_name}')">Delete</button>
+        `;
+        
+        // Add assign brand button for Assistant Admin
+        if (user.role === 'Assistant Admin') {
+            actionsHtml = `
+                <button class="btn-assign-brand" onclick="openAssignBrandsModal(${user.id}, '${user.full_name}')" style="margin-right: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+                    แบรนด์
+                </button>
+                ${actionsHtml}
+            `;
+        }
+        
         row.innerHTML = `
             <td>${user.full_name}</td>
             <td>${user.username}</td>
             <td>
                 <span class="${badgeClass}">${user.role}</span>
-                ${user.reseller_tier ? `<br><small style="color: #666;">Tier: ${user.reseller_tier}</small>` : ''}
+                ${user.reseller_tier ? `<br><small style="color: rgba(255,255,255,0.6);">Tier: ${user.reseller_tier}</small>` : ''}
             </td>
-            <td>
-                <button class="btn-edit" onclick="openEditUserModal(${user.id})" style="margin-right: 8px;">Edit</button>
-                <button class="btn-delete" onclick="deleteUser(${user.id}, '${user.full_name}')">Delete</button>
-            </td>
+            <td>${brandColumn}</td>
+            <td>${actionsHtml}</td>
         `;
         
         userTableBody.appendChild(row);
     });
 
     // Update user count
-    if (userCount) userCount.textContent = users.length;
+    if (userCount) userCount.textContent = filteredUsers.length;
 }
 
 // Update statistics
@@ -279,6 +345,21 @@ function setupEventListeners() {
     // Form submission
     if (createUserForm) {
         createUserForm.addEventListener('submit', handleCreateUser);
+    }
+    
+    // User filter event listeners
+    const searchUser = document.getElementById('searchUser');
+    const filterRole = document.getElementById('filterRole');
+    const filterTier = document.getElementById('filterTier');
+    
+    if (searchUser) {
+        searchUser.addEventListener('input', () => renderUsers());
+    }
+    if (filterRole) {
+        filterRole.addEventListener('change', () => renderUsers());
+    }
+    if (filterTier) {
+        filterTier.addEventListener('change', () => renderUsers());
     }
 }
 
@@ -1289,6 +1370,96 @@ function filterModalSkus(listId, searchTerm) {
             item.style.display = 'none';
         }
     });
+}
+
+// ==========================================
+// Assign Brands Modal Functions
+// ==========================================
+
+let allBrands = [];
+
+// Open Assign Brands Modal
+async function openAssignBrandsModal(userId, userName) {
+    const modal = document.getElementById('assignBrandsModal');
+    const userIdInput = document.getElementById('assignBrandsUserId');
+    const userNameSpan = document.getElementById('assignBrandsUserName');
+    const brandList = document.getElementById('brandCheckboxList');
+    const noBrandsMessage = document.getElementById('noBrandsMessage');
+    
+    userIdInput.value = userId;
+    userNameSpan.textContent = userName;
+    
+    try {
+        // Load all brands
+        const brandsResponse = await fetch(`${API_URL}/brands`);
+        allBrands = await brandsResponse.json();
+        
+        // Load user's current assigned brands
+        const userBrandsResponse = await fetch(`${API_URL}/users/${userId}/brands`);
+        const userBrands = await userBrandsResponse.json();
+        const assignedBrandIds = userBrands.map(b => b.id);
+        
+        if (allBrands.length === 0) {
+            brandList.innerHTML = '';
+            noBrandsMessage.style.display = 'block';
+        } else {
+            noBrandsMessage.style.display = 'none';
+            brandList.innerHTML = allBrands.map(brand => {
+                const isChecked = assignedBrandIds.includes(brand.id);
+                return `
+                    <label class="brand-checkbox-item ${isChecked ? 'selected' : ''}" data-brand-id="${brand.id}">
+                        <input type="checkbox" name="brands" value="${brand.id}" ${isChecked ? 'checked' : ''} 
+                               onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                        <div>
+                            <div class="brand-name">${brand.name}</div>
+                            ${brand.description ? `<div class="brand-desc">${brand.description}</div>` : ''}
+                        </div>
+                    </label>
+                `;
+            }).join('');
+        }
+        
+        modal.classList.add('active');
+    } catch (error) {
+        console.error('Error loading brands:', error);
+        showAlert('ไม่สามารถโหลดข้อมูลแบรนด์ได้', 'error');
+    }
+}
+
+// Close Assign Brands Modal
+function closeAssignBrandsModal() {
+    const modal = document.getElementById('assignBrandsModal');
+    modal.classList.remove('active');
+}
+
+// Handle Assign Brands Form Submit
+async function handleAssignBrands(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('assignBrandsUserId').value;
+    const checkboxes = document.querySelectorAll('#brandCheckboxList input[name="brands"]:checked');
+    const brandIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${userId}/brands`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brand_ids: brandIds })
+        });
+        
+        if (response.ok) {
+            showAlert('บันทึกการกำหนดแบรนด์สำเร็จ', 'success');
+            closeAssignBrandsModal();
+            await loadUsers();
+            renderUsers();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error assigning brands:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
 }
 
 // Initialize on page load

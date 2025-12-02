@@ -1622,3 +1622,158 @@ tr:hover td {
     width: 12px;
     height: 12px;
 }
+
+/* User Filter Bar */
+.user-filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.user-filter-bar .search-box {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+}
+
+.user-filter-bar .search-box svg {
+    color: rgba(255, 255, 255, 0.6);
+    flex-shrink: 0;
+}
+
+.user-filter-bar .search-box input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 13px;
+}
+
+.user-filter-bar .search-box input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.user-filter-bar select {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.user-filter-bar select option {
+    background: #4a1a6b;
+    color: white;
+}
+
+/* Brand Checkbox List */
+.brand-checkbox-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.brand-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.brand-checkbox-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(147, 51, 234, 0.4);
+}
+
+.brand-checkbox-item.selected {
+    background: rgba(147, 51, 234, 0.2);
+    border-color: rgba(147, 51, 234, 0.5);
+}
+
+.brand-checkbox-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #9333ea;
+}
+
+.brand-checkbox-item .brand-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+}
+
+.brand-checkbox-item .brand-desc {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+}
+
+/* Brand Tags in User Table */
+.brand-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.brand-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.3), rgba(219, 39, 119, 0.3));
+    border-radius: 12px;
+    font-size: 11px;
+    color: white;
+    font-weight: 500;
+}
+
+.brand-tag-more {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.no-brands {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Assign Brand Button */
+.btn-assign-brand {
+    padding: 5px 10px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.3), rgba(219, 39, 119, 0.3));
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    border-radius: 6px;
+    color: white;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-assign-brand:hover {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.5), rgba(219, 39, 119, 0.5));
+    border-color: rgba(147, 51, 234, 0.6);
+}
