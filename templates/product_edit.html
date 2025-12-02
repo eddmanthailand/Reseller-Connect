@@ -1726,26 +1726,38 @@
         
         async function saveCustomizations() {
             const customizations = collectCustomizationsData();
+            console.log('Saving customizations for product:', productId, customizations);
             
             for (const customization of customizations) {
                 try {
+                    let response;
                     if (customization.id) {
                         // Update existing
-                        await fetch(`${API_URL}/customizations/${customization.id}`, {
+                        response = await fetch(`${API_URL}/customizations/${customization.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(customization)
                         });
                     } else {
                         // Create new
-                        await fetch(`${API_URL}/products/${productId}/customizations`, {
+                        response = await fetch(`${API_URL}/products/${productId}/customizations`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(customization)
                         });
                     }
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        console.error('Error saving customization:', error);
+                        throw new Error(error.error || 'Failed to save customization');
+                    }
+                    
+                    const result = await response.json();
+                    console.log('Customization saved:', result);
                 } catch (error) {
                     console.error('Error saving customization:', error);
+                    throw error;
                 }
             }
         }
