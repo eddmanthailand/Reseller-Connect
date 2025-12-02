@@ -1618,6 +1618,213 @@ def update_sku(sku_id):
         if conn:
             conn.close()
 
+# ==================== PRODUCT CUSTOMIZATION ROUTES ====================
+
+@app.route('/api/products/<int:product_id>/customizations', methods=['GET'])
+@admin_required
+def get_product_customizations(product_id):
+    """Get all customizations for a product"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, is_required, allow_multiple, sort_order
+            FROM product_customizations
+            WHERE product_id = %s
+            ORDER BY sort_order, id
+        ''', (product_id,))
+        
+        customizations = []
+        for row in cursor.fetchall():
+            customization = dict(row)
+            
+            cursor.execute('''
+                SELECT id, label, extra_price, sort_order
+                FROM customization_choices
+                WHERE customization_id = %s
+                ORDER BY sort_order, id
+            ''', (customization['id'],))
+            
+            customization['choices'] = [dict(c) for c in cursor.fetchall()]
+            for choice in customization['choices']:
+                if choice.get('extra_price'):
+                    choice['extra_price'] = float(choice['extra_price'])
+            customizations.append(customization)
+        
+        return jsonify(customizations), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/products/<int:product_id>/customizations', methods=['POST'])
+@admin_required
+def create_product_customization(product_id):
+    """Create a new customization group for a product"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Customization name is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO product_customizations (product_id, name, is_required, allow_multiple, sort_order)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, name, is_required, allow_multiple, sort_order
+        ''', (
+            product_id,
+            data['name'],
+            data.get('is_required', False),
+            data.get('allow_multiple', False),
+            data.get('sort_order', 0)
+        ))
+        
+        customization = dict(cursor.fetchone())
+        
+        choices = data.get('choices', [])
+        customization['choices'] = []
+        
+        for idx, choice in enumerate(choices):
+            if not choice.get('label'):
+                continue
+            cursor.execute('''
+                INSERT INTO customization_choices (customization_id, label, extra_price, sort_order)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, label, extra_price, sort_order
+            ''', (
+                customization['id'],
+                choice['label'],
+                choice.get('extra_price', 0),
+                choice.get('sort_order', idx)
+            ))
+            choice_data = dict(cursor.fetchone())
+            if choice_data.get('extra_price'):
+                choice_data['extra_price'] = float(choice_data['extra_price'])
+            customization['choices'].append(choice_data)
+        
+        conn.commit()
+        return jsonify(customization), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/customizations/<int:customization_id>', methods=['PUT'])
+@admin_required
+def update_customization(customization_id):
+    """Update a customization group"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Customization name is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE product_customizations
+            SET name = %s, is_required = %s, allow_multiple = %s, sort_order = %s
+            WHERE id = %s
+            RETURNING id, product_id, name, is_required, allow_multiple, sort_order
+        ''', (
+            data['name'],
+            data.get('is_required', False),
+            data.get('allow_multiple', False),
+            data.get('sort_order', 0),
+            customization_id
+        ))
+        
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'error': 'Customization not found'}), 404
+        
+        customization = dict(result)
+        
+        cursor.execute('DELETE FROM customization_choices WHERE customization_id = %s', (customization_id,))
+        
+        choices = data.get('choices', [])
+        customization['choices'] = []
+        
+        for idx, choice in enumerate(choices):
+            if not choice.get('label'):
+                continue
+            cursor.execute('''
+                INSERT INTO customization_choices (customization_id, label, extra_price, sort_order)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, label, extra_price, sort_order
+            ''', (
+                customization_id,
+                choice['label'],
+                choice.get('extra_price', 0),
+                choice.get('sort_order', idx)
+            ))
+            choice_data = dict(cursor.fetchone())
+            if choice_data.get('extra_price'):
+                choice_data['extra_price'] = float(choice_data['extra_price'])
+            customization['choices'].append(choice_data)
+        
+        conn.commit()
+        return jsonify(customization), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/customizations/<int:customization_id>', methods=['DELETE'])
+@admin_required
+def delete_customization(customization_id):
+    """Delete a customization group"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM product_customizations WHERE id = %s RETURNING id', (customization_id,))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Customization not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Customization deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/upload-images', methods=['POST'])
 @admin_required
 def upload_images():

@@ -240,6 +240,31 @@ def init_db():
             )
         ''')
         
+        # Create product_customizations table (customization groups that don't affect SKU)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_customizations (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                is_required BOOLEAN DEFAULT FALSE,
+                allow_multiple BOOLEAN DEFAULT FALSE,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create customization_choices table (individual choices within a customization group)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customization_choices (
+                id SERIAL PRIMARY KEY,
+                customization_id INTEGER NOT NULL REFERENCES product_customizations(id) ON DELETE CASCADE,
+                label VARCHAR(255) NOT NULL,
+                extra_price DECIMAL(10, 2) DEFAULT 0,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:
