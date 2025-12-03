@@ -2762,6 +2762,12 @@ def admin_orders_page():
     """Admin orders management page"""
     return render_template('admin_orders.html')
 
+@app.route('/admin/sales-channels')
+@admin_required
+def sales_channels_page():
+    """Sales channels management page"""
+    return render_template('sales_channels.html')
+
 # ==================== SHOPPING CART API ====================
 
 def get_or_create_cart(user_id, cursor):

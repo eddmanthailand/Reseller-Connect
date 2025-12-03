@@ -320,8 +320,14 @@ body.sidebar-collapsed .sidebar-toggle {
     transition: transform 0.3s ease;
 }
 
-.nav-item.has-submenu.expanded::after {
+.nav-item.has-submenu.expanded::after,
+.nav-item.has-submenu.open::after {
     transform: rotate(180deg);
+}
+
+.nav-item.has-submenu.open > .submenu,
+.nav-item.has-submenu.open .submenu {
+    max-height: 200px;
 }
 
 .nav-item .icon {

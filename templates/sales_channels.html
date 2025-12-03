@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ช่องทางการจำหน่าย - Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .channels-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .channels-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .channel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .channel-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+        
+        .channel-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 1;
+        }
+        
+        .channel-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .channel-details h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        
+        .channel-details p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .channel-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+        
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+        
+        .btn-icon {
+            padding: 8px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        
+        .btn-icon.delete:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .add-channel-form {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .add-channel-form input {
+            flex: 1;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-footer {
+            padding: 20px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .close-btn:hover {
+            color: #fff;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .empty-state svg {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/admin/dashboard" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                        <span>หน้าหลัก</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/users" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span>จัดการผู้ใช้</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/orders" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        <span>คำสั่งซื้อ</span>
+                    </a>
+                </li>
+                <li class="nav-item has-submenu">
+                    <a href="#" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <span>จัดการสินค้า</span>
+                        <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </a>
+                    <ul class="submenu">
+                        <li><a href="/admin/products">รายการสินค้า</a></li>
+                        <li><a href="/admin/products/create">เพิ่มสินค้าใหม่</a></li>
+                        <li><a href="/admin/brands">จัดการแบรนด์</a></li>
+                        <li><a href="/admin/categories">จัดการหมวดหมู่</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/tier-settings" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        <span>ตั้งค่าระดับตัวแทน</span>
+                    </a>
+                </li>
+                <li class="nav-item has-submenu open">
+                    <a href="#" class="nav-link active">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span>ตั้งค่าระบบ</span>
+                        <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </a>
+                    <ul class="submenu">
+                        <li><a href="/admin/settings">ตั้งค่าทั่วไป</a></li>
+                        <li><a href="/admin/sales-channels" class="active">ช่องทางการจำหน่าย</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+                <h1>ช่องทางการจำหน่าย</h1>
+                <div class="user-info">
+                    <span id="currentUser">Loading...</span>
+                    <a href="/logout" class="btn-primary btn-gray">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        ออกจากระบบ
+                    </a>
+                </div>
+            </header>
+
+            <div class="channels-header">
+                <p style="color: rgba(255,255,255,0.7);">จัดการช่องทางการจำหน่ายสำหรับบันทึกยอดขาย เช่น LINE, Facebook, Lazada, Shopee</p>
+                <button class="btn-primary" onclick="openAddModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    เพิ่มช่องทาง
+                </button>
+            </div>
+
+            <div class="channels-container">
+                <div class="channel-list" id="channelList">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="channelModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">เพิ่มช่องทางการจำหน่าย</h3>
+                <button class="close-btn" onclick="closeModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="channelForm">
+                    <input type="hidden" id="channelId">
+                    <div class="form-group">
+                        <label class="form-label">ชื่อช่องทาง</label>
+                        <input type="text" id="channelName" class="form-input" placeholder="เช่น LINE, Facebook, Shopee" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">คำอธิบาย (ไม่บังคับ)</label>
+                        <input type="text" id="channelDesc" class="form-input" placeholder="รายละเอียดเพิ่มเติม">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary btn-gray" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-primary btn-success" onclick="saveChannel()">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        const API_URL = '/api';
+        let channels = [];
+        let editingChannel = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentUser();
+            loadChannels();
+        });
+        
+        async function loadChannels() {
+            try {
+                const response = await fetch(`${API_URL}/sales-channels`);
+                if (response.ok) {
+                    channels = await response.json();
+                    renderChannels();
+                }
+            } catch (error) {
+                console.error('Error loading channels:', error);
+            }
+        }
+        
+        function renderChannels() {
+            const container = document.getElementById('channelList');
+            
+            if (channels.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                        <h3 style="color: #fff; margin-bottom: 8px;">ยังไม่มีช่องทางการจำหน่าย</h3>
+                        <p>คลิก "เพิ่มช่องทาง" เพื่อเริ่มต้น</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = channels.map(channel => `
+                <div class="channel-item">
+                    <div class="channel-info">
+                        <div class="channel-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            </svg>
+                        </div>
+                        <div class="channel-details">
+                            <h4>${channel.name}</h4>
+                            <p>${channel.description || 'ไม่มีคำอธิบาย'}</p>
+                        </div>
+                    </div>
+                    <div class="channel-actions">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${channel.is_active ? 'checked' : ''} onchange="toggleChannel(${channel.id}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn-icon" onclick="editChannel(${channel.id})">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        ${channel.name !== 'ระบบออนไลน์' ? `
+                            <button class="btn-icon delete" onclick="deleteChannel(${channel.id})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function openAddModal() {
+            editingChannel = null;
+            document.getElementById('modalTitle').textContent = 'เพิ่มช่องทางการจำหน่าย';
+            document.getElementById('channelId').value = '';
+            document.getElementById('channelName').value = '';
+            document.getElementById('channelDesc').value = '';
+            document.getElementById('channelModal').classList.add('active');
+        }
+        
+        function editChannel(id) {
+            const channel = channels.find(c => c.id === id);
+            if (!channel) return;
+            
+            editingChannel = channel;
+            document.getElementById('modalTitle').textContent = 'แก้ไขช่องทาง';
+            document.getElementById('channelId').value = channel.id;
+            document.getElementById('channelName').value = channel.name;
+            document.getElementById('channelDesc').value = channel.description || '';
+            document.getElementById('channelModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('channelModal').classList.remove('active');
+            editingChannel = null;
+        }
+        
+        async function saveChannel() {
+            const name = document.getElementById('channelName').value.trim();
+            const description = document.getElementById('channelDesc').value.trim();
+            
+            if (!name) {
+                alert('กรุณากรอกชื่อช่องทาง');
+                return;
+            }
+            
+            try {
+                let response;
+                if (editingChannel) {
+                    response = await fetch(`${API_URL}/sales-channels/${editingChannel.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            name, 
+                            description,
+                            is_active: editingChannel.is_active,
+                            sort_order: editingChannel.sort_order
+                        })
+                    });
+                } else {
+                    response = await fetch(`${API_URL}/sales-channels`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, description })
+                    });
+                }
+                
+                if (response.ok) {
+                    closeModal();
+                    loadChannels();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'เกิดข้อผิดพลาด');
+                }
+            } catch (error) {
+                console.error('Error saving channel:', error);
+                alert('เกิดข้อผิดพลาด');
+            }
+        }
+        
+        async function toggleChannel(id, isActive) {
+            const channel = channels.find(c => c.id === id);
+            if (!channel) return;
+            
+            try {
+                await fetch(`${API_URL}/sales-channels/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: channel.name,
+                        description: channel.description,
+                        is_active: isActive,
+                        sort_order: channel.sort_order
+                    })
+                });
+            } catch (error) {
+                console.error('Error toggling channel:', error);
+            }
+        }
+        
+        async function deleteChannel(id) {
+            if (!confirm('ต้องการลบช่องทางนี้หรือไม่?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/sales-channels/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadChannels();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'ไม่สามารถลบได้');
+                }
+            } catch (error) {
+                console.error('Error deleting channel:', error);
+            }
+        }
+        
+        document.getElementById('channelModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        
+        document.querySelectorAll('.nav-item.has-submenu > a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const parent = this.parentElement;
+                parent.classList.toggle('open');
+            });
+        });
+    </script>
+</body>
+</html>
