@@ -252,93 +252,6 @@ def get_reseller_tiers():
         if conn:
             conn.close()
 
-@app.route('/api/reseller/products', methods=['GET'])
-@login_required
-def get_reseller_products():
-    """Get active products for resellers with basic info and tier pricing"""
-    user_role = session.get('role')
-    if user_role not in ['Reseller', 'Super Admin', 'Assistant Admin']:
-        return jsonify({'error': 'Unauthorized access'}), 403
-    
-    user_id = session.get('user_id')
-    
-    conn = None
-    cursor = None
-    try:
-        conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        
-        # Get user's reseller tier
-        user_tier_id = None
-        discount_percent = 0
-        
-        cursor.execute('''
-            SELECT reseller_tier_id FROM users WHERE id = %s
-        ''', (user_id,))
-        user_result = cursor.fetchone()
-        if user_result and user_result['reseller_tier_id']:
-            user_tier_id = user_result['reseller_tier_id']
-        
-        cursor.execute('''
-            SELECT 
-                p.id,
-                p.name,
-                p.parent_sku,
-                b.name as brand_name,
-                (
-                    SELECT pi.image_url 
-                    FROM product_images pi 
-                    WHERE pi.product_id = p.id 
-                    ORDER BY pi.sort_order ASC 
-                    LIMIT 1
-                ) as image_url,
-                COUNT(DISTINCT s.id) as sku_count,
-                MIN(s.price) as min_price,
-                MAX(s.price) as max_price,
-                (
-                    SELECT ptp.discount_percent
-                    FROM product_tier_pricing ptp
-                    WHERE ptp.product_id = p.id AND ptp.tier_id = %s
-                ) as discount_percent
-            FROM products p
-            LEFT JOIN skus s ON p.id = s.product_id
-            LEFT JOIN brands b ON p.brand_id = b.id
-            WHERE COALESCE(p.status, 'active') = 'active'
-            GROUP BY p.id, p.name, p.parent_sku, b.name
-            ORDER BY p.name ASC
-        ''', (user_tier_id,))
-        
-        products = []
-        for row in cursor.fetchall():
-            product = dict(row)
-            discount = float(product['discount_percent']) if product['discount_percent'] else 0
-            
-            # Calculate discounted prices
-            if product['min_price']:
-                min_price = float(product['min_price'])
-                product['min_price_discounted'] = min_price * (1 - discount / 100)
-            else:
-                product['min_price_discounted'] = None
-                
-            if product['max_price']:
-                max_price = float(product['max_price'])
-                product['max_price_discounted'] = max_price * (1 - discount / 100)
-            else:
-                product['max_price_discounted'] = None
-            
-            product['discount_percent'] = discount
-            products.append(product)
-        
-        return jsonify(products), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
 @app.route('/api/reseller/stats', methods=['GET'])
 @login_required
 def get_reseller_stats():
@@ -2461,6 +2374,1495 @@ def get_resellers_list():
         return jsonify(result), 200
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== SALES CHANNELS API ====================
+
+@app.route('/api/sales-channels', methods=['GET'])
+@login_required
+def get_sales_channels():
+    """Get all sales channels"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, description, is_active, sort_order, created_at
+            FROM sales_channels
+            ORDER BY sort_order ASC
+        ''')
+        channels = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(channels), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/sales-channels', methods=['POST'])
+@admin_required
+def create_sales_channel():
+    """Create a new sales channel"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'error': 'Channel name is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO sales_channels (name, description, is_active, sort_order)
+            VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM sales_channels))
+            RETURNING id, name, description, is_active, sort_order
+        ''', (name, data.get('description', ''), data.get('is_active', True)))
+        
+        channel = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(channel), 201
+        
+    except psycopg2.errors.UniqueViolation:
+        return jsonify({'error': 'Channel name already exists'}), 400
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/sales-channels/<int:channel_id>', methods=['PUT'])
+@admin_required
+def update_sales_channel(channel_id):
+    """Update a sales channel"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE sales_channels
+            SET name = %s, description = %s, is_active = %s, sort_order = %s
+            WHERE id = %s
+            RETURNING id, name, description, is_active, sort_order
+        ''', (
+            data.get('name', ''),
+            data.get('description', ''),
+            data.get('is_active', True),
+            data.get('sort_order', 0),
+            channel_id
+        ))
+        
+        channel = cursor.fetchone()
+        if not channel:
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        conn.commit()
+        return jsonify(dict(channel)), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/sales-channels/<int:channel_id>', methods=['DELETE'])
+@admin_required
+def delete_sales_channel(channel_id):
+    """Delete a sales channel"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Don't allow deleting the default "ระบบออนไลน์" channel
+        cursor.execute('SELECT name FROM sales_channels WHERE id = %s', (channel_id,))
+        result = cursor.fetchone()
+        if result and result[0] == 'ระบบออนไลน์':
+            return jsonify({'error': 'Cannot delete the default online channel'}), 400
+        
+        cursor.execute('DELETE FROM sales_channels WHERE id = %s RETURNING id', (channel_id,))
+        if cursor.fetchone() is None:
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Channel deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== PROMPTPAY SETTINGS API ====================
+
+@app.route('/api/promptpay-settings', methods=['GET'])
+@login_required
+def get_promptpay_settings():
+    """Get PromptPay settings"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, qr_image_url, account_name, account_number, is_active, updated_at
+            FROM promptpay_settings
+            WHERE is_active = TRUE
+            LIMIT 1
+        ''')
+        settings = cursor.fetchone()
+        
+        if settings:
+            return jsonify(dict(settings)), 200
+        return jsonify({}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/promptpay-settings', methods=['POST'])
+@admin_required
+def save_promptpay_settings():
+    """Save or update PromptPay settings"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if settings exist
+        cursor.execute('SELECT id FROM promptpay_settings LIMIT 1')
+        existing = cursor.fetchone()
+        
+        if existing:
+            cursor.execute('''
+                UPDATE promptpay_settings
+                SET qr_image_url = %s, account_name = %s, account_number = %s,
+                    is_active = %s, updated_at = CURRENT_TIMESTAMP, updated_by = %s
+                WHERE id = %s
+                RETURNING id, qr_image_url, account_name, account_number, is_active
+            ''', (
+                data.get('qr_image_url'),
+                data.get('account_name'),
+                data.get('account_number'),
+                data.get('is_active', True),
+                user_id,
+                existing['id']
+            ))
+        else:
+            cursor.execute('''
+                INSERT INTO promptpay_settings (qr_image_url, account_name, account_number, is_active, updated_by)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id, qr_image_url, account_name, account_number, is_active
+            ''', (
+                data.get('qr_image_url'),
+                data.get('account_name'),
+                data.get('account_number'),
+                data.get('is_active', True),
+                user_id
+            ))
+        
+        settings = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify({
+            'message': 'PromptPay settings saved successfully',
+            'settings': settings
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== NOTIFICATIONS API ====================
+
+@app.route('/api/notifications', methods=['GET'])
+@login_required
+def get_notifications():
+    """Get notifications for current user"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, title, message, type, reference_type, reference_id, is_read, created_at
+            FROM notifications
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 50
+        ''', (user_id,))
+        
+        notifications = [dict(row) for row in cursor.fetchall()]
+        
+        # Get unread count
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM notifications
+            WHERE user_id = %s AND is_read = FALSE
+        ''', (user_id,))
+        unread_count = cursor.fetchone()['count']
+        
+        return jsonify({
+            'notifications': notifications,
+            'unread_count': unread_count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PATCH'])
+@login_required
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE notifications SET is_read = TRUE
+            WHERE id = %s AND user_id = %s
+        ''', (notification_id, user_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Marked as read'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/notifications/read-all', methods=['PATCH'])
+@login_required
+def mark_all_notifications_read():
+    """Mark all notifications as read"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE notifications SET is_read = TRUE
+            WHERE user_id = %s AND is_read = FALSE
+        ''', (user_id,))
+        
+        conn.commit()
+        return jsonify({'message': 'All marked as read'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Helper function to create notification
+def create_notification(user_id, title, message, notification_type='info', reference_type=None, reference_id=None):
+    """Create a notification for a user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO notifications (user_id, title, message, type, reference_type, reference_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (user_id, title, message, notification_type, reference_type, reference_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error creating notification: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== ADMIN PAGES ====================
+
+@app.route('/admin/settings')
+@admin_required
+def settings_page():
+    """Admin settings page"""
+    return render_template('settings.html')
+
+@app.route('/admin/orders')
+@admin_required
+def admin_orders_page():
+    """Admin orders management page"""
+    return render_template('admin_orders.html')
+
+# ==================== SHOPPING CART API ====================
+
+def get_or_create_cart(user_id, cursor):
+    """Get active cart for user or create one"""
+    cursor.execute('''
+        SELECT id FROM carts WHERE user_id = %s AND status = 'active'
+    ''', (user_id,))
+    cart = cursor.fetchone()
+    
+    if cart:
+        return cart['id'] if isinstance(cart, dict) else cart[0]
+    
+    # Create new cart
+    cursor.execute('''
+        INSERT INTO carts (user_id, status) VALUES (%s, 'active')
+        RETURNING id
+    ''', (user_id,))
+    return cursor.fetchone()[0]
+
+@app.route('/api/cart', methods=['GET'])
+@login_required
+def get_cart():
+    """Get current user's cart with items"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get or create cart
+        cart_id = get_or_create_cart(user_id, cursor)
+        conn.commit()
+        
+        # Get cart items with product info
+        cursor.execute('''
+            SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
+                   ci.customization_data, ci.created_at,
+                   s.sku_code, s.price as current_price, s.stock,
+                   p.id as product_id, p.name as product_name, p.parent_sku,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
+            FROM cart_items ci
+            JOIN skus s ON s.id = ci.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE ci.cart_id = %s
+            ORDER BY ci.created_at DESC
+        ''', (cart_id,))
+        
+        items = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            # Calculate discounted price
+            unit_price = float(item['unit_price'] or 0)
+            discount_pct = float(item['tier_discount_percent'] or 0)
+            discounted_price = unit_price * (1 - discount_pct / 100)
+            quantity = item['quantity']
+            
+            item['discounted_price'] = round(discounted_price, 2)
+            item['subtotal'] = round(discounted_price * quantity, 2)
+            item['unit_price'] = float(item['unit_price']) if item['unit_price'] else 0
+            item['current_price'] = float(item['current_price']) if item['current_price'] else 0
+            items.append(item)
+        
+        # Calculate totals
+        total_amount = sum(float(item['unit_price']) * item['quantity'] for item in items)
+        total_discount = sum((float(item['unit_price']) - item['discounted_price']) * item['quantity'] for item in items)
+        final_amount = total_amount - total_discount
+        
+        return jsonify({
+            'cart_id': cart_id,
+            'items': items,
+            'item_count': len(items),
+            'total_quantity': sum(item['quantity'] for item in items),
+            'total_amount': round(total_amount, 2),
+            'total_discount': round(total_discount, 2),
+            'final_amount': round(final_amount, 2)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/cart/items', methods=['POST'])
+@login_required
+def add_to_cart():
+    """Add item to cart"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        sku_id = data.get('sku_id')
+        quantity = data.get('quantity', 1)
+        customization_data = data.get('customization_data')
+        
+        if not sku_id:
+            return jsonify({'error': 'SKU ID is required'}), 400
+        
+        if quantity < 1:
+            return jsonify({'error': 'Quantity must be at least 1'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get SKU info
+        cursor.execute('''
+            SELECT s.id, s.price, s.stock, p.id as product_id
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            WHERE s.id = %s AND p.status = 'active'
+        ''', (sku_id,))
+        sku = cursor.fetchone()
+        
+        if not sku:
+            return jsonify({'error': 'Product not found or not available'}), 404
+        
+        if sku['stock'] < quantity:
+            return jsonify({'error': f'Not enough stock. Available: {sku["stock"]}'}), 400
+        
+        # Get user's tier discount for this product
+        cursor.execute('''
+            SELECT ptp.discount_percent
+            FROM users u
+            JOIN product_tier_pricing ptp ON ptp.tier_id = u.reseller_tier_id
+            WHERE u.id = %s AND ptp.product_id = %s
+        ''', (user_id, sku['product_id']))
+        tier_pricing = cursor.fetchone()
+        discount_percent = float(tier_pricing['discount_percent']) if tier_pricing else 0
+        
+        # Get or create cart
+        cart_id = get_or_create_cart(user_id, cursor)
+        
+        # Check if item already in cart
+        cursor.execute('''
+            SELECT id, quantity FROM cart_items
+            WHERE cart_id = %s AND sku_id = %s
+        ''', (cart_id, sku_id))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update quantity
+            new_quantity = existing['quantity'] + quantity
+            if new_quantity > sku['stock']:
+                return jsonify({'error': f'Total quantity exceeds stock. Available: {sku["stock"]}'}), 400
+            
+            cursor.execute('''
+                UPDATE cart_items
+                SET quantity = %s, unit_price = %s, tier_discount_percent = %s,
+                    customization_data = COALESCE(%s, customization_data), updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id
+            ''', (new_quantity, sku['price'], discount_percent, 
+                  json.dumps(customization_data) if customization_data else None,
+                  existing['id']))
+        else:
+            # Insert new item
+            cursor.execute('''
+                INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent, customization_data)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (cart_id, sku_id, quantity, sku['price'], discount_percent,
+                  json.dumps(customization_data) if customization_data else None))
+        
+        conn.commit()
+        
+        return jsonify({'message': 'Added to cart successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/cart/items/<int:item_id>', methods=['PATCH'])
+@login_required
+def update_cart_item(item_id):
+    """Update cart item quantity"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        quantity = data.get('quantity', 1)
+        
+        if quantity < 1:
+            return jsonify({'error': 'Quantity must be at least 1'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify item belongs to user's cart
+        cursor.execute('''
+            SELECT ci.id, ci.sku_id, s.stock
+            FROM cart_items ci
+            JOIN carts c ON c.id = ci.cart_id
+            JOIN skus s ON s.id = ci.sku_id
+            WHERE ci.id = %s AND c.user_id = %s AND c.status = 'active'
+        ''', (item_id, user_id))
+        item = cursor.fetchone()
+        
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
+        
+        if quantity > item['stock']:
+            return jsonify({'error': f'Not enough stock. Available: {item["stock"]}'}), 400
+        
+        cursor.execute('''
+            UPDATE cart_items
+            SET quantity = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (quantity, item_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Cart updated'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/cart/items/<int:item_id>', methods=['DELETE'])
+@login_required
+def remove_cart_item(item_id):
+    """Remove item from cart"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Verify and delete
+        cursor.execute('''
+            DELETE FROM cart_items
+            WHERE id = %s AND cart_id IN (
+                SELECT id FROM carts WHERE user_id = %s AND status = 'active'
+            )
+            RETURNING id
+        ''', (item_id, user_id))
+        
+        if cursor.fetchone() is None:
+            return jsonify({'error': 'Item not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Item removed from cart'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/cart/clear', methods=['DELETE'])
+@login_required
+def clear_cart():
+    """Clear all items from cart"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            DELETE FROM cart_items
+            WHERE cart_id IN (
+                SELECT id FROM carts WHERE user_id = %s AND status = 'active'
+            )
+        ''', (user_id,))
+        
+        conn.commit()
+        return jsonify({'message': 'Cart cleared'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== RESELLER PRODUCT CATALOG ====================
+
+@app.route('/api/reseller/products', methods=['GET'])
+@login_required
+def get_reseller_products():
+    """Get products for reseller with tier pricing"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user's tier
+        cursor.execute('''
+            SELECT u.reseller_tier_id, rt.name as tier_name, rt.level_rank
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['reseller_tier_id'] if user else None
+        
+        # Get active products with tier pricing
+        cursor.execute('''
+            SELECT p.id, p.name, p.parent_sku, p.description, p.status,
+                   b.name as brand_name,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT MIN(price) FROM skus WHERE product_id = p.id) as min_price,
+                   (SELECT MAX(price) FROM skus WHERE product_id = p.id) as max_price,
+                   (SELECT SUM(stock) FROM skus WHERE product_id = p.id) as total_stock,
+                   (SELECT COUNT(*) FROM skus WHERE product_id = p.id) as sku_count,
+                   ptp.discount_percent
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
+            WHERE p.status = 'active'
+            ORDER BY p.created_at DESC
+        ''', (tier_id,))
+        
+        products = []
+        for row in cursor.fetchall():
+            product = dict(row)
+            product['min_price'] = float(product['min_price']) if product['min_price'] else 0
+            product['max_price'] = float(product['max_price']) if product['max_price'] else 0
+            product['discount_percent'] = float(product['discount_percent']) if product['discount_percent'] else 0
+            
+            # Calculate discounted prices
+            if product['discount_percent'] > 0:
+                product['discounted_min_price'] = round(product['min_price'] * (1 - product['discount_percent'] / 100), 2)
+                product['discounted_max_price'] = round(product['max_price'] * (1 - product['discount_percent'] / 100), 2)
+            else:
+                product['discounted_min_price'] = product['min_price']
+                product['discounted_max_price'] = product['max_price']
+            
+            products.append(product)
+        
+        return jsonify({
+            'tier': user,
+            'products': products
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/products/<int:product_id>', methods=['GET'])
+@login_required
+def get_reseller_product_detail(product_id):
+    """Get product detail with SKUs and tier pricing for reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user's tier
+        cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['reseller_tier_id'] if user else None
+        
+        # Get product
+        cursor.execute('''
+            SELECT p.*, b.name as brand_name, ptp.discount_percent
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
+            WHERE p.id = %s AND p.status = 'active'
+        ''', (tier_id, product_id))
+        product = cursor.fetchone()
+        
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        product = dict(product)
+        discount_percent = float(product['discount_percent']) if product['discount_percent'] else 0
+        
+        # Get images
+        cursor.execute('''
+            SELECT id, image_url, sort_order
+            FROM product_images
+            WHERE product_id = %s
+            ORDER BY sort_order
+        ''', (product_id,))
+        product['images'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get SKUs with discounted prices
+        cursor.execute('''
+            SELECT s.id, s.sku_code, s.price, s.stock
+            FROM skus s
+            WHERE s.product_id = %s
+            ORDER BY s.sku_code
+        ''', (product_id,))
+        
+        skus = []
+        for sku in cursor.fetchall():
+            sku_dict = dict(sku)
+            price = float(sku_dict['price']) if sku_dict['price'] else 0
+            sku_dict['price'] = price
+            sku_dict['discounted_price'] = round(price * (1 - discount_percent / 100), 2)
+            sku_dict['discount_percent'] = discount_percent
+            
+            # Get SKU option values
+            cursor.execute('''
+                SELECT o.name as option_name, ov.value as option_value
+                FROM sku_values_map svm
+                JOIN option_values ov ON ov.id = svm.option_value_id
+                JOIN options o ON o.id = ov.option_id
+                WHERE svm.sku_id = %s
+                ORDER BY o.id
+            ''', (sku_dict['id'],))
+            sku_dict['options'] = [dict(row) for row in cursor.fetchall()]
+            
+            skus.append(sku_dict)
+        
+        product['skus'] = skus
+        product['discount_percent'] = discount_percent
+        
+        # Get options
+        cursor.execute('''
+            SELECT o.id, o.name,
+                   ARRAY_AGG(
+                       JSON_BUILD_OBJECT('id', ov.id, 'value', ov.value, 'sort_order', ov.sort_order)
+                       ORDER BY ov.sort_order
+                   ) as values
+            FROM options o
+            JOIN option_values ov ON ov.option_id = o.id
+            WHERE o.product_id = %s
+            GROUP BY o.id, o.name
+            ORDER BY o.id
+        ''', (product_id,))
+        product['options'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get customizations
+        cursor.execute('''
+            SELECT pc.id, pc.name, pc.is_required, pc.allow_multiple, pc.sort_order
+            FROM product_customizations pc
+            WHERE pc.product_id = %s
+            ORDER BY pc.sort_order
+        ''', (product_id,))
+        customizations = []
+        for c in cursor.fetchall():
+            c_dict = dict(c)
+            cursor.execute('''
+                SELECT id, label, extra_price, sort_order
+                FROM customization_choices
+                WHERE customization_id = %s
+                ORDER BY sort_order
+            ''', (c_dict['id'],))
+            c_dict['choices'] = [dict(ch) for ch in cursor.fetchall()]
+            for ch in c_dict['choices']:
+                if ch['extra_price']:
+                    ch['extra_price'] = float(ch['extra_price'])
+            customizations.append(c_dict)
+        product['customizations'] = customizations
+        
+        return jsonify(product), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== RESELLER PAGES ====================
+
+@app.route('/reseller/catalog')
+@login_required
+def reseller_catalog_page():
+    """Reseller product catalog page"""
+    return render_template('reseller_catalog.html')
+
+@app.route('/reseller/cart')
+@login_required
+def reseller_cart_page():
+    """Reseller cart page"""
+    return render_template('reseller_cart.html')
+
+@app.route('/reseller/checkout')
+@login_required
+def reseller_checkout_page():
+    """Reseller checkout page"""
+    return render_template('reseller_checkout.html')
+
+@app.route('/reseller/orders')
+@login_required
+def reseller_orders_page():
+    """Reseller orders page"""
+    return render_template('reseller_orders.html')
+
+# ==================== ORDER API ====================
+
+import uuid
+
+def generate_order_number():
+    """Generate unique order number"""
+    from datetime import datetime
+    date_part = datetime.now().strftime('%Y%m%d')
+    random_part = str(uuid.uuid4().hex)[:6].upper()
+    return f'ORD-{date_part}-{random_part}'
+
+@app.route('/api/orders', methods=['POST'])
+@login_required
+def create_order():
+    """Create order from cart"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        notes = data.get('notes', '')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user's active cart with items
+        cursor.execute('''
+            SELECT c.id as cart_id
+            FROM carts c
+            WHERE c.user_id = %s AND c.status = 'active'
+        ''', (user_id,))
+        cart = cursor.fetchone()
+        
+        if not cart:
+            return jsonify({'error': 'Cart not found'}), 404
+        
+        # Get cart items
+        cursor.execute('''
+            SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent, ci.customization_data,
+                   s.stock, s.sku_code, p.name as product_name
+            FROM cart_items ci
+            JOIN skus s ON s.id = ci.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE ci.cart_id = %s
+        ''', (cart['cart_id'],))
+        items = cursor.fetchall()
+        
+        if not items:
+            return jsonify({'error': 'Cart is empty'}), 400
+        
+        # Validate stock (show available stock, don't deduct yet)
+        for item in items:
+            if item['stock'] < item['quantity']:
+                return jsonify({
+                    'error': f'สินค้า {item["product_name"]} ({item["sku_code"]}) สต็อกไม่พอ เหลือ {item["stock"]} ชิ้น'
+                }), 400
+        
+        # Calculate totals
+        total_amount = 0
+        total_discount = 0
+        for item in items:
+            unit_price = float(item['unit_price'])
+            discount_pct = float(item['tier_discount_percent'] or 0)
+            discounted_price = unit_price * (1 - discount_pct / 100)
+            total_amount += unit_price * item['quantity']
+            total_discount += (unit_price - discounted_price) * item['quantity']
+        
+        final_amount = total_amount - total_discount
+        
+        # Get default online channel
+        cursor.execute("SELECT id FROM sales_channels WHERE name = 'ระบบออนไลน์' LIMIT 1")
+        channel = cursor.fetchone()
+        channel_id = channel['id'] if channel else None
+        
+        # Create order
+        order_number = generate_order_number()
+        cursor.execute('''
+            INSERT INTO orders (order_number, user_id, sales_channel_id, status, total_amount, discount_amount, final_amount, notes)
+            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s)
+            RETURNING id, order_number, status, final_amount, created_at
+        ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes))
+        order = dict(cursor.fetchone())
+        
+        # Create order items
+        for item in items:
+            unit_price = float(item['unit_price'])
+            discount_pct = float(item['tier_discount_percent'] or 0)
+            discounted_price = round(unit_price * (1 - discount_pct / 100), 2)
+            
+            cursor.execute('''
+                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discounted_price, item['customization_data']))
+        
+        # Clear cart items
+        cursor.execute('DELETE FROM cart_items WHERE cart_id = %s', (cart['cart_id'],))
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Order created successfully',
+            'order': order
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/orders', methods=['GET'])
+@login_required
+def get_user_orders():
+    """Get orders for current user"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        status_filter = request.args.get('status')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        query = '''
+            SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
+                   o.final_amount, o.notes, o.created_at, o.updated_at,
+                   sc.name as channel_name,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o
+            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            WHERE o.user_id = %s
+        '''
+        params = [user_id]
+        
+        if status_filter:
+            query += ' AND o.status = %s'
+            params.append(status_filter)
+        
+        query += ' ORDER BY o.created_at DESC'
+        
+        cursor.execute(query, params)
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
+            order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
+            order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+            orders.append(order)
+        
+        return jsonify(orders), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/orders/<int:order_id>', methods=['GET'])
+@login_required
+def get_order_detail(order_id):
+    """Get order detail"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        user_role = session.get('role')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get order (check ownership for non-admins)
+        query = '''
+            SELECT o.*, sc.name as channel_name, u.full_name as customer_name
+            FROM orders o
+            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.id = %s
+        '''
+        if user_role not in ['Super Admin', 'Assistant Admin']:
+            query += ' AND o.user_id = %s'
+            cursor.execute(query, (order_id, user_id))
+        else:
+            cursor.execute(query, (order_id,))
+        
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        order = dict(order)
+        order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
+        order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
+        order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+        
+        # Get order items
+        cursor.execute('''
+            SELECT oi.*, s.sku_code, p.name as product_name, p.parent_sku,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
+            FROM order_items oi
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        
+        items = []
+        for item in cursor.fetchall():
+            item_dict = dict(item)
+            item_dict['unit_price'] = float(item_dict['unit_price']) if item_dict['unit_price'] else 0
+            item_dict['final_price'] = float(item_dict['final_price']) if item_dict['final_price'] else 0
+            item_dict['discount_percent'] = float(item_dict['discount_percent']) if item_dict['discount_percent'] else 0
+            items.append(item_dict)
+        
+        order['items'] = items
+        
+        # Get payment slips
+        cursor.execute('''
+            SELECT id, slip_image_url, amount, status, admin_notes, created_at
+            FROM payment_slips
+            WHERE order_id = %s
+            ORDER BY created_at DESC
+        ''', (order_id,))
+        order['payment_slips'] = [dict(s) for s in cursor.fetchall()]
+        
+        return jsonify(order), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/orders/<int:order_id>/payment-slip', methods=['POST'])
+@login_required
+def upload_payment_slip(order_id):
+    """Upload payment slip for order"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        slip_image_url = data.get('slip_image_url')
+        amount = data.get('amount')
+        
+        if not slip_image_url:
+            return jsonify({'error': 'Slip image URL is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify order belongs to user and is pending payment
+        cursor.execute('''
+            SELECT id, status, final_amount FROM orders
+            WHERE id = %s AND user_id = %s
+        ''', (order_id, user_id))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        if order['status'] not in ['pending_payment', 'rejected']:
+            return jsonify({'error': 'Cannot upload slip for this order status'}), 400
+        
+        # Create payment slip
+        cursor.execute('''
+            INSERT INTO payment_slips (order_id, slip_image_url, amount, status)
+            VALUES (%s, %s, %s, 'pending')
+            RETURNING id
+        ''', (order_id, slip_image_url, amount or order['final_amount']))
+        
+        # Update order status
+        cursor.execute('''
+            UPDATE orders SET status = 'under_review', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (order_id,))
+        
+        conn.commit()
+        
+        # Notify admins
+        cursor.execute("SELECT id FROM users WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Super Admin', 'Assistant Admin'))")
+        admins = cursor.fetchall()
+        for admin in admins:
+            create_notification(
+                admin['id'],
+                'สลิปการชำระเงินใหม่',
+                f'มีสลิปใหม่รอตรวจสอบ คำสั่งซื้อ #{order_id}',
+                'payment',
+                'order',
+                order_id
+            )
+        
+        return jsonify({'message': 'Payment slip uploaded successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== ADMIN ORDER MANAGEMENT ====================
+
+@app.route('/api/admin/orders', methods=['GET'])
+@admin_required
+def get_all_orders():
+    """Get all orders for admin"""
+    conn = None
+    cursor = None
+    try:
+        status_filter = request.args.get('status')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        query = '''
+            SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
+                   o.final_amount, o.notes, o.created_at, o.updated_at,
+                   u.full_name as customer_name, u.username,
+                   sc.name as channel_name,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
+                   (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+        '''
+        params = []
+        
+        if status_filter:
+            query += ' WHERE o.status = %s'
+            params.append(status_filter)
+        
+        query += ' ORDER BY o.created_at DESC'
+        
+        cursor.execute(query, params)
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
+            order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
+            order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+            orders.append(order)
+        
+        return jsonify(orders), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/approve', methods=['POST'])
+@admin_required
+def approve_order(order_id):
+    """Approve order payment and deduct stock"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json() or {}
+        slip_id = data.get('slip_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get order
+        cursor.execute('SELECT id, status, user_id, final_amount FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        if order['status'] != 'under_review':
+            return jsonify({'error': 'Order is not under review'}), 400
+        
+        # Get order items for stock deduction
+        cursor.execute('''
+            SELECT oi.sku_id, oi.quantity, s.stock
+            FROM order_items oi
+            JOIN skus s ON s.id = oi.sku_id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        items = cursor.fetchall()
+        
+        # Validate and deduct stock
+        for item in items:
+            if item['stock'] < item['quantity']:
+                return jsonify({'error': f'Insufficient stock for SKU'}), 400
+            
+            # Deduct stock
+            cursor.execute('''
+                UPDATE skus SET stock = stock - %s WHERE id = %s
+            ''', (item['quantity'], item['sku_id']))
+            
+            # Record stock transaction
+            cursor.execute('''
+                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, reference_type, reference_id, notes, created_by)
+                VALUES (%s, 'sale', %s, 'order', %s, %s, %s)
+            ''', (item['sku_id'], -item['quantity'], order_id, f'Order #{order_id} approved', admin_id))
+        
+        # Update order status
+        cursor.execute('''
+            UPDATE orders SET status = 'paid', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (order_id,))
+        
+        # Update slip status if provided
+        if slip_id:
+            cursor.execute('''
+                UPDATE payment_slips SET status = 'approved', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (admin_id, slip_id))
+        else:
+            cursor.execute('''
+                UPDATE payment_slips SET status = 'approved', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+                WHERE order_id = %s AND status = 'pending'
+            ''', (admin_id, order_id))
+        
+        # Update user's total purchases
+        cursor.execute('''
+            UPDATE users SET total_purchases = COALESCE(total_purchases, 0) + %s
+            WHERE id = %s
+        ''', (order['final_amount'], order['user_id']))
+        
+        # Check for tier upgrade
+        cursor.execute('''
+            SELECT u.id, u.reseller_tier_id, u.total_purchases, u.tier_manual_override,
+                   (SELECT id FROM reseller_tiers 
+                    WHERE upgrade_threshold <= u.total_purchases + %s 
+                    AND is_manual_only = FALSE
+                    ORDER BY level_rank DESC LIMIT 1) as new_tier_id
+            FROM users u WHERE u.id = %s
+        ''', (order['final_amount'], order['user_id']))
+        user = cursor.fetchone()
+        
+        if user and user['new_tier_id'] and not user['tier_manual_override']:
+            if user['new_tier_id'] != user['reseller_tier_id']:
+                cursor.execute('''
+                    UPDATE users SET reseller_tier_id = %s WHERE id = %s
+                ''', (user['new_tier_id'], user['id']))
+                
+                # Get tier name
+                cursor.execute('SELECT name FROM reseller_tiers WHERE id = %s', (user['new_tier_id'],))
+                new_tier = cursor.fetchone()
+                
+                # Notify user of tier upgrade
+                create_notification(
+                    user['id'],
+                    'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
+                    f'คุณได้รับการอัพเกรดเป็นระดับ {new_tier["name"]}',
+                    'success',
+                    'tier',
+                    user['new_tier_id']
+                )
+        
+        conn.commit()
+        
+        # Notify user
+        create_notification(
+            order['user_id'],
+            'การชำระเงินได้รับการอนุมัติ',
+            f'คำสั่งซื้อ #{order_id} ได้รับการอนุมัติแล้ว',
+            'success',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'Order approved and stock deducted'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/reject', methods=['POST'])
+@admin_required
+def reject_order(order_id):
+    """Reject order payment"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get order
+        cursor.execute('SELECT id, status, user_id FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        if order['status'] != 'under_review':
+            return jsonify({'error': 'Order is not under review'}), 400
+        
+        # Update order status
+        cursor.execute('''
+            UPDATE orders SET status = 'rejected', notes = CONCAT(COALESCE(notes, ''), ' [Rejected: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (reason, order_id))
+        
+        # Update slip status
+        cursor.execute('''
+            UPDATE payment_slips SET status = 'rejected', admin_notes = %s, reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+            WHERE order_id = %s AND status = 'pending'
+        ''', (reason, admin_id, order_id))
+        
+        conn.commit()
+        
+        # Notify user
+        create_notification(
+            order['user_id'],
+            'สลิปไม่ถูกต้อง',
+            f'คำสั่งซื้อ #{order_id} ไม่ผ่านการตรวจสอบ: {reason}',
+            'warning',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'Order rejected'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/cancel', methods=['POST'])
+@admin_required
+def cancel_order(order_id):
+    """Cancel order"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE orders SET status = 'cancelled', notes = CONCAT(COALESCE(notes, ''), ' [Cancelled: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND status IN ('pending_payment', 'under_review', 'rejected')
+            RETURNING id
+        ''', (reason, order_id))
+        
+        if cursor.fetchone() is None:
+            return jsonify({'error': 'Cannot cancel this order'}), 400
+        
+        conn.commit()
+        return jsonify({'message': 'Order cancelled'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if cursor:

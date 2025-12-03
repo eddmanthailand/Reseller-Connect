@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สินค้า - Reseller</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .catalog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .tier-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .tier-badge.bronze { background: linear-gradient(135deg, #cd7f32, #b87333); color: white; }
+        .tier-badge.silver { background: linear-gradient(135deg, #c0c0c0, #a8a8a8); color: #333; }
+        .tier-badge.gold { background: linear-gradient(135deg, #ffd700, #ffb700); color: #333; }
+        .tier-badge.platinum { background: linear-gradient(135deg, #e5e4e2, #c0c0c0); color: #333; }
+        
+        .cart-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        
+        .cart-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .cart-badge {
+            background: white;
+            color: #a855f7;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .product-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .product-image.placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .product-info {
+            padding: 16px;
+        }
+        
+        .product-brand {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+        }
+        
+        .product-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .product-sku {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 12px;
+        }
+        
+        .product-pricing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .original-price {
+            text-decoration: line-through;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+        }
+        
+        .discounted-price {
+            color: #22c55e;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        .discount-badge {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .product-stock {
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .product-stock.low {
+            color: #ef4444;
+        }
+        
+        /* Product Detail Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            max-width: 800px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin: 20px 0;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .product-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        @media (max-width: 768px) {
+            .product-detail-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .product-images-gallery {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .main-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .thumbnail-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+        
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        
+        .thumbnail.active,
+        .thumbnail:hover {
+            opacity: 1;
+            outline: 2px solid #a855f7;
+        }
+        
+        .sku-selector {
+            margin: 16px 0;
+        }
+        
+        .sku-option {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .sku-option-btn {
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .sku-option-btn:hover {
+            border-color: #a855f7;
+        }
+        
+        .sku-option-btn.selected {
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-color: transparent;
+        }
+        
+        .sku-option-btn.out-of-stock {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        
+        .qty-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        
+        .qty-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .qty-input {
+            width: 60px;
+            text-align: center;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 8px;
+        }
+        
+        .add-to-cart-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: opacity 0.2s;
+        }
+        
+        .add-to-cart-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .add-to-cart-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .search-bar input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 10px;
+        }
+        
+        .search-bar input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Reseller</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/reseller" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                        <span>หน้าหลัก</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/reseller/catalog" class="nav-link active">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <span>สินค้า</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/reseller/cart" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="9" cy="21" r="1"/>
+                            <circle cx="20" cy="21" r="1"/>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                        </svg>
+                        <span>ตะกร้าสินค้า</span>
+                        <span class="cart-count-badge" id="sidebarCartCount" style="display: none;">0</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/reseller/orders" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        <span>คำสั่งซื้อ</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+                <h1>รายการสินค้า</h1>
+                <div class="user-info">
+                    <span id="tierBadge" class="tier-badge"></span>
+                    <a href="/reseller/cart" class="cart-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="9" cy="21" r="1"/>
+                            <circle cx="20" cy="21" r="1"/>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                        </svg>
+                        ตะกร้า
+                        <span class="cart-badge" id="cartCount">0</span>
+                    </a>
+                    <a href="/logout" class="btn-primary btn-gray" style="margin-left: 12px;">
+                        ออกจากระบบ
+                    </a>
+                </div>
+            </header>
+
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="ค้นหาสินค้า...">
+            </div>
+
+            <div class="product-grid" id="productGrid">
+                <!-- Products will be loaded here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Product Detail Modal -->
+    <div class="modal" id="productModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalProductName">รายละเอียดสินค้า</h2>
+                <button class="close-btn" onclick="closeModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="product-detail-grid">
+                    <div class="product-images-gallery">
+                        <img id="mainImage" class="main-image" src="" alt="Product">
+                        <div class="thumbnail-row" id="thumbnailRow"></div>
+                    </div>
+                    <div class="product-detail-info">
+                        <p id="modalBrand" class="product-brand"></p>
+                        <p id="modalSku" class="product-sku"></p>
+                        
+                        <div class="product-pricing" id="modalPricing"></div>
+                        
+                        <div id="optionsContainer"></div>
+                        
+                        <div class="quantity-selector">
+                            <label>จำนวน:</label>
+                            <button class="qty-btn" onclick="changeQty(-1)">-</button>
+                            <input type="number" class="qty-input" id="qtyInput" value="1" min="1">
+                            <button class="qty-btn" onclick="changeQty(1)">+</button>
+                            <span id="stockInfo" style="margin-left: 12px; color: rgba(255,255,255,0.6);">คลัง: 0</span>
+                        </div>
+                        
+                        <button class="add-to-cart-btn" id="addToCartBtn" onclick="addToCart()">
+                            เพิ่มลงตะกร้า
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        let products = [];
+        let currentProduct = null;
+        let selectedSkuId = null;
+        let userTier = null;
+        
+        const API_URL = '/api';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProducts();
+            loadCart();
+        });
+        
+        async function loadProducts() {
+            try {
+                const response = await fetch(`${API_URL}/reseller/products`);
+                if (response.ok) {
+                    const data = await response.json();
+                    userTier = data.tier;
+                    products = data.products;
+                    renderProducts(products);
+                    updateTierBadge();
+                }
+            } catch (error) {
+                console.error('Error loading products:', error);
+            }
+        }
+        
+        function updateTierBadge() {
+            const badge = document.getElementById('tierBadge');
+            if (userTier && userTier.tier_name) {
+                const tierClass = userTier.tier_name.toLowerCase();
+                badge.className = `tier-badge ${tierClass}`;
+                badge.textContent = userTier.tier_name;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        function renderProducts(productList) {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = productList.map(product => `
+                <div class="product-card" onclick="openProductModal(${product.id})">
+                    ${product.image_url 
+                        ? `<img src="${product.image_url}" class="product-image" alt="${product.name}">`
+                        : `<div class="product-image placeholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                           </div>`
+                    }
+                    <div class="product-info">
+                        <p class="product-brand">${product.brand_name || '-'}</p>
+                        <h3 class="product-name">${product.name}</h3>
+                        <p class="product-sku">${product.parent_sku || ''}</p>
+                        <div class="product-pricing">
+                            ${product.discount_percent > 0 ? `
+                                <span class="original-price">${formatPrice(product.min_price)}${product.max_price !== product.min_price ? ' - ' + formatPrice(product.max_price) : ''}</span>
+                                <span class="discounted-price">${formatPrice(product.discounted_min_price)}${product.discounted_max_price !== product.discounted_min_price ? ' - ' + formatPrice(product.discounted_max_price) : ''}</span>
+                                <span class="discount-badge">-${product.discount_percent}%</span>
+                            ` : `
+                                <span class="discounted-price">${formatPrice(product.min_price)}${product.max_price !== product.min_price ? ' - ' + formatPrice(product.max_price) : ''}</span>
+                            `}
+                        </div>
+                        <p class="product-stock ${product.total_stock < 10 ? 'low' : ''}">
+                            คลัง: ${product.total_stock || 0} | ${product.sku_count || 0} รูปแบบ
+                        </p>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function formatPrice(price) {
+            return '฿' + (price || 0).toLocaleString('th-TH', { minimumFractionDigits: 0 });
+        }
+        
+        async function openProductModal(productId) {
+            try {
+                const response = await fetch(`${API_URL}/reseller/products/${productId}`);
+                if (response.ok) {
+                    currentProduct = await response.json();
+                    selectedSkuId = null;
+                    renderProductModal();
+                    document.getElementById('productModal').classList.add('active');
+                }
+            } catch (error) {
+                console.error('Error loading product:', error);
+            }
+        }
+        
+        function renderProductModal() {
+            const p = currentProduct;
+            document.getElementById('modalProductName').textContent = p.name;
+            document.getElementById('modalBrand').textContent = p.brand_name || '';
+            document.getElementById('modalSku').textContent = p.parent_sku || '';
+            
+            // Images
+            if (p.images && p.images.length > 0) {
+                document.getElementById('mainImage').src = p.images[0].image_url;
+                document.getElementById('thumbnailRow').innerHTML = p.images.map((img, idx) => `
+                    <img src="${img.image_url}" class="thumbnail ${idx === 0 ? 'active' : ''}" 
+                         onclick="selectImage(${idx}, '${img.image_url}')">
+                `).join('');
+            } else {
+                document.getElementById('mainImage').src = '';
+                document.getElementById('thumbnailRow').innerHTML = '';
+            }
+            
+            // Options/SKU selector
+            renderOptions();
+            
+            // Update pricing
+            updateModalPricing();
+        }
+        
+        function renderOptions() {
+            const container = document.getElementById('optionsContainer');
+            const p = currentProduct;
+            
+            if (!p.options || p.options.length === 0) {
+                // No options - just show single SKU
+                if (p.skus && p.skus.length > 0) {
+                    selectedSkuId = p.skus[0].id;
+                    updateModalPricing();
+                }
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.innerHTML = p.options.map(opt => `
+                <div class="sku-selector">
+                    <label class="form-label">${opt.name}:</label>
+                    <div class="sku-option">
+                        ${opt.values.map(val => `
+                            <button class="sku-option-btn" data-option="${opt.name}" data-value="${val.value}">
+                                ${val.value}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+            
+            // Add click handlers
+            container.querySelectorAll('.sku-option-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const optionName = this.dataset.option;
+                    const value = this.dataset.value;
+                    
+                    // Toggle selection in this group
+                    this.parentElement.querySelectorAll('.sku-option-btn').forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                    
+                    // Find matching SKU
+                    findMatchingSku();
+                });
+            });
+        }
+        
+        function findMatchingSku() {
+            const selectedValues = {};
+            document.querySelectorAll('.sku-option-btn.selected').forEach(btn => {
+                selectedValues[btn.dataset.option] = btn.dataset.value;
+            });
+            
+            // Need all options selected
+            if (Object.keys(selectedValues).length !== currentProduct.options.length) {
+                selectedSkuId = null;
+                updateModalPricing();
+                return;
+            }
+            
+            // Find SKU matching all selected values
+            for (const sku of currentProduct.skus) {
+                let matches = true;
+                for (const opt of sku.options) {
+                    if (selectedValues[opt.option_name] !== opt.option_value) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    selectedSkuId = sku.id;
+                    updateModalPricing();
+                    return;
+                }
+            }
+            
+            selectedSkuId = null;
+            updateModalPricing();
+        }
+        
+        function updateModalPricing() {
+            const pricing = document.getElementById('modalPricing');
+            const stockInfo = document.getElementById('stockInfo');
+            const addBtn = document.getElementById('addToCartBtn');
+            
+            if (!currentProduct) return;
+            
+            let price, discountedPrice, stock;
+            
+            if (selectedSkuId) {
+                const sku = currentProduct.skus.find(s => s.id === selectedSkuId);
+                price = sku.price;
+                discountedPrice = sku.discounted_price;
+                stock = sku.stock;
+            } else {
+                // Show price range
+                const minPrice = Math.min(...currentProduct.skus.map(s => s.discounted_price));
+                const maxPrice = Math.max(...currentProduct.skus.map(s => s.discounted_price));
+                price = currentProduct.skus[0].price;
+                discountedPrice = minPrice === maxPrice ? minPrice : `${minPrice} - ${maxPrice}`;
+                stock = currentProduct.skus.reduce((sum, s) => sum + s.stock, 0);
+            }
+            
+            const discount = currentProduct.discount_percent;
+            
+            if (discount > 0) {
+                pricing.innerHTML = `
+                    <span class="original-price">${formatPrice(price)}</span>
+                    <span class="discounted-price">${typeof discountedPrice === 'number' ? formatPrice(discountedPrice) : '฿' + discountedPrice}</span>
+                    <span class="discount-badge">-${discount}%</span>
+                `;
+            } else {
+                pricing.innerHTML = `
+                    <span class="discounted-price">${formatPrice(price)}</span>
+                `;
+            }
+            
+            stockInfo.textContent = `คลัง: ${stock}`;
+            
+            // Enable/disable add button
+            if (!selectedSkuId && currentProduct.options && currentProduct.options.length > 0) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'กรุณาเลือกตัวเลือก';
+            } else if (stock <= 0) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'สินค้าหมด';
+            } else {
+                addBtn.disabled = false;
+                addBtn.textContent = 'เพิ่มลงตะกร้า';
+            }
+        }
+        
+        function selectImage(idx, url) {
+            document.getElementById('mainImage').src = url;
+            document.querySelectorAll('.thumbnail').forEach((t, i) => {
+                t.classList.toggle('active', i === idx);
+            });
+        }
+        
+        function changeQty(delta) {
+            const input = document.getElementById('qtyInput');
+            let val = parseInt(input.value) || 1;
+            val = Math.max(1, val + delta);
+            input.value = val;
+        }
+        
+        async function addToCart() {
+            if (!selectedSkuId) {
+                // If no options, use first SKU
+                if (currentProduct.skus && currentProduct.skus.length > 0 && (!currentProduct.options || currentProduct.options.length === 0)) {
+                    selectedSkuId = currentProduct.skus[0].id;
+                } else {
+                    alert('กรุณาเลือกตัวเลือกสินค้า');
+                    return;
+                }
+            }
+            
+            const quantity = parseInt(document.getElementById('qtyInput').value) || 1;
+            
+            try {
+                const response = await fetch(`${API_URL}/cart/items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sku_id: selectedSkuId,
+                        quantity: quantity
+                    })
+                });
+                
+                if (response.ok) {
+                    closeModal();
+                    loadCart();
+                    alert('เพิ่มสินค้าลงตะกร้าแล้ว');
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'ไม่สามารถเพิ่มสินค้าได้');
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                alert('เกิดข้อผิดพลาด');
+            }
+        }
+        
+        async function loadCart() {
+            try {
+                const response = await fetch(`${API_URL}/cart`);
+                if (response.ok) {
+                    const cart = await response.json();
+                    document.getElementById('cartCount').textContent = cart.total_quantity || 0;
+                    const sidebarCount = document.getElementById('sidebarCartCount');
+                    if (cart.total_quantity > 0) {
+                        sidebarCount.style.display = 'inline';
+                        sidebarCount.textContent = cart.total_quantity;
+                    } else {
+                        sidebarCount.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading cart:', error);
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('productModal').classList.remove('active');
+            currentProduct = null;
+            selectedSkuId = null;
+        }
+        
+        // Close modal on outside click
+        document.getElementById('productModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+        
+        // Search
+        document.getElementById('searchInput').addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            const filtered = products.filter(p => 
+                p.name.toLowerCase().includes(query) ||
+                (p.parent_sku && p.parent_sku.toLowerCase().includes(query)) ||
+                (p.brand_name && p.brand_name.toLowerCase().includes(query))
+            );
+            renderProducts(filtered);
+        });
+    </script>
+</body>
+</html>

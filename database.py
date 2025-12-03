@@ -322,6 +322,177 @@ def init_db():
             )
         ''')
         
+        # Migration: Add total_purchases column to users table if not exists
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'total_purchases'
+                ) THEN
+                    ALTER TABLE users ADD COLUMN total_purchases DECIMAL(12, 2) DEFAULT 0;
+                END IF;
+            END $$;
+        ''')
+        
+        # Create sales_channels table (configurable sales channels)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sales_channels (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                description TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create promptpay_settings table (store PromptPay QR code)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS promptpay_settings (
+                id SERIAL PRIMARY KEY,
+                qr_image_url TEXT,
+                account_name VARCHAR(255),
+                account_number VARCHAR(50),
+                is_active BOOLEAN DEFAULT TRUE,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_by INTEGER REFERENCES users(id)
+            )
+        ''')
+        
+        # Create carts table (shopping cart per reseller)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS carts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                status VARCHAR(20) DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, status)
+            )
+        ''')
+        
+        # Create cart_items table (items in cart)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cart_items (
+                id SERIAL PRIMARY KEY,
+                cart_id INTEGER NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+                sku_id INTEGER NOT NULL REFERENCES skus(id) ON DELETE CASCADE,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price DECIMAL(10, 2) NOT NULL,
+                tier_discount_percent DECIMAL(5, 2) DEFAULT 0,
+                customization_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(cart_id, sku_id)
+            )
+        ''')
+        
+        # Create orders table (order records)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                order_number VARCHAR(50) UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                status VARCHAR(30) DEFAULT 'pending_payment',
+                channel_id INTEGER REFERENCES sales_channels(id),
+                total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
+                discount_amount DECIMAL(12, 2) DEFAULT 0,
+                final_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
+                tier_id INTEGER REFERENCES reseller_tiers(id),
+                notes TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                paid_at TIMESTAMP,
+                cancelled_at TIMESTAMP
+            )
+        ''')
+        
+        # Create order_items table (items in order)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_items (
+                id SERIAL PRIMARY KEY,
+                order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                sku_id INTEGER NOT NULL REFERENCES skus(id),
+                product_name VARCHAR(255) NOT NULL,
+                sku_code VARCHAR(100) NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price DECIMAL(10, 2) NOT NULL,
+                tier_discount_percent DECIMAL(5, 2) DEFAULT 0,
+                discount_amount DECIMAL(10, 2) DEFAULT 0,
+                subtotal DECIMAL(10, 2) NOT NULL,
+                customization_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create payment_slips table (payment slip uploads)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS payment_slips (
+                id SERIAL PRIMARY KEY,
+                order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                slip_image_url TEXT NOT NULL,
+                amount DECIMAL(12, 2),
+                transfer_date TIMESTAMP,
+                status VARCHAR(20) DEFAULT 'pending',
+                verified_by INTEGER REFERENCES users(id),
+                verified_at TIMESTAMP,
+                reject_reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create stock_transactions table (stock movement log)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stock_transactions (
+                id SERIAL PRIMARY KEY,
+                sku_id INTEGER NOT NULL REFERENCES skus(id),
+                quantity_change INTEGER NOT NULL,
+                quantity_before INTEGER NOT NULL,
+                quantity_after INTEGER NOT NULL,
+                transaction_type VARCHAR(30) NOT NULL,
+                reference_type VARCHAR(30),
+                reference_id INTEGER,
+                channel_id INTEGER REFERENCES sales_channels(id),
+                reason TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create notifications table (in-app notifications)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                type VARCHAR(50) DEFAULT 'info',
+                reference_type VARCHAR(30),
+                reference_id INTEGER,
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Insert default sales channels
+        default_channels = [
+            ('ระบบออนไลน์', 'การสั่งซื้อผ่านระบบตะกร้าสินค้า', 1),
+            ('LINE', 'ขายผ่าน LINE Official Account', 2),
+            ('หน้าร้าน', 'ขายหน้าร้าน Walk-in', 3),
+            ('Facebook', 'ขายผ่าน Facebook Page/Marketplace', 4),
+            ('Lazada', 'ขายผ่าน Lazada', 5),
+            ('Shopee', 'ขายผ่าน Shopee', 6),
+            ('TikTok', 'ขายผ่าน TikTok Shop', 7)
+        ]
+        for channel in default_channels:
+            cursor.execute('''
+                INSERT INTO sales_channels (name, description, sort_order)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (name) DO NOTHING
+            ''', channel)
+        
         # Insert default roles
         roles = ['Super Admin', 'Assistant Admin', 'Reseller']
         for role in roles:

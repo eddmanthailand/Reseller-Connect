@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จัดการคำสั่งซื้อ - Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .status-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .status-tab {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-tab:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .status-tab.active {
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            color: white;
+        }
+        
+        .status-tab .count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+        
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .orders-table th {
+            text-align: left;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        .orders-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .orders-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .order-number-cell {
+            font-weight: 600;
+        }
+        
+        .order-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+        
+        .order-status.pending_payment {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+        
+        .order-status.under_review {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+        
+        .order-status.paid {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
+        .order-status.rejected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .order-status.cancelled {
+            background: rgba(107, 114, 128, 0.2);
+            color: #6b7280;
+        }
+        
+        .pending-badge {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        
+        .btn-review {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+        
+        .btn-review:hover {
+            background: rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-approve {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
+        .btn-approve:hover {
+            background: rgba(34, 197, 94, 0.3);
+        }
+        
+        .btn-reject {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .btn-reject:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            max-width: 700px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin: 20px 0;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .detail-section {
+            margin-bottom: 20px;
+        }
+        
+        .detail-section h4 {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .detail-value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .slip-image {
+            max-width: 300px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .action-buttons button {
+            flex: 1;
+            padding: 14px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-size: 14px;
+        }
+        
+        .btn-approve-lg {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+        
+        .btn-reject-lg {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .reject-reason {
+            margin-top: 12px;
+        }
+        
+        .reject-reason textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-radius: 8px;
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .reject-reason textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.4;
+        }
+        
+        .empty-state h3 {
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        
+        .detail-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .detail-item {
+            display: flex;
+            gap: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        
+        .detail-item-image {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .detail-item-info {
+            flex: 1;
+        }
+        
+        .detail-item-name {
+            font-weight: 500;
+            color: #fff;
+            font-size: 13px;
+        }
+        
+        .detail-item-sku {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .detail-item-price {
+            text-align: right;
+            color: #fff;
+            font-weight: 500;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/admin/dashboard" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                        <span>หน้าหลัก</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/users" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span>จัดการผู้ใช้</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/orders" class="nav-link active">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        <span>คำสั่งซื้อ</span>
+                        <span class="pending-badge" id="pendingCount" style="display: none;">0</span>
+                    </a>
+                </li>
+                <li class="nav-item has-submenu">
+                    <a href="#" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <span>จัดการสินค้า</span>
+                        <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </a>
+                    <ul class="submenu">
+                        <li><a href="/admin/products">รายการสินค้า</a></li>
+                        <li><a href="/admin/products/create">เพิ่มสินค้าใหม่</a></li>
+                        <li><a href="/admin/brands">จัดการแบรนด์</a></li>
+                        <li><a href="/admin/categories">จัดการหมวดหมู่</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/tier-settings" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        <span>ตั้งค่าระดับตัวแทน</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/admin/settings" class="nav-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span>ตั้งค่าระบบ</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <button class="menu-toggle" id="menuToggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+                <h1>จัดการคำสั่งซื้อ</h1>
+                <div class="user-info">
+                    <span id="currentUser">Loading...</span>
+                    <a href="/logout" class="btn-primary btn-gray">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        ออกจากระบบ
+                    </a>
+                </div>
+            </header>
+
+            <div class="orders-header">
+                <div class="status-tabs">
+                    <button class="status-tab active" data-status="">ทั้งหมด</button>
+                    <button class="status-tab" data-status="under_review">รอตรวจสอบ <span class="count" id="reviewCount">0</span></button>
+                    <button class="status-tab" data-status="pending_payment">รอชำระเงิน</button>
+                    <button class="status-tab" data-status="paid">ชำระแล้ว</button>
+                    <button class="status-tab" data-status="rejected">ปฏิเสธ</button>
+                    <button class="status-tab" data-status="cancelled">ยกเลิก</button>
+                </div>
+            </div>
+
+            <div id="ordersContainer">
+                <!-- Orders loaded here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Order Detail Modal -->
+    <div class="modal" id="orderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalOrderNumber">รายละเอียดคำสั่งซื้อ</h2>
+                <button class="close-btn" onclick="closeModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Order detail loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        const API_URL = '/api';
+        let orders = [];
+        let currentOrder = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentUser();
+            loadOrders();
+            setupTabs();
+        });
+        
+        function setupTabs() {
+            document.querySelectorAll('.status-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    loadOrders(this.dataset.status);
+                });
+            });
+        }
+        
+        async function loadOrders(status = '') {
+            try {
+                let url = `${API_URL}/admin/orders`;
+                if (status) url += `?status=${status}`;
+                
+                const response = await fetch(url);
+                if (response.ok) {
+                    orders = await response.json();
+                    renderOrders();
+                    updateCounts();
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+        
+        function updateCounts() {
+            const reviewCount = orders.filter(o => o.status === 'under_review').length;
+            document.getElementById('reviewCount').textContent = reviewCount;
+            
+            const pendingBadge = document.getElementById('pendingCount');
+            if (reviewCount > 0) {
+                pendingBadge.style.display = 'inline';
+                pendingBadge.textContent = reviewCount;
+            } else {
+                pendingBadge.style.display = 'none';
+            }
+        }
+        
+        function formatPrice(price) {
+            return '฿' + (price || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        }
+        
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('th-TH', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        function getStatusText(status) {
+            const texts = {
+                'pending_payment': 'รอชำระเงิน',
+                'under_review': 'รอตรวจสอบ',
+                'paid': 'ชำระแล้ว',
+                'rejected': 'ถูกปฏิเสธ',
+                'cancelled': 'ยกเลิก'
+            };
+            return texts[status] || status;
+        }
+        
+        function renderOrders() {
+            const container = document.getElementById('ordersContainer');
+            
+            if (orders.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <h3>ไม่มีคำสั่งซื้อ</h3>
+                        <p>ยังไม่มีคำสั่งซื้อในระบบ</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>เลขคำสั่งซื้อ</th>
+                            <th>ลูกค้า</th>
+                            <th>ช่องทาง</th>
+                            <th>สถานะ</th>
+                            <th>ยอดรวม</th>
+                            <th>วันที่</th>
+                            <th>จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orders.map(order => `
+                            <tr>
+                                <td class="order-number-cell">${order.order_number}</td>
+                                <td>${order.customer_name || order.username}</td>
+                                <td>${order.channel_name || '-'}</td>
+                                <td>
+                                    <span class="order-status ${order.status}">${getStatusText(order.status)}</span>
+                                    ${order.pending_slips > 0 ? `<span class="pending-badge">${order.pending_slips} สลิปรอ</span>` : ''}
+                                </td>
+                                <td style="font-weight: 600;">${formatPrice(order.final_amount)}</td>
+                                <td style="font-size: 12px; color: rgba(255,255,255,0.6);">${formatDate(order.created_at)}</td>
+                                <td>
+                                    <button class="action-btn btn-review" onclick="viewOrder(${order.id})">
+                                        ดู
+                                    </button>
+                                    ${order.status === 'under_review' ? `
+                                        <button class="action-btn btn-approve" onclick="approveOrder(${order.id})">อนุมัติ</button>
+                                        <button class="action-btn btn-reject" onclick="showRejectModal(${order.id})">ปฏิเสธ</button>
+                                    ` : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        async function viewOrder(orderId) {
+            try {
+                const response = await fetch(`${API_URL}/orders/${orderId}`);
+                if (response.ok) {
+                    currentOrder = await response.json();
+                    renderOrderModal();
+                    document.getElementById('orderModal').classList.add('active');
+                }
+            } catch (error) {
+                console.error('Error loading order:', error);
+            }
+        }
+        
+        function renderOrderModal() {
+            document.getElementById('modalOrderNumber').textContent = currentOrder.order_number;
+            
+            document.getElementById('modalBody').innerHTML = `
+                <div class="detail-section">
+                    <h4>ข้อมูลคำสั่งซื้อ</h4>
+                    <div class="detail-row">
+                        <span class="detail-label">สถานะ</span>
+                        <span class="order-status ${currentOrder.status}">${getStatusText(currentOrder.status)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">ลูกค้า</span>
+                        <span class="detail-value">${currentOrder.customer_name}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">ช่องทาง</span>
+                        <span class="detail-value">${currentOrder.channel_name || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">วันที่สั่ง</span>
+                        <span class="detail-value">${formatDate(currentOrder.created_at)}</span>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>รายการสินค้า</h4>
+                    <div class="detail-items">
+                        ${currentOrder.items.map(item => `
+                            <div class="detail-item">
+                                ${item.image_url 
+                                    ? `<img src="${item.image_url}" class="detail-item-image" alt="${item.product_name}">`
+                                    : `<div class="detail-item-image"></div>`
+                                }
+                                <div class="detail-item-info">
+                                    <div class="detail-item-name">${item.product_name}</div>
+                                    <div class="detail-item-sku">${item.sku_code} x ${item.quantity}</div>
+                                </div>
+                                <div class="detail-item-price">
+                                    ${formatPrice(item.final_price * item.quantity)}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <div class="detail-row">
+                        <span class="detail-label">รวมสินค้า</span>
+                        <span class="detail-value">${formatPrice(currentOrder.total_amount)}</span>
+                    </div>
+                    ${currentOrder.discount_amount > 0 ? `
+                        <div class="detail-row">
+                            <span class="detail-label">ส่วนลด</span>
+                            <span class="detail-value" style="color: #22c55e;">-${formatPrice(currentOrder.discount_amount)}</span>
+                        </div>
+                    ` : ''}
+                    <div class="detail-row" style="font-size: 18px;">
+                        <span class="detail-label">รวมทั้งสิ้น</span>
+                        <span class="detail-value" style="font-weight: 700;">${formatPrice(currentOrder.final_amount)}</span>
+                    </div>
+                </div>
+                
+                ${currentOrder.payment_slips && currentOrder.payment_slips.length > 0 ? `
+                    <div class="detail-section">
+                        <h4>สลิปการชำระเงิน</h4>
+                        ${currentOrder.payment_slips.map(slip => `
+                            <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                <span class="order-status ${slip.status}">${getStatusText(slip.status)}</span>
+                                ${slip.admin_notes ? `<p style="color: #ef4444; font-size: 12px; margin: 8px 0;">${slip.admin_notes}</p>` : ''}
+                                <img src="${slip.slip_image_url}" class="slip-image" alt="Slip" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                ${currentOrder.status === 'under_review' ? `
+                    <div class="action-buttons">
+                        <button class="btn-approve-lg" onclick="approveOrder(${currentOrder.id})">
+                            อนุมัติการชำระเงิน
+                        </button>
+                        <button class="btn-reject-lg" onclick="showRejectForm()">
+                            ปฏิเสธ
+                        </button>
+                    </div>
+                    <div class="reject-reason" id="rejectForm" style="display: none;">
+                        <textarea id="rejectReason" placeholder="ระบุเหตุผลในการปฏิเสธ..."></textarea>
+                        <button class="btn-reject-lg" onclick="rejectOrder(${currentOrder.id})" style="width: 100%; margin-top: 8px;">
+                            ยืนยันปฏิเสธ
+                        </button>
+                    </div>
+                ` : ''}
+            `;
+        }
+        
+        function showRejectForm() {
+            document.getElementById('rejectForm').style.display = 'block';
+        }
+        
+        async function approveOrder(orderId) {
+            if (!confirm('ต้องการอนุมัติคำสั่งซื้อนี้หรือไม่? ระบบจะตัดสต็อกสินค้าอัตโนมัติ')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    alert('อนุมัติคำสั่งซื้อสำเร็จ');
+                    closeModal();
+                    loadOrders();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'ไม่สามารถอนุมัติได้');
+                }
+            } catch (error) {
+                console.error('Error approving order:', error);
+                alert('เกิดข้อผิดพลาด');
+            }
+        }
+        
+        function showRejectModal(orderId) {
+            currentOrder = { id: orderId };
+            document.getElementById('modalOrderNumber').textContent = 'ปฏิเสธคำสั่งซื้อ';
+            document.getElementById('modalBody').innerHTML = `
+                <div class="reject-reason">
+                    <p style="margin-bottom: 12px; color: rgba(255,255,255,0.8);">กรุณาระบุเหตุผลในการปฏิเสธ:</p>
+                    <textarea id="rejectReason" placeholder="เช่น สลิปไม่ชัด, ยอดไม่ตรง, สลิปปลอม..."></textarea>
+                    <button class="btn-reject-lg" onclick="rejectOrder(${orderId})" style="width: 100%; margin-top: 12px;">
+                        ยืนยันปฏิเสธ
+                    </button>
+                </div>
+            `;
+            document.getElementById('orderModal').classList.add('active');
+        }
+        
+        async function rejectOrder(orderId) {
+            const reason = document.getElementById('rejectReason').value.trim();
+            if (!reason) {
+                alert('กรุณาระบุเหตุผลในการปฏิเสธ');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/orders/${orderId}/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+                
+                if (response.ok) {
+                    alert('ปฏิเสธคำสั่งซื้อแล้ว');
+                    closeModal();
+                    loadOrders();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'ไม่สามารถปฏิเสธได้');
+                }
+            } catch (error) {
+                console.error('Error rejecting order:', error);
+                alert('เกิดข้อผิดพลาด');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('orderModal').classList.remove('active');
+            currentOrder = null;
+        }
+        
+        document.getElementById('orderModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+    </script>
+</body>
+</html>
