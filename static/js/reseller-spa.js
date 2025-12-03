@@ -357,9 +357,23 @@ function openProductModal(product) {
         };
     });
     
-    selectedSkuId = currentProductSkus.length > 0 ? currentProductSkus[0].id : null;
+    // Find first SKU with stock > 0
+    const firstAvailableSku = currentProductSkus.find(s => s.stock > 0);
+    selectedSkuId = firstAvailableSku ? firstAvailableSku.id : (currentProductSkus.length > 0 ? currentProductSkus[0].id : null);
     
     const hasOptions = product.options && product.options.length > 0;
+    
+    // Build a map of option values with stock info
+    const optionStockMap = {};
+    currentProductSkus.forEach(sku => {
+        Object.entries(sku.variant_values || {}).forEach(([optName, optVal]) => {
+            const key = `${optName}:${optVal}`;
+            if (!optionStockMap[key]) {
+                optionStockMap[key] = { totalStock: 0 };
+            }
+            optionStockMap[key].totalStock += (sku.stock || 0);
+        });
+    });
     
     let optionsHtml = '';
     if (hasOptions) {
@@ -371,13 +385,26 @@ function openProductModal(product) {
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${values.map((val, idx) => {
                         const valStr = typeof val === 'object' ? val.value : val;
+                        const stockKey = `${opt.name}:${valStr}`;
+                        const stockInfo = optionStockMap[stockKey] || { totalStock: 0 };
+                        const isOutOfStock = stockInfo.totalStock <= 0;
+                        const isFirstAvailable = !isOutOfStock && idx === values.findIndex(v => {
+                            const vs = typeof v === 'object' ? v.value : v;
+                            const sk = `${opt.name}:${vs}`;
+                            return (optionStockMap[sk]?.totalStock || 0) > 0;
+                        });
                         return `
-                        <button type="button" class="option-btn ${idx === 0 ? 'active' : ''}" 
+                        <button type="button" class="option-btn ${isFirstAvailable ? 'active' : ''}" 
                                 data-option="${opt.name}" data-value="${valStr}"
                                 onclick="selectOption(this, '${opt.name}', '${valStr}')"
-                                style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); 
-                                       background: ${idx === 0 ? 'var(--primary)' : 'transparent'}; color: white; cursor: pointer;">
-                            ${valStr}
+                                ${isOutOfStock ? 'disabled' : ''}
+                                style="padding: 8px 16px; border-radius: 8px; border: 1px solid ${isOutOfStock ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)'}; 
+                                       background: ${isFirstAvailable ? 'var(--primary)' : 'transparent'}; 
+                                       color: ${isOutOfStock ? 'rgba(255,255,255,0.3)' : 'white'}; 
+                                       cursor: ${isOutOfStock ? 'not-allowed' : 'pointer'};
+                                       text-decoration: ${isOutOfStock ? 'line-through' : 'none'};
+                                       position: relative;">
+                            ${valStr}${isOutOfStock ? ' <span style="font-size:10px;">(หมด)</span>' : ''}
                         </button>
                     `}).join('')}
                 </div>
@@ -448,11 +475,11 @@ function openProductModal(product) {
     }
     
     document.getElementById('productModalContent').innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
-            <div style="padding: 20px; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: 400px;">
+            <div style="padding: 16px; background: rgba(255,255,255,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 ${mainImage 
-                    ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" style="max-width: 100%; max-height: 280px; object-fit: contain;">`
-                    : `<div style="width: 200px; height: 200px; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" style="width: 100%; height: 320px; object-fit: contain;">`
+                    : `<div style="width: 100%; height: 320px; background: rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                        </div>`
                 }
@@ -550,10 +577,25 @@ function changeMainImage(imageUrl) {
 function showSizeChart(imageUrl) {
     const overlay = document.createElement('div');
     overlay.id = 'sizeChartOverlay';
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; cursor: pointer;';
-    overlay.innerHTML = `<img src="${imageUrl}" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 12px;">`;
-    overlay.onclick = () => overlay.remove();
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    overlay.innerHTML = `
+        <div style="position: relative; max-width: 90%; max-height: 90%;">
+            <button onclick="closeSizeChart()" 
+                    style="position: absolute; top: -40px; right: 0; background: var(--primary); border: none; 
+                           color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; 
+                           font-size: 20px; display: flex; align-items: center; justify-content: center;
+                           box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                &times;
+            </button>
+            <img src="${imageUrl}" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 12px; background: white;">
+        </div>
+    `;
     document.body.appendChild(overlay);
+}
+
+function closeSizeChart() {
+    const overlay = document.getElementById('sizeChartOverlay');
+    if (overlay) overlay.remove();
 }
 
 let selectedCustomizations = {};

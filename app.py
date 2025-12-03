@@ -4280,6 +4280,271 @@ def get_reseller_product_detail(product_id):
         if conn:
             conn.close()
 
+# ==================== RESELLER CART API ====================
+
+@app.route('/api/reseller/cart', methods=['GET'])
+@login_required
+def get_reseller_cart():
+    """Get current user's cart"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get or create active cart
+        cursor.execute('''
+            INSERT INTO carts (user_id, status) 
+            VALUES (%s, 'active') 
+            ON CONFLICT (user_id, status) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+        ''', (user_id,))
+        cart = cursor.fetchone()
+        cart_id = cart['id']
+        conn.commit()
+        
+        # Get cart items with product info
+        cursor.execute('''
+            SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
+                   ci.customization_data,
+                   s.sku_code, s.stock, p.name as product_name, p.id as product_id,
+                   b.name as brand_name,
+                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
+            FROM cart_items ci
+            JOIN skus s ON s.id = ci.sku_id
+            JOIN products p ON p.id = s.product_id
+            LEFT JOIN brands b ON b.id = p.brand_id
+            WHERE ci.cart_id = %s
+            ORDER BY ci.created_at DESC
+        ''', (cart_id,))
+        
+        items = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            item['unit_price'] = float(item['unit_price']) if item['unit_price'] else 0
+            item['tier_discount_percent'] = float(item['tier_discount_percent']) if item['tier_discount_percent'] else 0
+            item['final_price'] = round(item['unit_price'] * (1 - item['tier_discount_percent']/100), 2)
+            item['subtotal'] = round(item['final_price'] * item['quantity'], 2)
+            items.append(item)
+        
+        total = sum(item['subtotal'] for item in items)
+        
+        return jsonify({
+            'cart_id': cart_id,
+            'items': items,
+            'total': total,
+            'item_count': len(items)
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/cart', methods=['POST'])
+@login_required
+def reseller_add_to_cart():
+    """Add item to cart for reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        sku_id = data.get('sku_id')
+        quantity = data.get('quantity', 1)
+        customization_data = data.get('customization_data')
+        
+        if not sku_id:
+            return jsonify({'error': 'SKU ID is required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user tier
+        cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['reseller_tier_id'] if user else None
+        
+        # Get SKU and product info
+        cursor.execute('''
+            SELECT s.id, s.price, s.stock, p.id as product_id, ptp.discount_percent
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
+            WHERE s.id = %s AND p.status = 'active'
+        ''', (tier_id, sku_id))
+        sku = cursor.fetchone()
+        
+        if not sku:
+            return jsonify({'error': 'SKU not found or product inactive'}), 404
+        
+        if sku['stock'] < quantity:
+            return jsonify({'error': f'Not enough stock (available: {sku["stock"]})'}), 400
+        
+        price = float(sku['price']) if sku['price'] else 0
+        discount = float(sku['discount_percent']) if sku['discount_percent'] else 0
+        
+        # Get or create active cart
+        cursor.execute('''
+            INSERT INTO carts (user_id, status) 
+            VALUES (%s, 'active') 
+            ON CONFLICT (user_id, status) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+        ''', (user_id,))
+        cart = cursor.fetchone()
+        cart_id = cart['id']
+        
+        # Add or update cart item
+        cursor.execute('''
+            INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent, customization_data)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (cart_id, sku_id) DO UPDATE SET 
+                quantity = cart_items.quantity + EXCLUDED.quantity,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+        ''', (cart_id, sku_id, quantity, price, discount, 
+              json.dumps(customization_data) if customization_data else None))
+        
+        conn.commit()
+        
+        # Get updated cart count
+        cursor.execute('SELECT COUNT(*) as count FROM cart_items WHERE cart_id = %s', (cart_id,))
+        count = cursor.fetchone()['count']
+        
+        return jsonify({
+            'success': True,
+            'message': 'Added to cart',
+            'cart_count': count
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/cart/<int:item_id>', methods=['PUT'])
+@login_required
+def reseller_update_cart_item(item_id):
+    """Update cart item quantity for reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        quantity = data.get('quantity', 1)
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify item belongs to user's cart
+        cursor.execute('''
+            SELECT ci.id, ci.sku_id, s.stock
+            FROM cart_items ci
+            JOIN carts c ON c.id = ci.cart_id
+            JOIN skus s ON s.id = ci.sku_id
+            WHERE ci.id = %s AND c.user_id = %s AND c.status = 'active'
+        ''', (item_id, user_id))
+        item = cursor.fetchone()
+        
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
+        
+        if quantity > item['stock']:
+            return jsonify({'error': f'Not enough stock (available: {item["stock"]})'}), 400
+        
+        if quantity <= 0:
+            cursor.execute('DELETE FROM cart_items WHERE id = %s', (item_id,))
+        else:
+            cursor.execute('UPDATE cart_items SET quantity = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', 
+                          (quantity, item_id))
+        
+        conn.commit()
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/cart/<int:item_id>', methods=['DELETE'])
+@login_required
+def reseller_remove_cart_item(item_id):
+    """Remove item from cart for reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Delete item if it belongs to user's cart
+        cursor.execute('''
+            DELETE FROM cart_items 
+            WHERE id = %s AND cart_id IN (
+                SELECT id FROM carts WHERE user_id = %s AND status = 'active'
+            )
+        ''', (item_id, user_id))
+        
+        conn.commit()
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/cart/count', methods=['GET'])
+@login_required
+def get_cart_count():
+    """Get cart item count"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT COALESCE(SUM(ci.quantity), 0) as count
+            FROM cart_items ci
+            JOIN carts c ON c.id = ci.cart_id
+            WHERE c.user_id = %s AND c.status = 'active'
+        ''', (user_id,))
+        result = cursor.fetchone()
+        
+        return jsonify({'count': int(result['count'])}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== RESELLER PAGES ====================
 
 @app.route('/reseller/dashboard')
