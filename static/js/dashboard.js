@@ -1938,7 +1938,7 @@ async function loadSettings() {
 
 async function loadPromptPaySettings() {
     try {
-        const response = await fetch(`${API_URL}/settings/promptpay`);
+        const response = await fetch(`${API_URL}/promptpay-settings`);
         if (response.ok) {
             const data = await response.json();
             
@@ -2111,9 +2111,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     account_name: accountName,
                     account_number: accountNumber
                 };
-                if (qrUrl) settingsData.qr_code_url = qrUrl;
+                if (qrUrl) settingsData.qr_image_url = qrUrl;
                 
-                const response = await fetch(`${API_URL}/settings/promptpay`, {
+                const response = await fetch(`${API_URL}/promptpay-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(settingsData)

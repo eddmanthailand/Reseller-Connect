@@ -1780,6 +1780,239 @@ tr:hover td {
 }
 
 .btn-assign-brand:hover {
-    background: linear-gradient(135deg, rgba(147, 51, 234, 0.5), rgba(219, 39, 119, 0.5));
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.5), rgba(219, 39, 219, 0.5));
     border-color: rgba(147, 51, 234, 0.6);
+}
+
+/* ==========================================
+   Settings Page Styles
+   ========================================== */
+
+.settings-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.settings-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 20px;
+}
+
+.settings-card h3 svg {
+    opacity: 0.9;
+}
+
+/* Form Inputs */
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.form-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 8px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+/* Primary Button */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Success Button (Save) */
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.btn-success:hover {
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+/* QR Upload Area */
+.qr-upload-area {
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 20px;
+}
+
+.qr-upload-area:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.qr-upload-area .placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.qr-upload-area .placeholder p {
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+/* Channel List */
+.channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.channel-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.channel-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.channel-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.channel-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+}
+
+.channel-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.channel-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.toggle-switch.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active::after {
+    left: 25px;
+}
+
+.toggle-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    min-width: 45px;
+    text-align: center;
+}
+
+.toggle-label.active {
+    color: #10b981;
+}
+
+/* Add Channel Form */
+.add-channel-form {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.add-channel-form .form-input {
+    flex: 1;
+}
+
+.add-channel-form .btn-primary {
+    padding: 12px 18px;
+    white-space: nowrap;
 }
