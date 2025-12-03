@@ -338,8 +338,12 @@ async function viewProduct(productId) {
 
 let currentProductSkus = [];
 let selectedSkuId = null;
+let currentProductCustomizations = [];
 
 function openProductModal(product) {
+    // Reset customizations
+    selectedCustomizations = {};
+    currentProductCustomizations = product.customizations || [];
     document.getElementById('productModalTitle').textContent = product.name;
     
     // Transform SKUs to include variant_values
@@ -629,13 +633,32 @@ async function addToCartFromModal() {
         return;
     }
     
+    // Check required customizations
+    const missingRequired = currentProductCustomizations
+        .filter(c => c.is_required)
+        .filter(c => !selectedCustomizations[c.id] || selectedCustomizations[c.id].length === 0);
+    
+    if (missingRequired.length > 0) {
+        showAlert(`กรุณาเลือก: ${missingRequired.map(c => c.name).join(', ')}`, 'error');
+        return;
+    }
+    
     const quantity = parseInt(document.getElementById('modalQty').value) || 1;
+    
+    // Build customization data
+    const customizationData = Object.keys(selectedCustomizations).length > 0 
+        ? selectedCustomizations 
+        : null;
     
     try {
         const response = await fetch(`${RESELLER_API_URL}/reseller/cart`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sku_id: selectedSkuId, quantity })
+            body: JSON.stringify({ 
+                sku_id: selectedSkuId, 
+                quantity,
+                customization_data: customizationData
+            })
         });
         
         const result = await response.json();
@@ -742,7 +765,7 @@ async function updateCartQty(itemId, qty) {
     }
     
     try {
-        const response = await fetch(`${RESELLER_API_URL}/reseller/cart/items/${itemId}`, {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/cart/${itemId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quantity: qty })
@@ -751,24 +774,32 @@ async function updateCartQty(itemId, qty) {
         if (response.ok) {
             loadCart();
             loadCartBadge();
+        } else {
+            const result = await response.json();
+            showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
         }
     } catch (error) {
         console.error('Error updating cart:', error);
+        showAlert('เกิดข้อผิดพลาดในการอัพเดทตะกร้า', 'error');
     }
 }
 
 async function removeFromCart(itemId) {
     try {
-        const response = await fetch(`${RESELLER_API_URL}/reseller/cart/items/${itemId}`, {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/cart/${itemId}`, {
             method: 'DELETE'
         });
         
         if (response.ok) {
+            showAlert('ลบสินค้าออกจากตะกร้าแล้ว', 'success');
             loadCart();
             loadCartBadge();
+        } else {
+            showAlert('เกิดข้อผิดพลาดในการลบสินค้า', 'error');
         }
     } catch (error) {
         console.error('Error removing from cart:', error);
+        showAlert('เกิดข้อผิดพลาดในการลบสินค้า', 'error');
     }
 }
 
