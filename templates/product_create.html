@@ -567,21 +567,33 @@
                         <!-- Brand & Category Selection - First Row -->
                         <div class="grid-2-cols" style="margin-bottom: 20px;">
                             <div>
-                                <label class="form-label">🏷️ แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                                <label class="form-label">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; color: #a78bfa;">
+                                        <path d="M4 7V4h16v3"/>
+                                        <path d="M9 20h6"/>
+                                        <path d="M12 4v16"/>
+                                    </svg>
+                                    แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span>
+                                </label>
                                 <select id="brand_id" class="form-input" required style="cursor: pointer;">
                                     <option value="">-- เลือกแบรนด์ --</option>
                                 </select>
                                 <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
-                                    หากยังไม่มีแบรนด์ <a href="/admin/brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
+                                    หากยังไม่มีแบรนด์ <a href="/admin/dashboard#brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
                                 </p>
                             </div>
                             <div>
-                                <label class="form-label">📂 หมวดหมู่</label>
+                                <label class="form-label">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; color: #fbbf24;">
+                                        <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                    หมวดหมู่
+                                </label>
                                 <select id="category_id" class="form-input" style="cursor: pointer;">
                                     <option value="">-- เลือกหมวดหมู่ (ไม่บังคับ) --</option>
                                 </select>
                                 <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
-                                    หากยังไม่มีหมวดหมู่ <a href="/admin/categories" style="color: rgba(139, 92, 246, 0.9);">สร้างหมวดหมู่ใหม่</a>
+                                    หากยังไม่มีหมวดหมู่ <a href="/admin/dashboard#categories" style="color: rgba(139, 92, 246, 0.9);">สร้างหมวดหมู่ใหม่</a>
                                 </p>
                             </div>
                         </div>
@@ -603,8 +615,13 @@
                         
                         <!-- Shipping Info Section -->
                         <div style="margin-top: 24px; padding: 20px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
-                            <h3 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9);">
-                                📦 ข้อมูลการจัดส่ง
+                            <h3 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); display: flex; align-items: center; gap: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #a78bfa;">
+                                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                                    <path d="m3.3 7 8.7 5 8.7-5"/>
+                                    <path d="M12 22V12"/>
+                                </svg>
+                                ข้อมูลการจัดส่ง
                             </h3>
                             <div class="grid-2-cols" style="gap: 16px;">
                                 <div>
@@ -637,8 +654,13 @@
                         <div style="margin-top: 16px;">
                             <label class="form-label">รูปภาพสินค้า (ไม่บังคับ - สามารถเลือกหลายรูป)</label>
                             <input type="file" id="product_images" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" multiple>
-                            <div id="upload-status" style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7);">
-                                💡 เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)
+                            <div id="upload-status" style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24; flex-shrink: 0;">
+                                    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+                                    <path d="M9 18h6"/>
+                                    <path d="M10 22h4"/>
+                                </svg>
+                                เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)
                             </div>
                             
                             <!-- Image Gallery with Drag & Drop -->
@@ -659,8 +681,13 @@
                         <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
                             <label class="form-label">ตารางไซส์ (ไม่บังคับ)</label>
                             <input type="file" id="size_chart_image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input">
-                            <div style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7);">
-                                💡 อัปโหลดรูปตารางไซส์สินค้า - ขนาดอิสระ (สำหรับสินค้าเสื้อผ้า รองเท้า ฯลฯ)
+                            <div style="margin-top: 8px; font-size: 13px; opacity: 0.8; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24; flex-shrink: 0;">
+                                    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+                                    <path d="M9 18h6"/>
+                                    <path d="M10 22h4"/>
+                                </svg>
+                                อัปโหลดรูปตารางไซส์สินค้า - ขนาดอิสระ (สำหรับสินค้าเสื้อผ้า รองเท้า ฯลฯ)
                             </div>
                             
                             <!-- Size Chart Preview -->
@@ -1158,7 +1185,7 @@
                 statusDiv.style.color = 'rgba(34, 197, 94, 0.9)';
                 
                 setTimeout(() => {
-                    statusDiv.textContent = '💡 เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)';
+                        statusDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24; flex-shrink: 0;"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ (จะอัพโหลดเมื่อกดบันทึกสินค้า)';
                     statusDiv.style.color = 'rgba(255,255,255,0.7)';
                 }, 3000);
             } catch (error) {
