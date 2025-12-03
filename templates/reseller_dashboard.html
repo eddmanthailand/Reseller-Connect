@@ -1294,7 +1294,11 @@
             };
 
             document.getElementById('currentTierName').textContent = tier.current_tier;
-            document.getElementById('tierDescription').textContent = tier.tier_description || 'ตัวแทนจำหน่าย';
+            let tierDesc = tier.tier_description || 'ตัวแทนจำหน่าย';
+            if (tier.current_tier === 'Platinum') {
+                tierDesc = 'ระดับสูงสุด';
+            }
+            document.getElementById('tierDescription').textContent = tierDesc;
             document.getElementById('userTier').textContent = tier.current_tier;
 
             const tierBadge = document.getElementById('tierBadgeIcon');
