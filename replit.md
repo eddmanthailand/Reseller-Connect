@@ -1,6 +1,12 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Low Stock Indicators & Filters (Dec 2025):**
+  - Visual badges on SKU rows: "หมด" (red) for out-of-stock, "ใกล้หมด" (yellow) for low stock
+  - Product row shows aggregate stock warning badge with count of problematic SKUs
+  - Stock filter dropdown in Products page: สต็อกทั้งหมด / สต็อกใกล้หมด / หมดสต็อก
+  - API returns low_stock_count, out_of_stock_count, low_stock_threshold per product
+  - CSS classes: .stock-badge-out, .stock-badge-low for color-coded indicators
 - **Dashboard Home Page Improvements (Dec 2025):**
   - Added sales statistics widgets: ยอดขายวันนี้, ยอดขายเดือนนี้, รอดำเนินการ, สินค้าใกล้หมด
   - Sales chart showing 7-day trend using Chart.js

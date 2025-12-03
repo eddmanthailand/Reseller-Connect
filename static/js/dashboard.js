@@ -818,9 +818,9 @@ function applyFiltersAndRender() {
             return false;
         }
         
-        // Stock filter (use ?? to handle 0 correctly)
-        const lowCount = product.low_stock_count ?? 0;
-        const outCount = product.out_of_stock_count ?? 0;
+        // Stock filter (coerce to number to handle string/number variations)
+        const lowCount = Number(product.low_stock_count ?? 0);
+        const outCount = Number(product.out_of_stock_count ?? 0);
         if (stockFilter === 'low' && lowCount === 0) {
             return false;
         }
