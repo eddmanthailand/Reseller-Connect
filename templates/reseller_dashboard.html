@@ -562,7 +562,9 @@
 
     <script>
         // Use global API_URL or fallback to '/api'
-        const API_URL = window.API_URL || '/api';
+        if (typeof API_URL === 'undefined') {
+            var API_URL = '/api';
+        }
 
         // Load current user info
         async function loadCurrentUser() {
