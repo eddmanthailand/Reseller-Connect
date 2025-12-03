@@ -592,6 +592,40 @@
                             <label class="form-label">คำอธิบาย (ไม่บังคับ)</label>
                             <textarea id="product_description" class="form-input" rows="3" placeholder="รายละเอียดสินค้า..."></textarea>
                         </div>
+                        
+                        <!-- Shipping Info Section -->
+                        <div style="margin-top: 24px; padding: 20px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
+                            <h3 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9);">
+                                📦 ข้อมูลการจัดส่ง
+                            </h3>
+                            <div class="grid-2-cols" style="gap: 16px;">
+                                <div>
+                                    <label class="form-label">น้ำหนัก (กรัม)</label>
+                                    <input type="number" id="product_weight" class="form-input" placeholder="เช่น 250" min="0" step="0.01">
+                                    <p style="margin-top: 4px; font-size: 12px; color: rgba(255, 255, 255, 0.5);">ใช้คำนวณค่าขนส่ง</p>
+                                </div>
+                                <div>
+                                    <label class="form-label">แจ้งเตือนสต็อกต่ำ</label>
+                                    <input type="number" id="low_stock_threshold" class="form-input" placeholder="5" min="0" value="5">
+                                    <p style="margin-top: 4px; font-size: 12px; color: rgba(255, 255, 255, 0.5);">แจ้งเตือนเมื่อสต็อกต่ำกว่านี้</p>
+                                </div>
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <label class="form-label">ขนาดกล่องบรรจุภัณฑ์ (ซม.) - สำหรับคำนวณน้ำหนักเชิงปริมาตร</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <input type="number" id="product_length" class="form-input" placeholder="ยาว" min="0" step="0.01">
+                                    </div>
+                                    <div>
+                                        <input type="number" id="product_width" class="form-input" placeholder="กว้าง" min="0" step="0.01">
+                                    </div>
+                                    <div>
+                                        <input type="number" id="product_height" class="form-input" placeholder="สูง" min="0" step="0.01">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div style="margin-top: 16px;">
                             <label class="form-label">รูปภาพสินค้า (ไม่บังคับ - สามารถเลือกหลายรูป)</label>
                             <input type="file" id="product_images" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" multiple>
@@ -1561,6 +1595,13 @@
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
+            
+            // Shipping info fields
+            const weight = document.getElementById('product_weight').value;
+            const length = document.getElementById('product_length').value;
+            const width = document.getElementById('product_width').value;
+            const height = document.getElementById('product_height').value;
+            const lowStockThreshold = document.getElementById('low_stock_threshold').value;
 
             if (!brandId) {
                 showAlert('กรุณาเลือกแบรนด์', 'warning');
@@ -1650,6 +1691,11 @@
                     description,
                     image_urls: imageUrls,
                     size_chart_image_url: sizeChartImageUrl,
+                    weight: weight ? parseFloat(weight) : null,
+                    length: length ? parseFloat(length) : null,
+                    width: width ? parseFloat(width) : null,
+                    height: height ? parseFloat(height) : null,
+                    low_stock_threshold: lowStockThreshold !== '' ? parseInt(lowStockThreshold) : null,
                     options: options.map(opt => ({
                         name: opt.name,
                         values: opt.values.map((v, idx) => ({ value: v, sort_order: idx }))

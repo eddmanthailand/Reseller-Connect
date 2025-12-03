@@ -1130,6 +1130,7 @@ def get_product(product_id):
                 s.sku_code,
                 s.price,
                 s.stock,
+                s.cost_price,
                 json_agg(
                     json_build_object(
                         'option_id', o.id,
@@ -1143,7 +1144,7 @@ def get_product(product_id):
             LEFT JOIN option_values ov ON svm.option_value_id = ov.id
             LEFT JOIN options o ON ov.option_id = o.id
             WHERE s.product_id = %s
-            GROUP BY s.id, s.sku_code, s.price, s.stock
+            GROUP BY s.id, s.sku_code, s.price, s.stock, s.cost_price
             ORDER BY s.sku_code
         ''', (product_id,))
         
@@ -1191,13 +1192,22 @@ def create_product():
         if cursor.fetchone():
             return jsonify({'error': 'Parent SKU already exists'}), 400
         
-        # Insert product with brand_id and status
+        # Insert product with brand_id, status, and shipping info
         status = data.get('status', 'active')
+        low_stock = data.get('low_stock_threshold')
+        if low_stock is not None and low_stock != '':
+            low_stock = int(low_stock)
+        else:
+            low_stock = None
         cursor.execute('''
-            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url, status, 
+                                  weight, length, width, height, low_stock_threshold)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), data.get('size_chart_image_url'), status))
+        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), 
+              data.get('size_chart_image_url'), status,
+              data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
+              low_stock))
         
         product_id = cursor.fetchone()['id']
         
@@ -1254,16 +1264,17 @@ def create_product():
             if not sku_data.get('sku_code'):
                 continue
             
-            # Insert SKU
+            # Insert SKU with cost_price
             cursor.execute('''
-                INSERT INTO skus (product_id, sku_code, price, stock)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO skus (product_id, sku_code, price, stock, cost_price)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
             ''', (
                 product_id,
                 sku_data['sku_code'],
                 sku_data.get('price', 0),
-                sku_data.get('stock', 0)
+                sku_data.get('stock', 0),
+                sku_data.get('cost_price')
             ))
             
             sku_id = cursor.fetchone()['id']
@@ -1366,13 +1377,22 @@ def update_product(product_id):
         if not cursor.fetchone():
             return jsonify({'error': 'Product not found'}), 404
         
-        # Update basic product information
+        # Update basic product information including shipping info
         status = data.get('status', 'active')
+        low_stock = data.get('low_stock_threshold')
+        if low_stock is not None and low_stock != '':
+            low_stock = int(low_stock)
+        else:
+            low_stock = None
         cursor.execute('''
             UPDATE products 
-            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, status = %s, updated_at = CURRENT_TIMESTAMP
+            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, status = %s,
+                weight = %s, length = %s, width = %s, height = %s, low_stock_threshold = %s,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), status, product_id))
+        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), status,
+              data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
+              low_stock, product_id))
         
         # Update product category
         cursor.execute('DELETE FROM product_categories WHERE product_id = %s', (product_id,))
@@ -1469,8 +1489,8 @@ def update_product(product_id):
                               (existing_options[old_option_name]['option_id'],))
         
         # ========== DIFF-BASED SKUs UPDATE ==========
-        # Get existing SKUs
-        cursor.execute('SELECT id, sku_code, price, stock FROM skus WHERE product_id = %s', (product_id,))
+        # Get existing SKUs including cost_price
+        cursor.execute('SELECT id, sku_code, price, stock, cost_price FROM skus WHERE product_id = %s', (product_id,))
         existing_skus = {row['sku_code']: row for row in cursor.fetchall()}
         
         # Get SKU codes that have order references (cannot be deleted)
@@ -1494,15 +1514,16 @@ def update_product(product_id):
             new_sku_codes.add(sku_code)
             new_price = sku_data.get('price', 0)
             new_stock = sku_data.get('stock', 0)
+            new_cost_price = sku_data.get('cost_price')
             variant_values = sku_data.get('variant_values', [])
             
             if sku_code in existing_skus:
-                # SKU exists - UPDATE price and stock (preserve sku_id)
+                # SKU exists - UPDATE price, stock, and cost_price (preserve sku_id)
                 sku_id = existing_skus[sku_code]['id']
                 cursor.execute('''
-                    UPDATE skus SET price = %s, stock = %s, updated_at = CURRENT_TIMESTAMP
+                    UPDATE skus SET price = %s, stock = %s, cost_price = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
-                ''', (new_price, new_stock, sku_id))
+                ''', (new_price, new_stock, new_cost_price, sku_id))
                 
                 # Update sku_values_map if variant_values changed
                 cursor.execute('DELETE FROM sku_values_map WHERE sku_id = %s', (sku_id,))
@@ -1513,11 +1534,11 @@ def update_product(product_id):
                             cursor.execute('INSERT INTO sku_values_map (sku_id, option_value_id) VALUES (%s, %s)',
                                           (sku_id, value_id))
             else:
-                # New SKU - INSERT
+                # New SKU - INSERT with cost_price
                 cursor.execute('''
-                    INSERT INTO skus (product_id, sku_code, price, stock)
-                    VALUES (%s, %s, %s, %s) RETURNING id
-                ''', (product_id, sku_code, new_price, new_stock))
+                    INSERT INTO skus (product_id, sku_code, price, stock, cost_price)
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id
+                ''', (product_id, sku_code, new_price, new_stock, new_cost_price))
                 sku_id = cursor.fetchone()['id']
                 
                 # Map to option values

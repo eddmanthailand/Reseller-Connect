@@ -1,6 +1,12 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Product Shipping & Cost Fields (Dec 2025):**
+  - Added weight (grams), length, width, height (cm) columns to products table for shipping calculation
+  - Added cost_price column to skus table for profit margin calculation
+  - Added low_stock_threshold column to products table for stock alerts
+  - UI forms updated with "Shipping Info" section in product create/edit
+  - API endpoints accept and return new fields
 - **Product Update Logic - Diff-based Approach (Dec 2025):**
   - Changed from "delete all and recreate" to "diff-based update" strategy
   - SKU IDs are now preserved when editing products (maintains referential integrity with order_items)
@@ -123,7 +129,7 @@ The backend is built with Flask 3.1.2 and Flask-CORS, using a Neon PostgreSQL da
 ### Database Schema
 **User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override` column)
 **Brand Management:** `brands`, `admin_brand_access` (for role-based brand access control)
-**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands), `size_chart_image_url`, and `status` (active/inactive/draft, default active).
+**Product Management (6-Table SPU/SKU Architecture):** `products`, `product_images`, `options`, `option_values`, `skus`, `sku_values_map`. The `products` table includes `brand_id` (FK to brands), `size_chart_image_url`, `status` (active/inactive/draft), `weight`, `length`, `width`, `height`, `low_stock_threshold`. The `skus` table includes `cost_price` for profit calculation.
 **Category Management:** `categories`, `product_categories` (junction table for product-category associations)
 **Product Customizations:** `product_customizations`, `customization_choices` (for non-SKU product variations with optional pricing)
 **Tier Pricing:** `product_tier_pricing` (stores discount_percent per product/tier combination)
