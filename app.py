@@ -3958,6 +3958,197 @@ def upload_payment_slip(order_id):
         if conn:
             conn.close()
 
+# ==================== ADMIN DASHBOARD STATISTICS ====================
+
+@app.route('/api/admin/dashboard-stats', methods=['GET'])
+@admin_required
+def get_dashboard_stats():
+    """Get dashboard statistics for admin home page"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Today's date range
+        cursor.execute("SELECT CURRENT_DATE as today")
+        today = cursor.fetchone()['today']
+        
+        # Sales today (paid orders created today)
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as total,
+                   COUNT(*) as count
+            FROM orders 
+            WHERE status = 'paid' 
+            AND DATE(paid_at) = %s
+        ''', (today,))
+        sales_today = cursor.fetchone()
+        
+        # Sales this month
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as total,
+                   COUNT(*) as count
+            FROM orders 
+            WHERE status = 'paid' 
+            AND EXTRACT(YEAR FROM paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+            AND EXTRACT(MONTH FROM paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+        ''')
+        sales_month = cursor.fetchone()
+        
+        # All time sales
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as total,
+                   COUNT(*) as count
+            FROM orders 
+            WHERE status = 'paid'
+        ''')
+        sales_all = cursor.fetchone()
+        
+        # Orders today (all orders created today)
+        cursor.execute('''
+            SELECT COUNT(*) as count
+            FROM orders 
+            WHERE DATE(created_at) = %s
+        ''', (today,))
+        orders_today = cursor.fetchone()
+        
+        # Pending orders (pending_payment, under_review)
+        cursor.execute('''
+            SELECT COUNT(*) as count
+            FROM orders 
+            WHERE status IN ('pending_payment', 'under_review')
+        ''')
+        pending_orders = cursor.fetchone()
+        
+        # Low stock products (stock <= low_stock_threshold or stock <= 5 if no threshold)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT p.id) as count
+            FROM products p
+            JOIN skus s ON s.product_id = p.id
+            WHERE s.stock <= COALESCE(p.low_stock_threshold, 5)
+            AND s.stock > 0
+            AND p.status = 'active'
+        ''')
+        low_stock = cursor.fetchone()
+        
+        # Out of stock products
+        cursor.execute('''
+            SELECT COUNT(DISTINCT p.id) as count
+            FROM products p
+            JOIN skus s ON s.product_id = p.id
+            WHERE s.stock = 0
+            AND p.status = 'active'
+        ''')
+        out_of_stock = cursor.fetchone()
+        
+        # Sales last 7 days for chart
+        cursor.execute('''
+            SELECT DATE(paid_at) as date,
+                   COALESCE(SUM(final_amount), 0) as total,
+                   COUNT(*) as count
+            FROM orders 
+            WHERE status = 'paid' 
+            AND paid_at >= CURRENT_DATE - INTERVAL '6 days'
+            GROUP BY DATE(paid_at)
+            ORDER BY DATE(paid_at)
+        ''')
+        sales_7_days = []
+        for row in cursor.fetchall():
+            sales_7_days.append({
+                'date': row['date'].strftime('%Y-%m-%d'),
+                'total': float(row['total']),
+                'count': row['count']
+            })
+        
+        # Fill in missing days with zeros
+        from datetime import datetime, timedelta
+        all_dates = []
+        for i in range(6, -1, -1):
+            d = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            all_dates.append(d)
+        
+        sales_7_days_filled = []
+        existing_dates = {s['date']: s for s in sales_7_days}
+        for d in all_dates:
+            if d in existing_dates:
+                sales_7_days_filled.append(existing_dates[d])
+            else:
+                sales_7_days_filled.append({'date': d, 'total': 0, 'count': 0})
+        
+        # Recent orders (last 5)
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at,
+                   u.full_name as customer_name,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            ORDER BY o.created_at DESC
+            LIMIT 5
+        ''')
+        recent_orders = []
+        for row in cursor.fetchall():
+            recent_orders.append({
+                'id': row['id'],
+                'order_number': row['order_number'],
+                'status': row['status'],
+                'final_amount': float(row['final_amount']) if row['final_amount'] else 0,
+                'created_at': row['created_at'].isoformat() if row['created_at'] else None,
+                'customer_name': row['customer_name'],
+                'item_count': row['item_count']
+            })
+        
+        # Top selling products this month
+        cursor.execute('''
+            SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.subtotal) as revenue
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE o.status = 'paid'
+            AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+            AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+            GROUP BY p.id, p.name
+            ORDER BY total_sold DESC
+            LIMIT 5
+        ''')
+        top_products = []
+        for row in cursor.fetchall():
+            top_products.append({
+                'name': row['name'],
+                'total_sold': int(row['total_sold']) if row['total_sold'] else 0,
+                'revenue': float(row['revenue']) if row['revenue'] else 0
+            })
+        
+        return jsonify({
+            'sales_today': {
+                'total': float(sales_today['total']),
+                'count': sales_today['count']
+            },
+            'sales_month': {
+                'total': float(sales_month['total']),
+                'count': sales_month['count']
+            },
+            'sales_all': {
+                'total': float(sales_all['total']),
+                'count': sales_all['count']
+            },
+            'orders_today': orders_today['count'],
+            'pending_orders': pending_orders['count'],
+            'low_stock': low_stock['count'],
+            'out_of_stock': out_of_stock['count'],
+            'sales_7_days': sales_7_days_filled,
+            'recent_orders': recent_orders,
+            'top_products': top_products
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== ADMIN ORDER MANAGEMENT ====================
 
 @app.route('/api/admin/orders', methods=['GET'])

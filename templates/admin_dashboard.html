@@ -83,6 +83,7 @@
         .btn-icon.delete:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         @media (max-width: 768px) { .settings-grid { grid-template-columns: 1fr; } .tier-form-row { grid-template-columns: 1fr; } }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -222,6 +223,69 @@
                     <p>จัดการระบบตัวแทนจำหน่ายของคุณ</p>
                 </div>
 
+                <!-- Sales Stats Row -->
+                <div class="dashboard-stats-row">
+                    <div class="stat-card stat-card-primary">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <p class="stat-label">ยอดขายวันนี้</p>
+                            <h3 id="salesToday">฿0</h3>
+                            <span class="stat-sub" id="ordersToday">0 ออเดอร์</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-card-success">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <p class="stat-label">ยอดขายเดือนนี้</p>
+                            <h3 id="salesMonth">฿0</h3>
+                            <span class="stat-sub" id="ordersMonth">0 ออเดอร์</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-card-info">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <p class="stat-label">รอดำเนินการ</p>
+                            <h3 id="pendingOrders">0</h3>
+                            <span class="stat-sub">ออเดอร์รอชำระ/ตรวจสอบ</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card stat-card-warning">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <p class="stat-label">สินค้าใกล้หมด</p>
+                            <h3 id="lowStock">0</h3>
+                            <span class="stat-sub" id="outOfStock">0 หมดสต็อก</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Stats Row -->
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-icon">
@@ -268,33 +332,66 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <h3 id="silverCount">0</h3>
-                            <p>Silver Tier</p>
+                            <h3 id="salesAll">฿0</h3>
+                            <p>ยอดขายสะสม</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="card">
-                    <h2>📋 ภาพรวมระบบ</h2>
-                    <p>ระบบจัดการตัวแทนจำหน่ายพร้อมใช้งาน คุณสามารถจัดการผู้ใช้งาน ตั้งค่าระบบ และดูข้อมูลสถิติได้จากเมนูด้านซ้าย</p>
-                    
-                    <div style="margin-top: 20px;">
-                        <h3 style="font-size: 16px; margin-bottom: 10px;">ฟีเจอร์หลัก:</h3>
-                        <ul style="list-style: none; padding: 0;">
-                            <li style="padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                                <strong>👥 Admin User Management</strong> - สร้างและจัดการผู้ใช้งานในระบบ
-                            </li>
-                            <li style="padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                                <strong>🔐 Role-Based Access Control</strong> - จัดการสิทธิ์ตามบทบาท
-                            </li>
-                            <li style="padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                                <strong>⭐ Reseller Tier Management</strong> - กำหนดระดับตัวแทนจำหน่าย
-                            </li>
-                        </ul>
+                <!-- Dashboard Content Grid -->
+                <div class="dashboard-content-grid">
+                    <!-- Sales Chart -->
+                    <div class="card dashboard-chart-card">
+                        <div class="card-header">
+                            <h2>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <line x1="18" y1="20" x2="18" y2="10"/>
+                                    <line x1="12" y1="20" x2="12" y2="4"/>
+                                    <line x1="6" y1="20" x2="6" y2="14"/>
+                                </svg>
+                                ยอดขาย 7 วันย้อนหลัง
+                            </h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Orders -->
+                    <div class="card dashboard-orders-card">
+                        <div class="card-header">
+                            <h2>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                ออเดอร์ล่าสุด
+                            </h2>
+                            <a href="#" onclick="switchPage('orders'); return false;" class="view-all-link">ดูทั้งหมด</a>
+                        </div>
+                        <div class="recent-orders-list" id="recentOrdersList">
+                            <div class="loading-placeholder">กำลังโหลด...</div>
+                        </div>
+                    </div>
+
+                    <!-- Top Products -->
+                    <div class="card dashboard-products-card">
+                        <div class="card-header">
+                            <h2>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                                สินค้าขายดีเดือนนี้
+                            </h2>
+                        </div>
+                        <div class="top-products-list" id="topProductsList">
+                            <div class="loading-placeholder">กำลังโหลด...</div>
+                        </div>
                     </div>
                 </div>
             </div>
