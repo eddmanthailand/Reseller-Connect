@@ -28,6 +28,17 @@ function restoreSidebarState() {
     }
 }
 
+// Toggle submenu
+function toggleSubmenu(element, event) {
+    event.preventDefault();
+    element.classList.toggle('open');
+    // Get next sibling element which should be the submenu div
+    const submenu = element.nextElementSibling;
+    if (submenu && submenu.classList.contains('submenu')) {
+        submenu.classList.toggle('open');
+    }
+}
+
 // Global data
 let roles = [];
 let resellerTiers = [];
@@ -321,7 +332,9 @@ function setupEventListeners() {
                 }
             }
             
-            switchPage(targetPage);
+            if (targetPage) {
+                switchPage(targetPage);
+            }
         });
     });
 
