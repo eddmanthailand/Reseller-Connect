@@ -4167,6 +4167,233 @@ def get_dashboard_stats():
         if conn:
             conn.close()
 
+@app.route('/api/admin/sales-history', methods=['GET'])
+@admin_required
+def get_sales_history():
+    """Get sales history with filters for dashboard"""
+    conn = None
+    cursor = None
+    try:
+        from datetime import datetime, timedelta
+        
+        # Get filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        channel_id = request.args.get('channel_id')
+        status = request.args.get('status')
+        search = request.args.get('search', '').strip()
+        period = request.args.get('period', '7days')  # 7days, 30days, this_month, last_month, custom
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Calculate date range based on period
+        today = datetime.now().date()
+        if period == '7days':
+            start = today - timedelta(days=6)
+            end = today
+        elif period == '30days':
+            start = today - timedelta(days=29)
+            end = today
+        elif period == 'this_month':
+            start = today.replace(day=1)
+            end = today
+        elif period == 'last_month':
+            first_of_this_month = today.replace(day=1)
+            end = first_of_this_month - timedelta(days=1)
+            start = end.replace(day=1)
+        elif period == 'custom' and start_date and end_date:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            start = today - timedelta(days=6)
+            end = today
+        
+        # Build query
+        query = '''
+            SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at, o.paid_at,
+                   u.full_name as customer_name,
+                   sc.name as channel_name,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
+        '''
+        params = [start, end]
+        
+        if channel_id:
+            query += ' AND o.sales_channel_id = %s'
+            params.append(int(channel_id))
+        
+        if status:
+            query += ' AND o.status = %s'
+            params.append(status)
+        
+        if search:
+            query += ' AND (o.order_number ILIKE %s OR u.full_name ILIKE %s)'
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term])
+        
+        query += ' ORDER BY o.created_at DESC LIMIT 100'
+        
+        cursor.execute(query, params)
+        orders = []
+        for row in cursor.fetchall():
+            orders.append({
+                'id': row['id'],
+                'order_number': row['order_number'],
+                'status': row['status'],
+                'final_amount': float(row['final_amount']) if row['final_amount'] else 0,
+                'created_at': row['created_at'].isoformat() if row['created_at'] else None,
+                'paid_at': row['paid_at'].isoformat() if row['paid_at'] else None,
+                'customer_name': row['customer_name'],
+                'channel_name': row['channel_name'],
+                'item_count': row['item_count']
+            })
+        
+        # Get summary stats for the period
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as total,
+                   COUNT(*) as count,
+                   COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
+                   COALESCE(SUM(CASE WHEN status = 'paid' THEN final_amount END), 0) as paid_total
+            FROM orders 
+            WHERE DATE(created_at) >= %s AND DATE(created_at) <= %s
+        ''', (start, end))
+        summary = cursor.fetchone()
+        
+        # Get sales channels for filter
+        cursor.execute('SELECT id, name FROM sales_channels WHERE is_active = true ORDER BY name')
+        channels = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+        
+        return jsonify({
+            'orders': orders,
+            'summary': {
+                'total': float(summary['total']),
+                'count': summary['count'],
+                'paid_count': summary['paid_count'],
+                'paid_total': float(summary['paid_total'])
+            },
+            'channels': channels,
+            'period': {
+                'start': start.strftime('%Y-%m-%d'),
+                'end': end.strftime('%Y-%m-%d')
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/brand-sales', methods=['GET'])
+@admin_required
+def get_brand_sales():
+    """Get sales statistics by brand with filters"""
+    conn = None
+    cursor = None
+    try:
+        from datetime import datetime, timedelta
+        
+        # Get filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        brand_id = request.args.get('brand_id')
+        period = request.args.get('period', 'this_month')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Calculate date range
+        today = datetime.now().date()
+        if period == '7days':
+            start = today - timedelta(days=6)
+            end = today
+        elif period == '30days':
+            start = today - timedelta(days=29)
+            end = today
+        elif period == 'this_month':
+            start = today.replace(day=1)
+            end = today
+        elif period == 'last_month':
+            first_of_this_month = today.replace(day=1)
+            end = first_of_this_month - timedelta(days=1)
+            start = end.replace(day=1)
+        elif period == 'custom' and start_date and end_date:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            start = today.replace(day=1)
+            end = today
+        
+        # Build query for brand sales
+        query = '''
+            SELECT b.id, b.name,
+                   COALESCE(SUM(oi.quantity), 0) as total_sold,
+                   COALESCE(SUM(oi.subtotal), 0) as revenue,
+                   COUNT(DISTINCT o.id) as order_count
+            FROM brands b
+            LEFT JOIN products p ON p.brand_id = b.id
+            LEFT JOIN skus s ON s.product_id = p.id
+            LEFT JOIN order_items oi ON oi.sku_id = s.id
+            LEFT JOIN orders o ON o.id = oi.order_id AND o.status = 'paid' 
+                AND DATE(o.paid_at) >= %s AND DATE(o.paid_at) <= %s
+        '''
+        params = [start, end]
+        
+        if brand_id:
+            query += ' WHERE b.id = %s'
+            params.append(int(brand_id))
+        
+        query += ' GROUP BY b.id, b.name ORDER BY revenue DESC'
+        
+        cursor.execute(query, params)
+        brands_sales = []
+        total_revenue = 0
+        total_sold = 0
+        for row in cursor.fetchall():
+            revenue = float(row['revenue']) if row['revenue'] else 0
+            sold = int(row['total_sold']) if row['total_sold'] else 0
+            total_revenue += revenue
+            total_sold += sold
+            brands_sales.append({
+                'id': row['id'],
+                'name': row['name'],
+                'total_sold': sold,
+                'revenue': revenue,
+                'order_count': row['order_count']
+            })
+        
+        # Get all brands for filter
+        cursor.execute('SELECT id, name FROM brands ORDER BY name')
+        all_brands = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
+        
+        return jsonify({
+            'brands': brands_sales,
+            'all_brands': all_brands,
+            'summary': {
+                'total_revenue': total_revenue,
+                'total_sold': total_sold,
+                'brand_count': len(brands_sales)
+            },
+            'period': {
+                'start': start.strftime('%Y-%m-%d'),
+                'end': end.strftime('%Y-%m-%d')
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== ADMIN ORDER MANAGEMENT ====================
 
 @app.route('/api/admin/orders', methods=['GET'])

@@ -381,6 +381,148 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Sales History Section -->
+                <div class="dashboard-section">
+                    <div class="card sales-history-card">
+                        <div class="card-header">
+                            <h2>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M3 3v18h18"/>
+                                    <path d="m19 9-5 5-4-4-3 3"/>
+                                </svg>
+                                ประวัติยอดขาย
+                            </h2>
+                        </div>
+                        <div class="sales-filters">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>ช่วงเวลา</label>
+                                    <select id="salesPeriodFilter" onchange="loadSalesHistory()">
+                                        <option value="7days">7 วันล่าสุด</option>
+                                        <option value="30days">30 วันล่าสุด</option>
+                                        <option value="this_month">เดือนนี้</option>
+                                        <option value="last_month">เดือนที่แล้ว</option>
+                                        <option value="custom">กำหนดเอง</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group custom-date-range" id="customDateRange" style="display: none;">
+                                    <label>วันที่</label>
+                                    <input type="date" id="salesStartDate" onchange="loadSalesHistory()">
+                                    <span>ถึง</span>
+                                    <input type="date" id="salesEndDate" onchange="loadSalesHistory()">
+                                </div>
+                                <div class="filter-group">
+                                    <label>ช่องทาง</label>
+                                    <select id="salesChannelFilter" onchange="loadSalesHistory()">
+                                        <option value="">ทั้งหมด</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>สถานะ</label>
+                                    <select id="salesStatusFilter" onchange="loadSalesHistory()">
+                                        <option value="">ทั้งหมด</option>
+                                        <option value="pending_payment">รอชำระเงิน</option>
+                                        <option value="under_review">รอตรวจสอบ</option>
+                                        <option value="paid">ชำระแล้ว</option>
+                                        <option value="cancelled">ยกเลิก</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group search-group">
+                                    <label>ค้นหา</label>
+                                    <input type="text" id="salesSearchInput" placeholder="เลขออเดอร์, ชื่อลูกค้า..." onkeyup="debounceSearchSales()">
+                                </div>
+                            </div>
+                            <div class="sales-summary" id="salesSummary">
+                                <div class="summary-item">
+                                    <span class="summary-label">ยอดรวม</span>
+                                    <span class="summary-value" id="salesSummaryTotal">฿0</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">ออเดอร์</span>
+                                    <span class="summary-value" id="salesSummaryCount">0</span>
+                                </div>
+                                <div class="summary-item paid">
+                                    <span class="summary-label">ชำระแล้ว</span>
+                                    <span class="summary-value" id="salesSummaryPaid">฿0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sales-table-container">
+                            <table class="sales-table">
+                                <thead>
+                                    <tr>
+                                        <th>เลขออเดอร์</th>
+                                        <th>ลูกค้า</th>
+                                        <th>ช่องทาง</th>
+                                        <th>จำนวน</th>
+                                        <th>ยอดเงิน</th>
+                                        <th>สถานะ</th>
+                                        <th>วันที่</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="salesHistoryBody">
+                                    <tr><td colspan="7" class="loading-placeholder">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Brand Sales Section -->
+                <div class="dashboard-section">
+                    <div class="card brand-sales-card">
+                        <div class="card-header">
+                            <h2>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M4 7V4h16v3"/>
+                                    <path d="M9 20h6"/>
+                                    <path d="M12 4v16"/>
+                                </svg>
+                                ยอดขายตามแบรนด์
+                            </h2>
+                        </div>
+                        <div class="sales-filters">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>ช่วงเวลา</label>
+                                    <select id="brandPeriodFilter" onchange="loadBrandSales()">
+                                        <option value="7days">7 วันล่าสุด</option>
+                                        <option value="30days">30 วันล่าสุด</option>
+                                        <option value="this_month" selected>เดือนนี้</option>
+                                        <option value="last_month">เดือนที่แล้ว</option>
+                                        <option value="custom">กำหนดเอง</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group custom-date-range" id="brandCustomDateRange" style="display: none;">
+                                    <label>วันที่</label>
+                                    <input type="date" id="brandStartDate" onchange="loadBrandSales()">
+                                    <span>ถึง</span>
+                                    <input type="date" id="brandEndDate" onchange="loadBrandSales()">
+                                </div>
+                                <div class="filter-group">
+                                    <label>แบรนด์</label>
+                                    <select id="brandFilter" onchange="loadBrandSales()">
+                                        <option value="">ทั้งหมด</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="sales-summary" id="brandSalesSummary">
+                                <div class="summary-item">
+                                    <span class="summary-label">ยอดรวมทุกแบรนด์</span>
+                                    <span class="summary-value" id="brandSummaryTotal">฿0</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">ขายแล้ว</span>
+                                    <span class="summary-value" id="brandSummarySold">0 ชิ้น</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="brand-sales-grid" id="brandSalesGrid">
+                            <div class="loading-placeholder">กำลังโหลด...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Admin User Management Page -->

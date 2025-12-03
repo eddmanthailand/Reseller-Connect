@@ -2586,6 +2586,10 @@ async function loadDashboardStats() {
         // Render top products
         renderTopProducts(data.top_products);
         
+        // Load sales history and brand sales
+        loadSalesHistory();
+        loadBrandSales();
+        
     } catch (error) {
         console.error('Error loading dashboard stats:', error);
     }
@@ -2770,6 +2774,187 @@ function getTimeAgo(date) {
     if (hours < 24) return `${hours} ชั่วโมงที่แล้ว`;
     if (days < 7) return `${days} วันที่แล้ว`;
     return date.toLocaleDateString('th-TH');
+}
+
+// ==================== SALES HISTORY ====================
+let salesSearchTimeout = null;
+
+function debounceSearchSales() {
+    clearTimeout(salesSearchTimeout);
+    salesSearchTimeout = setTimeout(loadSalesHistory, 300);
+}
+
+async function loadSalesHistory() {
+    try {
+        const period = document.getElementById('salesPeriodFilter')?.value || '7days';
+        const channelId = document.getElementById('salesChannelFilter')?.value || '';
+        const status = document.getElementById('salesStatusFilter')?.value || '';
+        const search = document.getElementById('salesSearchInput')?.value || '';
+        const startDate = document.getElementById('salesStartDate')?.value || '';
+        const endDate = document.getElementById('salesEndDate')?.value || '';
+        
+        // Show/hide custom date range
+        const customDateRange = document.getElementById('customDateRange');
+        if (customDateRange) {
+            customDateRange.style.display = period === 'custom' ? 'flex' : 'none';
+        }
+        
+        // Build query params
+        let params = `period=${period}`;
+        if (period === 'custom' && startDate && endDate) {
+            params += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+        if (channelId) params += `&channel_id=${channelId}`;
+        if (status) params += `&status=${status}`;
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        
+        const response = await fetch(`${API_URL}/admin/sales-history?${params}`);
+        if (!response.ok) throw new Error('Failed to load sales history');
+        
+        const data = await response.json();
+        
+        // Populate channels dropdown
+        const channelFilter = document.getElementById('salesChannelFilter');
+        if (channelFilter && data.channels) {
+            const currentValue = channelFilter.value;
+            channelFilter.innerHTML = '<option value="">ทั้งหมด</option>';
+            data.channels.forEach(ch => {
+                channelFilter.innerHTML += `<option value="${ch.id}" ${currentValue == ch.id ? 'selected' : ''}>${ch.name}</option>`;
+            });
+        }
+        
+        // Update summary
+        document.getElementById('salesSummaryTotal').textContent = formatCurrency(data.summary.total);
+        document.getElementById('salesSummaryCount').textContent = data.summary.count;
+        document.getElementById('salesSummaryPaid').textContent = formatCurrency(data.summary.paid_total);
+        
+        // Render table
+        renderSalesHistoryTable(data.orders);
+        
+    } catch (error) {
+        console.error('Error loading sales history:', error);
+    }
+}
+
+function renderSalesHistoryTable(orders) {
+    const tbody = document.getElementById('salesHistoryBody');
+    if (!tbody) return;
+    
+    const statusLabels = {
+        'pending_payment': 'รอชำระเงิน',
+        'under_review': 'รอตรวจสอบ',
+        'paid': 'ชำระแล้ว',
+        'cancelled': 'ยกเลิก'
+    };
+    
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading-placeholder">ไม่พบข้อมูลออเดอร์</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    orders.forEach(order => {
+        const date = order.created_at ? new Date(order.created_at).toLocaleDateString('th-TH', {day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit'}) : '-';
+        html += `
+            <tr onclick="switchPage('orders')">
+                <td><strong>${order.order_number}</strong></td>
+                <td>${order.customer_name || '-'}</td>
+                <td>${order.channel_name || '-'}</td>
+                <td>${order.item_count} รายการ</td>
+                <td>${formatCurrency(order.final_amount)}</td>
+                <td><span class="order-status ${order.status}">${statusLabels[order.status] || order.status}</span></td>
+                <td>${date}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// ==================== BRAND SALES ====================
+async function loadBrandSales() {
+    try {
+        const period = document.getElementById('brandPeriodFilter')?.value || 'this_month';
+        const brandId = document.getElementById('brandFilter')?.value || '';
+        const startDate = document.getElementById('brandStartDate')?.value || '';
+        const endDate = document.getElementById('brandEndDate')?.value || '';
+        
+        // Show/hide custom date range
+        const customDateRange = document.getElementById('brandCustomDateRange');
+        if (customDateRange) {
+            customDateRange.style.display = period === 'custom' ? 'flex' : 'none';
+        }
+        
+        // Build query params
+        let params = `period=${period}`;
+        if (period === 'custom' && startDate && endDate) {
+            params += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+        if (brandId) params += `&brand_id=${brandId}`;
+        
+        const response = await fetch(`${API_URL}/admin/brand-sales?${params}`);
+        if (!response.ok) throw new Error('Failed to load brand sales');
+        
+        const data = await response.json();
+        
+        // Populate brands dropdown
+        const brandFilter = document.getElementById('brandFilter');
+        if (brandFilter && data.all_brands) {
+            const currentValue = brandFilter.value;
+            brandFilter.innerHTML = '<option value="">ทั้งหมด</option>';
+            data.all_brands.forEach(br => {
+                brandFilter.innerHTML += `<option value="${br.id}" ${currentValue == br.id ? 'selected' : ''}>${br.name}</option>`;
+            });
+        }
+        
+        // Update summary
+        document.getElementById('brandSummaryTotal').textContent = formatCurrency(data.summary.total_revenue);
+        document.getElementById('brandSummarySold').textContent = `${data.summary.total_sold.toLocaleString()} ชิ้น`;
+        
+        // Render brand sales grid
+        renderBrandSalesGrid(data.brands);
+        
+    } catch (error) {
+        console.error('Error loading brand sales:', error);
+    }
+}
+
+function renderBrandSalesGrid(brands) {
+    const container = document.getElementById('brandSalesGrid');
+    if (!container) return;
+    
+    if (!brands || brands.length === 0) {
+        container.innerHTML = '<div class="loading-placeholder">ไม่พบข้อมูลยอดขาย</div>';
+        return;
+    }
+    
+    let html = '';
+    brands.forEach((brand, index) => {
+        html += `
+            <div class="brand-sales-item">
+                <div class="brand-name">
+                    <span class="rank">${index + 1}</span>
+                    ${brand.name}
+                </div>
+                <div class="brand-stats">
+                    <div class="brand-stat">
+                        <span class="brand-stat-value revenue">${formatCurrency(brand.revenue)}</span>
+                        <span class="brand-stat-label">ยอดขาย</span>
+                    </div>
+                    <div class="brand-stat">
+                        <span class="brand-stat-value">${brand.total_sold.toLocaleString()}</span>
+                        <span class="brand-stat-label">ชิ้น</span>
+                    </div>
+                    <div class="brand-stat">
+                        <span class="brand-stat-value">${brand.order_count}</span>
+                        <span class="brand-stat-label">ออเดอร์</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
 }
 
 // Initialize on page load
