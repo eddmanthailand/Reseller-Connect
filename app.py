@@ -5,6 +5,7 @@ import bcrypt
 from functools import wraps
 from database import get_db, init_db
 import os
+import json
 from replit.object_storage import Client
 
 app = Flask(__name__)
