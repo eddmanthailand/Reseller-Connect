@@ -1,6 +1,13 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Sales History & Brand Sales Analytics (Dec 2025):**
+  - Sales History table with advanced filters: date range (7days, 30days, this_month, last_month, custom), sales channel, order status, keyword search
+  - Summary stats: total amount, order count, paid total
+  - Brand Sales grid showing revenue, items sold, and order count per brand
+  - API endpoints: GET `/api/admin/sales-history` and GET `/api/admin/brand-sales`
+  - Both endpoints support flexible query parameters for filtering by period, channel, status, brand
+  - CSS styling: .sales-filters, .sales-summary, .sales-table, .brand-sales-grid
 - **Low Stock Indicators & Filters (Dec 2025):**
   - Visual badges on SKU rows: "หมด" (red) for out-of-stock, "ใกล้หมด" (yellow) for low stock
   - Product row shows aggregate stock warning badge with count of problematic SKUs
