@@ -1573,6 +1573,30 @@ tr:hover td {
     font-size: var(--font-xs);
 }
 
+/* SKU Value Display (read-only) */
+.sku-value-display {
+    font-size: var(--font-sm);
+    color: white;
+    padding: 4px 8px;
+    text-align: right;
+    display: inline-block;
+    min-width: 60px;
+}
+
+.sku-stock-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sku-stock-display.stock-out .sku-value-display {
+    color: #fca5a5;
+}
+
+.sku-stock-display.stock-low .sku-value-display {
+    color: #fcd34d;
+}
+
 /* Inline Editing */
 .inline-edit {
     position: relative;

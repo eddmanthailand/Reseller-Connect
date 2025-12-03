@@ -996,17 +996,11 @@ function renderProducts() {
                         <span style="font-size: 10px; opacity: 0.6; margin-left: 8px;">${sku.variant_name || ''}</span>
                     </td>
                     <td>
-                        <div class="inline-edit">
-                            <input type="text" class="inline-edit-input" value="${sku.price || 0}" 
-                                   onblur="updateSkuPrice(${sku.id}, this.value)"
-                                   onkeypress="if(event.key==='Enter') this.blur()">
-                        </div>
+                        <span class="sku-value-display">${(sku.price || 0).toLocaleString()}</span>
                     </td>
                     <td>
-                        <div class="inline-edit ${stockStatusClass}">
-                            <input type="text" class="inline-edit-input" value="${stock}" 
-                                   onblur="updateSkuStock(${sku.id}, this.value)"
-                                   onkeypress="if(event.key==='Enter') this.blur()">
+                        <div class="sku-stock-display ${stockStatusClass}">
+                            <span class="sku-value-display">${stock.toLocaleString()}</span>
                             ${stockBadge}
                         </div>
                     </td>
