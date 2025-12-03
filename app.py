@@ -3736,6 +3736,9 @@ def get_reseller_featured_products():
 @login_required
 def get_reseller_customers():
     """Get all customers for the logged-in reseller"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3778,6 +3781,9 @@ def get_reseller_customers():
 @login_required
 def create_reseller_customer():
     """Create a new customer for the reseller"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3827,6 +3833,9 @@ def create_reseller_customer():
 @login_required
 def get_reseller_customer(customer_id):
     """Get a specific customer"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3860,6 +3869,9 @@ def get_reseller_customer(customer_id):
 @login_required
 def update_reseller_customer(customer_id):
     """Update a customer"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3914,6 +3926,9 @@ def update_reseller_customer(customer_id):
 @login_required
 def delete_reseller_customer(customer_id):
     """Delete a customer"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3949,6 +3964,9 @@ def delete_reseller_customer(customer_id):
 @login_required
 def get_reseller_profile():
     """Get reseller's profile with shipping info"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:
@@ -3985,6 +4003,9 @@ def get_reseller_profile():
 @login_required
 def update_reseller_profile():
     """Update reseller's profile with shipping info"""
+    if session.get('role') != 'Reseller':
+        return jsonify({'error': 'Reseller access only'}), 403
+    
     conn = None
     cursor = None
     try:

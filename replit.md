@@ -39,6 +39,8 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Order Number Settings:** Configurable order number format (prefix, digit count, monthly reset).
 - **Dashboard Home Page:** Sales statistics widgets (today, month, pending, low stock), 7-day sales chart (Chart.js), recent orders, top-selling products.
 - **Sales History & Brand Sales Analytics:** Sales history table with advanced filters (date range, channel, status, keyword), summary stats. Brand sales grid with revenue, items, orders per brand.
+- **Customer Database (Reseller):** Resellers can manage their own customer database for direct shipping with reseller branding. Full CRUD for customers with shipping info (name, phone, email, address, province, district, subdistrict, postal_code).
+- **Reseller Profile Management:** Resellers can edit their shipping information and brand name for label printing.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -51,13 +53,14 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **SPA Conversion:** Admin interface converted to a Single Page Application using `admin_dashboard.html` and hash-based navigation.
 
 ### Database Schema
-- **User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override`, `total_purchases`).
+- **User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override`, `total_purchases`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `brand_name`, `logo_url`).
 - **Brand Management:** `brands`, `admin_brand_access`.
 - **Product Management:** `products` (with `brand_id`, `size_chart_image_url`, `status`, `weight`, `length`, `width`, `height`, `low_stock_threshold`), `product_images`, `options`, `option_values`, `skus` (with `cost_price`), `sku_values_map`.
 - **Category Management:** `categories`, `product_categories`.
 - **Product Customizations:** `product_customizations`, `customization_choices`.
 - **Tier Pricing:** `product_tier_pricing`.
 - **Order Settings:** `order_number_settings`.
+- **Reseller Customer Database:** `reseller_customers` (with `reseller_id`, `full_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `notes`).
 
 ## External Dependencies
 

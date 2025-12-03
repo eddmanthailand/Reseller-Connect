@@ -538,6 +538,59 @@ def init_db():
                 WHERE username = %s
             ''', (password_hash, 'Super Admin', 'superadmin'))
         
+        # Migration: Add shipping/contact fields to users table for resellers
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
+                    ALTER TABLE users ADD COLUMN phone VARCHAR(50);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email') THEN
+                    ALTER TABLE users ADD COLUMN email VARCHAR(255);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'address') THEN
+                    ALTER TABLE users ADD COLUMN address TEXT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'province') THEN
+                    ALTER TABLE users ADD COLUMN province VARCHAR(100);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'district') THEN
+                    ALTER TABLE users ADD COLUMN district VARCHAR(100);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'subdistrict') THEN
+                    ALTER TABLE users ADD COLUMN subdistrict VARCHAR(100);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'postal_code') THEN
+                    ALTER TABLE users ADD COLUMN postal_code VARCHAR(10);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'brand_name') THEN
+                    ALTER TABLE users ADD COLUMN brand_name VARCHAR(255);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'logo_url') THEN
+                    ALTER TABLE users ADD COLUMN logo_url TEXT;
+                END IF;
+            END $$;
+        ''')
+        
+        # Create reseller_customers table (customers of resellers for direct shipping)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reseller_customers (
+                id SERIAL PRIMARY KEY,
+                reseller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                full_name VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                email VARCHAR(255),
+                address TEXT,
+                province VARCHAR(100),
+                district VARCHAR(100),
+                subdistrict VARCHAR(100),
+                postal_code VARCHAR(10),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         
