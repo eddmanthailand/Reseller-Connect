@@ -1339,13 +1339,13 @@ def reorder_product_images(product_id):
 @app.route('/api/products/<int:product_id>', methods=['PUT'])
 @admin_required
 def update_product(product_id):
-    """Update an existing product with options, values, and SKUs"""
+    """Update an existing product with options, values, and SKUs using diff-based approach.
+    This preserves sku_id to maintain referential integrity with order_items."""
     data = request.json
     
     if not data or 'name' not in data:
         return jsonify({'error': 'Missing required field: name'}), 400
     
-    # Validate brand_id is provided
     brand_id = data.get('brand_id')
     if not brand_id:
         return jsonify({'error': 'Missing required field: brand_id'}), 400
@@ -1356,17 +1356,17 @@ def update_product(product_id):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Check if brand exists
+        # Validate brand exists
         cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
         if not cursor.fetchone():
             return jsonify({'error': 'Brand not found'}), 400
         
-        # Check if product exists
+        # Validate product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
             return jsonify({'error': 'Product not found'}), 404
         
-        # Update basic product information including brand_id and status
+        # Update basic product information
         status = data.get('status', 'active')
         cursor.execute('''
             UPDATE products 
@@ -1380,98 +1380,212 @@ def update_product(product_id):
         if category_id:
             cursor.execute('SELECT id FROM categories WHERE id = %s', (category_id,))
             if cursor.fetchone():
-                cursor.execute('''
-                    INSERT INTO product_categories (product_id, category_id)
-                    VALUES (%s, %s)
-                ''', (product_id, category_id))
+                cursor.execute('INSERT INTO product_categories (product_id, category_id) VALUES (%s, %s)', (product_id, category_id))
         
-        # Delete existing SKUs (cascade deletes sku_values_map)
-        cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))
+        # ========== DIFF-BASED OPTIONS UPDATE ==========
+        # Get existing options with their values
+        cursor.execute('''
+            SELECT o.id as option_id, o.name as option_name, 
+                   ov.id as value_id, ov.value as value_name, ov.sort_order
+            FROM options o
+            LEFT JOIN option_values ov ON o.id = ov.option_id
+            WHERE o.product_id = %s
+            ORDER BY o.id, ov.sort_order
+        ''', (product_id,))
+        existing_options_rows = cursor.fetchall()
         
-        # Delete existing options (cascade deletes option_values)
-        cursor.execute('DELETE FROM options WHERE product_id = %s', (product_id,))
+        # Build existing options map: {option_name: {option_id, values: {value_name: value_id}}}
+        existing_options = {}
+        for row in existing_options_rows:
+            opt_name = row['option_name']
+            if opt_name not in existing_options:
+                existing_options[opt_name] = {'option_id': row['option_id'], 'values': {}}
+            if row['value_id']:
+                existing_options[opt_name]['values'][row['value_name']] = row['value_id']
         
-        # Delete existing product images
-        cursor.execute('DELETE FROM product_images WHERE product_id = %s', (product_id,))
-        
-        # Insert new product images
-        image_urls = data.get('image_urls', [])
-        for idx, image_url in enumerate(image_urls):
-            cursor.execute('''
-                INSERT INTO product_images (product_id, image_url, sort_order)
-                VALUES (%s, %s, %s)
-            ''', (product_id, image_url, idx))
-        
-        # Insert new options and values
+        # Process new options data
         options_data = data.get('options', [])
-        options_map = []  # List of {name, value_ids} for ordered lookup
+        new_option_names = set()
+        options_map = []  # For SKU mapping later
         
         for option in options_data:
             if not option.get('name') or not option.get('values'):
                 continue
             
-            # Insert option
-            cursor.execute('''
-                INSERT INTO options (product_id, name)
-                VALUES (%s, %s)
-                RETURNING id
-            ''', (product_id, option['name']))
-            
-            option_id = cursor.fetchone()['id']
             option_name = option['name']
-            value_to_id = {}  # Map for this option: {value_name: value_id}
+            new_option_names.add(option_name)
+            value_to_id = {}
             
-            # Insert option values with sort_order
-            for idx, value_data in enumerate(option['values']):
-                value_name = value_data['value']
-                cursor.execute('''
-                    INSERT INTO option_values (option_id, value, sort_order)
-                    VALUES (%s, %s, %s)
-                    RETURNING id
-                ''', (option_id, value_name, value_data.get('sort_order', idx)))
+            if option_name in existing_options:
+                # Option exists - update values
+                option_id = existing_options[option_name]['option_id']
+                existing_values = existing_options[option_name]['values']
+                new_value_names = set()
                 
-                value_id = cursor.fetchone()['id']
-                value_to_id[value_name] = value_id
+                for idx, value_data in enumerate(option['values']):
+                    value_name = value_data['value']
+                    new_value_names.add(value_name)
+                    
+                    if value_name in existing_values:
+                        # Value exists - just update sort_order
+                        value_id = existing_values[value_name]
+                        cursor.execute('UPDATE option_values SET sort_order = %s WHERE id = %s', 
+                                      (value_data.get('sort_order', idx), value_id))
+                        value_to_id[value_name] = value_id
+                    else:
+                        # New value - insert
+                        cursor.execute('''
+                            INSERT INTO option_values (option_id, value, sort_order)
+                            VALUES (%s, %s, %s) RETURNING id
+                        ''', (option_id, value_name, value_data.get('sort_order', idx)))
+                        value_id = cursor.fetchone()['id']
+                        value_to_id[value_name] = value_id
+                
+                # Delete removed values (only if not referenced by SKUs with orders)
+                for old_value_name, old_value_id in existing_values.items():
+                    if old_value_name not in new_value_names:
+                        cursor.execute('DELETE FROM option_values WHERE id = %s', (old_value_id,))
+            else:
+                # New option - insert
+                cursor.execute('INSERT INTO options (product_id, name) VALUES (%s, %s) RETURNING id',
+                              (product_id, option_name))
+                option_id = cursor.fetchone()['id']
+                
+                for idx, value_data in enumerate(option['values']):
+                    value_name = value_data['value']
+                    cursor.execute('''
+                        INSERT INTO option_values (option_id, value, sort_order)
+                        VALUES (%s, %s, %s) RETURNING id
+                    ''', (option_id, value_name, value_data.get('sort_order', idx)))
+                    value_id = cursor.fetchone()['id']
+                    value_to_id[value_name] = value_id
             
-            options_map.append({
-                'name': option_name,
-                'value_to_id': value_to_id,
-                'values_order': [v['value'] for v in option['values']]
-            })
+            options_map.append({'name': option_name, 'value_to_id': value_to_id})
         
-        # Insert new SKUs
+        # Delete removed options
+        for old_option_name in existing_options:
+            if old_option_name not in new_option_names:
+                cursor.execute('DELETE FROM options WHERE id = %s', 
+                              (existing_options[old_option_name]['option_id'],))
+        
+        # ========== DIFF-BASED SKUs UPDATE ==========
+        # Get existing SKUs
+        cursor.execute('SELECT id, sku_code, price, stock FROM skus WHERE product_id = %s', (product_id,))
+        existing_skus = {row['sku_code']: row for row in cursor.fetchall()}
+        
+        # Get SKU codes that have order references (cannot be deleted)
+        cursor.execute('''
+            SELECT DISTINCT s.sku_code 
+            FROM skus s
+            INNER JOIN order_items oi ON s.id = oi.sku_id
+            WHERE s.product_id = %s
+        ''', (product_id,))
+        protected_sku_codes = {row['sku_code'] for row in cursor.fetchall()}
+        
+        # Process new SKUs
         skus_data = data.get('skus', [])
+        new_sku_codes = set()
+        
         for sku_data in skus_data:
-            if not sku_data.get('sku_code'):
+            sku_code = sku_data.get('sku_code')
+            if not sku_code:
                 continue
             
-            # Insert SKU
-            cursor.execute('''
-                INSERT INTO skus (product_id, sku_code, price, stock)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id
-            ''', (
-                product_id,
-                sku_data['sku_code'],
-                sku_data.get('price', 0),
-                sku_data.get('stock', 0)
-            ))
-            
-            sku_id = cursor.fetchone()['id']
-            
-            # Map SKU to option values using variant_values (maintains option context)
+            new_sku_codes.add(sku_code)
+            new_price = sku_data.get('price', 0)
+            new_stock = sku_data.get('stock', 0)
             variant_values = sku_data.get('variant_values', [])
-            if len(variant_values) == len(options_map):
-                for idx, value_name in enumerate(variant_values):
-                    option = options_map[idx]
-                    if value_name in option['value_to_id']:
-                        value_id = option['value_to_id'][value_name]
-                        cursor.execute('''
-                            INSERT INTO sku_values_map (sku_id, option_value_id)
-                            VALUES (%s, %s)
-                        ''', (sku_id, value_id))
+            
+            if sku_code in existing_skus:
+                # SKU exists - UPDATE price and stock (preserve sku_id)
+                sku_id = existing_skus[sku_code]['id']
+                cursor.execute('''
+                    UPDATE skus SET price = %s, stock = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (new_price, new_stock, sku_id))
+                
+                # Update sku_values_map if variant_values changed
+                cursor.execute('DELETE FROM sku_values_map WHERE sku_id = %s', (sku_id,))
+                if len(variant_values) == len(options_map):
+                    for idx, value_name in enumerate(variant_values):
+                        if value_name in options_map[idx]['value_to_id']:
+                            value_id = options_map[idx]['value_to_id'][value_name]
+                            cursor.execute('INSERT INTO sku_values_map (sku_id, option_value_id) VALUES (%s, %s)',
+                                          (sku_id, value_id))
+            else:
+                # New SKU - INSERT
+                cursor.execute('''
+                    INSERT INTO skus (product_id, sku_code, price, stock)
+                    VALUES (%s, %s, %s, %s) RETURNING id
+                ''', (product_id, sku_code, new_price, new_stock))
+                sku_id = cursor.fetchone()['id']
+                
+                # Map to option values
+                if len(variant_values) == len(options_map):
+                    for idx, value_name in enumerate(variant_values):
+                        if value_name in options_map[idx]['value_to_id']:
+                            value_id = options_map[idx]['value_to_id'][value_name]
+                            cursor.execute('INSERT INTO sku_values_map (sku_id, option_value_id) VALUES (%s, %s)',
+                                          (sku_id, value_id))
+        
+        # Delete removed SKUs (only if not referenced by orders)
+        for old_sku_code, old_sku in existing_skus.items():
+            if old_sku_code not in new_sku_codes:
+                if old_sku_code in protected_sku_codes:
+                    # Cannot delete - mark as inactive by setting stock to 0
+                    cursor.execute('UPDATE skus SET stock = 0, updated_at = CURRENT_TIMESTAMP WHERE id = %s',
+                                  (old_sku['id'],))
+                else:
+                    # Safe to delete
+                    cursor.execute('DELETE FROM skus WHERE id = %s', (old_sku['id'],))
+        
+        # ========== DIFF-BASED IMAGES UPDATE ==========
+        cursor.execute('SELECT id, image_url FROM product_images WHERE product_id = %s', (product_id,))
+        existing_images = {row['image_url']: row['id'] for row in cursor.fetchall()}
+        
+        new_image_urls = data.get('image_urls', [])
+        new_image_set = set(new_image_urls)
+        
+        # Collect removed images for Object Storage cleanup
+        images_to_delete_from_storage = []
+        
+        # Delete removed images from database
+        for old_url, old_id in existing_images.items():
+            if old_url not in new_image_set:
+                cursor.execute('DELETE FROM product_images WHERE id = %s', (old_id,))
+                if old_url and old_url.startswith('/storage/'):
+                    images_to_delete_from_storage.append(old_url.replace('/storage/', ''))
+        
+        # Check if size chart was changed/removed
+        cursor.execute('SELECT size_chart_image_url FROM products WHERE id = %s', (product_id,))
+        old_product = cursor.fetchone()
+        old_size_chart = old_product['size_chart_image_url'] if old_product else None
+        new_size_chart = data.get('size_chart_image_url')
+        if old_size_chart and old_size_chart != new_size_chart and old_size_chart.startswith('/storage/'):
+            images_to_delete_from_storage.append(old_size_chart.replace('/storage/', ''))
+        
+        # Insert or update images with correct sort_order
+        for idx, image_url in enumerate(new_image_urls):
+            if image_url in existing_images:
+                cursor.execute('UPDATE product_images SET sort_order = %s WHERE id = %s',
+                              (idx, existing_images[image_url]))
+            else:
+                cursor.execute('INSERT INTO product_images (product_id, image_url, sort_order) VALUES (%s, %s, %s)',
+                              (product_id, image_url, idx))
         
         conn.commit()
+        
+        # Delete removed images from Object Storage (after successful DB commit)
+        if images_to_delete_from_storage:
+            try:
+                storage_client = Client()
+                for filename in images_to_delete_from_storage:
+                    try:
+                        storage_client.delete(filename)
+                    except Exception:
+                        pass  # Ignore individual file deletion errors
+            except Exception:
+                pass  # Don't fail the request if storage cleanup fails
         
         return jsonify({
             'message': 'Product updated successfully',
@@ -1529,21 +1643,48 @@ def update_product_status(product_id):
 @app.route('/api/products/<int:product_id>', methods=['DELETE'])
 @admin_required
 def delete_product(product_id):
-    """Delete a product and all related data (cascade)"""
+    """Delete a product and all related data (cascade), including images from Object Storage"""
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Check if product exists
-        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
-        if not cursor.fetchone():
+        # Check if product exists and get size_chart_image_url
+        cursor.execute('SELECT id, size_chart_image_url FROM products WHERE id = %s', (product_id,))
+        product = cursor.fetchone()
+        if not product:
             return jsonify({'error': 'Product not found'}), 404
         
-        # Delete product (cascade will handle related data)
+        # Get all product images before deletion
+        cursor.execute('SELECT image_url FROM product_images WHERE product_id = %s', (product_id,))
+        product_images = cursor.fetchall()
+        
+        # Collect all image URLs to delete from Object Storage
+        images_to_delete = []
+        for img in product_images:
+            if img['image_url'] and img['image_url'].startswith('/storage/'):
+                images_to_delete.append(img['image_url'].replace('/storage/', ''))
+        
+        # Add size chart image if exists
+        if product['size_chart_image_url'] and product['size_chart_image_url'].startswith('/storage/'):
+            images_to_delete.append(product['size_chart_image_url'].replace('/storage/', ''))
+        
+        # Delete product from database (cascade will handle related data)
         cursor.execute('DELETE FROM products WHERE id = %s', (product_id,))
         conn.commit()
+        
+        # Delete images from Object Storage (after successful DB deletion)
+        if images_to_delete:
+            try:
+                storage_client = Client()
+                for filename in images_to_delete:
+                    try:
+                        storage_client.delete(filename)
+                    except Exception:
+                        pass  # Ignore individual file deletion errors
+            except Exception:
+                pass  # Don't fail the request if storage cleanup fails
         
         return jsonify({'message': 'Product deleted successfully'}), 200
         
