@@ -2059,80 +2059,73 @@ async function deleteChannel(channelId) {
     }
 }
 
-// QR Code upload handler
-document.addEventListener('DOMContentLoaded', function() {
-    const qrInput = document.getElementById('qrInput');
-    if (qrInput) {
-        qrInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                promptPayQrFile = file;
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const preview = document.getElementById('qrPreview');
-                    const placeholder = document.getElementById('qrPlaceholder');
-                    preview.src = event.target.result;
-                    preview.style.display = 'block';
-                    placeholder.style.display = 'none';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
+// PromptPay form submit handler
+async function savePromptPaySettings(event) {
+    event.preventDefault();
     
-    const promptpayForm = document.getElementById('promptpayForm');
-    if (promptpayForm) {
-        promptpayForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
+    const accountName = document.getElementById('accountName').value;
+    const accountNumber = document.getElementById('accountNumber').value;
+    
+    try {
+        let qrUrl = null;
+        
+        if (promptPayQrFile) {
+            const formData = new FormData();
+            formData.append('file', promptPayQrFile);
+            formData.append('type', 'promptpay_qr');
             
-            const accountName = document.getElementById('accountName').value;
-            const accountNumber = document.getElementById('accountNumber').value;
+            const uploadResponse = await fetch(`${API_URL}/upload`, {
+                method: 'POST',
+                body: formData
+            });
             
-            try {
-                let qrUrl = null;
-                
-                if (promptPayQrFile) {
-                    const formData = new FormData();
-                    formData.append('file', promptPayQrFile);
-                    formData.append('type', 'promptpay_qr');
-                    
-                    const uploadResponse = await fetch(`${API_URL}/upload`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (uploadResponse.ok) {
-                        const uploadResult = await uploadResponse.json();
-                        qrUrl = uploadResult.url;
-                    }
-                }
-                
-                const settingsData = {
-                    account_name: accountName,
-                    account_number: accountNumber
-                };
-                if (qrUrl) settingsData.qr_image_url = qrUrl;
-                
-                const response = await fetch(`${API_URL}/promptpay-settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settingsData)
-                });
-                
-                if (response.ok) {
-                    showAlert('บันทึกการตั้งค่าสำเร็จ', 'success');
-                    promptPayQrFile = null;
-                } else {
-                    const error = await response.json();
-                    showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
-                }
-            } catch (error) {
-                console.error('Error saving PromptPay settings:', error);
-                showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+            if (uploadResponse.ok) {
+                const uploadResult = await uploadResponse.json();
+                qrUrl = uploadResult.url;
             }
+        }
+        
+        const settingsData = {
+            account_name: accountName,
+            account_number: accountNumber
+        };
+        if (qrUrl) settingsData.qr_image_url = qrUrl;
+        
+        const response = await fetch(`${API_URL}/promptpay-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settingsData)
         });
+        
+        if (response.ok) {
+            showAlert('บันทึกการตั้งค่า PromptPay สำเร็จ', 'success');
+            promptPayQrFile = null;
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving PromptPay settings:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
     }
-});
+}
+
+// QR Code upload handler
+function handleQrUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        promptPayQrFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('qrPreview');
+            const placeholder = document.getElementById('qrPlaceholder');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            placeholder.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+}
 
 // ==========================================
 // Brands Page Functions

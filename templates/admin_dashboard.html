@@ -751,7 +751,7 @@
                             ตั้งค่า PromptPay
                         </h3>
                         
-                        <form id="promptpayForm">
+                        <form id="promptpayForm" onsubmit="savePromptPaySettings(event)">
                             <div class="qr-upload-area" id="qrUploadArea" onclick="document.getElementById('qrInput').click()">
                                 <div class="placeholder" id="qrPlaceholder">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-bottom: 12px;">
@@ -764,7 +764,7 @@
                                 </div>
                                 <img id="qrPreview" src="" alt="QR Preview" style="display: none; max-width: 200px; max-height: 200px; border-radius: 8px;">
                             </div>
-                            <input type="file" id="qrInput" accept="image/*" style="display: none;">
+                            <input type="file" id="qrInput" accept="image/*" style="display: none;" onchange="handleQrUpload(event)">
                             
                             <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                 <div class="form-group">
