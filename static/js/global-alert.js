@@ -102,4 +102,75 @@
     window.showInfo = function(message, duration) {
         return showAlert(message, 'info', duration);
     };
+
+    // Confirm alert with callback
+    window.showConfirmAlert = function(message, onConfirm, onCancel) {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        
+        // Create confirm dialog
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        
+        dialog.innerHTML = `
+            <div class="confirm-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <div class="confirm-message">${message}</div>
+            <div class="confirm-buttons">
+                <button class="confirm-btn cancel">ยกเลิก</button>
+                <button class="confirm-btn confirm">ยืนยัน</button>
+            </div>
+        `;
+        
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        
+        // Show with animation
+        setTimeout(() => {
+            overlay.classList.add('show');
+        }, 10);
+        
+        // Handle buttons
+        const confirmBtn = dialog.querySelector('.confirm-btn.confirm');
+        const cancelBtn = dialog.querySelector('.confirm-btn.cancel');
+        
+        function closeDialog() {
+            overlay.classList.remove('show');
+            setTimeout(() => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            }, 300);
+        }
+        
+        confirmBtn.addEventListener('click', () => {
+            closeDialog();
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            closeDialog();
+            if (typeof onCancel === 'function') {
+                onCancel();
+            }
+        });
+        
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeDialog();
+                if (typeof onCancel === 'function') {
+                    onCancel();
+                }
+            }
+        });
+    };
 })();

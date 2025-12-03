@@ -97,24 +97,25 @@ async function loadCurrentUser() {
 
 // Handle logout
 async function handleLogout() {
-    if (!confirm('คุณต้องการออกจากระบบหรือไม่?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/logout`, {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            window.location.href = '/login';
-        } else {
-            throw new Error('Logout failed');
+    showConfirmAlert('คุณต้องการออกจากระบบหรือไม่?', async () => {
+        try {
+            const response = await fetch(`${API_URL}/logout`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                showAlert('ออกจากระบบสำเร็จ', 'success');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1000);
+            } else {
+                throw new Error('Logout failed');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+            showAlert('เกิดข้อผิดพลาดในการออกจากระบบ', 'error');
         }
-    } catch (error) {
-        console.error('Logout error:', error);
-        alert('เกิดข้อผิดพลาดในการออกจากระบบ');
-    }
+    });
 }
 
 // Load roles from API
