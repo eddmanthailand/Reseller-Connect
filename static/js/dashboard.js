@@ -2060,11 +2060,13 @@ async function deleteChannel(channelId) {
 }
 
 // PromptPay form submit handler
-async function savePromptPaySettings(event) {
-    event.preventDefault();
+async function savePromptPaySettings() {
+    console.log('savePromptPaySettings called');
     
     const accountName = document.getElementById('accountName').value;
     const accountNumber = document.getElementById('accountNumber').value;
+    
+    console.log('Saving PromptPay:', { accountName, accountNumber });
     
     try {
         let qrUrl = null;
@@ -2076,6 +2078,7 @@ async function savePromptPaySettings(event) {
             
             const uploadResponse = await fetch(`${API_URL}/upload`, {
                 method: 'POST',
+                credentials: 'include',
                 body: formData
             });
             
@@ -2091,18 +2094,31 @@ async function savePromptPaySettings(event) {
         };
         if (qrUrl) settingsData.qr_image_url = qrUrl;
         
+        console.log('Sending data:', settingsData);
+        
         const response = await fetch(`${API_URL}/promptpay-settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(settingsData)
         });
         
+        console.log('Response status:', response.status);
+        
         if (response.ok) {
+            const result = await response.json();
+            console.log('Save success:', result);
             showAlert('บันทึกการตั้งค่า PromptPay สำเร็จ', 'success');
             promptPayQrFile = null;
         } else {
-            const error = await response.json();
-            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            const errorText = await response.text();
+            console.error('Save failed:', response.status, errorText);
+            try {
+                const error = JSON.parse(errorText);
+                showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            } catch {
+                showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+            }
         }
     } catch (error) {
         console.error('Error saving PromptPay settings:', error);
