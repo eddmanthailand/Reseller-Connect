@@ -1,6 +1,17 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Product Update Logic - Diff-based Approach (Dec 2025):**
+  - Changed from "delete all and recreate" to "diff-based update" strategy
+  - SKU IDs are now preserved when editing products (maintains referential integrity with order_items)
+  - Options and option values are updated in-place by name matching
+  - SKUs with order references are protected: set stock=0 instead of deleting
+  - Removed images are automatically deleted from Object Storage after successful DB commit
+  - Product deletion now cleans up images from Object Storage
+- **Global Alert System (Dec 2025):**
+  - Consistent notification system across all pages using showGlobalAlert() and showConfirmAlert()
+  - Logout confirmation dialog with success message
+  - Script loading order fixed: global-alert.js loads before dashboard.js
 - **Order Number Settings (Dec 2025):**
   - Configurable order number format: PREFIX-YYMM-XXXX (e.g., ORD-2512-0001)
   - Settings page UI for configuring prefix (1-10 chars) and digit count (3-6 digits)
