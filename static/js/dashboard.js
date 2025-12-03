@@ -1183,16 +1183,29 @@ async function cycleProductStatus(productId, currentStatus) {
     }
 }
 
-// Show alert message
+// Show alert message (uses global alert if alertBox not available)
 function showAlert(message, type) {
-    if (!alertBox) return;
+    // Try global alert first (works on all pages)
+    const globalAlert = document.getElementById('globalAlertBox');
+    if (globalAlert) {
+        globalAlert.textContent = message;
+        globalAlert.className = `global-alert ${type} show`;
+        
+        setTimeout(() => {
+            globalAlert.classList.remove('show');
+        }, 4000);
+        return;
+    }
+    
+    // Fallback to old alertBox
+    if (alertBox) {
+        alertBox.textContent = message;
+        alertBox.className = `alert ${type} show`;
 
-    alertBox.textContent = message;
-    alertBox.className = `alert ${type} show`;
-
-    setTimeout(() => {
-        alertBox.classList.remove('show');
-    }, 5000);
+        setTimeout(() => {
+            alertBox.classList.remove('show');
+        }, 5000);
+    }
 }
 
 // ========== Price/Stock Modal Functions ==========
