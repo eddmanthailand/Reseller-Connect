@@ -418,7 +418,8 @@ def get_user(user_id):
         
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.role_id, u.reseller_tier_id,
-                   u.tier_manual_override,
+                   u.tier_manual_override, u.phone, u.email, u.address, u.province,
+                   u.district, u.subdistrict, u.postal_code, u.brand_name, u.logo_url,
                    r.name as role, rt.name as reseller_tier
             FROM users u
             JOIN roles r ON u.role_id = r.id
@@ -490,6 +491,42 @@ def update_user(user_id):
         if 'tier_manual_override' in data:
             update_fields.append('tier_manual_override = %s')
             update_values.append(data['tier_manual_override'])
+        
+        if 'phone' in data:
+            update_fields.append('phone = %s')
+            update_values.append(data['phone'] if data['phone'] else None)
+        
+        if 'email' in data:
+            update_fields.append('email = %s')
+            update_values.append(data['email'] if data['email'] else None)
+        
+        if 'address' in data:
+            update_fields.append('address = %s')
+            update_values.append(data['address'] if data['address'] else None)
+        
+        if 'province' in data:
+            update_fields.append('province = %s')
+            update_values.append(data['province'] if data['province'] else None)
+        
+        if 'district' in data:
+            update_fields.append('district = %s')
+            update_values.append(data['district'] if data['district'] else None)
+        
+        if 'subdistrict' in data:
+            update_fields.append('subdistrict = %s')
+            update_values.append(data['subdistrict'] if data['subdistrict'] else None)
+        
+        if 'postal_code' in data:
+            update_fields.append('postal_code = %s')
+            update_values.append(data['postal_code'] if data['postal_code'] else None)
+        
+        if 'brand_name' in data:
+            update_fields.append('brand_name = %s')
+            update_values.append(data['brand_name'] if data['brand_name'] else None)
+        
+        if 'logo_url' in data:
+            update_fields.append('logo_url = %s')
+            update_values.append(data['logo_url'] if data['logo_url'] else None)
         
         if 'password' in data and data['password']:
             password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

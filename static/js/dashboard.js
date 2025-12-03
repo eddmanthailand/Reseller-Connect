@@ -591,12 +591,25 @@ async function openEditUserModal(userId) {
         
         editManualOverride.checked = user.tier_manual_override === true;
         
+        const shippingSection = document.getElementById('editResellerShippingSection');
+        
         if (user.role === 'Reseller') {
             editTierGroup.classList.remove('hidden');
             editManualOverrideGroup.classList.remove('hidden');
+            if (shippingSection) shippingSection.classList.remove('hidden');
+            
+            document.getElementById('editBrandName').value = user.brand_name || '';
+            document.getElementById('editPhone').value = user.phone || '';
+            document.getElementById('editEmail').value = user.email || '';
+            document.getElementById('editAddress').value = user.address || '';
+            document.getElementById('editSubdistrict').value = user.subdistrict || '';
+            document.getElementById('editDistrict').value = user.district || '';
+            document.getElementById('editProvince').value = user.province || '';
+            document.getElementById('editPostalCode').value = user.postal_code || '';
         } else {
             editTierGroup.classList.add('hidden');
             editManualOverrideGroup.classList.add('hidden');
+            if (shippingSection) shippingSection.classList.add('hidden');
         }
         
         editRoleSelect.addEventListener('change', function() {
@@ -604,9 +617,11 @@ async function openEditUserModal(userId) {
             if (selectedOption.dataset.roleName === 'Reseller') {
                 editTierGroup.classList.remove('hidden');
                 editManualOverrideGroup.classList.remove('hidden');
+                if (shippingSection) shippingSection.classList.remove('hidden');
             } else {
                 editTierGroup.classList.add('hidden');
                 editManualOverrideGroup.classList.add('hidden');
+                if (shippingSection) shippingSection.classList.add('hidden');
             }
         });
         
@@ -644,6 +659,15 @@ async function handleEditUser(event) {
         const tierValue = document.getElementById('editResellerTier').value;
         userData.reseller_tier_id = tierValue ? parseInt(tierValue) : null;
         userData.tier_manual_override = document.getElementById('editManualOverride').checked;
+        
+        userData.brand_name = document.getElementById('editBrandName').value;
+        userData.phone = document.getElementById('editPhone').value;
+        userData.email = document.getElementById('editEmail').value;
+        userData.address = document.getElementById('editAddress').value;
+        userData.subdistrict = document.getElementById('editSubdistrict').value;
+        userData.district = document.getElementById('editDistrict').value;
+        userData.province = document.getElementById('editProvince').value;
+        userData.postal_code = document.getElementById('editPostalCode').value;
     } else {
         userData.reseller_tier_id = null;
         userData.tier_manual_override = false;

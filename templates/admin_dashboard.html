@@ -1184,6 +1184,53 @@
                     </p>
                 </div>
                 
+                <div class="reseller-shipping-section hidden" id="editResellerShippingSection" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="margin-bottom: 16px; color: #a855f7;">ข้อมูลสำหรับจัดส่ง</h4>
+                    
+                    <div class="form-group">
+                        <label for="editBrandName">ชื่อร้าน/ยี่ห้อ (สำหรับจ่าหน้าซอง)</label>
+                        <input type="text" id="editBrandName" placeholder="ชื่อร้าน">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="editPhone">เบอร์โทรศัพท์</label>
+                            <input type="text" id="editPhone" placeholder="0xx-xxx-xxxx">
+                        </div>
+                        <div class="form-group">
+                            <label for="editEmail">อีเมล</label>
+                            <input type="email" id="editEmail" placeholder="email@example.com">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editAddress">ที่อยู่</label>
+                        <textarea id="editAddress" rows="2" placeholder="บ้านเลขที่ ซอย ถนน"></textarea>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="editSubdistrict">แขวง/ตำบล</label>
+                            <input type="text" id="editSubdistrict" placeholder="แขวง/ตำบล">
+                        </div>
+                        <div class="form-group">
+                            <label for="editDistrict">เขต/อำเภอ</label>
+                            <input type="text" id="editDistrict" placeholder="เขต/อำเภอ">
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="editProvince">จังหวัด</label>
+                            <input type="text" id="editProvince" placeholder="จังหวัด">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPostalCode">รหัสไปรษณีย์</label>
+                            <input type="text" id="editPostalCode" placeholder="xxxxx">
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()">ยกเลิก</button>
                     <button type="submit" class="btn">บันทึก</button>
