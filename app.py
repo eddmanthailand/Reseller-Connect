@@ -74,7 +74,7 @@ def dashboard():
     if role in ['Super Admin', 'Assistant Admin']:
         return redirect(url_for('admin_management'))
     elif role == 'Reseller':
-        return render_template('reseller_dashboard.html')
+        return render_template('reseller_spa.html')
     else:
         return redirect(url_for('login_page'))
 
@@ -4248,20 +4248,20 @@ def get_reseller_product_detail(product_id):
 @app.route('/reseller/dashboard')
 @login_required
 def reseller_dashboard_page():
-    """Reseller dashboard page"""
-    return render_template('reseller_dashboard.html')
+    """Reseller dashboard SPA"""
+    return render_template('reseller_spa.html')
 
 @app.route('/reseller/catalog')
 @login_required
 def reseller_catalog_page():
-    """Reseller product catalog page"""
-    return render_template('reseller_catalog.html')
+    """Redirect to SPA with catalog hash"""
+    return redirect('/dashboard#catalog')
 
 @app.route('/reseller/cart')
 @login_required
 def reseller_cart_page():
-    """Reseller cart page"""
-    return render_template('reseller_cart.html')
+    """Redirect to SPA with cart hash"""
+    return redirect('/dashboard#cart')
 
 @app.route('/reseller/checkout')
 @login_required
@@ -4272,20 +4272,20 @@ def reseller_checkout_page():
 @app.route('/reseller/orders')
 @login_required
 def reseller_orders_page():
-    """Reseller orders page"""
-    return render_template('reseller_orders.html')
+    """Redirect to SPA with orders hash"""
+    return redirect('/dashboard#orders')
 
 @app.route('/reseller/customers')
 @login_required
 def reseller_customers_page():
-    """Reseller customers management page"""
-    return render_template('reseller_customers.html')
+    """Redirect to SPA with customers hash"""
+    return redirect('/dashboard#customers')
 
 @app.route('/reseller/profile')
 @login_required
 def reseller_profile_page():
-    """Reseller profile page"""
-    return render_template('reseller_profile.html')
+    """Redirect to SPA with profile hash"""
+    return redirect('/dashboard#profile')
 
 # ==================== ORDER API ====================
 
