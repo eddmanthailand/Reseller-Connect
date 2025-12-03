@@ -525,7 +525,7 @@
     <div class="full-page-container">
         <header class="full-page-header">
             <div class="header-left">
-                <a href="/admin/dashboard#products" class="btn-primary btn-gray" style="text-decoration: none;">
+                <a href="/admin#products" class="btn-primary btn-gray" style="text-decoration: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m12 19-7-7 7-7"/>
                         <path d="M19 12H5"/>
@@ -579,7 +579,7 @@
                                     <option value="">-- เลือกแบรนด์ --</option>
                                 </select>
                                 <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
-                                    หากยังไม่มีแบรนด์ <a href="/admin/dashboard#brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
+                                    หากยังไม่มีแบรนด์ <a href="/admin#brands" style="color: rgba(139, 92, 246, 0.9);">สร้างแบรนด์ใหม่</a>
                                 </p>
                             </div>
                             <div>
@@ -593,7 +593,7 @@
                                     <option value="">-- เลือกหมวดหมู่ (ไม่บังคับ) --</option>
                                 </select>
                                 <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
-                                    หากยังไม่มีหมวดหมู่ <a href="/admin/dashboard#categories" style="color: rgba(139, 92, 246, 0.9);">สร้างหมวดหมู่ใหม่</a>
+                                    หากยังไม่มีหมวดหมู่ <a href="/admin#categories" style="color: rgba(139, 92, 246, 0.9);">สร้างหมวดหมู่ใหม่</a>
                                 </p>
                             </div>
                         </div>
@@ -1685,7 +1685,7 @@
                     
                     showAlert('บันทึกสำเร็จ', 'success');
                     setTimeout(() => {
-                        window.location.href = '/admin/dashboard#products';
+                        window.location.href = '/admin#products';
                     }, 1000);
                 } else {
                     throw new Error(result.error || 'บันทึกข้อมูลล้มเหลว');
@@ -1964,7 +1964,7 @@
                 console.error('Error loading product:', error);
                 showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูลสินค้า: ' + error.message, 'error');
                 setTimeout(() => {
-                    window.location.href = '/admin/dashboard#products';
+                    window.location.href = '/admin#products';
                 }, 1500);
             }
         }
