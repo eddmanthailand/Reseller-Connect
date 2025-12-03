@@ -328,8 +328,8 @@ async function viewProduct(productId) {
         const response = await fetch(`${RESELLER_API_URL}/reseller/products/${productId}`);
         if (!response.ok) throw new Error('Failed to load product');
         
-        const data = await response.json();
-        openProductModal(data.product);
+        const product = await response.json();
+        openProductModal(product);
     } catch (error) {
         console.error('Error loading product:', error);
         showAlert('ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
@@ -341,34 +341,53 @@ let selectedSkuId = null;
 
 function openProductModal(product) {
     document.getElementById('productModalTitle').textContent = product.name;
-    currentProductSkus = product.skus || [];
+    
+    // Transform SKUs to include variant_values
+    currentProductSkus = (product.skus || []).map(sku => {
+        const variantValues = {};
+        if (sku.options) {
+            sku.options.forEach(opt => {
+                variantValues[opt.option_name] = opt.option_value;
+            });
+        }
+        return {
+            ...sku,
+            variant_values: variantValues,
+            final_price: sku.discounted_price || sku.price
+        };
+    });
+    
     selectedSkuId = currentProductSkus.length > 0 ? currentProductSkus[0].id : null;
     
     const hasOptions = product.options && product.options.length > 0;
     
     let optionsHtml = '';
     if (hasOptions) {
-        optionsHtml = product.options.map(opt => `
+        optionsHtml = product.options.map(opt => {
+            const values = opt.values || [];
+            return `
             <div style="margin-bottom: 12px;">
                 <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">${opt.name}</label>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    ${opt.values.map((val, idx) => `
+                    ${values.map((val, idx) => {
+                        const valStr = typeof val === 'object' ? val.value : val;
+                        return `
                         <button type="button" class="option-btn ${idx === 0 ? 'active' : ''}" 
-                                data-option="${opt.name}" data-value="${val}"
-                                onclick="selectOption(this, '${opt.name}', '${val}')"
+                                data-option="${opt.name}" data-value="${valStr}"
+                                onclick="selectOption(this, '${opt.name}', '${valStr}')"
                                 style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); 
                                        background: ${idx === 0 ? 'var(--primary)' : 'transparent'}; color: white; cursor: pointer;">
-                            ${val}
+                            ${valStr}
                         </button>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     }
     
     const firstSku = currentProductSkus[0] || {};
-    const price = firstSku.final_price || firstSku.price || product.min_price || 0;
-    const originalPrice = firstSku.price || product.min_price || 0;
+    const price = firstSku.final_price || firstSku.discounted_price || firstSku.price || 0;
+    const originalPrice = firstSku.price || 0;
     const discount = product.discount_percent || 0;
     const stock = firstSku.stock || 0;
     
