@@ -3406,6 +3406,293 @@ def clear_cart():
         if conn:
             conn.close()
 
+# ==================== RESELLER DASHBOARD APIs ====================
+
+@app.route('/api/reseller/dashboard-stats', methods=['GET'])
+@login_required
+def get_reseller_dashboard_stats():
+    """Get dashboard statistics for reseller"""
+    conn = None
+    cursor = None
+    try:
+        from datetime import datetime, timedelta
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user info with tier
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.total_purchases,
+                   u.reseller_tier_id, u.tier_manual_override,
+                   rt.name as tier_name, rt.level_rank, rt.description as tier_description
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Get this month's purchases
+        today = datetime.now().date()
+        first_of_month = today.replace(day=1)
+        
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as month_total,
+                   COUNT(*) as month_orders
+            FROM orders
+            WHERE user_id = %s AND status = 'paid'
+            AND DATE(paid_at) >= %s AND DATE(paid_at) <= %s
+        ''', (user_id, first_of_month, today))
+        month_stats = cursor.fetchone()
+        
+        # Get all-time stats
+        cursor.execute('''
+            SELECT COALESCE(SUM(final_amount), 0) as all_time_total,
+                   COUNT(*) as all_time_orders
+            FROM orders
+            WHERE user_id = %s AND status = 'paid'
+        ''', (user_id,))
+        all_time_stats = cursor.fetchone()
+        
+        # Get pending orders count (by status)
+        cursor.execute('''
+            SELECT status, COUNT(*) as count
+            FROM orders
+            WHERE user_id = %s AND status != 'paid' AND status != 'cancelled'
+            GROUP BY status
+        ''', (user_id,))
+        pending_orders = {row['status']: row['count'] for row in cursor.fetchall()}
+        
+        # Get tier progress info
+        tier_progress = {
+            'current_tier': user['tier_name'] or 'ไม่มีระดับ',
+            'current_tier_rank': user['level_rank'] or 0,
+            'tier_description': user['tier_description'] or '',
+            'total_purchases': float(user['total_purchases'] or 0),
+            'next_tier': None,
+            'next_tier_threshold': 0,
+            'progress_percent': 100,
+            'amount_to_next': 0,
+            'is_manual_override': user['tier_manual_override'] or False
+        }
+        
+        # Get next tier info
+        if user['level_rank']:
+            cursor.execute('''
+                SELECT name, upgrade_threshold, level_rank
+                FROM reseller_tiers 
+                WHERE level_rank > %s AND is_manual_only = FALSE
+                ORDER BY level_rank ASC
+                LIMIT 1
+            ''', (user['level_rank'],))
+            next_tier = cursor.fetchone()
+            
+            if next_tier:
+                tier_progress['next_tier'] = next_tier['name']
+                tier_progress['next_tier_threshold'] = float(next_tier['upgrade_threshold'] or 0)
+                
+                # Calculate progress
+                current_purchases = float(user['total_purchases'] or 0)
+                threshold = float(next_tier['upgrade_threshold'] or 0)
+                
+                if threshold > 0:
+                    tier_progress['progress_percent'] = min(100, round((current_purchases / threshold) * 100, 1))
+                    tier_progress['amount_to_next'] = max(0, threshold - current_purchases)
+        
+        # Get cart item count
+        cursor.execute('''
+            SELECT COALESCE(SUM(ci.quantity), 0) as cart_count
+            FROM cart_items ci
+            JOIN carts c ON c.id = ci.cart_id
+            WHERE c.user_id = %s AND c.status = 'active'
+        ''', (user_id,))
+        cart_result = cursor.fetchone()
+        cart_count = int(cart_result['cart_count']) if cart_result else 0
+        
+        # Get notification count
+        cursor.execute('''
+            SELECT COUNT(*) as unread_count
+            FROM notifications
+            WHERE user_id = %s AND is_read = FALSE
+        ''', (user_id,))
+        notif_result = cursor.fetchone()
+        notification_count = int(notif_result['unread_count']) if notif_result else 0
+        
+        return jsonify({
+            'user': {
+                'id': user['id'],
+                'full_name': user['full_name'],
+                'username': user['username']
+            },
+            'month_stats': {
+                'total': float(month_stats['month_total']),
+                'orders': int(month_stats['month_orders'])
+            },
+            'all_time_stats': {
+                'total': float(all_time_stats['all_time_total']),
+                'orders': int(all_time_stats['all_time_orders'])
+            },
+            'pending_orders': pending_orders,
+            'tier_progress': tier_progress,
+            'cart_count': cart_count,
+            'notification_count': notification_count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/recent-orders', methods=['GET'])
+@login_required
+def get_reseller_recent_orders():
+    """Get recent orders for reseller dashboard"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        limit = request.args.get('limit', 5, type=int)
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status, o.final_amount, 
+                   o.created_at, o.updated_at, o.paid_at,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
+                   (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+            FROM orders o
+            WHERE o.user_id = %s
+            ORDER BY o.created_at DESC
+            LIMIT %s
+        ''', (user_id, limit))
+        
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+            orders.append(order)
+        
+        return jsonify(orders), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/featured-products', methods=['GET'])
+@login_required
+def get_reseller_featured_products():
+    """Get featured/new products for reseller dashboard"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get user's tier
+        cursor.execute('''
+            SELECT reseller_tier_id FROM users WHERE id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['reseller_tier_id'] if user else None
+        
+        # Get newest products (last 10)
+        cursor.execute('''
+            SELECT p.id, p.name, p.parent_sku,
+                   b.name as brand_name,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT MIN(price) FROM skus WHERE product_id = p.id) as min_price,
+                   (SELECT MAX(price) FROM skus WHERE product_id = p.id) as max_price,
+                   (SELECT SUM(stock) FROM skus WHERE product_id = p.id) as total_stock,
+                   ptp.discount_percent,
+                   p.created_at
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
+            WHERE p.status = 'active'
+            ORDER BY p.created_at DESC
+            LIMIT 10
+        ''', (tier_id,))
+        
+        new_products = []
+        for row in cursor.fetchall():
+            product = dict(row)
+            product['min_price'] = float(product['min_price']) if product['min_price'] else 0
+            product['max_price'] = float(product['max_price']) if product['max_price'] else 0
+            product['discount_percent'] = float(product['discount_percent']) if product['discount_percent'] else 0
+            
+            if product['discount_percent'] > 0:
+                product['discounted_min_price'] = round(product['min_price'] * (1 - product['discount_percent'] / 100), 2)
+                product['discounted_max_price'] = round(product['max_price'] * (1 - product['discount_percent'] / 100), 2)
+            else:
+                product['discounted_min_price'] = product['min_price']
+                product['discounted_max_price'] = product['max_price']
+            
+            new_products.append(product)
+        
+        # Get best-selling products (based on order items)
+        cursor.execute('''
+            SELECT p.id, p.name, p.parent_sku,
+                   b.name as brand_name,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT MIN(price) FROM skus WHERE product_id = p.id) as min_price,
+                   (SELECT MAX(price) FROM skus WHERE product_id = p.id) as max_price,
+                   ptp.discount_percent,
+                   COALESCE(SUM(oi.quantity), 0) as total_sold
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
+            LEFT JOIN skus s ON s.product_id = p.id
+            LEFT JOIN order_items oi ON oi.sku_id = s.id
+            LEFT JOIN orders o ON o.id = oi.order_id AND o.status = 'paid'
+            WHERE p.status = 'active'
+            GROUP BY p.id, p.name, p.parent_sku, b.name, ptp.discount_percent
+            HAVING COALESCE(SUM(oi.quantity), 0) > 0
+            ORDER BY total_sold DESC
+            LIMIT 10
+        ''', (tier_id,))
+        
+        best_sellers = []
+        for row in cursor.fetchall():
+            product = dict(row)
+            product['min_price'] = float(product['min_price']) if product['min_price'] else 0
+            product['max_price'] = float(product['max_price']) if product['max_price'] else 0
+            product['discount_percent'] = float(product['discount_percent']) if product['discount_percent'] else 0
+            
+            if product['discount_percent'] > 0:
+                product['discounted_min_price'] = round(product['min_price'] * (1 - product['discount_percent'] / 100), 2)
+                product['discounted_max_price'] = round(product['max_price'] * (1 - product['discount_percent'] / 100), 2)
+            else:
+                product['discounted_min_price'] = product['min_price']
+                product['discounted_max_price'] = product['max_price']
+            
+            best_sellers.append(product)
+        
+        return jsonify({
+            'new_products': new_products,
+            'best_sellers': best_sellers
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== RESELLER PRODUCT CATALOG ====================
 
 @app.route('/api/reseller/products', methods=['GET'])
