@@ -2146,6 +2146,12 @@ async function savePromptPaySettings() {
 // ==================== ORDER NUMBER SETTINGS ====================
 
 async function loadOrderNumberSettings() {
+    const prefixInput = document.getElementById('orderPrefix');
+    const digitSelect = document.getElementById('orderDigitCount');
+    const previewDiv = document.getElementById('orderNumberPreview');
+    
+    if (!prefixInput || !digitSelect || !previewDiv) return;
+    
     try {
         const response = await fetch(`${API_URL}/order-number-settings`, {
             credentials: 'include'
@@ -2153,12 +2159,16 @@ async function loadOrderNumberSettings() {
         
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('orderPrefix').value = data.prefix || 'ORD';
-            document.getElementById('orderDigitCount').value = data.digit_count || 4;
-            document.getElementById('orderNumberPreview').textContent = data.preview || 'ORD-2512-0001';
+            prefixInput.value = data.prefix || 'ORD';
+            digitSelect.value = data.digit_count || 4;
+            previewDiv.textContent = data.preview || 'ORD-2512-0001';
+        } else {
+            console.error('Failed to load order number settings:', response.status);
+            updateOrderPreview();
         }
     } catch (error) {
         console.error('Error loading order number settings:', error);
+        updateOrderPreview();
     }
 }
 
@@ -2175,11 +2185,25 @@ function updateOrderPreview() {
 }
 
 async function saveOrderNumberSettings() {
-    const prefix = document.getElementById('orderPrefix').value.toUpperCase().trim();
-    const digitCount = parseInt(document.getElementById('orderDigitCount').value);
+    const prefixInput = document.getElementById('orderPrefix');
+    const digitSelect = document.getElementById('orderDigitCount');
+    const previewDiv = document.getElementById('orderNumberPreview');
+    
+    if (!prefixInput || !digitSelect) {
+        showAlert('ไม่พบฟอร์มตั้งค่า', 'error');
+        return;
+    }
+    
+    const prefix = prefixInput.value.toUpperCase().trim();
+    const digitCount = parseInt(digitSelect.value);
     
     if (!prefix || prefix.length > 10) {
         showAlert('คำนำหน้าต้องมี 1-10 ตัวอักษร', 'error');
+        return;
+    }
+    
+    if (!/^[A-Z0-9]+$/.test(prefix)) {
+        showAlert('คำนำหน้าต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลขเท่านั้น', 'error');
         return;
     }
     
@@ -2196,8 +2220,12 @@ async function saveOrderNumberSettings() {
         
         if (response.ok) {
             const result = await response.json();
-            if (result.settings && result.settings.preview) {
-                document.getElementById('orderNumberPreview').textContent = result.settings.preview;
+            if (result.settings) {
+                prefixInput.value = result.settings.prefix || prefix;
+                digitSelect.value = result.settings.digit_count || digitCount;
+                if (result.settings.preview && previewDiv) {
+                    previewDiv.textContent = result.settings.preview;
+                }
             }
             showAlert('บันทึกการตั้งค่าเลขที่คำสั่งซื้อสำเร็จ', 'success');
         } else {
@@ -2206,7 +2234,7 @@ async function saveOrderNumberSettings() {
         }
     } catch (error) {
         console.error('Error saving order number settings:', error);
-        showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+        showAlert('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่', 'error');
     }
 }
 
