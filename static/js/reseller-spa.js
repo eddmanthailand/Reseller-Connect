@@ -391,17 +391,74 @@ function openProductModal(product) {
     const discount = product.discount_percent || 0;
     const stock = firstSku.stock || 0;
     
+    // Get main image from images array
+    const mainImage = product.images && product.images.length > 0 ? product.images[0].image_url : null;
+    
+    // Build customizations HTML
+    let customizationsHtml = '';
+    if (product.customizations && product.customizations.length > 0) {
+        customizationsHtml = product.customizations.map(c => `
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">
+                    ${c.name} ${c.is_required ? '<span style="color:#ef4444;">*</span>' : ''}
+                </label>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${(c.choices || []).map((ch, idx) => `
+                        <button type="button" class="customization-btn" 
+                                data-customization="${c.id}" data-choice="${ch.id}"
+                                onclick="toggleCustomization(this, ${c.id}, ${ch.id}, ${c.allow_multiple})"
+                                style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); 
+                                       background: transparent; color: white; cursor: pointer; font-size: 12px;">
+                            ${ch.label}${ch.extra_price ? ` (+฿${ch.extra_price})` : ''}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Build image gallery HTML
+    let galleryHtml = '';
+    if (product.images && product.images.length > 1) {
+        galleryHtml = `
+            <div style="display: flex; gap: 8px; margin-top: 12px; justify-content: center;">
+                ${product.images.map((img, idx) => `
+                    <img src="${img.image_url}" alt="Product ${idx+1}" 
+                         onclick="changeMainImage('${img.image_url}')"
+                         style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; 
+                                cursor: pointer; border: 2px solid ${idx === 0 ? 'var(--primary)' : 'transparent'};"
+                         class="gallery-thumb">
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    // Size chart HTML
+    let sizeChartHtml = '';
+    if (product.size_chart_image_url) {
+        sizeChartHtml = `
+            <div style="margin-top: 12px;">
+                <button onclick="showSizeChart('${product.size_chart_image_url}')" 
+                        style="background: transparent; border: 1px solid rgba(255,255,255,0.3); 
+                               color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                    📏 ดูตารางไซส์
+                </button>
+            </div>
+        `;
+    }
+    
     document.getElementById('productModalContent').innerHTML = `
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
-            <div style="padding: 20px; background: rgba(255,255,255,0.95); display: flex; align-items: center; justify-content: center;">
-                ${product.image_url 
-                    ? `<img src="${product.image_url}" alt="${product.name}" style="max-width: 100%; max-height: 300px; object-fit: contain;">`
+            <div style="padding: 20px; background: rgba(255,255,255,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                ${mainImage 
+                    ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" style="max-width: 100%; max-height: 280px; object-fit: contain;">`
                     : `<div style="width: 200px; height: 200px; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                        </div>`
                 }
+                ${galleryHtml}
             </div>
-            <div style="padding: 24px;">
+            <div style="padding: 24px; max-height: 500px; overflow-y: auto;">
                 <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">${product.brand_name || ''}</div>
                 <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">${product.name}</h3>
                 <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">SKU: ${product.parent_sku || '-'}</div>
@@ -413,6 +470,8 @@ function openProductModal(product) {
                 </div>
                 
                 ${optionsHtml}
+                ${customizationsHtml}
+                ${sizeChartHtml}
                 
                 <div style="display: flex; align-items: center; gap: 12px; margin-top: 20px;">
                     <span style="font-size: 13px; color: rgba(255,255,255,0.7);">จำนวน:</span>
@@ -476,6 +535,50 @@ function changeModalQty(delta) {
     let val = parseInt(input.value) || 1;
     val = Math.max(1, val + delta);
     input.value = val;
+}
+
+function changeMainImage(imageUrl) {
+    const mainImg = document.getElementById('modalMainImage');
+    if (mainImg) {
+        mainImg.src = imageUrl;
+    }
+    document.querySelectorAll('.gallery-thumb').forEach(thumb => {
+        thumb.style.border = thumb.src === imageUrl ? '2px solid var(--primary)' : '2px solid transparent';
+    });
+}
+
+function showSizeChart(imageUrl) {
+    const overlay = document.createElement('div');
+    overlay.id = 'sizeChartOverlay';
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; cursor: pointer;';
+    overlay.innerHTML = `<img src="${imageUrl}" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 12px;">`;
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+}
+
+let selectedCustomizations = {};
+
+function toggleCustomization(btn, customizationId, choiceId, allowMultiple) {
+    if (!selectedCustomizations[customizationId]) {
+        selectedCustomizations[customizationId] = [];
+    }
+    
+    const btns = document.querySelectorAll(`.customization-btn[data-customization="${customizationId}"]`);
+    
+    if (allowMultiple) {
+        const idx = selectedCustomizations[customizationId].indexOf(choiceId);
+        if (idx > -1) {
+            selectedCustomizations[customizationId].splice(idx, 1);
+            btn.style.background = 'transparent';
+        } else {
+            selectedCustomizations[customizationId].push(choiceId);
+            btn.style.background = 'var(--primary)';
+        }
+    } else {
+        btns.forEach(b => b.style.background = 'transparent');
+        selectedCustomizations[customizationId] = [choiceId];
+        btn.style.background = 'var(--primary)';
+    }
 }
 
 async function addToCartFromModal() {
