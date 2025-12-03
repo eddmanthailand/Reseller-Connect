@@ -3693,6 +3693,305 @@ def get_reseller_featured_products():
         if conn:
             conn.close()
 
+# ==================== RESELLER CUSTOMERS ====================
+
+@app.route('/api/reseller/customers', methods=['GET'])
+@login_required
+def get_reseller_customers():
+    """Get all customers for the logged-in reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        search = request.args.get('search', '')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        if search:
+            cursor.execute('''
+                SELECT id, full_name, phone, email, address, province, district, 
+                       subdistrict, postal_code, notes, created_at
+                FROM reseller_customers
+                WHERE reseller_id = %s 
+                AND (full_name ILIKE %s OR phone ILIKE %s OR email ILIKE %s)
+                ORDER BY created_at DESC
+            ''', (user_id, f'%{search}%', f'%{search}%', f'%{search}%'))
+        else:
+            cursor.execute('''
+                SELECT id, full_name, phone, email, address, province, district, 
+                       subdistrict, postal_code, notes, created_at
+                FROM reseller_customers
+                WHERE reseller_id = %s
+                ORDER BY created_at DESC
+            ''', (user_id,))
+        
+        customers = [dict(row) for row in cursor.fetchall()]
+        return jsonify({'customers': customers}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/customers', methods=['POST'])
+@login_required
+def create_reseller_customer():
+    """Create a new customer for the reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        if not data.get('full_name'):
+            return jsonify({'error': 'กรุณากรอกชื่อลูกค้า'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO reseller_customers 
+            (reseller_id, full_name, phone, email, address, province, district, subdistrict, postal_code, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, full_name, phone, email, address, province, district, subdistrict, postal_code, notes, created_at
+        ''', (
+            user_id,
+            data.get('full_name'),
+            data.get('phone'),
+            data.get('email'),
+            data.get('address'),
+            data.get('province'),
+            data.get('district'),
+            data.get('subdistrict'),
+            data.get('postal_code'),
+            data.get('notes')
+        ))
+        
+        customer = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify({'message': 'เพิ่มลูกค้าสำเร็จ', 'customer': customer}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/customers/<int:customer_id>', methods=['GET'])
+@login_required
+def get_reseller_customer(customer_id):
+    """Get a specific customer"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, full_name, phone, email, address, province, district, 
+                   subdistrict, postal_code, notes, created_at
+            FROM reseller_customers
+            WHERE id = %s AND reseller_id = %s
+        ''', (customer_id, user_id))
+        
+        customer = cursor.fetchone()
+        if not customer:
+            return jsonify({'error': 'ไม่พบลูกค้า'}), 404
+        
+        return jsonify({'customer': dict(customer)}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/customers/<int:customer_id>', methods=['PUT'])
+@login_required
+def update_reseller_customer(customer_id):
+    """Update a customer"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        if not data.get('full_name'):
+            return jsonify({'error': 'กรุณากรอกชื่อลูกค้า'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE reseller_customers
+            SET full_name = %s, phone = %s, email = %s, address = %s,
+                province = %s, district = %s, subdistrict = %s, postal_code = %s,
+                notes = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND reseller_id = %s
+            RETURNING id, full_name, phone, email, address, province, district, subdistrict, postal_code, notes
+        ''', (
+            data.get('full_name'),
+            data.get('phone'),
+            data.get('email'),
+            data.get('address'),
+            data.get('province'),
+            data.get('district'),
+            data.get('subdistrict'),
+            data.get('postal_code'),
+            data.get('notes'),
+            customer_id,
+            user_id
+        ))
+        
+        customer = cursor.fetchone()
+        if not customer:
+            return jsonify({'error': 'ไม่พบลูกค้า'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'อัปเดตข้อมูลสำเร็จ', 'customer': dict(customer)}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/customers/<int:customer_id>', methods=['DELETE'])
+@login_required
+def delete_reseller_customer(customer_id):
+    """Delete a customer"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            DELETE FROM reseller_customers
+            WHERE id = %s AND reseller_id = %s
+            RETURNING id
+        ''', (customer_id, user_id))
+        
+        deleted = cursor.fetchone()
+        if not deleted:
+            return jsonify({'error': 'ไม่พบลูกค้า'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'ลบลูกค้าสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/profile', methods=['GET'])
+@login_required
+def get_reseller_profile():
+    """Get reseller's profile with shipping info"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.phone, u.email, u.address,
+                   u.province, u.district, u.subdistrict, u.postal_code,
+                   u.brand_name, u.logo_url,
+                   rt.name as tier_name
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (user_id,))
+        
+        profile = cursor.fetchone()
+        if not profile:
+            return jsonify({'error': 'ไม่พบข้อมูล'}), 404
+        
+        return jsonify({'profile': dict(profile)}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/profile', methods=['PUT'])
+@login_required
+def update_reseller_profile():
+    """Update reseller's profile with shipping info"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE users
+            SET phone = %s, email = %s, address = %s,
+                province = %s, district = %s, subdistrict = %s, postal_code = %s,
+                brand_name = %s, logo_url = %s
+            WHERE id = %s
+            RETURNING id, full_name, phone, email, address, province, district, subdistrict, postal_code, brand_name, logo_url
+        ''', (
+            data.get('phone'),
+            data.get('email'),
+            data.get('address'),
+            data.get('province'),
+            data.get('district'),
+            data.get('subdistrict'),
+            data.get('postal_code'),
+            data.get('brand_name'),
+            data.get('logo_url'),
+            user_id
+        ))
+        
+        profile = cursor.fetchone()
+        conn.commit()
+        
+        return jsonify({'message': 'อัปเดตข้อมูลสำเร็จ', 'profile': dict(profile)}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== RESELLER PRODUCT CATALOG ====================
 
 @app.route('/api/reseller/products', methods=['GET'])
