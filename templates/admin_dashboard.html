@@ -218,9 +218,51 @@
             
             <!-- Home Page -->
             <div id="page-home" class="page-content active">
-                <div class="page-header">
-                    <h1>ยินดีต้อนรับสู่ Admin Dashboard</h1>
-                    <p>จัดการระบบตัวแทนจำหน่ายของคุณ</p>
+                <!-- Compact User Stats Row -->
+                <div class="user-stats-row">
+                    <div class="user-stat-card">
+                        <div class="user-stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <span class="user-stat-value" id="totalUsers">0</span>
+                        <span class="user-stat-label">ผู้ใช้ทั้งหมด</span>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="user-stat-icon admin">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+                                <path d="m9 12 2 2 4-4"/>
+                            </svg>
+                        </div>
+                        <span class="user-stat-value" id="adminCount">0</span>
+                        <span class="user-stat-label">ผู้ดูแลระบบ</span>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="user-stat-icon reseller">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
+                                <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
+                                <path d="M12 3v6"/>
+                            </svg>
+                        </div>
+                        <span class="user-stat-value" id="resellerCount">0</span>
+                        <span class="user-stat-label">ตัวแทนจำหน่าย</span>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="user-stat-icon sales">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <span class="user-stat-value" id="salesAll">฿0</span>
+                        <span class="user-stat-label">ยอดขายสะสม</span>
+                    </div>
                 </div>
 
                 <!-- Sales Stats Row -->
@@ -281,64 +323,6 @@
                             <p class="stat-label">สินค้าใกล้หมด</p>
                             <h3 id="lowStock">0</h3>
                             <span class="stat-sub" id="outOfStock">0 หมดสต็อก</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- User Stats Row -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                                <circle cx="9" cy="7" r="4"/>
-                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="totalUsers">0</h3>
-                            <p>ผู้ใช้ทั้งหมด</p>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
-                                <path d="m9 12 2 2 4-4"/>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="adminCount">0</h3>
-                            <p>ผู้ดูแลระบบ</p>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
-                                <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
-                                <path d="M12 3v6"/>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="resellerCount">0</h3>
-                            <p>ตัวแทนจำหน่าย</p>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="12" y1="1" x2="12" y2="23"/>
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="salesAll">฿0</h3>
-                            <p>ยอดขายสะสม</p>
                         </div>
                     </div>
                 </div>

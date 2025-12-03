@@ -527,6 +527,75 @@ body.sidebar-collapsed .sidebar-toggle {
     font-weight: 500;
 }
 
+/* Compact User Stats Row */
+.user-stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.user-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 150px;
+    flex: 1;
+}
+
+.user-stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.user-stat-icon svg {
+    stroke: white;
+}
+
+.user-stat-icon.admin {
+    background: linear-gradient(135deg, #10b981, #34d399);
+}
+
+.user-stat-icon.reseller {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.user-stat-icon.sales {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+
+.user-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+}
+
+.user-stat-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+@media (max-width: 768px) {
+    .user-stats-row {
+        flex-direction: column;
+    }
+    .user-stat-card {
+        min-width: auto;
+    }
+}
+
 /* Dashboard Stats Row - Sales/Orders Stats */
 .dashboard-stats-row {
     display: grid;
