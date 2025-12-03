@@ -2562,7 +2562,9 @@ async function loadDashboardStats() {
         const ordersMonthEl = document.getElementById('ordersMonth');
         const pendingOrdersEl = document.getElementById('pendingOrders');
         const lowStockEl = document.getElementById('lowStock');
+        const lowStockSkusEl = document.getElementById('lowStockSkus');
         const outOfStockEl = document.getElementById('outOfStock');
+        const outOfStockSkusEl = document.getElementById('outOfStockSkus');
         
         if (salesTodayEl) salesTodayEl.textContent = formatCurrency(data.sales_today.total);
         if (salesMonthEl) salesMonthEl.textContent = formatCurrency(data.sales_month.total);
@@ -2570,8 +2572,10 @@ async function loadDashboardStats() {
         if (ordersTodayEl) ordersTodayEl.textContent = `${data.sales_today.count} ออเดอร์`;
         if (ordersMonthEl) ordersMonthEl.textContent = `${data.sales_month.count} ออเดอร์`;
         if (pendingOrdersEl) pendingOrdersEl.textContent = data.pending_orders;
-        if (lowStockEl) lowStockEl.textContent = data.low_stock;
-        if (outOfStockEl) outOfStockEl.textContent = `${data.out_of_stock} หมดสต็อก`;
+        if (outOfStockEl) outOfStockEl.textContent = data.out_of_stock_skus || 0;
+        if (lowStockEl) lowStockEl.textContent = data.low_stock_skus || 0;
+        if (lowStockSkusEl) lowStockSkusEl.textContent = data.out_of_stock ? `${data.out_of_stock} สินค้าหมด` : '';
+        if (outOfStockSkusEl) outOfStockSkusEl.textContent = data.low_stock ? `${data.low_stock} สินค้าใกล้หมด` : '';
         
         // Render sales chart
         renderSalesChart(data.sales_7_days);

@@ -320,9 +320,12 @@
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <p class="stat-label">สินค้าใกล้หมด</p>
-                            <h3><span id="lowStock">0</span> <small id="lowStockSkus" class="sku-count-sub">(0 SKUs)</small></h3>
-                            <span class="stat-sub"><span id="outOfStock">0</span> หมดสต็อก <small id="outOfStockSkus" class="sku-count-inline">(0 SKUs)</small></span>
+                            <p class="stat-label">สต็อกสินค้า</p>
+                            <div class="stock-status-display">
+                                <span class="stock-status-item out"><span id="outOfStock">0</span> SKUs หมด</span>
+                                <span class="stock-status-item low"><span id="lowStock">0</span> SKUs ใกล้หมด</span>
+                            </div>
+                            <span class="stat-sub"><span id="lowStockSkus"></span> <span id="outOfStockSkus"></span></span>
                         </div>
                     </div>
                 </div>

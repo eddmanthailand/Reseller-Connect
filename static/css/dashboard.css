@@ -670,6 +670,35 @@ body.sidebar-collapsed .sidebar-toggle {
     background: linear-gradient(135deg, #f59e0b, #fbbf24);
 }
 
+/* Stock Status Display */
+.stock-status-display {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.stock-status-item {
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stock-status-item.out {
+    color: #fca5a5;
+}
+
+.stock-status-item.low {
+    color: #fcd34d;
+}
+
+.stock-status-item span {
+    font-size: 18px;
+    font-weight: 700;
+}
+
 /* Dashboard Content Grid */
 .dashboard-content-grid {
     display: grid;
