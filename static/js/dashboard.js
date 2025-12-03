@@ -337,6 +337,17 @@ function setupEventListeners() {
             }
         });
     });
+    
+    // Submenu item navigation
+    document.querySelectorAll('.submenu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetPage = item.dataset.page;
+            if (targetPage) {
+                switchPage(targetPage);
+            }
+        });
+    });
 
     // Role selection change
     if (roleSelect) {
@@ -406,6 +417,10 @@ function switchPage(pageName) {
         loadResellers();
     } else if (pageName === 'settings') {
         loadSettings();
+    } else if (pageName === 'brands') {
+        loadBrandsPage();
+    } else if (pageName === 'categories') {
+        loadCategoriesPage();
     }
 }
 
@@ -2118,6 +2133,236 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ==========================================
+// Brands Page Functions
+// ==========================================
+
+let brandsData = [];
+
+async function loadBrandsPage() {
+    const tableBody = document.getElementById('brandsTableBody');
+    const countEl = document.getElementById('brandCount');
+    
+    try {
+        const response = await fetch(`${API_URL}/brands`);
+        brandsData = await response.json();
+        
+        if (countEl) countEl.textContent = brandsData.length;
+        
+        if (brandsData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 30px; opacity: 0.6;">ยังไม่มีแบรนด์</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        brandsData.forEach(brand => {
+            html += `
+                <tr>
+                    <td><strong>${brand.name}</strong></td>
+                    <td style="opacity: 0.7;">${brand.description || '-'}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editBrand(${brand.id})" style="margin-right: 6px;">แก้ไข</button>
+                        <button class="btn-delete" onclick="deleteBrand(${brand.id}, '${brand.name}')">ลบ</button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading brands:', error);
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; opacity: 0.6;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+async function handleBrandSubmit(event) {
+    event.preventDefault();
+    
+    const editId = document.getElementById('editBrandId').value;
+    const name = document.getElementById('brandName').value.trim();
+    const description = document.getElementById('brandDescription').value.trim();
+    
+    if (!name) {
+        showAlert('กรุณากรอกชื่อแบรนด์', 'error');
+        return;
+    }
+    
+    try {
+        const url = editId ? `${API_URL}/brands/${editId}` : `${API_URL}/brands`;
+        const method = editId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description })
+        });
+        
+        if (response.ok) {
+            showAlert(editId ? 'แก้ไขแบรนด์สำเร็จ' : 'เพิ่มแบรนด์สำเร็จ', 'success');
+            resetBrandForm();
+            loadBrandsPage();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving brand:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function editBrand(id) {
+    const brand = brandsData.find(b => b.id === id);
+    if (!brand) return;
+    
+    document.getElementById('editBrandId').value = brand.id;
+    document.getElementById('brandName').value = brand.name;
+    document.getElementById('brandDescription').value = brand.description || '';
+    
+    document.querySelector('#page-brands .card h3').textContent = 'แก้ไขแบรนด์';
+}
+
+async function deleteBrand(id, name) {
+    if (!confirm(`ลบแบรนด์ "${name}"?`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/brands/${id}`, { method: 'DELETE' });
+        
+        if (response.ok) {
+            showAlert('ลบแบรนด์สำเร็จ', 'success');
+            loadBrandsPage();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting brand:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function resetBrandForm() {
+    document.getElementById('editBrandId').value = '';
+    document.getElementById('brandName').value = '';
+    document.getElementById('brandDescription').value = '';
+    document.querySelector('#page-brands .card h3').textContent = 'เพิ่มแบรนด์ใหม่';
+}
+
+// ==========================================
+// Categories Page Functions
+// ==========================================
+
+let categoriesData = [];
+
+async function loadCategoriesPage() {
+    const tableBody = document.getElementById('categoriesTableBody');
+    const countEl = document.getElementById('categoryCount');
+    
+    try {
+        const response = await fetch(`${API_URL}/categories`);
+        categoriesData = await response.json();
+        
+        if (countEl) countEl.textContent = categoriesData.length;
+        
+        if (categoriesData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 30px; opacity: 0.6;">ยังไม่มีหมวดหมู่</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        categoriesData.forEach(cat => {
+            html += `
+                <tr>
+                    <td><strong>${cat.name}</strong></td>
+                    <td style="opacity: 0.7;">${cat.description || '-'}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editCategory(${cat.id})" style="margin-right: 6px;">แก้ไข</button>
+                        <button class="btn-delete" onclick="deleteCategory(${cat.id}, '${cat.name}')">ลบ</button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading categories:', error);
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; opacity: 0.6;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+async function handleCategorySubmit(event) {
+    event.preventDefault();
+    
+    const editId = document.getElementById('editCategoryId').value;
+    const name = document.getElementById('categoryName').value.trim();
+    const description = document.getElementById('categoryDescription').value.trim();
+    
+    if (!name) {
+        showAlert('กรุณากรอกชื่อหมวดหมู่', 'error');
+        return;
+    }
+    
+    try {
+        const url = editId ? `${API_URL}/categories/${editId}` : `${API_URL}/categories`;
+        const method = editId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description })
+        });
+        
+        if (response.ok) {
+            showAlert(editId ? 'แก้ไขหมวดหมู่สำเร็จ' : 'เพิ่มหมวดหมู่สำเร็จ', 'success');
+            resetCategoryForm();
+            loadCategoriesPage();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving category:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function editCategory(id) {
+    const cat = categoriesData.find(c => c.id === id);
+    if (!cat) return;
+    
+    document.getElementById('editCategoryId').value = cat.id;
+    document.getElementById('categoryName').value = cat.name;
+    document.getElementById('categoryDescription').value = cat.description || '';
+    
+    document.querySelector('#page-categories .card h3').textContent = 'แก้ไขหมวดหมู่';
+}
+
+async function deleteCategory(id, name) {
+    if (!confirm(`ลบหมวดหมู่ "${name}"?`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/categories/${id}`, { method: 'DELETE' });
+        
+        if (response.ok) {
+            showAlert('ลบหมวดหมู่สำเร็จ', 'success');
+            loadCategoriesPage();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function resetCategoryForm() {
+    document.getElementById('editCategoryId').value = '';
+    document.getElementById('categoryName').value = '';
+    document.getElementById('categoryDescription').value = '';
+    document.querySelector('#page-categories .card h3').textContent = 'เพิ่มหมวดหมู่ใหม่';
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
