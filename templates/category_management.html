@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .category-card {
             background: rgba(255, 255, 255, 0.1);
@@ -435,7 +436,7 @@
             const parentId = document.getElementById('parentCategory').value || null;
             
             if (!name) {
-                alert('กรุณากรอกชื่อหมวดหมู่');
+                showAlert('กรุณากรอกชื่อหมวดหมู่', 'warning');
                 return;
             }
             
@@ -455,10 +456,11 @@
                 document.getElementById('categoryName').value = '';
                 document.getElementById('parentCategory').value = '';
                 
+                showAlert('เพิ่มหมวดหมู่สำเร็จ', 'success');
                 loadCategories();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
@@ -483,12 +485,12 @@
             const parentId = document.getElementById('editParentCategory').value || null;
             
             if (!name) {
-                alert('กรุณากรอกชื่อหมวดหมู่');
+                showAlert('กรุณากรอกชื่อหมวดหมู่', 'warning');
                 return;
             }
             
             if (parentId && parseInt(parentId) === parseInt(id)) {
-                alert('ไม่สามารถเลือกตัวเองเป็นหมวดหมู่หลักได้');
+                showAlert('ไม่สามารถเลือกตัวเองเป็นหมวดหมู่หลักได้', 'warning');
                 return;
             }
             
@@ -506,22 +508,23 @@
                 }
                 
                 closeModal();
+                showAlert('บันทึกหมวดหมู่สำเร็จ', 'success');
                 loadCategories();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
         async function deleteCategory(id, name, productCount) {
             if (productCount > 0) {
-                alert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในหมวดหมู่นี้\n\nกรุณาย้ายหรือลบสินค้าก่อน`);
+                showAlert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในหมวดหมู่นี้ กรุณาย้ายหรือลบสินค้าก่อน`, 'error');
                 return;
             }
             
             const hasChildren = categories.some(c => c.parent_id === id);
             if (hasChildren) {
-                alert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมีหมวดหมู่ย่อยอยู่\n\nกรุณาลบหมวดหมู่ย่อยก่อน`);
+                showAlert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากมีหมวดหมู่ย่อยอยู่ กรุณาลบหมวดหมู่ย่อยก่อน`, 'error');
                 return;
             }
             
@@ -540,10 +543,11 @@
                     throw new Error(result.error || 'Failed to delete category');
                 }
                 
+                showAlert('ลบหมวดหมู่สำเร็จ', 'success');
                 loadCategories();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
@@ -556,5 +560,6 @@
         
         loadCategories();
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

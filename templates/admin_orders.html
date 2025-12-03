@@ -6,6 +6,7 @@
     <title>จัดการคำสั่งซื้อ - Admin Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .orders-header {
             display: flex;
@@ -772,16 +773,16 @@
                 });
                 
                 if (response.ok) {
-                    alert('อนุมัติคำสั่งซื้อสำเร็จ');
+                    showAlert('อนุมัติคำสั่งซื้อสำเร็จ', 'success');
                     closeModal();
                     loadOrders();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถอนุมัติได้');
+                    showAlert(error.error || 'ไม่สามารถอนุมัติได้', 'error');
                 }
             } catch (error) {
                 console.error('Error approving order:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -803,7 +804,7 @@
         async function rejectOrder(orderId) {
             const reason = document.getElementById('rejectReason').value.trim();
             if (!reason) {
-                alert('กรุณาระบุเหตุผลในการปฏิเสธ');
+                showAlert('กรุณาระบุเหตุผลในการปฏิเสธ', 'warning');
                 return;
             }
             
@@ -815,16 +816,16 @@
                 });
                 
                 if (response.ok) {
-                    alert('ปฏิเสธคำสั่งซื้อแล้ว');
+                    showAlert('ปฏิเสธคำสั่งซื้อแล้ว', 'success');
                     closeModal();
                     loadOrders();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถปฏิเสธได้');
+                    showAlert(error.error || 'ไม่สามารถปฏิเสธได้', 'error');
                 }
             } catch (error) {
                 console.error('Error rejecting order:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -845,5 +846,6 @@
             });
         });
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

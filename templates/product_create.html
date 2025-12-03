@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
@@ -890,13 +891,13 @@
             for (const tier of tierPricingData) {
                 const input = document.getElementById(`tier-discount-${tier.tier_id}`);
                 if (!input || input.value === '' || isNaN(parseFloat(input.value))) {
-                    alert(`กรุณากรอกส่วนลดสำหรับระดับ ${tier.tier_name}`);
+                    showAlert(`กรุณากรอกส่วนลดสำหรับระดับ ${tier.tier_name}`, 'warning');
                     if (input) input.focus();
                     return false;
                 }
                 const value = parseFloat(input.value);
                 if (value < 0 || value > 100) {
-                    alert(`ส่วนลดต้องอยู่ระหว่าง 0-100% สำหรับระดับ ${tier.tier_name}`);
+                    showAlert(`ส่วนลดต้องอยู่ระหว่าง 0-100% สำหรับระดับ ${tier.tier_name}`, 'warning');
                     if (input) input.focus();
                     return false;
                 }
@@ -952,12 +953,12 @@
             if (!file) return;
 
             if (!file.type.startsWith('image/')) {
-                alert('กรุณาเลือกไฟล์รูปภาพ');
+                showAlert('กรุณาเลือกไฟล์รูปภาพ', 'warning');
                 return;
             }
 
             if (file.size > 5 * 1024 * 1024) {
-                alert('ไฟล์ใหญ่เกิน 5MB');
+                showAlert('ไฟล์ใหญ่เกิน 5MB', 'warning');
                 return;
             }
 
@@ -1089,13 +1090,13 @@
                 for (let file of newFiles) {
                     // Validate file type
                     if (!file.type.startsWith('image/')) {
-                        alert(`ไฟล์ ${file.name} ไม่ใช่รูปภาพ`);
+                        showAlert(`ไฟล์ ${file.name} ไม่ใช่รูปภาพ`, 'warning');
                         continue;
                     }
                     
                     // Validate file size (max 5MB)
                     if (file.size > 5 * 1024 * 1024) {
-                        alert(`ไฟล์ ${file.name} ใหญ่เกิน 5MB`);
+                        showAlert(`ไฟล์ ${file.name} ใหญ่เกิน 5MB`, 'warning');
                         continue;
                     }
                     
@@ -1313,14 +1314,14 @@
             const options = collectOptionsData();
             
             if (options.length === 0) {
-                alert('กรุณาเพิ่มคุณสมบัติอย่างน้อย 1 รายการ');
+                showAlert('กรุณาเพิ่มคุณสมบัติอย่างน้อย 1 รายการ', 'warning');
                 return;
             }
 
             // Check if all options have values
             for (const opt of options) {
                 if (opt.values.length === 0) {
-                    alert(`กรุณาเพิ่มค่าสำหรับคุณสมบัติ "${opt.name}"`);
+                    showAlert(`กรุณาเพิ่มค่าสำหรับคุณสมบัติ "${opt.name}"`, 'warning');
                     return;
                 }
             }
@@ -1405,7 +1406,7 @@
         document.getElementById('btn_apply_price').addEventListener('click', () => {
             const masterPrice = document.getElementById('master_price').value;
             if (!masterPrice) {
-                alert('กรุณากรอก Master Price');
+                showAlert('กรุณากรอก Master Price', 'warning');
                 return;
             }
             document.querySelectorAll('.sku-price').forEach(input => {
@@ -1416,7 +1417,7 @@
         document.getElementById('btn_apply_stock').addEventListener('click', () => {
             const masterStock = document.getElementById('master_stock').value;
             if (!masterStock) {
-                alert('กรุณากรอก Master Stock');
+                showAlert('กรุณากรอก Master Stock', 'warning');
                 return;
             }
             document.querySelectorAll('.sku-stock').forEach(input => {
@@ -1561,12 +1562,12 @@
             const description = document.getElementById('product_description').value.trim();
 
             if (!brandId) {
-                alert('กรุณาเลือกแบรนด์');
+                showAlert('กรุณาเลือกแบรนด์', 'warning');
                 return;
             }
 
             if (!name || !parentSku) {
-                alert('กรุณากรอกชื่อสินค้าและ SKU หลัก');
+                showAlert('กรุณากรอกชื่อสินค้าและ SKU หลัก', 'warning');
                 return;
             }
 
@@ -1671,14 +1672,16 @@
                         await saveCustomizations(result.product_id);
                     }
                     
-                    alert('บันทึกสำเร็จ');
-                    window.location.href = '/admin/products';
+                    showAlert('บันทึกสำเร็จ', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/admin/products';
+                    }, 1000);
                 } else {
                     throw new Error(result.error || 'บันทึกข้อมูลล้มเหลว');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalBtnText;
             }
@@ -1712,5 +1715,6 @@
             return skus;
         }
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

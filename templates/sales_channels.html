@@ -6,6 +6,7 @@
     <title>ช่องทางการจำหน่าย - Admin Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .channels-header {
             display: flex;
@@ -538,7 +539,7 @@
             const description = document.getElementById('channelDesc').value.trim();
             
             if (!name) {
-                alert('กรุณากรอกชื่อช่องทาง');
+                showAlert('กรุณากรอกชื่อช่องทาง', 'warning');
                 return;
             }
             
@@ -565,14 +566,15 @@
                 
                 if (response.ok) {
                     closeModal();
+                    showAlert(editingChannel ? 'บันทึกช่องทางสำเร็จ' : 'เพิ่มช่องทางสำเร็จ', 'success');
                     loadChannels();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'เกิดข้อผิดพลาด');
+                    showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
                 }
             } catch (error) {
                 console.error('Error saving channel:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -605,13 +607,15 @@
                 });
                 
                 if (response.ok) {
+                    showAlert('ลบช่องทางสำเร็จ', 'success');
                     loadChannels();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถลบได้');
+                    showAlert(error.error || 'ไม่สามารถลบได้', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting channel:', error);
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -655,5 +659,6 @@
             restoreSidebarState();
         });
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

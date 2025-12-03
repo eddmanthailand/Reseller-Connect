@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ตั้งค่าระบบ - Admin Dashboard</title>
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .settings-grid {
             display: grid;
@@ -503,7 +504,7 @@
                 }
             } catch (error) {
                 console.error('Error uploading QR:', error);
-                alert('ไม่สามารถอัปโหลดรูปภาพได้');
+                showAlert('ไม่สามารถอัปโหลดรูปภาพได้', 'error');
             }
         });
         
@@ -526,13 +527,13 @@
                 });
                 
                 if (response.ok) {
-                    alert('บันทึกการตั้งค่าสำเร็จ');
+                    showAlert('บันทึกการตั้งค่าสำเร็จ', 'success');
                 } else {
                     throw new Error('Save failed');
                 }
             } catch (error) {
                 console.error('Error saving settings:', error);
-                alert('ไม่สามารถบันทึกการตั้งค่าได้');
+                showAlert('ไม่สามารถบันทึกการตั้งค่าได้', 'error');
             }
         });
         
@@ -584,7 +585,7 @@
         async function addChannel() {
             const name = document.getElementById('newChannelName').value.trim();
             if (!name) {
-                alert('กรุณากรอกชื่อช่องทาง');
+                showAlert('กรุณากรอกชื่อช่องทาง', 'warning');
                 return;
             }
             
@@ -597,14 +598,15 @@
                 
                 if (response.ok) {
                     document.getElementById('newChannelName').value = '';
+                    showAlert('เพิ่มช่องทางสำเร็จ', 'success');
                     loadSalesChannels();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถเพิ่มช่องทางได้');
+                    showAlert(error.error || 'ไม่สามารถเพิ่มช่องทางได้', 'error');
                 }
             } catch (error) {
                 console.error('Error adding channel:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -633,13 +635,15 @@
                 });
                 
                 if (response.ok) {
+                    showAlert('ลบช่องทางสำเร็จ', 'success');
                     loadSalesChannels();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถลบได้');
+                    showAlert(error.error || 'ไม่สามารถลบได้', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting channel:', error);
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -679,5 +683,6 @@
             restoreSidebarState();
         });
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

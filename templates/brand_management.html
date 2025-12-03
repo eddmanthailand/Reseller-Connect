@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .brand-card {
             background: rgba(255, 255, 255, 0.1);
@@ -392,7 +393,7 @@
             const description = document.getElementById('brandDescription').value.trim();
             
             if (!name) {
-                alert('กรุณากรอกชื่อแบรนด์');
+                showAlert('กรุณากรอกชื่อแบรนด์', 'warning');
                 return;
             }
             
@@ -412,10 +413,11 @@
                 document.getElementById('brandName').value = '';
                 document.getElementById('brandDescription').value = '';
                 
+                showAlert('เพิ่มแบรนด์สำเร็จ', 'success');
                 loadBrands();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
@@ -440,7 +442,7 @@
             const description = document.getElementById('editBrandDescription').value.trim();
             
             if (!name) {
-                alert('กรุณากรอกชื่อแบรนด์');
+                showAlert('กรุณากรอกชื่อแบรนด์', 'warning');
                 return;
             }
             
@@ -458,16 +460,17 @@
                 }
                 
                 closeModal();
+                showAlert('บันทึกแบรนด์สำเร็จ', 'success');
                 loadBrands();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
         async function deleteBrand(id, name, productCount) {
             if (productCount > 0) {
-                alert(`ไม่สามารถลบแบรนด์ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในแบรนด์นี้\n\nกรุณาย้ายหรือลบสินค้าก่อน`);
+                showAlert(`ไม่สามารถลบแบรนด์ "${name}" ได้ เนื่องจากมี ${productCount} สินค้าในแบรนด์นี้ กรุณาย้ายหรือลบสินค้าก่อน`, 'error');
                 return;
             }
             
@@ -486,10 +489,11 @@
                     throw new Error(result.error || 'Failed to delete brand');
                 }
                 
+                showAlert('ลบแบรนด์สำเร็จ', 'success');
                 loadBrands();
                 
             } catch (error) {
-                alert('เกิดข้อผิดพลาด: ' + error.message);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
             }
         }
         
@@ -502,5 +506,6 @@
         
         loadBrands();
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>
