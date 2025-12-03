@@ -2660,6 +2660,123 @@ def save_promptpay_settings():
         if conn:
             conn.close()
 
+# ==================== ORDER NUMBER SETTINGS API ====================
+
+@app.route('/api/order-number-settings', methods=['GET'])
+@admin_required
+def get_order_number_settings():
+    """Get order number settings"""
+    from datetime import datetime
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        current_period = datetime.now().strftime('%y%m')
+        
+        cursor.execute('''
+            SELECT id, prefix, format_type, digit_count, current_sequence, current_period, updated_at
+            FROM order_number_settings
+            LIMIT 1
+        ''')
+        settings = cursor.fetchone()
+        
+        if settings:
+            # Generate preview of next order number
+            if settings['current_period'] == current_period:
+                next_seq = settings['current_sequence'] + 1
+            else:
+                next_seq = 1
+            preview = f"{settings['prefix']}-{current_period}-{str(next_seq).zfill(settings['digit_count'])}"
+            settings['preview'] = preview
+            return jsonify(dict(settings)), 200
+        
+        # Return defaults if no settings
+        return jsonify({
+            'prefix': 'ORD',
+            'format_type': 'YYMM',
+            'digit_count': 4,
+            'current_sequence': 0,
+            'current_period': '',
+            'preview': 'ORD-' + current_period + '-0001'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/order-number-settings', methods=['POST'])
+@admin_required
+def save_order_number_settings():
+    """Save order number settings"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        prefix = data.get('prefix', 'ORD').upper().strip()
+        digit_count = int(data.get('digit_count', 4))
+        
+        # Validate prefix (alphanumeric, 1-10 chars)
+        if not prefix or len(prefix) > 10:
+            return jsonify({'error': 'Prefix must be 1-10 characters'}), 400
+        
+        # Validate digit count (3-6)
+        if digit_count < 3 or digit_count > 6:
+            return jsonify({'error': 'Digit count must be between 3 and 6'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if settings exist
+        cursor.execute('SELECT id FROM order_number_settings LIMIT 1')
+        existing = cursor.fetchone()
+        
+        if existing:
+            cursor.execute('''
+                UPDATE order_number_settings
+                SET prefix = %s, digit_count = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, prefix, format_type, digit_count, current_sequence, current_period
+            ''', (prefix, digit_count, existing['id']))
+        else:
+            cursor.execute('''
+                INSERT INTO order_number_settings (prefix, format_type, digit_count, current_sequence, current_period)
+                VALUES (%s, 'YYMM', %s, 0, '')
+                RETURNING id, prefix, format_type, digit_count, current_sequence, current_period
+            ''', (prefix, digit_count))
+        
+        settings = dict(cursor.fetchone())
+        conn.commit()
+        
+        # Generate preview
+        from datetime import datetime
+        current_period = datetime.now().strftime('%y%m')
+        if settings['current_period'] == current_period:
+            next_seq = settings['current_sequence'] + 1
+        else:
+            next_seq = 1
+        settings['preview'] = f"{prefix}-{current_period}-{str(next_seq).zfill(digit_count)}"
+        
+        return jsonify({
+            'message': 'Order number settings saved successfully',
+            'settings': settings
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== NOTIFICATIONS API ====================
 
 @app.route('/api/notifications', methods=['GET'])
@@ -3336,12 +3453,49 @@ def reseller_orders_page():
 
 import uuid
 
-def generate_order_number():
-    """Generate unique order number"""
+def generate_order_number(cursor):
+    """Generate unique order number in format PREFIX-YYMM-XXXX"""
     from datetime import datetime
-    date_part = datetime.now().strftime('%Y%m%d')
-    random_part = str(uuid.uuid4().hex)[:6].upper()
-    return f'ORD-{date_part}-{random_part}'
+    
+    # Get current period (YYMM)
+    current_period = datetime.now().strftime('%y%m')
+    
+    # Get settings from database
+    cursor.execute('SELECT prefix, digit_count, current_sequence, current_period FROM order_number_settings LIMIT 1')
+    settings = cursor.fetchone()
+    
+    if settings:
+        prefix = settings['prefix']
+        digit_count = settings['digit_count']
+        last_sequence = settings['current_sequence']
+        last_period = settings['current_period']
+        
+        # Check if period changed (new month) - reset sequence
+        if last_period != current_period:
+            new_sequence = 1
+        else:
+            new_sequence = last_sequence + 1
+        
+        # Update settings with new sequence and period
+        cursor.execute('''
+            UPDATE order_number_settings 
+            SET current_sequence = %s, current_period = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = (SELECT id FROM order_number_settings LIMIT 1)
+        ''', (new_sequence, current_period))
+    else:
+        # Default fallback
+        prefix = 'ORD'
+        digit_count = 4
+        new_sequence = 1
+        cursor.execute('''
+            INSERT INTO order_number_settings (prefix, format_type, digit_count, current_sequence, current_period)
+            VALUES (%s, 'YYMM', %s, %s, %s)
+        ''', (prefix, digit_count, new_sequence, current_period))
+    
+    # Format sequence with leading zeros
+    sequence_str = str(new_sequence).zfill(digit_count)
+    
+    return f'{prefix}-{current_period}-{sequence_str}'
 
 @app.route('/api/orders', methods=['POST'])
 @login_required
@@ -3406,8 +3560,8 @@ def create_order():
         channel = cursor.fetchone()
         channel_id = channel['id'] if channel else None
         
-        # Create order
-        order_number = generate_order_number()
+        # Create order with new order number format (ORD-YYMM-XXXX)
+        order_number = generate_order_number(cursor)
         cursor.execute('''
             INSERT INTO orders (order_number, user_id, sales_channel_id, status, total_amount, discount_amount, final_amount, notes)
             VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s)

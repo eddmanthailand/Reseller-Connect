@@ -815,6 +815,67 @@
                         </div>
                     </div>
                     
+                    <!-- Order Number Settings -->
+                    <div class="settings-card">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                            ตั้งค่าเลขที่คำสั่งซื้อ
+                        </h3>
+                        
+                        <div id="orderNumberForm">
+                            <div class="form-group">
+                                <label class="form-label">รูปแบบเลขที่คำสั่งซื้อ</label>
+                                <div style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                                    <div style="font-family: monospace; font-size: 18px; color: #a78bfa; text-align: center;" id="orderNumberPreview">
+                                        ORD-2512-0001
+                                    </div>
+                                    <div style="text-align: center; margin-top: 8px; font-size: 12px; opacity: 0.6;">
+                                        ตัวอย่างเลขที่คำสั่งซื้อถัดไป
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label class="form-label">คำนำหน้า (Prefix)</label>
+                                    <input type="text" id="orderPrefix" class="form-input" placeholder="เช่น ORD, INV" maxlength="10" value="ORD" oninput="updateOrderPreview()">
+                                    <small style="opacity: 0.6; font-size: 11px;">ตัวอักษรพิมพ์ใหญ่ 1-10 ตัว</small>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">จำนวนหลักลำดับ</label>
+                                    <select id="orderDigitCount" class="form-input" onchange="updateOrderPreview()">
+                                        <option value="3">3 หลัก (001-999)</option>
+                                        <option value="4" selected>4 หลัก (0001-9999)</option>
+                                        <option value="5">5 หลัก (00001-99999)</option>
+                                        <option value="6">6 หลัก (000001-999999)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(139,92,246,0.1); padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid #8b5cf6;">
+                                <div style="font-size: 12px; opacity: 0.8;">
+                                    <strong>รูปแบบ:</strong> PREFIX-YYMM-XXXX<br>
+                                    <span style="opacity: 0.7;">เลขลำดับจะรีเซ็ตทุกเดือนใหม่อัตโนมัติ</span>
+                                </div>
+                            </div>
+                            
+                            <button type="button" onclick="saveOrderNumberSettings()" class="btn-primary btn-success" style="width: 100%; justify-content: center;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                บันทึกการตั้งค่า
+                            </button>
+                        </div>
+                    </div>
+                    
                     <!-- Sales Channels -->
                     <div class="settings-card">
                         <h3>
