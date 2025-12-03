@@ -1951,9 +1951,12 @@ async function loadSettings() {
 
 async function loadPromptPaySettings() {
     try {
-        const response = await fetch(`${API_URL}/promptpay-settings`);
+        const response = await fetch(`${API_URL}/promptpay-settings`, {
+            credentials: 'include'
+        });
         if (response.ok) {
             const data = await response.json();
+            console.log('Loaded PromptPay settings:', data);
             
             if (data.account_name) {
                 document.getElementById('accountName').value = data.account_name;
@@ -1961,12 +1964,12 @@ async function loadPromptPaySettings() {
             if (data.account_number) {
                 document.getElementById('accountNumber').value = data.account_number;
             }
-            if (data.qr_code_url) {
+            if (data.qr_image_url) {
                 const preview = document.getElementById('qrPreview');
                 const placeholder = document.getElementById('qrPlaceholder');
-                preview.src = data.qr_code_url;
+                preview.src = data.qr_image_url;
                 preview.style.display = 'block';
-                placeholder.style.display = 'none';
+                if (placeholder) placeholder.style.display = 'none';
             }
         }
     } catch (error) {
