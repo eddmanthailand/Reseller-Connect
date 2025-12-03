@@ -6,6 +6,7 @@
     <title>สินค้า - Reseller</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .catalog-header {
             display: flex;
@@ -774,7 +775,7 @@
                 if (currentProduct.skus && currentProduct.skus.length > 0 && (!currentProduct.options || currentProduct.options.length === 0)) {
                     selectedSkuId = currentProduct.skus[0].id;
                 } else {
-                    alert('กรุณาเลือกตัวเลือกสินค้า');
+                    showAlert('กรุณาเลือกตัวเลือกสินค้า', 'warning');
                     return;
                 }
             }
@@ -794,14 +795,14 @@
                 if (response.ok) {
                     closeModal();
                     loadCart();
-                    alert('เพิ่มสินค้าลงตะกร้าแล้ว');
+                    showAlert('เพิ่มสินค้าลงตะกร้าแล้ว', 'success');
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถเพิ่มสินค้าได้');
+                    showAlert(error.error || 'ไม่สามารถเพิ่มสินค้าได้', 'error');
                 }
             } catch (error) {
                 console.error('Error adding to cart:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -848,5 +849,6 @@
             renderProducts(filtered);
         });
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

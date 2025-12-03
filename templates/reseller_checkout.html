@@ -6,6 +6,7 @@
     <title>ชำระเงิน - Reseller</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .checkout-layout {
             display: grid;
@@ -532,15 +533,16 @@
                 if (response.ok) {
                     const data = await response.json();
                     createdOrder = data.order;
+                    showAlert('สร้างคำสั่งซื้อสำเร็จ!', 'success');
                     updateStep(3);
                     renderStep3();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถสร้างคำสั่งซื้อได้');
+                    showAlert(error.error || 'ไม่สามารถสร้างคำสั่งซื้อได้', 'error');
                 }
             } catch (error) {
                 console.error('Error creating order:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
         
@@ -638,14 +640,14 @@
                     }
                 } catch (error) {
                     console.error('Error uploading slip:', error);
-                    alert('ไม่สามารถอัปโหลดรูปภาพได้');
+                    showAlert('ไม่สามารถอัปโหลดรูปภาพได้', 'error');
                 }
             });
         }
         
         async function submitSlip() {
             if (!slipImageUrl) {
-                alert('กรุณาอัปโหลดสลิปก่อน');
+                showAlert('กรุณาอัปโหลดสลิปก่อน', 'warning');
                 return;
             }
             
@@ -660,17 +662,20 @@
                 });
                 
                 if (response.ok) {
-                    alert('ส่งสลิปสำเร็จ! กรุณารอการตรวจสอบ');
-                    window.location.href = '/reseller/orders';
+                    showAlert('ส่งสลิปสำเร็จ! กรุณารอการตรวจสอบ', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/reseller/orders';
+                    }, 1500);
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถส่งสลิปได้');
+                    showAlert(error.error || 'ไม่สามารถส่งสลิปได้', 'error');
                 }
             } catch (error) {
                 console.error('Error submitting slip:', error);
-                alert('เกิดข้อผิดพลาด');
+                showAlert('เกิดข้อผิดพลาด', 'error');
             }
         }
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@
     <title>ตะกร้าสินค้า - Reseller</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         .cart-layout {
             display: grid;
@@ -490,7 +491,7 @@
                     loadCart();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'ไม่สามารถอัพเดทจำนวนได้');
+                    showAlert(error.error || 'ไม่สามารถอัพเดทจำนวนได้', 'error');
                 }
             } catch (error) {
                 console.error('Error updating quantity:', error);
@@ -507,8 +508,9 @@
                 
                 if (response.ok) {
                     loadCart();
+                    showAlert('ลบสินค้าออกจากตะกร้าแล้ว', 'success');
                 } else {
-                    alert('ไม่สามารถลบสินค้าได้');
+                    showAlert('ไม่สามารถลบสินค้าได้', 'error');
                 }
             } catch (error) {
                 console.error('Error removing item:', error);
@@ -535,5 +537,6 @@
             window.location.href = '/reseller/checkout';
         }
     </script>
+    <script src="/static/js/global-alert.js"></script>
 </body>
 </html>
