@@ -98,6 +98,8 @@ function handleHashNavigation() {
 }
 
 // Load current user info
+let currentUserRole = null;
+
 async function loadCurrentUser() {
     try {
         const response = await fetch(`${API_URL}/me`);
@@ -105,13 +107,39 @@ async function loadCurrentUser() {
             throw new Error('Not authenticated');
         }
         const user = await response.json();
+        currentUserRole = user.role;
         const currentUserElement = document.getElementById('currentUser');
         if (currentUserElement) {
             currentUserElement.textContent = `${user.full_name} (${user.role})`;
         }
+        
+        // Apply role-based UI restrictions
+        applyRoleBasedUI(user.role);
     } catch (error) {
         console.error('Error loading current user:', error);
         window.location.href = '/login';
+    }
+}
+
+function applyRoleBasedUI(role) {
+    // Hide menu items restricted to Super Admin
+    if (role !== 'Super Admin') {
+        // Hide nav items with data-role="Super Admin"
+        document.querySelectorAll('[data-role="Super Admin"]').forEach(el => {
+            el.style.display = 'none';
+        });
+        
+        // Hide user stats row on dashboard (for Assistant Admin)
+        const userStatsRow = document.querySelector('.user-stats-row');
+        if (userStatsRow) {
+            userStatsRow.style.display = 'none';
+        }
+        
+        // Remove has-submenu class from products menu since submenu is hidden
+        const productsNav = document.querySelector('[data-page="products"]');
+        if (productsNav) {
+            productsNav.classList.remove('has-submenu');
+        }
     }
 }
 

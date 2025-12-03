@@ -3984,90 +3984,218 @@ def get_dashboard_stats():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        
+        # Get brand filter for Assistant Admin
+        brand_ids = None
+        brand_ids_tuple = None
+        is_assistant_admin = user_role == 'Assistant Admin'
+        if is_assistant_admin:
+            cursor.execute('SELECT brand_id FROM admin_brand_access WHERE user_id = %s', (user_id,))
+            brand_ids = [row['brand_id'] for row in cursor.fetchall()]
+            # If Assistant Admin has no brands assigned, return empty stats
+            if not brand_ids:
+                return jsonify({
+                    'sales_today': {'total': 0, 'count': 0},
+                    'sales_month': {'total': 0, 'count': 0},
+                    'sales_all': {'total': 0, 'count': 0},
+                    'orders_today': 0,
+                    'pending_orders': 0,
+                    'low_stock': 0,
+                    'low_stock_skus': 0,
+                    'out_of_stock': 0,
+                    'out_of_stock_skus': 0,
+                    'sales_7_days': [],
+                    'recent_orders': [],
+                    'top_products': []
+                }), 200
+            brand_ids_tuple = tuple(brand_ids)
+        
         # Today's date range
         cursor.execute("SELECT CURRENT_DATE as today")
         today = cursor.fetchone()['today']
         
-        # Sales today (paid orders created today)
-        cursor.execute('''
-            SELECT COALESCE(SUM(final_amount), 0) as total,
-                   COUNT(*) as count
-            FROM orders 
-            WHERE status = 'paid' 
-            AND DATE(paid_at) = %s
-        ''', (today,))
+        # Sales today (paid orders - filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COALESCE(SUM(oi.subtotal), 0) as total,
+                       COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid' 
+                AND DATE(o.paid_at) = %s
+                AND p.brand_id IN %s
+            ''', (today, brand_ids_tuple))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(SUM(final_amount), 0) as total,
+                       COUNT(*) as count
+                FROM orders 
+                WHERE status = 'paid' 
+                AND DATE(paid_at) = %s
+            ''', (today,))
         sales_today = cursor.fetchone()
         
         # Sales this month
-        cursor.execute('''
-            SELECT COALESCE(SUM(final_amount), 0) as total,
-                   COUNT(*) as count
-            FROM orders 
-            WHERE status = 'paid' 
-            AND EXTRACT(YEAR FROM paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND EXTRACT(MONTH FROM paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
-        ''')
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COALESCE(SUM(oi.subtotal), 0) as total,
+                       COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid' 
+                AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+                AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND p.brand_id IN %s
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(SUM(final_amount), 0) as total,
+                       COUNT(*) as count
+                FROM orders 
+                WHERE status = 'paid' 
+                AND EXTRACT(YEAR FROM paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+                AND EXTRACT(MONTH FROM paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+            ''')
         sales_month = cursor.fetchone()
         
         # All time sales
-        cursor.execute('''
-            SELECT COALESCE(SUM(final_amount), 0) as total,
-                   COUNT(*) as count
-            FROM orders 
-            WHERE status = 'paid'
-        ''')
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COALESCE(SUM(oi.subtotal), 0) as total,
+                       COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid'
+                AND p.brand_id IN %s
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(SUM(final_amount), 0) as total,
+                       COUNT(*) as count
+                FROM orders 
+                WHERE status = 'paid'
+            ''')
         sales_all = cursor.fetchone()
         
-        # Orders today (all orders created today)
-        cursor.execute('''
-            SELECT COUNT(*) as count
-            FROM orders 
-            WHERE DATE(created_at) = %s
-        ''', (today,))
+        # Orders today (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE DATE(o.created_at) = %s
+                AND p.brand_id IN %s
+            ''', (today, brand_ids_tuple))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) as count
+                FROM orders 
+                WHERE DATE(created_at) = %s
+            ''', (today,))
         orders_today = cursor.fetchone()
         
-        # Pending orders (pending_payment, under_review)
-        cursor.execute('''
-            SELECT COUNT(*) as count
-            FROM orders 
-            WHERE status IN ('pending_payment', 'under_review')
-        ''')
+        # Pending orders (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status IN ('pending_payment', 'under_review')
+                AND p.brand_id IN %s
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) as count
+                FROM orders 
+                WHERE status IN ('pending_payment', 'under_review')
+            ''')
         pending_orders = cursor.fetchone()
         
-        # Low stock SKUs (stock <= low_stock_threshold or stock <= 5 if no threshold)
-        cursor.execute('''
-            SELECT COUNT(*) as sku_count,
-                   COUNT(DISTINCT p.id) as product_count
-            FROM products p
-            JOIN skus s ON s.product_id = p.id
-            WHERE s.stock <= COALESCE(p.low_stock_threshold, 5)
-            AND s.stock > 0
-            AND p.status = 'active'
-        ''')
+        # Low stock SKUs (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COUNT(*) as sku_count,
+                       COUNT(DISTINCT p.id) as product_count
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE s.stock <= COALESCE(p.low_stock_threshold, 5)
+                AND s.stock > 0
+                AND p.status = 'active'
+                AND p.brand_id IN %s
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) as sku_count,
+                       COUNT(DISTINCT p.id) as product_count
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE s.stock <= COALESCE(p.low_stock_threshold, 5)
+                AND s.stock > 0
+                AND p.status = 'active'
+            ''')
         low_stock = cursor.fetchone()
         
-        # Out of stock SKUs
-        cursor.execute('''
-            SELECT COUNT(*) as sku_count,
-                   COUNT(DISTINCT p.id) as product_count
-            FROM products p
-            JOIN skus s ON s.product_id = p.id
-            WHERE s.stock = 0
-            AND p.status = 'active'
-        ''')
+        # Out of stock SKUs (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COUNT(*) as sku_count,
+                       COUNT(DISTINCT p.id) as product_count
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE s.stock = 0
+                AND p.status = 'active'
+                AND p.brand_id IN %s
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) as sku_count,
+                       COUNT(DISTINCT p.id) as product_count
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE s.stock = 0
+                AND p.status = 'active'
+            ''')
         out_of_stock = cursor.fetchone()
         
-        # Sales last 7 days for chart
-        cursor.execute('''
-            SELECT DATE(paid_at) as date,
-                   COALESCE(SUM(final_amount), 0) as total,
-                   COUNT(*) as count
-            FROM orders 
-            WHERE status = 'paid' 
-            AND paid_at >= CURRENT_DATE - INTERVAL '6 days'
-            GROUP BY DATE(paid_at)
-            ORDER BY DATE(paid_at)
-        ''')
+        # Sales last 7 days for chart (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT DATE(o.paid_at) as date,
+                       COALESCE(SUM(oi.subtotal), 0) as total,
+                       COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid' 
+                AND o.paid_at >= CURRENT_DATE - INTERVAL '6 days'
+                AND p.brand_id IN %s
+                GROUP BY DATE(o.paid_at)
+                ORDER BY DATE(o.paid_at)
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT DATE(paid_at) as date,
+                       COALESCE(SUM(final_amount), 0) as total,
+                       COUNT(*) as count
+                FROM orders 
+                WHERE status = 'paid' 
+                AND paid_at >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY DATE(paid_at)
+                ORDER BY DATE(paid_at)
+            ''')
         sales_7_days = []
         for row in cursor.fetchall():
             sales_7_days.append({
@@ -4091,16 +4219,34 @@ def get_dashboard_stats():
             else:
                 sales_7_days_filled.append({'date': d, 'total': 0, 'count': 0})
         
-        # Recent orders (last 5)
-        cursor.execute('''
-            SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at,
-                   u.full_name as customer_name,
-                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
-            FROM orders o
-            LEFT JOIN users u ON u.id = o.user_id
-            ORDER BY o.created_at DESC
-            LIMIT 5
-        ''')
+        # Recent orders (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT DISTINCT o.id, o.order_number, o.status, o.final_amount, o.created_at,
+                       u.full_name as customer_name,
+                       (SELECT COUNT(*) FROM order_items oi2 
+                        JOIN skus s2 ON s2.id = oi2.sku_id 
+                        JOIN products p2 ON p2.id = s2.product_id 
+                        WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE p.brand_id IN %s
+                ORDER BY o.created_at DESC
+                LIMIT 5
+            ''', (brand_ids_tuple, brand_ids_tuple))
+        else:
+            cursor.execute('''
+                SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at,
+                       u.full_name as customer_name,
+                       (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                ORDER BY o.created_at DESC
+                LIMIT 5
+            ''')
         recent_orders = []
         for row in cursor.fetchall():
             recent_orders.append({
@@ -4113,20 +4259,36 @@ def get_dashboard_stats():
                 'item_count': row['item_count']
             })
         
-        # Top selling products this month
-        cursor.execute('''
-            SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.subtotal) as revenue
-            FROM order_items oi
-            JOIN orders o ON o.id = oi.order_id
-            JOIN skus s ON s.id = oi.sku_id
-            JOIN products p ON p.id = s.product_id
-            WHERE o.status = 'paid'
-            AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
-            GROUP BY p.id, p.name
-            ORDER BY total_sold DESC
-            LIMIT 5
-        ''')
+        # Top selling products this month (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.subtotal) as revenue
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid'
+                AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+                AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+                AND p.brand_id IN %s
+                GROUP BY p.id, p.name
+                ORDER BY total_sold DESC
+                LIMIT 5
+            ''', (brand_ids_tuple,))
+        else:
+            cursor.execute('''
+                SELECT p.name, SUM(oi.quantity) as total_sold, SUM(oi.subtotal) as revenue
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE o.status = 'paid'
+                AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
+                AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
+                GROUP BY p.id, p.name
+                ORDER BY total_sold DESC
+                LIMIT 5
+            ''')
         top_products = []
         for row in cursor.fetchall():
             top_products.append({
@@ -4182,10 +4344,30 @@ def get_sales_history():
         channel_id = request.args.get('channel_id')
         status = request.args.get('status')
         search = request.args.get('search', '').strip()
-        period = request.args.get('period', '7days')  # 7days, 30days, this_month, last_month, custom
+        period = request.args.get('period', '7days')
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        is_assistant_admin = user_role == 'Assistant Admin'
+        
+        # Get brand filter for Assistant Admin
+        brand_ids = None
+        brand_ids_tuple = None
+        if is_assistant_admin:
+            cursor.execute('SELECT brand_id FROM admin_brand_access WHERE user_id = %s', (user_id,))
+            brand_ids = [row['brand_id'] for row in cursor.fetchall()]
+            # If no brands assigned, return empty results
+            if not brand_ids:
+                return jsonify({
+                    'orders': [],
+                    'summary': {'total': 0, 'count': 0, 'paid_count': 0, 'paid_total': 0},
+                    'channels': [],
+                    'period': {'start': '', 'end': ''}
+                }), 200
+            brand_ids_tuple = tuple(brand_ids)
         
         # Calculate date range based on period
         today = datetime.now().date()
@@ -4209,18 +4391,38 @@ def get_sales_history():
             start = today - timedelta(days=6)
             end = today
         
-        # Build query
-        query = '''
-            SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at, o.paid_at,
-                   u.full_name as customer_name,
-                   sc.name as channel_name,
-                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
-            FROM orders o
-            LEFT JOIN users u ON u.id = o.user_id
-            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
-            WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
-        '''
-        params = [start, end]
+        # Build query - filter by brand for Assistant Admin
+        if is_assistant_admin and brand_ids_tuple:
+            query = '''
+                SELECT DISTINCT o.id, o.order_number, o.status, o.final_amount, o.created_at, o.paid_at,
+                       u.full_name as customer_name,
+                       sc.name as channel_name,
+                       (SELECT COUNT(*) FROM order_items oi2 
+                        JOIN skus s2 ON s2.id = oi2.sku_id 
+                        JOIN products p2 ON p2.id = s2.product_id 
+                        WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
+                AND p.brand_id IN %s
+            '''
+            params = [brand_ids_tuple, start, end, brand_ids_tuple]
+        else:
+            query = '''
+                SELECT o.id, o.order_number, o.status, o.final_amount, o.created_at, o.paid_at,
+                       u.full_name as customer_name,
+                       sc.name as channel_name,
+                       (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
+            '''
+            params = [start, end]
         
         if channel_id:
             query += ' AND o.sales_channel_id = %s'
@@ -4252,15 +4454,29 @@ def get_sales_history():
                 'item_count': row['item_count']
             })
         
-        # Get summary stats for the period
-        cursor.execute('''
-            SELECT COALESCE(SUM(final_amount), 0) as total,
-                   COUNT(*) as count,
-                   COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
-                   COALESCE(SUM(CASE WHEN status = 'paid' THEN final_amount END), 0) as paid_total
-            FROM orders 
-            WHERE DATE(created_at) >= %s AND DATE(created_at) <= %s
-        ''', (start, end))
+        # Get summary stats for the period (filtered by brand for Assistant Admin)
+        if is_assistant_admin and brand_ids_tuple:
+            cursor.execute('''
+                SELECT COALESCE(SUM(oi.subtotal), 0) as total,
+                       COUNT(DISTINCT o.id) as count,
+                       COUNT(DISTINCT CASE WHEN o.status = 'paid' THEN o.id END) as paid_count,
+                       COALESCE(SUM(CASE WHEN o.status = 'paid' THEN oi.subtotal END), 0) as paid_total
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
+                AND p.brand_id IN %s
+            ''', (start, end, brand_ids_tuple))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(SUM(final_amount), 0) as total,
+                       COUNT(*) as count,
+                       COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
+                       COALESCE(SUM(CASE WHEN status = 'paid' THEN final_amount END), 0) as paid_total
+                FROM orders 
+                WHERE DATE(created_at) >= %s AND DATE(created_at) <= %s
+            ''', (start, end))
         summary = cursor.fetchone()
         
         # Get sales channels for filter
@@ -4308,6 +4524,26 @@ def get_brand_sales():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        is_assistant_admin = user_role == 'Assistant Admin'
+        
+        # Get brand filter for Assistant Admin
+        allowed_brand_ids = None
+        allowed_brand_ids_tuple = None
+        if is_assistant_admin:
+            cursor.execute('SELECT brand_id FROM admin_brand_access WHERE user_id = %s', (user_id,))
+            allowed_brand_ids = [row['brand_id'] for row in cursor.fetchall()]
+            # If no brands assigned, return empty results
+            if not allowed_brand_ids:
+                return jsonify({
+                    'brands': [],
+                    'all_brands': [],
+                    'summary': {'total_revenue': 0, 'total_sold': 0, 'brand_count': 0},
+                    'period': {'start': '', 'end': ''}
+                }), 200
+            allowed_brand_ids_tuple = tuple(allowed_brand_ids)
+        
         # Calculate date range
         today = datetime.now().date()
         if period == '7days':
@@ -4345,9 +4581,18 @@ def get_brand_sales():
         '''
         params = [start, end]
         
+        # Filter by allowed brands for Assistant Admin
+        where_clauses = []
+        if is_assistant_admin and allowed_brand_ids_tuple:
+            where_clauses.append('b.id IN %s')
+            params.append(allowed_brand_ids_tuple)
+        
         if brand_id:
-            query += ' WHERE b.id = %s'
+            where_clauses.append('b.id = %s')
             params.append(int(brand_id))
+        
+        if where_clauses:
+            query += ' WHERE ' + ' AND '.join(where_clauses)
         
         query += ' GROUP BY b.id, b.name ORDER BY revenue DESC'
         
@@ -4368,8 +4613,11 @@ def get_brand_sales():
                 'order_count': row['order_count']
             })
         
-        # Get all brands for filter
-        cursor.execute('SELECT id, name FROM brands ORDER BY name')
+        # Get all brands for filter (only allowed brands for Assistant Admin)
+        if is_assistant_admin and allowed_brand_ids_tuple:
+            cursor.execute('SELECT id, name FROM brands WHERE id IN %s ORDER BY name', (allowed_brand_ids_tuple,))
+        else:
+            cursor.execute('SELECT id, name FROM brands ORDER BY name')
         all_brands = [{'id': row['id'], 'name': row['name']} for row in cursor.fetchall()]
         
         return jsonify({
@@ -4408,22 +4656,63 @@ def get_all_orders():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        query = '''
-            SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
-                   o.final_amount, o.notes, o.created_at, o.updated_at,
-                   u.full_name as customer_name, u.username,
-                   sc.name as channel_name,
-                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
-                   (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
-            FROM orders o
-            LEFT JOIN users u ON u.id = o.user_id
-            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
-        '''
-        params = []
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        is_assistant_admin = user_role == 'Assistant Admin'
         
-        if status_filter:
-            query += ' WHERE o.status = %s'
-            params.append(status_filter)
+        # Get brand filter for Assistant Admin
+        brand_ids = None
+        brand_ids_tuple = None
+        if is_assistant_admin:
+            cursor.execute('SELECT brand_id FROM admin_brand_access WHERE user_id = %s', (user_id,))
+            brand_ids = [row['brand_id'] for row in cursor.fetchall()]
+            # If no brands assigned, return empty results
+            if not brand_ids:
+                return jsonify([]), 200
+            brand_ids_tuple = tuple(brand_ids)
+        
+        # Build query - filter by brand for Assistant Admin
+        if is_assistant_admin and brand_ids_tuple:
+            query = '''
+                SELECT DISTINCT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
+                       o.final_amount, o.notes, o.created_at, o.updated_at,
+                       u.full_name as customer_name, u.username,
+                       sc.name as channel_name,
+                       (SELECT COUNT(*) FROM order_items oi2 
+                        JOIN skus s2 ON s2.id = oi2.sku_id 
+                        JOIN products p2 ON p2.id = s2.product_id 
+                        WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count,
+                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE p.brand_id IN %s
+            '''
+            params = [brand_ids_tuple, brand_ids_tuple]
+            
+            if status_filter:
+                query += ' AND o.status = %s'
+                params.append(status_filter)
+        else:
+            query = '''
+                SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
+                       o.final_amount, o.notes, o.created_at, o.updated_at,
+                       u.full_name as customer_name, u.username,
+                       sc.name as channel_name,
+                       (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
+                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+                FROM orders o
+                LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            '''
+            params = []
+            
+            if status_filter:
+                query += ' WHERE o.status = %s'
+                params.append(status_filter)
         
         query += ' ORDER BY o.created_at DESC'
         
