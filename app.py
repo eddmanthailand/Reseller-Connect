@@ -3888,6 +3888,12 @@ def get_reseller_product_detail(product_id):
 
 # ==================== RESELLER PAGES ====================
 
+@app.route('/reseller/dashboard')
+@login_required
+def reseller_dashboard_page():
+    """Reseller dashboard page"""
+    return render_template('reseller_dashboard.html')
+
 @app.route('/reseller/catalog')
 @login_required
 def reseller_catalog_page():

@@ -1203,7 +1203,9 @@
 
     <script src="/static/js/global-alert.js"></script>
     <script>
-        const API_URL = '/api';
+        if (typeof API_URL === 'undefined') {
+            var API_URL = '/api';
+        }
         let dashboardData = null;
         let featuredProducts = null;
         let currentProductTab = 'new';
