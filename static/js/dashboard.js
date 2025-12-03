@@ -1,5 +1,5 @@
 // API Base URL (use window.API_URL set by template, fallback to '/api')
-const API_URL = window.API_URL || '/api';
+const API_URL = (typeof window !== 'undefined' && window.API_URL) ? window.API_URL : '/api';
 
 // Sidebar Toggle Function
 function toggleSidebar() {
@@ -396,9 +396,16 @@ function switchPage(pageName) {
         }
     });
 
-    // Load products data when switching to products page
+    // Load data based on page
     if (pageName === 'products') {
         loadProducts();
+    } else if (pageName === 'orders') {
+        loadOrders();
+    } else if (pageName === 'tier-settings') {
+        loadTierSettings();
+        loadResellers();
+    } else if (pageName === 'settings') {
+        loadSettings();
     }
 }
 
@@ -1474,6 +1481,643 @@ async function handleAssignBrands(event) {
         showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
     }
 }
+
+// ==========================================
+// Orders Page Functions
+// ==========================================
+
+let allOrders = [];
+let currentOrdersStatus = '';
+
+async function loadOrders(status = '') {
+    currentOrdersStatus = status;
+    const container = document.getElementById('ordersContainer');
+    
+    try {
+        let url = `${API_URL}/orders`;
+        if (status) url += `?status=${status}`;
+        
+        const response = await fetch(url);
+        allOrders = await response.json();
+        
+        renderOrders();
+        updateOrderCounts();
+    } catch (error) {
+        console.error('Error loading orders:', error);
+        container.innerHTML = '<div class="empty-state">ไม่สามารถโหลดข้อมูลได้</div>';
+    }
+}
+
+function renderOrders() {
+    const container = document.getElementById('ordersContainer');
+    
+    if (allOrders.length === 0) {
+        container.innerHTML = '<div class="empty-state">ไม่มีคำสั่งซื้อ</div>';
+        return;
+    }
+    
+    const statusLabels = {
+        'pending_payment': 'รอชำระเงิน',
+        'under_review': 'รอตรวจสอบ',
+        'paid': 'ชำระแล้ว',
+        'rejected': 'ปฏิเสธ',
+        'cancelled': 'ยกเลิก'
+    };
+    
+    let html = `
+        <table class="orders-table">
+            <thead>
+                <tr>
+                    <th>เลขที่คำสั่งซื้อ</th>
+                    <th>ลูกค้า</th>
+                    <th>ยอดรวม</th>
+                    <th>สถานะ</th>
+                    <th>วันที่</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    allOrders.forEach(order => {
+        const statusLabel = statusLabels[order.status] || order.status;
+        const orderDate = new Date(order.created_at).toLocaleDateString('th-TH');
+        
+        html += `
+            <tr>
+                <td>#${order.id}</td>
+                <td>${order.customer_name || 'N/A'}</td>
+                <td>${parseFloat(order.total_amount || 0).toLocaleString('th-TH')} บาท</td>
+                <td><span class="order-status ${order.status}">${statusLabel}</span></td>
+                <td>${orderDate}</td>
+                <td>
+                    <button class="action-btn btn-review" onclick="viewOrderDetails(${order.id})">ดูรายละเอียด</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function updateOrderCounts() {
+    try {
+        const response = await fetch(`${API_URL}/orders?status=under_review`);
+        const reviewOrders = await response.json();
+        
+        const reviewCountEl = document.getElementById('reviewCount');
+        const pendingBadge = document.getElementById('pendingOrderCount');
+        
+        if (reviewCountEl) reviewCountEl.textContent = reviewOrders.length;
+        if (pendingBadge) {
+            if (reviewOrders.length > 0) {
+                pendingBadge.textContent = reviewOrders.length;
+                pendingBadge.style.display = 'inline';
+            } else {
+                pendingBadge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error updating order counts:', error);
+    }
+}
+
+async function viewOrderDetails(orderId) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}`);
+        const order = await response.json();
+        
+        const statusLabels = {
+            'pending_payment': 'รอชำระเงิน',
+            'under_review': 'รอตรวจสอบ',
+            'paid': 'ชำระแล้ว',
+            'rejected': 'ปฏิเสธ',
+            'cancelled': 'ยกเลิก'
+        };
+        
+        let itemsHtml = '';
+        if (order.items && order.items.length > 0) {
+            itemsHtml = order.items.map(item => `
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <span>${item.product_name || 'Product'} x${item.quantity}</span>
+                    <span>${parseFloat(item.price * item.quantity).toLocaleString('th-TH')} บาท</span>
+                </div>
+            `).join('');
+        }
+        
+        let slipHtml = '';
+        if (order.payment_slip_url) {
+            slipHtml = `
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 8px;">หลักฐานการชำระเงิน:</h4>
+                    <img src="${order.payment_slip_url}" alt="Payment Slip" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                </div>
+            `;
+        }
+        
+        let actionsHtml = '';
+        if (order.status === 'under_review') {
+            actionsHtml = `
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button class="btn btn-success" onclick="updateOrderStatus(${orderId}, 'paid')" style="flex: 1;">
+                        ยืนยันการชำระเงิน
+                    </button>
+                    <button class="btn btn-danger" onclick="updateOrderStatus(${orderId}, 'rejected')" style="flex: 1;">
+                        ปฏิเสธ
+                    </button>
+                </div>
+            `;
+        }
+        
+        const modalContent = `
+            <div style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>คำสั่งซื้อ #${order.id}</h2>
+                    <span class="order-status ${order.status}">${statusLabels[order.status]}</span>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <p><strong>ลูกค้า:</strong> ${order.customer_name || 'N/A'}</p>
+                    <p><strong>วันที่:</strong> ${new Date(order.created_at).toLocaleString('th-TH')}</p>
+                </div>
+                <h4 style="margin-bottom: 8px;">รายการสินค้า:</h4>
+                <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
+                    ${itemsHtml || '<p style="opacity: 0.6;">ไม่มีรายการ</p>'}
+                    <div style="display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid rgba(255,255,255,0.2); font-weight: bold;">
+                        <span>ยอดรวม</span>
+                        <span>${parseFloat(order.total_amount || 0).toLocaleString('th-TH')} บาท</span>
+                    </div>
+                </div>
+                ${slipHtml}
+                ${actionsHtml}
+            </div>
+        `;
+        
+        showModal(modalContent);
+    } catch (error) {
+        console.error('Error loading order details:', error);
+        showAlert('ไม่สามารถโหลดรายละเอียดคำสั่งซื้อได้', 'error');
+    }
+}
+
+async function updateOrderStatus(orderId, newStatus) {
+    const confirmMessages = {
+        'paid': 'ยืนยันการชำระเงินและหักสต็อก?',
+        'rejected': 'ปฏิเสธคำสั่งซื้อนี้?'
+    };
+    
+    if (!confirm(confirmMessages[newStatus] || `เปลี่ยนสถานะเป็น ${newStatus}?`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (response.ok) {
+            showAlert('อัปเดตสถานะสำเร็จ', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating order status:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function showModal(content) {
+    let modal = document.getElementById('dynamicModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dynamicModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px;">
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div id="dynamicModalContent"></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    document.getElementById('dynamicModalContent').innerHTML = content;
+    modal.classList.add('active');
+}
+
+function closeModal() {
+    const modal = document.getElementById('dynamicModal');
+    if (modal) modal.classList.remove('active');
+}
+
+// Orders status tabs
+document.addEventListener('DOMContentLoaded', function() {
+    const orderStatusTabs = document.getElementById('orderStatusTabs');
+    if (orderStatusTabs) {
+        orderStatusTabs.addEventListener('click', function(e) {
+            if (e.target.classList.contains('status-tab')) {
+                orderStatusTabs.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+                e.target.classList.add('active');
+                loadOrders(e.target.dataset.status);
+            }
+        });
+    }
+});
+
+// ==========================================
+// Tier Settings Page Functions
+// ==========================================
+
+let tierData = [];
+
+async function loadTierSettings() {
+    const container = document.getElementById('tiersContainer');
+    
+    try {
+        const response = await fetch(`${API_URL}/reseller-tiers`);
+        tierData = await response.json();
+        
+        renderTierCards();
+    } catch (error) {
+        console.error('Error loading tiers:', error);
+        container.innerHTML = '<div style="text-align: center; opacity: 0.6;">ไม่สามารถโหลดข้อมูลได้</div>';
+    }
+}
+
+function renderTierCards() {
+    const container = document.getElementById('tiersContainer');
+    
+    const tierColors = {
+        'Bronze': 'bronze',
+        'Silver': 'silver',
+        'Gold': 'gold',
+        'Platinum': 'platinum'
+    };
+    
+    let html = '';
+    
+    tierData.forEach(tier => {
+        const colorClass = tierColors[tier.name] || 'bronze';
+        html += `
+            <div class="tier-card">
+                <div class="tier-header">
+                    <span class="tier-badge ${colorClass}">${tier.name}</span>
+                    <span class="tier-level">ระดับ ${tier.level_rank || 1}</span>
+                </div>
+                <div class="tier-form-row">
+                    <label>ยอดซื้อขั้นต่ำ</label>
+                    <div class="threshold-input-wrapper">
+                        <input type="number" class="tier-input threshold-input" 
+                               data-tier-id="${tier.id}" 
+                               value="${tier.upgrade_threshold || 0}" 
+                               min="0">
+                        <span class="threshold-suffix">บาท</span>
+                    </div>
+                </div>
+                <div class="tier-form-row">
+                    <label>รายละเอียด</label>
+                    <input type="text" class="tier-input description-input" 
+                           data-tier-id="${tier.id}" 
+                           value="${tier.description || ''}" 
+                           placeholder="คำอธิบายระดับ (ไม่จำเป็น)">
+                </div>
+                <p class="info-text">ตัวแทนที่มียอดซื้อสะสมตั้งแต่ ${(tier.upgrade_threshold || 0).toLocaleString()} บาท จะได้รับระดับนี้</p>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+async function saveAllTiers() {
+    const thresholdInputs = document.querySelectorAll('.threshold-input');
+    const descriptionInputs = document.querySelectorAll('.description-input');
+    
+    const updates = [];
+    thresholdInputs.forEach(input => {
+        const tierId = input.dataset.tierId;
+        const threshold = parseInt(input.value) || 0;
+        const descInput = document.querySelector(`.description-input[data-tier-id="${tierId}"]`);
+        const description = descInput ? descInput.value : '';
+        
+        updates.push({
+            id: parseInt(tierId),
+            upgrade_threshold: threshold,
+            description: description
+        });
+    });
+    
+    try {
+        const response = await fetch(`${API_URL}/reseller-tiers/bulk`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tiers: updates })
+        });
+        
+        if (response.ok) {
+            showTierAlert('บันทึกการตั้งค่าสำเร็จ', 'success');
+            loadTierSettings();
+        } else {
+            const error = await response.json();
+            showTierAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving tiers:', error);
+        showTierAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+async function loadResellers() {
+    const tableBody = document.getElementById('resellersTableBody');
+    
+    try {
+        const response = await fetch(`${API_URL}/resellers`);
+        const resellers = await response.json();
+        
+        if (resellers.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.6;">ไม่มีข้อมูลตัวแทน</td></tr>';
+            return;
+        }
+        
+        const tierColors = {
+            'Bronze': 'bronze',
+            'Silver': 'silver',
+            'Gold': 'gold',
+            'Platinum': 'platinum'
+        };
+        
+        let html = '';
+        resellers.forEach(r => {
+            const colorClass = tierColors[r.tier_name] || 'bronze';
+            const manualBadge = r.tier_manual_override ? '<span class="manual-badge">Manual</span>' : '';
+            
+            html += `
+                <tr>
+                    <td>${r.username}</td>
+                    <td>${r.full_name}</td>
+                    <td><span class="tier-badge ${colorClass}">${r.tier_name}</span></td>
+                    <td>${(r.total_purchases || 0).toLocaleString()} บาท</td>
+                    <td>${manualBadge || '<span style="opacity: 0.5;">Auto</span>'}</td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading resellers:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.6;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+async function checkAllUpgrades() {
+    const resultDiv = document.getElementById('upgradeResult');
+    resultDiv.innerHTML = '<p style="opacity: 0.6;">กำลังตรวจสอบ...</p>';
+    
+    try {
+        const response = await fetch(`${API_URL}/users/check-tier-upgrades`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.upgraded && result.upgraded.length > 0) {
+            let html = '<div class="upgrade-result"><h4>อัปเกรดสำเร็จ:</h4><ul>';
+            result.upgraded.forEach(u => {
+                html += `<li>${u.full_name}: ${u.old_tier} → ${u.new_tier}</li>`;
+            });
+            html += '</ul></div>';
+            resultDiv.innerHTML = html;
+            loadResellers();
+        } else {
+            resultDiv.innerHTML = '<p style="color: rgba(255,255,255,0.6); padding: 16px;">ไม่มีตัวแทนที่ต้องอัปเกรด</p>';
+        }
+        
+        setTimeout(() => { resultDiv.innerHTML = ''; }, 5000);
+    } catch (error) {
+        console.error('Error checking upgrades:', error);
+        resultDiv.innerHTML = '<p style="color: #ef4444;">เกิดข้อผิดพลาด</p>';
+    }
+}
+
+function showTierAlert(message, type) {
+    const alertBox = document.getElementById('tierAlertBox');
+    if (!alertBox) return;
+    
+    alertBox.textContent = message;
+    alertBox.className = `alert alert-${type}`;
+    alertBox.style.display = 'block';
+    
+    setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+}
+
+// ==========================================
+// Settings Page Functions
+// ==========================================
+
+let promptPayQrFile = null;
+let salesChannels = [];
+
+async function loadSettings() {
+    loadPromptPaySettings();
+    loadChannels();
+}
+
+async function loadPromptPaySettings() {
+    try {
+        const response = await fetch(`${API_URL}/settings/promptpay`);
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.account_name) {
+                document.getElementById('accountName').value = data.account_name;
+            }
+            if (data.account_number) {
+                document.getElementById('accountNumber').value = data.account_number;
+            }
+            if (data.qr_code_url) {
+                const preview = document.getElementById('qrPreview');
+                const placeholder = document.getElementById('qrPlaceholder');
+                preview.src = data.qr_code_url;
+                preview.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading PromptPay settings:', error);
+    }
+}
+
+async function loadChannels() {
+    const container = document.getElementById('channelList');
+    
+    try {
+        const response = await fetch(`${API_URL}/sales-channels`);
+        salesChannels = await response.json();
+        
+        if (salesChannels.length === 0) {
+            container.innerHTML = '<p style="text-align: center; opacity: 0.6;">ยังไม่มีช่องทางการขาย</p>';
+            return;
+        }
+        
+        let html = '';
+        salesChannels.forEach(channel => {
+            html += `
+                <div class="channel-item">
+                    <div class="channel-info">
+                        <span class="channel-name">${channel.name}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${channel.is_active ? 'checked' : ''} onchange="toggleChannel(${channel.id}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn-icon delete" onclick="deleteChannel(${channel.id})">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading channels:', error);
+        container.innerHTML = '<p style="text-align: center; opacity: 0.6;">ไม่สามารถโหลดข้อมูลได้</p>';
+    }
+}
+
+async function addChannel() {
+    const nameInput = document.getElementById('newChannelName');
+    const name = nameInput.value.trim();
+    
+    if (!name) {
+        showAlert('กรุณากรอกชื่อช่องทาง', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/sales-channels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        
+        if (response.ok) {
+            nameInput.value = '';
+            loadChannels();
+            showAlert('เพิ่มช่องทางสำเร็จ', 'success');
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding channel:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function toggleChannel(channelId, isActive) {
+    try {
+        await fetch(`${API_URL}/sales-channels/${channelId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+        });
+    } catch (error) {
+        console.error('Error toggling channel:', error);
+    }
+}
+
+async function deleteChannel(channelId) {
+    if (!confirm('ลบช่องทางนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/sales-channels/${channelId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadChannels();
+            showAlert('ลบช่องทางสำเร็จ', 'success');
+        }
+    } catch (error) {
+        console.error('Error deleting channel:', error);
+    }
+}
+
+// QR Code upload handler
+document.addEventListener('DOMContentLoaded', function() {
+    const qrInput = document.getElementById('qrInput');
+    if (qrInput) {
+        qrInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                promptPayQrFile = file;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const preview = document.getElementById('qrPreview');
+                    const placeholder = document.getElementById('qrPlaceholder');
+                    preview.src = event.target.result;
+                    preview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
+    const promptpayForm = document.getElementById('promptpayForm');
+    if (promptpayForm) {
+        promptpayForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const accountName = document.getElementById('accountName').value;
+            const accountNumber = document.getElementById('accountNumber').value;
+            
+            try {
+                let qrUrl = null;
+                
+                if (promptPayQrFile) {
+                    const formData = new FormData();
+                    formData.append('file', promptPayQrFile);
+                    formData.append('type', 'promptpay_qr');
+                    
+                    const uploadResponse = await fetch(`${API_URL}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (uploadResponse.ok) {
+                        const uploadResult = await uploadResponse.json();
+                        qrUrl = uploadResult.url;
+                    }
+                }
+                
+                const settingsData = {
+                    account_name: accountName,
+                    account_number: accountNumber
+                };
+                if (qrUrl) settingsData.qr_code_url = qrUrl;
+                
+                const response = await fetch(`${API_URL}/settings/promptpay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settingsData)
+                });
+                
+                if (response.ok) {
+                    showAlert('บันทึกการตั้งค่าสำเร็จ', 'success');
+                    promptPayQrFile = null;
+                } else {
+                    const error = await response.json();
+                    showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving PromptPay settings:', error);
+                showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+            }
+        });
+    }
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);

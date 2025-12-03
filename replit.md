@@ -1,5 +1,12 @@
 # Admin User Management & Product Management System
 
+## Recent Changes (December 2025)
+- **SPA Conversion**: Converted admin interface to Single Page Application (SPA) within admin_dashboard.html
+  - Orders page integrated with status tabs and order detail modal
+  - Tier Settings page with reseller list and upgrade checking
+  - Settings page with PromptPay QR upload and sales channel management
+  - Navigation uses data-page attributes for seamless page switching
+
 ## Overview
 This is a full-stack reseller/distributor application built with Flask and Neon PostgreSQL. The system enables Super Admins to manage users with various roles (Super Admin, Assistant Admin, Reseller), assign reseller tiers, and manage products with advanced SPU/SKU variant management, including multiple images, drag-and-drop ordering, and optional size charts. It features a modern glassmorphism UI design with real-time API integration, aiming to provide a professional and secure business management solution.
 
