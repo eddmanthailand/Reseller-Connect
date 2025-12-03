@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         * {
             margin: 0;
@@ -334,8 +335,6 @@
             <p>ระบบจัดการตัวแทนจำหน่าย</p>
         </div>
 
-        <div id="alertBox" class="alert"></div>
-
         <form id="loginForm">
             <div class="form-group">
                 <label for="username">Username</label>
@@ -385,21 +384,9 @@
         </div>
     </div>
 
+    <script src="/static/js/global-alert.js"></script>
     <script>
         const loginForm = document.getElementById('loginForm');
-        const alertBox = document.getElementById('alertBox');
-
-        function showAlert(message, type = 'error') {
-            alertBox.textContent = message;
-            alertBox.className = `alert ${type}`;
-            alertBox.style.display = 'block';
-
-            if (type === 'success') {
-                setTimeout(() => {
-                    alertBox.style.display = 'none';
-                }, 2000);
-            }
-        }
 
         loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -429,7 +416,7 @@
                     throw new Error(result.error || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
                 }
 
-                showAlert('✓ เข้าสู่ระบบสำเร็จ! กำลังเปลี่ยนหน้า...', 'success');
+                showAlert('เข้าสู่ระบบสำเร็จ! กำลังเปลี่ยนหน้า...', 'success');
 
                 // Redirect based on role
                 setTimeout(() => {
@@ -442,7 +429,7 @@
 
             } catch (error) {
                 console.error('Login error:', error);
-                showAlert('✗ ' + error.message, 'error');
+                showAlert(error.message, 'error');
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalText;
             }
