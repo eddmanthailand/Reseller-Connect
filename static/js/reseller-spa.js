@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function init() {
     try {
         await loadCurrentUser();
+        await loadThailandProvinces();
         setupNavigation();
         handleHashNavigation();
         window.addEventListener('hashchange', handleHashNavigation);
@@ -592,6 +593,12 @@ function openAddCustomerModal() {
     document.getElementById('customerModalTitle').textContent = 'เพิ่มลูกค้าใหม่';
     document.getElementById('customerForm').reset();
     document.getElementById('customerId').value = '';
+    
+    populateProvinceSelect('customerProvince');
+    document.getElementById('customerDistrict').innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+    document.getElementById('customerSubdistrict').innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+    document.getElementById('customerPostalCode').value = '';
+    
     document.getElementById('customerModal').classList.add('active');
 }
 
@@ -635,9 +642,9 @@ async function handleSaveCustomer(event) {
         phone: document.getElementById('customerPhone').value,
         email: document.getElementById('customerEmail').value,
         address: document.getElementById('customerAddress').value,
-        subdistrict: document.getElementById('customerSubdistrict').value,
-        district: document.getElementById('customerDistrict').value,
-        province: document.getElementById('customerProvince').value,
+        subdistrict: getSelectedText('customerSubdistrict'),
+        district: getSelectedText('customerDistrict'),
+        province: getSelectedText('customerProvince'),
         postal_code: document.getElementById('customerPostalCode').value,
         notes: document.getElementById('customerNotes').value
     };
@@ -706,12 +713,69 @@ async function loadProfile() {
         document.getElementById('profilePhone').value = profile.phone || '';
         document.getElementById('profileEmail').value = profile.email || '';
         document.getElementById('profileAddress').value = profile.address || '';
-        document.getElementById('profileSubdistrict').value = profile.subdistrict || '';
-        document.getElementById('profileDistrict').value = profile.district || '';
-        document.getElementById('profileProvince').value = profile.province || '';
         document.getElementById('profilePostalCode').value = profile.postal_code || '';
+        
+        populateProvinceSelect('profileProvince');
+        
+        if (profile.province) {
+            await setProfileAddressFromText(profile.province, profile.district, profile.subdistrict, profile.postal_code);
+        }
     } catch (error) {
         console.error('Error loading profile:', error);
+    }
+}
+
+async function setProfileAddressFromText(provinceName, districtName, subdistrictName, postalCode) {
+    const provinceSelect = document.getElementById('profileProvince');
+    const districtSelect = document.getElementById('profileDistrict');
+    const subdistrictSelect = document.getElementById('profileSubdistrict');
+    
+    const province = thailandProvinces.find(p => p.provinceNameTh === provinceName);
+    if (province) {
+        provinceSelect.value = province.provinceCode;
+        
+        const distResponse = await fetch(`${RESELLER_API_URL}/thailand/districts/${province.provinceCode}`);
+        if (distResponse.ok) {
+            const districts = await distResponse.json();
+            thailandDistricts['profile'] = districts;
+            districtSelect.innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+            districts.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.districtCode;
+                option.textContent = d.districtNameTh;
+                option.dataset.name = d.districtNameTh;
+                districtSelect.appendChild(option);
+            });
+            
+            const district = districts.find(d => d.districtNameTh === districtName);
+            if (district) {
+                districtSelect.value = district.districtCode;
+                
+                const subResponse = await fetch(`${RESELLER_API_URL}/thailand/subdistricts/${district.districtCode}`);
+                if (subResponse.ok) {
+                    const subdistricts = await subResponse.json();
+                    thailandSubdistricts['profile'] = subdistricts;
+                    subdistrictSelect.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+                    subdistricts.forEach(s => {
+                        const option = document.createElement('option');
+                        option.value = s.subdistrictCode;
+                        option.textContent = s.subdistrictNameTh;
+                        option.dataset.name = s.subdistrictNameTh;
+                        option.dataset.postalCode = s.postalCode;
+                        subdistrictSelect.appendChild(option);
+                    });
+                    
+                    const subdistrict = subdistricts.find(s => s.subdistrictNameTh === subdistrictName);
+                    if (subdistrict) {
+                        subdistrictSelect.value = subdistrict.subdistrictCode;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (postalCode) {
+        document.getElementById('profilePostalCode').value = postalCode;
     }
 }
 
@@ -723,9 +787,9 @@ async function handleSaveProfile(event) {
         phone: document.getElementById('profilePhone').value,
         email: document.getElementById('profileEmail').value,
         address: document.getElementById('profileAddress').value,
-        subdistrict: document.getElementById('profileSubdistrict').value,
-        district: document.getElementById('profileDistrict').value,
-        province: document.getElementById('profileProvince').value,
+        subdistrict: getSelectedText('profileSubdistrict'),
+        district: getSelectedText('profileDistrict'),
+        province: getSelectedText('profileProvince'),
         postal_code: document.getElementById('profilePostalCode').value
     };
     
@@ -756,4 +820,186 @@ async function handleLogout() {
         console.log('Logout request sent');
     }
     window.location.href = '/login';
+}
+
+let thailandProvinces = [];
+let thailandDistricts = {};
+let thailandSubdistricts = {};
+
+async function loadThailandProvinces() {
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/thailand/provinces`);
+        if (response.ok) {
+            thailandProvinces = await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading provinces:', error);
+    }
+}
+
+function populateProvinceSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
+    thailandProvinces.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.provinceCode;
+        option.textContent = p.provinceNameTh;
+        option.dataset.name = p.provinceNameTh;
+        select.appendChild(option);
+    });
+}
+
+async function loadProfileDistricts() {
+    const provinceSelect = document.getElementById('profileProvince');
+    const districtSelect = document.getElementById('profileDistrict');
+    const subdistrictSelect = document.getElementById('profileSubdistrict');
+    const postalCodeInput = document.getElementById('profilePostalCode');
+    
+    districtSelect.innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+    subdistrictSelect.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+    postalCodeInput.value = '';
+    
+    const provinceCode = parseInt(provinceSelect.value);
+    if (!provinceCode) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/thailand/districts/${provinceCode}`);
+        if (response.ok) {
+            const districts = await response.json();
+            thailandDistricts['profile'] = districts;
+            districts.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.districtCode;
+                option.textContent = d.districtNameTh;
+                option.dataset.name = d.districtNameTh;
+                districtSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading districts:', error);
+    }
+}
+
+async function loadProfileSubdistricts() {
+    const districtSelect = document.getElementById('profileDistrict');
+    const subdistrictSelect = document.getElementById('profileSubdistrict');
+    const postalCodeInput = document.getElementById('profilePostalCode');
+    
+    subdistrictSelect.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+    postalCodeInput.value = '';
+    
+    const districtCode = parseInt(districtSelect.value);
+    if (!districtCode) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/thailand/subdistricts/${districtCode}`);
+        if (response.ok) {
+            const subdistricts = await response.json();
+            thailandSubdistricts['profile'] = subdistricts;
+            subdistricts.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.subdistrictCode;
+                option.textContent = s.subdistrictNameTh;
+                option.dataset.name = s.subdistrictNameTh;
+                option.dataset.postalCode = s.postalCode;
+                subdistrictSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading subdistricts:', error);
+    }
+}
+
+function updateProfilePostalCode() {
+    const subdistrictSelect = document.getElementById('profileSubdistrict');
+    const postalCodeInput = document.getElementById('profilePostalCode');
+    
+    const selectedOption = subdistrictSelect.options[subdistrictSelect.selectedIndex];
+    if (selectedOption && selectedOption.dataset.postalCode) {
+        postalCodeInput.value = selectedOption.dataset.postalCode;
+    } else {
+        postalCodeInput.value = '';
+    }
+}
+
+async function loadCustomerDistricts() {
+    const provinceSelect = document.getElementById('customerProvince');
+    const districtSelect = document.getElementById('customerDistrict');
+    const subdistrictSelect = document.getElementById('customerSubdistrict');
+    const postalCodeInput = document.getElementById('customerPostalCode');
+    
+    districtSelect.innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+    subdistrictSelect.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+    postalCodeInput.value = '';
+    
+    const provinceCode = parseInt(provinceSelect.value);
+    if (!provinceCode) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/thailand/districts/${provinceCode}`);
+        if (response.ok) {
+            const districts = await response.json();
+            thailandDistricts['customer'] = districts;
+            districts.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.districtCode;
+                option.textContent = d.districtNameTh;
+                option.dataset.name = d.districtNameTh;
+                districtSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading districts:', error);
+    }
+}
+
+async function loadCustomerSubdistricts() {
+    const districtSelect = document.getElementById('customerDistrict');
+    const subdistrictSelect = document.getElementById('customerSubdistrict');
+    const postalCodeInput = document.getElementById('customerPostalCode');
+    
+    subdistrictSelect.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+    postalCodeInput.value = '';
+    
+    const districtCode = parseInt(districtSelect.value);
+    if (!districtCode) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/thailand/subdistricts/${districtCode}`);
+        if (response.ok) {
+            const subdistricts = await response.json();
+            thailandSubdistricts['customer'] = subdistricts;
+            subdistricts.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.subdistrictCode;
+                option.textContent = s.subdistrictNameTh;
+                option.dataset.name = s.subdistrictNameTh;
+                option.dataset.postalCode = s.postalCode;
+                subdistrictSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading subdistricts:', error);
+    }
+}
+
+function updateCustomerPostalCode() {
+    const subdistrictSelect = document.getElementById('customerSubdistrict');
+    const postalCodeInput = document.getElementById('customerPostalCode');
+    
+    const selectedOption = subdistrictSelect.options[subdistrictSelect.selectedIndex];
+    if (selectedOption && selectedOption.dataset.postalCode) {
+        postalCodeInput.value = selectedOption.dataset.postalCode;
+    } else {
+        postalCodeInput.value = '';
+    }
+}
+
+function getSelectedText(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select || select.selectedIndex < 0) return '';
+    const option = select.options[select.selectedIndex];
+    return option.dataset.name || option.textContent || '';
 }

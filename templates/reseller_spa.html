@@ -483,7 +483,30 @@
         }
 
         .form-group input:focus,
-        .form-group textarea:focus { outline: none; border-color: var(--primary); }
+        .form-group textarea:focus,
+        .form-group select:focus { outline: none; border-color: var(--primary); }
+
+        .form-group select,
+        .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 10.5l-5-5h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        .form-group select option {
+            background: #1a0a2e;
+            color: white;
+            padding: 10px;
+        }
 
         .modal {
             display: none;
@@ -978,20 +1001,26 @@
                                 <textarea id="profileAddress" rows="2" placeholder="บ้านเลขที่ ซอย ถนน"></textarea>
                             </div>
                             <div class="form-group">
-                                <label>แขวง/ตำบล</label>
-                                <input type="text" id="profileSubdistrict" placeholder="แขวง/ตำบล">
+                                <label>จังหวัด</label>
+                                <select id="profileProvince" class="form-select" onchange="loadProfileDistricts()">
+                                    <option value="">-- เลือกจังหวัด --</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label>เขต/อำเภอ</label>
-                                <input type="text" id="profileDistrict" placeholder="เขต/อำเภอ">
+                                <select id="profileDistrict" class="form-select" onchange="loadProfileSubdistricts()">
+                                    <option value="">-- เลือกเขต/อำเภอ --</option>
+                                </select>
                             </div>
                             <div class="form-group">
-                                <label>จังหวัด</label>
-                                <input type="text" id="profileProvince" placeholder="จังหวัด">
+                                <label>แขวง/ตำบล</label>
+                                <select id="profileSubdistrict" class="form-select" onchange="updateProfilePostalCode()">
+                                    <option value="">-- เลือกแขวง/ตำบล --</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label>รหัสไปรษณีย์</label>
-                                <input type="text" id="profilePostalCode" placeholder="xxxxx">
+                                <input type="text" id="profilePostalCode" placeholder="รหัสไปรษณีย์" readonly style="background: rgba(255,255,255,0.15);">
                             </div>
                         </div>
 
@@ -1034,22 +1063,28 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>แขวง/ตำบล</label>
-                            <input type="text" id="customerSubdistrict" placeholder="แขวง/ตำบล">
+                            <label>จังหวัด</label>
+                            <select id="customerProvince" class="form-select" onchange="loadCustomerDistricts()">
+                                <option value="">-- เลือกจังหวัด --</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>เขต/อำเภอ</label>
-                            <input type="text" id="customerDistrict" placeholder="เขต/อำเภอ">
+                            <select id="customerDistrict" class="form-select" onchange="loadCustomerSubdistricts()">
+                                <option value="">-- เลือกเขต/อำเภอ --</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>จังหวัด</label>
-                            <input type="text" id="customerProvince" placeholder="จังหวัด">
+                            <label>แขวง/ตำบล</label>
+                            <select id="customerSubdistrict" class="form-select" onchange="updateCustomerPostalCode()">
+                                <option value="">-- เลือกแขวง/ตำบล --</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>รหัสไปรษณีย์</label>
-                            <input type="text" id="customerPostalCode" placeholder="xxxxx">
+                            <input type="text" id="customerPostalCode" placeholder="รหัสไปรษณีย์" readonly style="background: rgba(255,255,255,0.15);">
                         </div>
                     </div>
                     <div class="form-group">

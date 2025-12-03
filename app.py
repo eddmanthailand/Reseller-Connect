@@ -3730,6 +3730,43 @@ def get_reseller_featured_products():
         if conn:
             conn.close()
 
+# ==================== THAILAND ADDRESS DATA ====================
+
+@app.route('/api/thailand/provinces', methods=['GET'])
+def get_thailand_provinces():
+    """Get all Thailand provinces"""
+    try:
+        import json
+        with open('static/data/provinces.json', 'r', encoding='utf-8') as f:
+            provinces = json.load(f)
+        return jsonify(provinces), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/thailand/districts/<int:province_code>', methods=['GET'])
+def get_thailand_districts(province_code):
+    """Get districts by province code"""
+    try:
+        import json
+        with open('static/data/districts.json', 'r', encoding='utf-8') as f:
+            all_districts = json.load(f)
+        districts = [d for d in all_districts if d['provinceCode'] == province_code]
+        return jsonify(districts), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/thailand/subdistricts/<int:district_code>', methods=['GET'])
+def get_thailand_subdistricts(district_code):
+    """Get subdistricts by district code"""
+    try:
+        import json
+        with open('static/data/subdistricts.json', 'r', encoding='utf-8') as f:
+            all_subdistricts = json.load(f)
+        subdistricts = [s for s in all_subdistricts if s['districtCode'] == district_code]
+        return jsonify(subdistricts), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # ==================== RESELLER CUSTOMERS ====================
 
 @app.route('/api/reseller/customers', methods=['GET'])
