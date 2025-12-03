@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ข้อมูลของฉัน - Reseller Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        :root {
+            --primary: #a855f7;
+            --primary-dark: #9333ea;
+            --secondary: #ec4899;
+            --bg-dark: #0f0a1a;
+            --card-bg: rgba(255, 255, 255, 0.08);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.6);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a0a2e 50%, #0f0a1a 100%);
+            min-height: 100vh;
+            color: var(--text);
+        }
+
+        .app-container { display: flex; min-height: 100vh; }
+
+        .sidebar {
+            width: 280px;
+            background: rgba(15, 10, 26, 0.95);
+            border-right: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--card-border);
+            text-align: center;
+        }
+
+        .sidebar-logo {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+        }
+
+        .sidebar-logo svg { width: 28px; height: 28px; color: white; }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        .nav-menu { flex: 1; padding: 16px; overflow-y: auto; }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));
+            color: var(--text);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .nav-item svg { width: 20px; height: 20px; }
+
+        .sidebar-footer { padding: 16px; border-top: 1px solid var(--card-border); }
+
+        .btn-logout {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-logout:hover { background: rgba(239, 68, 68, 0.2); }
+        .btn-logout svg { width: 18px; height: 18px; }
+
+        .main-content { flex: 1; margin-left: 280px; padding: 24px; }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .page-title { font-size: 28px; font-weight: 700; }
+        .page-subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+        .profile-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 800px;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .profile-info h2 { font-size: 24px; margin-bottom: 4px; }
+        .profile-info p { color: var(--text-muted); }
+
+        .tier-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2));
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 20px;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group.full { grid-column: span 2; }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group input:disabled {
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--text-muted);
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 24px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(168, 85, 247, 0.3);
+        }
+
+        .btn-primary svg { width: 18px; height: 18px; }
+
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { margin-left: 0; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-group.full { grid-column: span 1; }
+            .profile-header { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+                </div>
+                <div class="sidebar-title">Reseller Portal</div>
+                <div class="sidebar-subtitle">ระบบตัวแทนจำหน่าย</div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="/reseller/dashboard" class="nav-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    หน้าหลัก
+                </a>
+                <a href="/reseller/catalog" class="nav-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path></svg>
+                    สินค้าทั้งหมด
+                </a>
+                <a href="/reseller/cart" class="nav-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                    ตะกร้าสินค้า
+                </a>
+                <a href="/reseller/orders" class="nav-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    ประวัติคำสั่งซื้อ
+                </a>
+                <a href="/reseller/customers" class="nav-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    ลูกค้าของฉัน
+                </a>
+                <a href="/reseller/profile" class="nav-item active">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    ข้อมูลของฉัน
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn-logout" onclick="handleLogout()">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" x2="9" y1="12" y2="12"></line></svg>
+                    ออกจากระบบ
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">ข้อมูลของฉัน</h1>
+                    <p class="page-subtitle">จัดการข้อมูลส่วนตัวและที่อยู่สำหรับจัดส่ง</p>
+                </div>
+            </div>
+
+            <div class="profile-card">
+                <div class="profile-header">
+                    <div class="profile-avatar" id="profileAvatar">-</div>
+                    <div class="profile-info">
+                        <h2 id="profileName">Loading...</h2>
+                        <p id="profileUsername">-</p>
+                        <div class="tier-badge" id="tierBadge">
+                            <span>🥉</span>
+                            <span id="tierName">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="profileForm" onsubmit="handleSaveProfile(event)">
+                    <h3 class="section-title">ข้อมูลร้านค้า/ยี่ห้อ</h3>
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>ชื่อร้าน/ยี่ห้อ (สำหรับจ่าหน้าซอง)</label>
+                            <input type="text" id="brandName" placeholder="ชื่อร้านของคุณ">
+                        </div>
+                    </div>
+
+                    <h3 class="section-title" style="margin-top: 24px;">ข้อมูลติดต่อ</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>เบอร์โทรศัพท์</label>
+                            <input type="text" id="phone" placeholder="0xx-xxx-xxxx">
+                        </div>
+                        <div class="form-group">
+                            <label>อีเมล</label>
+                            <input type="email" id="email" placeholder="email@example.com">
+                        </div>
+                    </div>
+
+                    <h3 class="section-title" style="margin-top: 24px;">ที่อยู่สำหรับจัดส่ง</h3>
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>ที่อยู่</label>
+                            <textarea id="address" rows="2" placeholder="บ้านเลขที่ ซอย ถนน"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>แขวง/ตำบล</label>
+                            <input type="text" id="subdistrict" placeholder="แขวง/ตำบล">
+                        </div>
+                        <div class="form-group">
+                            <label>เขต/อำเภอ</label>
+                            <input type="text" id="district" placeholder="เขต/อำเภอ">
+                        </div>
+                        <div class="form-group">
+                            <label>จังหวัด</label>
+                            <input type="text" id="province" placeholder="จังหวัด">
+                        </div>
+                        <div class="form-group">
+                            <label>รหัสไปรษณีย์</label>
+                            <input type="text" id="postalCode" placeholder="xxxxx">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        บันทึกข้อมูล
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/global-alert.js"></script>
+    <script>
+        const API_URL = '/api';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProfile();
+        });
+
+        async function loadProfile() {
+            try {
+                const response = await fetch(`${API_URL}/reseller/profile`);
+                if (!response.ok) throw new Error('Failed to load profile');
+                
+                const data = await response.json();
+                const profile = data.profile;
+                
+                document.getElementById('profileName').textContent = profile.full_name;
+                document.getElementById('profileUsername').textContent = profile.username;
+                document.getElementById('profileAvatar').textContent = profile.full_name.charAt(0).toUpperCase();
+                
+                const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
+                document.getElementById('tierBadge').querySelector('span:first-child').textContent = tierIcons[profile.tier_name] || '🏷️';
+                document.getElementById('tierName').textContent = profile.tier_name || '-';
+                
+                document.getElementById('brandName').value = profile.brand_name || '';
+                document.getElementById('phone').value = profile.phone || '';
+                document.getElementById('email').value = profile.email || '';
+                document.getElementById('address').value = profile.address || '';
+                document.getElementById('subdistrict').value = profile.subdistrict || '';
+                document.getElementById('district').value = profile.district || '';
+                document.getElementById('province').value = profile.province || '';
+                document.getElementById('postalCode').value = profile.postal_code || '';
+                
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+            }
+        }
+
+        async function handleSaveProfile(event) {
+            event.preventDefault();
+            
+            const profileData = {
+                brand_name: document.getElementById('brandName').value,
+                phone: document.getElementById('phone').value,
+                email: document.getElementById('email').value,
+                address: document.getElementById('address').value,
+                subdistrict: document.getElementById('subdistrict').value,
+                district: document.getElementById('district').value,
+                province: document.getElementById('province').value,
+                postal_code: document.getElementById('postalCode').value
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/reseller/profile`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profileData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('บันทึกข้อมูลสำเร็จ', 'success');
+                } else {
+                    showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving profile:', error);
+                showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+            }
+        }
+
+        function handleLogout() {
+            window.location.href = '/logout';
+        }
+    </script>
+</body>
+</html>

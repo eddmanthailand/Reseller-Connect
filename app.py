@@ -4254,6 +4254,18 @@ def reseller_orders_page():
     """Reseller orders page"""
     return render_template('reseller_orders.html')
 
+@app.route('/reseller/customers')
+@login_required
+def reseller_customers_page():
+    """Reseller customers management page"""
+    return render_template('reseller_customers.html')
+
+@app.route('/reseller/profile')
+@login_required
+def reseller_profile_page():
+    """Reseller profile page"""
+    return render_template('reseller_profile.html')
+
 # ==================== ORDER API ====================
 
 import uuid
