@@ -308,9 +308,13 @@
         }
 
         .product-image {
-            width: 100%; height: 200px;
-            object-fit: cover;
-            background: rgba(255, 255, 255, 0.05);
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            object-position: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            box-sizing: border-box;
         }
 
         .product-image.placeholder {
@@ -318,6 +322,8 @@
             align-items: center;
             justify-content: center;
             color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0;
         }
 
         .product-info { padding: 16px; }
@@ -1097,6 +1103,22 @@
                     <button type="submit" class="btn-primary">บันทึก</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal" id="productModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2 id="productModalTitle">รายละเอียดสินค้า</h2>
+                <button class="modal-close" onclick="closeProductModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div id="productModalContent">
+                    <div class="empty-state" style="padding: 40px;">
+                        <p>กำลังโหลด...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

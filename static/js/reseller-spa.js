@@ -323,8 +323,170 @@ function renderProducts(productsToRender) {
     `).join('');
 }
 
-function viewProduct(productId) {
-    window.location.href = `/reseller/product/${productId}`;
+async function viewProduct(productId) {
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/products/${productId}`);
+        if (!response.ok) throw new Error('Failed to load product');
+        
+        const data = await response.json();
+        openProductModal(data.product);
+    } catch (error) {
+        console.error('Error loading product:', error);
+        showAlert('ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
+    }
+}
+
+let currentProductSkus = [];
+let selectedSkuId = null;
+
+function openProductModal(product) {
+    document.getElementById('productModalTitle').textContent = product.name;
+    currentProductSkus = product.skus || [];
+    selectedSkuId = currentProductSkus.length > 0 ? currentProductSkus[0].id : null;
+    
+    const hasOptions = product.options && product.options.length > 0;
+    
+    let optionsHtml = '';
+    if (hasOptions) {
+        optionsHtml = product.options.map(opt => `
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">${opt.name}</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${opt.values.map((val, idx) => `
+                        <button type="button" class="option-btn ${idx === 0 ? 'active' : ''}" 
+                                data-option="${opt.name}" data-value="${val}"
+                                onclick="selectOption(this, '${opt.name}', '${val}')"
+                                style="padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); 
+                                       background: ${idx === 0 ? 'var(--primary)' : 'transparent'}; color: white; cursor: pointer;">
+                            ${val}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    const firstSku = currentProductSkus[0] || {};
+    const price = firstSku.final_price || firstSku.price || product.min_price || 0;
+    const originalPrice = firstSku.price || product.min_price || 0;
+    const discount = product.discount_percent || 0;
+    const stock = firstSku.stock || 0;
+    
+    document.getElementById('productModalContent').innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
+            <div style="padding: 20px; background: rgba(255,255,255,0.95); display: flex; align-items: center; justify-content: center;">
+                ${product.image_url 
+                    ? `<img src="${product.image_url}" alt="${product.name}" style="max-width: 100%; max-height: 300px; object-fit: contain;">`
+                    : `<div style="width: 200px; height: 200px; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                       </div>`
+                }
+            </div>
+            <div style="padding: 24px;">
+                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">${product.brand_name || ''}</div>
+                <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">${product.name}</h3>
+                <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">SKU: ${product.parent_sku || '-'}</div>
+                
+                <div style="margin-bottom: 20px;">
+                    <span id="modalPrice" style="font-size: 28px; font-weight: 700; color: #22c55e;">฿${price.toLocaleString()}</span>
+                    ${discount > 0 ? `<span style="text-decoration: line-through; color: rgba(255,255,255,0.5); margin-left: 12px;">฿${originalPrice.toLocaleString()}</span>
+                    <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">-${discount}%</span>` : ''}
+                </div>
+                
+                ${optionsHtml}
+                
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 20px;">
+                    <span style="font-size: 13px; color: rgba(255,255,255,0.7);">จำนวน:</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="changeModalQty(-1)" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; cursor: pointer;">-</button>
+                        <input type="number" id="modalQty" value="1" min="1" style="width: 60px; text-align: center; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white;">
+                        <button onclick="changeModalQty(1)" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; cursor: pointer;">+</button>
+                    </div>
+                    <span id="modalStock" style="font-size: 12px; color: rgba(255,255,255,0.5);">คงเหลือ ${stock} ชิ้น</span>
+                </div>
+                
+                <button onclick="addToCartFromModal()" style="width: 100%; margin-top: 20px; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 10px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                    เพิ่มลงตะกร้า
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('productModal').classList.add('active');
+}
+
+function closeProductModal() {
+    document.getElementById('productModal').classList.remove('active');
+}
+
+function selectOption(btn, optionName, value) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.option-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+    });
+    btn.classList.add('active');
+    btn.style.background = 'var(--primary)';
+    
+    updateSelectedSku();
+}
+
+function updateSelectedSku() {
+    const selectedOptions = {};
+    document.querySelectorAll('#productModalContent .option-btn.active').forEach(btn => {
+        selectedOptions[btn.dataset.option] = btn.dataset.value;
+    });
+    
+    const matchingSku = currentProductSkus.find(sku => {
+        if (!sku.variant_values) return false;
+        return Object.entries(selectedOptions).every(([key, val]) => 
+            sku.variant_values[key] === val
+        );
+    });
+    
+    if (matchingSku) {
+        selectedSkuId = matchingSku.id;
+        document.getElementById('modalPrice').textContent = `฿${(matchingSku.final_price || matchingSku.price).toLocaleString()}`;
+        document.getElementById('modalStock').textContent = `คงเหลือ ${matchingSku.stock || 0} ชิ้น`;
+    }
+}
+
+function changeModalQty(delta) {
+    const input = document.getElementById('modalQty');
+    let val = parseInt(input.value) || 1;
+    val = Math.max(1, val + delta);
+    input.value = val;
+}
+
+async function addToCartFromModal() {
+    if (!selectedSkuId) {
+        showAlert('กรุณาเลือกตัวเลือกสินค้า', 'error');
+        return;
+    }
+    
+    const quantity = parseInt(document.getElementById('modalQty').value) || 1;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/cart`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sku_id: selectedSkuId, quantity })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('เพิ่มสินค้าลงตะกร้าแล้ว', 'success');
+            loadCartBadge();
+            closeProductModal();
+        } else {
+            showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showAlert('เกิดข้อผิดพลาดในการเพิ่มสินค้า', 'error');
+    }
 }
 
 document.getElementById('productSearch')?.addEventListener('input', function() {
