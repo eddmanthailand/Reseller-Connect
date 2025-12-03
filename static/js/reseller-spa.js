@@ -114,22 +114,52 @@ async function loadCurrentUser() {
 
 async function loadDashboardData() {
     try {
-        const [statsRes, productsRes, customersRes] = await Promise.all([
-            fetch(`${RESELLER_API_URL}/reseller/stats`),
-            fetch(`${RESELLER_API_URL}/reseller/products?limit=4`),
-            fetch(`${RESELLER_API_URL}/reseller/customers`)
+        const [dashboardRes, productsRes, customersRes, ordersRes, cartRes] = await Promise.all([
+            fetch(`${RESELLER_API_URL}/reseller/dashboard-stats`),
+            fetch(`${RESELLER_API_URL}/reseller/products?limit=8`),
+            fetch(`${RESELLER_API_URL}/reseller/customers`),
+            fetch(`${RESELLER_API_URL}/reseller/recent-orders?limit=5`),
+            fetch(`${RESELLER_API_URL}/reseller/cart`)
         ]);
         
-        if (statsRes.ok) {
-            const stats = await statsRes.json();
-            document.getElementById('statTotalOrders').textContent = stats.total_orders || 0;
-            document.getElementById('statTotalSpent').textContent = `฿${(stats.total_spent || 0).toLocaleString()}`;
-            document.getElementById('statPendingOrders').textContent = stats.pending_orders || 0;
+        if (dashboardRes.ok) {
+            const data = await dashboardRes.json();
+            
+            document.getElementById('statMonthTotal').textContent = formatCurrency(data.month_stats?.total || 0);
+            document.getElementById('statMonthOrders').textContent = `${data.month_stats?.orders || 0} คำสั่งซื้อ`;
+            
+            document.getElementById('statTotalSpent').textContent = formatCurrency(data.all_time_stats?.total || 0);
+            document.getElementById('statTotalOrders').textContent = `${data.all_time_stats?.orders || 0} คำสั่งซื้อ`;
+            
+            const pendingTotal = Object.values(data.pending_orders || {}).reduce((a, b) => a + b, 0);
+            document.getElementById('statPendingOrders').textContent = pendingTotal;
+            
+            const pendingPayment = data.pending_orders?.pending_payment || 0;
+            const underReview = data.pending_orders?.under_review || 0;
+            let pendingText = [];
+            if (pendingPayment > 0) pendingText.push(`รอชำระ ${pendingPayment}`);
+            if (underReview > 0) pendingText.push(`รอตรวจ ${underReview}`);
+            document.getElementById('statPendingDetail').textContent = pendingText.join(', ') || 'ไม่มี';
+            
+            updateTierProgress(data.tier_info, data.all_time_stats?.total || 0);
+        }
+        
+        if (cartRes.ok) {
+            const cartData = await cartRes.json();
+            const cartCount = (cartData.items || []).reduce((sum, item) => sum + item.quantity, 0);
+            document.getElementById('statCartCount').textContent = cartCount;
         }
         
         if (customersRes.ok) {
             const data = await customersRes.json();
-            document.getElementById('statCustomers').textContent = (data.customers || []).length;
+            const customerCount = (data.customers || []).length;
+            const el = document.getElementById('statCustomers');
+            if (el) el.textContent = customerCount;
+        }
+        
+        if (ordersRes.ok) {
+            const data = await ordersRes.json();
+            renderRecentOrders(data.orders || []);
         }
         
         if (productsRes.ok) {
@@ -139,6 +169,93 @@ async function loadDashboardData() {
     } catch (error) {
         console.error('Error loading dashboard:', error);
     }
+}
+
+function formatCurrency(amount) {
+    return `฿${(amount || 0).toLocaleString()}`;
+}
+
+function updateTierProgress(tierInfo, totalPurchases) {
+    if (!tierInfo) return;
+    
+    const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
+    const tierDescriptions = { 
+        'Bronze': 'ระดับเริ่มต้น', 
+        'Silver': 'ระดับเงิน', 
+        'Gold': 'ระดับทอง', 
+        'Platinum': 'ระดับสูงสุด' 
+    };
+    
+    const currentTier = tierInfo.current_tier || 'Bronze';
+    document.getElementById('homeTierBadgeIcon').textContent = tierIcons[currentTier] || '🥉';
+    document.getElementById('homeTierName').textContent = currentTier;
+    document.getElementById('homeTierDescription').textContent = tierDescriptions[currentTier] || '';
+    document.getElementById('homeTotalPurchases').textContent = formatCurrency(totalPurchases);
+    
+    if (tierInfo.next_tier) {
+        document.getElementById('homeNextTierInfo').style.display = 'block';
+        document.getElementById('homeNextTierName').textContent = tierInfo.next_tier;
+        
+        const threshold = tierInfo.next_threshold || 0;
+        const remaining = Math.max(0, threshold - totalPurchases);
+        document.getElementById('homeAmountToNext').textContent = `อีก ${formatCurrency(remaining)} สู่ระดับถัดไป`;
+        
+        const progress = threshold > 0 ? Math.min(100, (totalPurchases / threshold) * 100) : 0;
+        document.getElementById('homeTierProgressBar').style.width = `${progress}%`;
+    } else {
+        document.getElementById('homeNextTierInfo').style.display = 'none';
+        document.getElementById('homeAmountToNext').textContent = 'ระดับสูงสุดแล้ว!';
+        document.getElementById('homeTierProgressBar').style.width = '100%';
+    }
+}
+
+function renderRecentOrders(orders) {
+    const container = document.getElementById('recentOrdersList');
+    
+    if (!orders || orders.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 30px;">
+                <p>ยังไม่มีคำสั่งซื้อ</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const statusLabels = {
+        'pending_payment': 'รอชำระเงิน',
+        'pending_verification': 'รอตรวจสอบ',
+        'paid': 'ชำระแล้ว',
+        'processing': 'กำลังจัดส่ง',
+        'shipped': 'จัดส่งแล้ว',
+        'completed': 'เสร็จสิ้น',
+        'cancelled': 'ยกเลิก'
+    };
+    
+    const statusColors = {
+        'pending_payment': '#fbbf24',
+        'pending_verification': '#60a5fa',
+        'paid': '#4ade80',
+        'processing': '#a78bfa',
+        'shipped': '#22d3ee',
+        'completed': '#4ade80',
+        'cancelled': '#f87171'
+    };
+    
+    container.innerHTML = orders.map(order => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer;" onclick="switchPage('orders')">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: ${statusColors[order.status] || '#666'}20; display: flex; align-items: center; justify-content: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${statusColors[order.status] || '#666'}" stroke-width="2" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 14px;">#${order.order_number}</div>
+                <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${new Date(order.created_at).toLocaleDateString('th-TH')}</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-weight: 600; color: #4ade80;">${formatCurrency(order.final_amount || 0)}</div>
+                <div style="font-size: 11px; padding: 2px 8px; border-radius: 8px; background: ${statusColors[order.status] || '#666'}20; color: ${statusColors[order.status] || '#666'};">${statusLabels[order.status] || order.status}</div>
+            </div>
+        </div>
+    `).join('');
 }
 
 function renderFeaturedProducts(products) {
