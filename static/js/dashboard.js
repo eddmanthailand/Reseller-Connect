@@ -71,9 +71,26 @@ async function init() {
         ]);
         setupEventListeners();
         updateStats();
+        
+        // Handle hash navigation (e.g., /admin#products)
+        handleHashNavigation();
+        
+        // Listen for hash changes
+        window.addEventListener('hashchange', handleHashNavigation);
     } catch (error) {
         console.error('Initialization error:', error);
         showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+    }
+}
+
+// Handle hash navigation to switch pages
+function handleHashNavigation() {
+    const hash = window.location.hash.substring(1); // Remove the '#'
+    if (hash) {
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'orders', 'tier-settings', 'settings'];
+        if (validPages.includes(hash)) {
+            switchPage(hash);
+        }
     }
 }
 
