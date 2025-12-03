@@ -4034,9 +4034,10 @@ def get_dashboard_stats():
         ''')
         pending_orders = cursor.fetchone()
         
-        # Low stock products (stock <= low_stock_threshold or stock <= 5 if no threshold)
+        # Low stock SKUs (stock <= low_stock_threshold or stock <= 5 if no threshold)
         cursor.execute('''
-            SELECT COUNT(DISTINCT p.id) as count
+            SELECT COUNT(*) as sku_count,
+                   COUNT(DISTINCT p.id) as product_count
             FROM products p
             JOIN skus s ON s.product_id = p.id
             WHERE s.stock <= COALESCE(p.low_stock_threshold, 5)
@@ -4045,9 +4046,10 @@ def get_dashboard_stats():
         ''')
         low_stock = cursor.fetchone()
         
-        # Out of stock products
+        # Out of stock SKUs
         cursor.execute('''
-            SELECT COUNT(DISTINCT p.id) as count
+            SELECT COUNT(*) as sku_count,
+                   COUNT(DISTINCT p.id) as product_count
             FROM products p
             JOIN skus s ON s.product_id = p.id
             WHERE s.stock = 0
@@ -4148,8 +4150,10 @@ def get_dashboard_stats():
             },
             'orders_today': orders_today['count'],
             'pending_orders': pending_orders['count'],
-            'low_stock': low_stock['count'],
-            'out_of_stock': out_of_stock['count'],
+            'low_stock': low_stock['product_count'],
+            'low_stock_skus': low_stock['sku_count'],
+            'out_of_stock': out_of_stock['product_count'],
+            'out_of_stock_skus': out_of_stock['sku_count'],
             'sales_7_days': sales_7_days_filled,
             'recent_orders': recent_orders,
             'top_products': top_products
