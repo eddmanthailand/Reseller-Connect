@@ -50,7 +50,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API.
 - **Deployment:** Gunicorn production server.
 - **API Design:** RESTful.
-- **SPA Conversion:** Admin interface converted to a Single Page Application using `admin_dashboard.html` and hash-based navigation.
+- **SPA Conversion:** Both Admin and Reseller interfaces converted to Single Page Applications using hash-based navigation (`admin_dashboard.html` and `reseller_spa.html`).
 
 ### Database Schema
 - **User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override`, `total_purchases`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `brand_name`, `logo_url`).
