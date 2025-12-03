@@ -1,6 +1,14 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Dashboard Home Page Improvements (Dec 2025):**
+  - Added sales statistics widgets: ยอดขายวันนี้, ยอดขายเดือนนี้, รอดำเนินการ, สินค้าใกล้หมด
+  - Sales chart showing 7-day trend using Chart.js
+  - Recent orders list with status badges and time ago formatting
+  - Top selling products of the month with ranking
+  - New API endpoint: GET `/api/admin/dashboard-stats`
+  - Hash-based navigation support for SPA (#products, #orders, etc.)
+  - Removed old "ภาพรวมระบบ" and "ฟีเจอร์หลัก" sections
 - **Product Shipping & Cost Fields (Dec 2025):**
   - Added weight (grams), length, width, height (cm) columns to products table for shipping calculation
   - Added cost_price column to skus table for profit margin calculation
