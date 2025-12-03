@@ -764,6 +764,12 @@ function setupProductFilters() {
         categoryFilter.addEventListener('change', () => applyFiltersAndRender());
     }
     
+    // Stock filter
+    const stockFilter = document.getElementById('filterStock');
+    if (stockFilter) {
+        stockFilter.addEventListener('change', () => applyFiltersAndRender());
+    }
+    
     // Sort
     const sortSelect = document.getElementById('sortBy');
     if (sortSelect) {
@@ -789,6 +795,7 @@ function applyFiltersAndRender() {
     const searchTerm = document.getElementById('searchProduct')?.value.toLowerCase() || '';
     const brandId = document.getElementById('filterBrand')?.value || '';
     const categoryId = document.getElementById('filterCategory')?.value || '';
+    const stockFilter = document.getElementById('filterStock')?.value || '';
     const sortBy = document.getElementById('sortBy')?.value || 'newest';
     
     // Filter
@@ -808,6 +815,16 @@ function applyFiltersAndRender() {
         
         // Brand filter
         if (brandId && product.brand_id != brandId) {
+            return false;
+        }
+        
+        // Stock filter (use ?? to handle 0 correctly)
+        const lowCount = product.low_stock_count ?? 0;
+        const outCount = product.out_of_stock_count ?? 0;
+        if (stockFilter === 'low' && lowCount === 0) {
+            return false;
+        }
+        if (stockFilter === 'out' && outCount === 0) {
             return false;
         }
         
@@ -891,6 +908,16 @@ function renderProducts() {
             : `฿${minPrice.toLocaleString()} - ฿${maxPrice.toLocaleString()}`;
         
         const totalStock = product.total_stock || 0;
+        const outOfStockCount = product.out_of_stock_count || 0;
+        const lowStockCount = product.low_stock_count || 0;
+        
+        // Build stock warning badge for product row
+        let stockWarningBadge = '';
+        if (outOfStockCount > 0) {
+            stockWarningBadge = `<span class="stock-badge stock-badge-out" style="margin-left: 6px;">${outOfStockCount} หมด</span>`;
+        } else if (lowStockCount > 0) {
+            stockWarningBadge = `<span class="stock-badge stock-badge-low" style="margin-left: 6px;">${lowStockCount} ใกล้หมด</span>`;
+        }
         
         row.innerHTML = `
             <td>
@@ -922,6 +949,7 @@ function renderProducts() {
                     <span style="font-size: 11px;">${totalStock.toLocaleString()}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                 </button>
+                ${stockWarningBadge}
             </td>
             <td>
                 <label class="toggle-switch">
@@ -941,10 +969,23 @@ function renderProducts() {
         
         // Add SKU rows (hidden by default)
         if (product.skus && product.skus.length > 0) {
+            const threshold = product.low_stock_threshold || 5;
             product.skus.forEach(sku => {
                 const skuRow = document.createElement('tr');
                 skuRow.className = 'sku-row';
                 skuRow.dataset.parentId = product.id;
+                
+                // Determine stock status
+                const stock = sku.stock || 0;
+                let stockStatusClass = '';
+                let stockBadge = '';
+                if (stock === 0) {
+                    stockStatusClass = 'stock-out';
+                    stockBadge = '<span class="stock-badge stock-badge-out">หมด</span>';
+                } else if (stock <= threshold) {
+                    stockStatusClass = 'stock-low';
+                    stockBadge = '<span class="stock-badge stock-badge-low">ใกล้หมด</span>';
+                }
                 
                 skuRow.innerHTML = `
                     <td></td>
@@ -962,10 +1003,11 @@ function renderProducts() {
                         </div>
                     </td>
                     <td>
-                        <div class="inline-edit">
-                            <input type="text" class="inline-edit-input" value="${sku.stock || 0}" 
+                        <div class="inline-edit ${stockStatusClass}">
+                            <input type="text" class="inline-edit-input" value="${stock}" 
                                    onblur="updateSkuStock(${sku.id}, this.value)"
                                    onkeypress="if(event.key==='Enter') this.blur()">
+                            ${stockBadge}
                         </div>
                     </td>
                     <td>

@@ -1612,6 +1612,61 @@ tr:hover td {
     opacity: 1;
 }
 
+/* Stock Status Styles */
+.inline-edit.stock-out .inline-edit-input {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+}
+
+.inline-edit.stock-low .inline-edit-input {
+    border-color: rgba(245, 158, 11, 0.6);
+    background: rgba(245, 158, 11, 0.15);
+    color: #fcd34d;
+}
+
+.stock-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.stock-badge-out {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.stock-badge-low {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+/* Product row stock indicator */
+.product-stock-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+}
+
+.stock-alert-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.stock-alert-icon.warning {
+    color: #fbbf24;
+}
+
+.stock-alert-icon.danger {
+    color: #f87171;
+}
+
 /* Quick Actions Dropdown */
 .quick-actions {
     position: relative;

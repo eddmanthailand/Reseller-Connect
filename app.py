@@ -985,10 +985,17 @@ def get_products():
                 b.name as brand_name,
                 COALESCE(p.status, 'active') as status,
                 p.created_at,
+                COALESCE(p.low_stock_threshold, 5) as low_stock_threshold,
                 COUNT(DISTINCT s.id) as sku_count,
                 COALESCE(MIN(s.price), 0) as min_price,
                 COALESCE(MAX(s.price), 0) as max_price,
                 COALESCE(SUM(s.stock), 0) as total_stock,
+                (
+                    SELECT COUNT(*) FROM skus ss WHERE ss.product_id = p.id AND ss.stock = 0
+                ) as out_of_stock_count,
+                (
+                    SELECT COUNT(*) FROM skus ss WHERE ss.product_id = p.id AND ss.stock > 0 AND ss.stock <= COALESCE(p.low_stock_threshold, 5)
+                ) as low_stock_count,
                 (
                     SELECT pi.image_url 
                     FROM product_images pi 
@@ -1009,13 +1016,13 @@ def get_products():
                 )
             '''
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query, (user_id,))
         else:
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query)
@@ -1031,6 +1038,13 @@ def get_products():
                 product['max_price'] = float(product['max_price'])
             if product.get('total_stock') is not None:
                 product['total_stock'] = int(product['total_stock'])
+            # Convert count fields to int for JSON serialization
+            if product.get('out_of_stock_count') is not None:
+                product['out_of_stock_count'] = int(product['out_of_stock_count'])
+            if product.get('low_stock_count') is not None:
+                product['low_stock_count'] = int(product['low_stock_count'])
+            if product.get('low_stock_threshold') is not None:
+                product['low_stock_threshold'] = int(product['low_stock_threshold'])
             
             cursor.execute('''
                 SELECT 
