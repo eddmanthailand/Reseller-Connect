@@ -1829,6 +1829,47 @@ def delete_customization(customization_id):
         if conn:
             conn.close()
 
+@app.route('/api/upload', methods=['POST'])
+@admin_required
+def upload_single_file():
+    """Upload a single file to Replit Object Storage"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Allowed extensions
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': 'File type not allowed'}), 400
+        
+        # Initialize Object Storage client
+        storage_client = Client()
+        import uuid
+        
+        # Generate unique filename
+        unique_filename = f"settings/{uuid.uuid4()}.{file_ext}"
+        
+        # Upload to Object Storage
+        storage_client.upload_from_bytes(unique_filename, file.read())
+        
+        # Return image URL
+        image_url = f"/storage/{unique_filename}"
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'url': image_url
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/upload-images', methods=['POST'])
 @admin_required
 def upload_images():
