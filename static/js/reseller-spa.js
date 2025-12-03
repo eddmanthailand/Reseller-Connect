@@ -141,7 +141,7 @@ async function loadDashboardData() {
             if (underReview > 0) pendingText.push(`รอตรวจ ${underReview}`);
             document.getElementById('statPendingDetail').textContent = pendingText.join(', ') || 'ไม่มี';
             
-            updateTierProgress(data.tier_info, data.all_time_stats?.total || 0);
+            updateTierProgress(data.tier_progress, data.all_time_stats?.total || 0);
         }
         
         if (cartRes.ok) {
@@ -175,8 +175,8 @@ function formatCurrency(amount) {
     return `฿${(amount || 0).toLocaleString()}`;
 }
 
-function updateTierProgress(tierInfo, totalPurchases) {
-    if (!tierInfo) return;
+function updateTierProgress(tierProgress, totalPurchases) {
+    if (!tierProgress) return;
     
     const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
     const tierDescriptions = { 
@@ -186,21 +186,20 @@ function updateTierProgress(tierInfo, totalPurchases) {
         'Platinum': 'ระดับสูงสุด' 
     };
     
-    const currentTier = tierInfo.current_tier || 'Bronze';
+    const currentTier = tierProgress.current_tier || 'Bronze';
     document.getElementById('homeTierBadgeIcon').textContent = tierIcons[currentTier] || '🥉';
     document.getElementById('homeTierName').textContent = currentTier;
-    document.getElementById('homeTierDescription').textContent = tierDescriptions[currentTier] || '';
-    document.getElementById('homeTotalPurchases').textContent = formatCurrency(totalPurchases);
+    document.getElementById('homeTierDescription').textContent = tierProgress.tier_description || tierDescriptions[currentTier] || '';
+    document.getElementById('homeTotalPurchases').textContent = formatCurrency(tierProgress.total_purchases || totalPurchases);
     
-    if (tierInfo.next_tier) {
+    if (tierProgress.next_tier) {
         document.getElementById('homeNextTierInfo').style.display = 'block';
-        document.getElementById('homeNextTierName').textContent = tierInfo.next_tier;
+        document.getElementById('homeNextTierName').textContent = tierProgress.next_tier;
         
-        const threshold = tierInfo.next_threshold || 0;
-        const remaining = Math.max(0, threshold - totalPurchases);
+        const remaining = tierProgress.amount_to_next || 0;
         document.getElementById('homeAmountToNext').textContent = `อีก ${formatCurrency(remaining)} สู่ระดับถัดไป`;
         
-        const progress = threshold > 0 ? Math.min(100, (totalPurchases / threshold) * 100) : 0;
+        const progress = tierProgress.progress_percent || 0;
         document.getElementById('homeTierProgressBar').style.width = `${progress}%`;
     } else {
         document.getElementById('homeNextTierInfo').style.display = 'none';
@@ -750,6 +749,11 @@ async function handleSaveProfile(event) {
     }
 }
 
-function handleLogout() {
-    window.location.href = '/logout';
+async function handleLogout() {
+    try {
+        await fetch(`${RESELLER_API_URL}/logout`, { method: 'POST' });
+    } catch (e) {
+        console.log('Logout request sent');
+    }
+    window.location.href = '/login';
 }
