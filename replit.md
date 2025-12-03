@@ -1,10 +1,17 @@
 # Admin User Management & Product Management System
 
 ## Recent Changes (December 2025)
+- **Order Number Settings (Dec 2025):**
+  - Configurable order number format: PREFIX-YYMM-XXXX (e.g., ORD-2512-0001)
+  - Settings page UI for configuring prefix (1-10 chars) and digit count (3-6 digits)
+  - Automatic sequence reset on new month
+  - Real-time preview of next order number
+  - Database table: `order_number_settings` with prefix, format_type, digit_count, current_sequence, current_period
+  - API endpoints: GET/POST `/api/order-number-settings`
 - **SPA Conversion**: Converted admin interface to Single Page Application (SPA) within admin_dashboard.html
   - Orders page integrated with status tabs and order detail modal
   - Tier Settings page with reseller list and upgrade checking
-  - Settings page with PromptPay QR upload and sales channel management
+  - Settings page with PromptPay QR upload, Order Number settings, and sales channel management
   - Navigation uses data-page attributes for seamless page switching
 
 ## Overview
