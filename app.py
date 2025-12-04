@@ -4335,7 +4335,7 @@ def get_reseller_cart():
                 JOIN option_values ov ON ov.id = svm.option_value_id
                 JOIN options o ON o.id = ov.option_id
                 WHERE svm.sku_id = %s
-                ORDER BY o.sort_order, ov.sort_order
+                ORDER BY o.id, ov.sort_order
             ''', (item['sku_id'],))
             sku_options = cursor.fetchall()
             item['sku_options'] = [dict(opt) for opt in sku_options]
