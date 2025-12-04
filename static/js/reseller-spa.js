@@ -70,6 +70,9 @@ function switchPage(pageName) {
         case 'cart':
             loadCart();
             break;
+        case 'checkout':
+            loadCheckout();
+            break;
         case 'orders':
             loadOrders();
             break;
@@ -804,7 +807,218 @@ async function removeFromCart(itemId) {
 }
 
 function proceedToCheckout() {
-    window.location.href = '/reseller/checkout';
+    window.location.hash = 'checkout';
+}
+
+let checkoutData = { items: [], total: 0, customers: [], selfAddress: null };
+
+async function loadCheckout() {
+    try {
+        const [cartRes, customersRes, profileRes] = await Promise.all([
+            fetch(`${RESELLER_API_URL}/reseller/cart`),
+            fetch(`${RESELLER_API_URL}/reseller/customers`),
+            fetch(`${RESELLER_API_URL}/reseller/profile`)
+        ]);
+        
+        if (!cartRes.ok) throw new Error('Failed to load cart');
+        
+        const cartData = await cartRes.json();
+        checkoutData.items = cartData.items || [];
+        checkoutData.total = cartData.total || 0;
+        
+        if (checkoutData.items.length === 0) {
+            window.location.hash = 'cart';
+            showAlert('ตะกร้าว่างเปล่า กรุณาเลือกสินค้า', 'error');
+            return;
+        }
+        
+        if (customersRes.ok) {
+            const customersData = await customersRes.json();
+            checkoutData.customers = customersData.customers || customersData || [];
+        }
+        
+        if (profileRes.ok) {
+            checkoutData.selfAddress = await profileRes.json();
+        }
+        
+        renderCheckout();
+    } catch (error) {
+        console.error('Error loading checkout:', error);
+        showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+    }
+}
+
+function renderCheckout() {
+    document.getElementById('checkoutItemCount').textContent = checkoutData.items.length;
+    
+    const customerSelect = document.getElementById('checkoutCustomer');
+    customerSelect.innerHTML = '<option value="">-- เลือกลูกค้า --</option>' +
+        checkoutData.customers.map(c => 
+            `<option value="${c.id}">${c.full_name} - ${c.phone || 'ไม่มีเบอร์'}</option>`
+        ).join('');
+    
+    const selfCard = document.getElementById('selfAddressCard');
+    if (checkoutData.selfAddress) {
+        const addr = checkoutData.selfAddress;
+        const fullAddress = [addr.address, addr.subdistrict, addr.district, addr.province, addr.postal_code]
+            .filter(Boolean).join(' ');
+        selfCard.innerHTML = `
+            <div class="address-name">${addr.brand_name || addr.full_name || 'ที่อยู่ร้าน'}</div>
+            <div class="address-phone">${addr.phone || '-'}</div>
+            <div class="address-detail">${fullAddress || 'ยังไม่ได้ตั้งค่าที่อยู่'}</div>
+        `;
+    }
+    
+    renderCheckoutItems();
+    updateCheckoutSummary();
+    validateCheckout();
+}
+
+function renderCheckoutItems() {
+    const container = document.getElementById('checkoutItems');
+    container.innerHTML = checkoutData.items.map(item => {
+        const customizations = item.customization_data ? 
+            Object.entries(item.customization_data).map(([k, v]) => v).flat().join(', ') : '';
+        return `
+            <div class="checkout-item">
+                <img class="checkout-item-image" src="${item.image_url || '/static/images/no-image.png'}" alt="${item.product_name}">
+                <div class="checkout-item-info">
+                    <div class="checkout-item-name">${item.product_name}</div>
+                    <div class="checkout-item-sku">${item.sku_code || ''}</div>
+                    ${customizations ? `<div class="checkout-item-customizations">${customizations}</div>` : ''}
+                </div>
+                <div class="checkout-item-price">
+                    <div class="price">฿${(item.price * item.quantity).toLocaleString()}</div>
+                    <div class="qty">x${item.quantity}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateCheckoutSummary() {
+    document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
+    document.getElementById('summaryTotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
+}
+
+function toggleShippingType() {
+    const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
+    document.getElementById('customerShippingSection').style.display = shippingType === 'customer' ? 'block' : 'none';
+    document.getElementById('selfShippingSection').style.display = shippingType === 'self' ? 'block' : 'none';
+    document.getElementById('selectedCustomerInfo').style.display = 'none';
+    document.getElementById('checkoutCustomer').value = '';
+    validateCheckout();
+}
+
+function selectCheckoutCustomer() {
+    const customerId = document.getElementById('checkoutCustomer').value;
+    const infoDiv = document.getElementById('selectedCustomerInfo');
+    
+    if (!customerId) {
+        infoDiv.style.display = 'none';
+        validateCheckout();
+        return;
+    }
+    
+    const customer = checkoutData.customers.find(c => c.id == customerId);
+    if (customer) {
+        const fullAddress = [customer.address, customer.subdistrict, customer.district, customer.province, customer.postal_code]
+            .filter(Boolean).join(' ');
+        infoDiv.innerHTML = `
+            <div class="address-name">${customer.full_name}</div>
+            <div class="address-phone">${customer.phone || '-'}</div>
+            <div class="address-detail">${fullAddress || 'ไม่มีที่อยู่'}</div>
+        `;
+        infoDiv.style.display = 'block';
+    }
+    validateCheckout();
+}
+
+function openAddCustomerFromCheckout() {
+    openAddCustomerModal();
+}
+
+function validateCheckout() {
+    const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
+    let isValid = false;
+    
+    if (shippingType === 'customer') {
+        isValid = !!document.getElementById('checkoutCustomer').value;
+    } else {
+        isValid = checkoutData.selfAddress && 
+            (checkoutData.selfAddress.address || checkoutData.selfAddress.province);
+    }
+    
+    document.getElementById('btnPlaceOrder').disabled = !isValid;
+}
+
+async function placeOrder() {
+    const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
+    const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+    const notes = document.getElementById('orderNotes').value;
+    
+    let shippingData = {};
+    if (shippingType === 'customer') {
+        const customerId = document.getElementById('checkoutCustomer').value;
+        const customer = checkoutData.customers.find(c => c.id == customerId);
+        if (customer) {
+            shippingData = {
+                customer_id: customer.id,
+                shipping_name: customer.full_name,
+                shipping_phone: customer.phone,
+                shipping_address: customer.address,
+                shipping_province: customer.province,
+                shipping_district: customer.district,
+                shipping_subdistrict: customer.subdistrict,
+                shipping_postal_code: customer.postal_code
+            };
+        }
+    } else {
+        const addr = checkoutData.selfAddress;
+        shippingData = {
+            shipping_name: addr.brand_name || addr.full_name,
+            shipping_phone: addr.phone,
+            shipping_address: addr.address,
+            shipping_province: addr.province,
+            shipping_district: addr.district,
+            shipping_subdistrict: addr.subdistrict,
+            shipping_postal_code: addr.postal_code
+        };
+    }
+    
+    try {
+        document.getElementById('btnPlaceOrder').disabled = true;
+        document.getElementById('btnPlaceOrder').innerHTML = '<span>กำลังสร้างคำสั่งซื้อ...</span>';
+        
+        const response = await fetch(`${RESELLER_API_URL}/reseller/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                payment_method: paymentMethod,
+                notes: notes,
+                ...shippingData
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('สร้างคำสั่งซื้อสำเร็จ!', 'success');
+            loadCartBadge();
+            window.location.hash = 'orders';
+        } else {
+            showAlert(result.error || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
+            document.getElementById('btnPlaceOrder').disabled = false;
+            document.getElementById('btnPlaceOrder').innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                ยืนยันคำสั่งซื้อ
+            `;
+        }
+    } catch (error) {
+        console.error('Error placing order:', error);
+        showAlert('เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
+        document.getElementById('btnPlaceOrder').disabled = false;
+    }
 }
 
 async function loadCartBadge() {

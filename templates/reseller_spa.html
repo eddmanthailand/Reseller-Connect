@@ -614,6 +614,231 @@
         .cart-summary-row { display: flex; justify-content: space-between; margin-bottom: 12px; }
         .cart-summary-total { font-size: 24px; font-weight: 700; color: #22c55e; }
 
+        .checkout-container { padding: 0; }
+        .checkout-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+        .checkout-left { display: flex; flex-direction: column; gap: 20px; }
+        .checkout-right { position: sticky; top: 24px; height: fit-content; }
+        
+        .checkout-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .checkout-section .section-title {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .shipping-options {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .shipping-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+        
+        .shipping-option:has(input:checked) {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+            border-color: var(--primary);
+        }
+        
+        .shipping-option input { display: none; }
+        .radio-label { font-size: 14px; }
+        
+        .customer-select-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .customer-select-wrapper label { font-size: 13px; color: var(--text-muted); }
+        
+        .btn-link {
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 0;
+            text-align: left;
+        }
+        
+        .btn-link:hover { text-decoration: underline; }
+        
+        .selected-address-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 12px;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+        }
+        
+        .selected-address-card .address-name { font-weight: 600; margin-bottom: 4px; }
+        .selected-address-card .address-phone { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+        .selected-address-card .address-detail { font-size: 13px; line-height: 1.5; }
+        
+        .checkout-items { display: flex; flex-direction: column; gap: 12px; }
+        
+        .checkout-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+        
+        .checkout-item-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .checkout-item-info { flex: 1; }
+        .checkout-item-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .checkout-item-sku { font-size: 12px; color: var(--text-muted); }
+        .checkout-item-customizations { font-size: 11px; color: #a78bfa; margin-top: 2px; }
+        .checkout-item-price { text-align: right; }
+        .checkout-item-price .price { font-weight: 600; color: #22c55e; }
+        .checkout-item-price .qty { font-size: 12px; color: var(--text-muted); }
+        
+        .form-textarea {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .order-summary-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .summary-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        
+        .summary-row.total {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        .summary-row.total span:last-child { color: #22c55e; }
+        .summary-divider { border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 16px 0; }
+        
+        .payment-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+        .payment-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        
+        .payment-options { display: flex; flex-direction: column; gap: 10px; }
+        
+        .payment-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .payment-option:has(input:checked) {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+            border-color: var(--primary);
+        }
+        
+        .payment-option input { display: none; }
+        .payment-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+        .payment-icon svg { width: 24px; height: 24px; }
+        .payment-option span { font-size: 14px; }
+        
+        .btn-checkout {
+            width: 100%;
+            padding: 16px;
+            margin-top: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .btn-checkout:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-checkout:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+        
+        .btn-checkout svg { width: 20px; height: 20px; }
+        
+        .checkout-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 12px;
+        }
+        
+        @media (max-width: 1024px) {
+            .checkout-grid { grid-template-columns: 1fr; }
+            .checkout-right { position: static; }
+        }
+        
+        @media (max-width: 768px) {
+            .shipping-options { flex-direction: column; }
+        }
+
         .orders-list { display: flex; flex-direction: column; gap: 12px; }
 
         .order-card {
@@ -918,6 +1143,121 @@
                         <h3>ตะกร้าว่างเปล่า</h3>
                         <p>เลือกสินค้าเพื่อเพิ่มลงตะกร้า</p>
                         <button class="btn-primary" style="margin-top: 16px;" onclick="switchPage('catalog')">เลือกซื้อสินค้า</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-checkout" class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">ยืนยันคำสั่งซื้อ</h1>
+                        <p class="page-subtitle">ตรวจสอบและยืนยันการสั่งซื้อ</p>
+                    </div>
+                    <button class="btn-secondary" onclick="window.location.hash='cart'">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                        กลับไปตะกร้า
+                    </button>
+                </div>
+                <div class="checkout-container" id="checkoutContent">
+                    <div class="checkout-grid">
+                        <div class="checkout-left">
+                            <div class="checkout-section">
+                                <h3 class="section-title">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                    ที่อยู่จัดส่ง
+                                </h3>
+                                <div class="shipping-options">
+                                    <label class="shipping-option">
+                                        <input type="radio" name="shippingType" value="customer" checked onchange="toggleShippingType()">
+                                        <span class="radio-label">ส่งถึงลูกค้า</span>
+                                    </label>
+                                    <label class="shipping-option">
+                                        <input type="radio" name="shippingType" value="self" onchange="toggleShippingType()">
+                                        <span class="radio-label">ส่งถึงตัวเอง (ที่อยู่ร้าน)</span>
+                                    </label>
+                                </div>
+                                
+                                <div id="customerShippingSection">
+                                    <div class="customer-select-wrapper">
+                                        <label>เลือกลูกค้า</label>
+                                        <select id="checkoutCustomer" class="form-select" onchange="selectCheckoutCustomer()">
+                                            <option value="">-- เลือกลูกค้า --</option>
+                                        </select>
+                                        <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()">+ เพิ่มลูกค้าใหม่</button>
+                                    </div>
+                                    <div id="selectedCustomerInfo" class="selected-address-card" style="display:none;">
+                                    </div>
+                                </div>
+                                
+                                <div id="selfShippingSection" style="display:none;">
+                                    <div class="selected-address-card" id="selfAddressCard">
+                                        <p>กำลังโหลดที่อยู่...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="checkout-section">
+                                <h3 class="section-title">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                                    รายการสินค้า (<span id="checkoutItemCount">0</span> รายการ)
+                                </h3>
+                                <div class="checkout-items" id="checkoutItems">
+                                </div>
+                            </div>
+                            
+                            <div class="checkout-section">
+                                <h3 class="section-title">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                    หมายเหตุ (ถ้ามี)
+                                </h3>
+                                <textarea id="orderNotes" class="form-textarea" rows="3" placeholder="ข้อความถึงร้านค้า เช่น ขอใบกำกับภาษี, วันที่ต้องการรับสินค้า เป็นต้น"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="checkout-right">
+                            <div class="order-summary-card">
+                                <h3 class="summary-title">สรุปคำสั่งซื้อ</h3>
+                                <div class="summary-row">
+                                    <span>ยอดรวมสินค้า</span>
+                                    <span id="summarySubtotal">฿0</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>ค่าจัดส่ง</span>
+                                    <span id="summaryShipping">คำนวณภายหลัง</span>
+                                </div>
+                                <div class="summary-divider"></div>
+                                <div class="summary-row total">
+                                    <span>ยอดรวมทั้งหมด</span>
+                                    <span id="summaryTotal">฿0</span>
+                                </div>
+                                
+                                <div class="payment-section">
+                                    <h4 class="payment-title">ช่องทางชำระเงิน</h4>
+                                    <div class="payment-options">
+                                        <label class="payment-option active">
+                                            <input type="radio" name="paymentMethod" value="promptpay" checked>
+                                            <div class="payment-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                                            </div>
+                                            <span>PromptPay / QR Code</span>
+                                        </label>
+                                        <label class="payment-option">
+                                            <input type="radio" name="paymentMethod" value="transfer">
+                                            <div class="payment-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"></path></svg>
+                                            </div>
+                                            <span>โอนเงินผ่านบัญชี</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn-checkout" id="btnPlaceOrder" onclick="placeOrder()" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                                    ยืนยันคำสั่งซื้อ
+                                </button>
+                                <p class="checkout-note">หลังยืนยันคำสั่งซื้อ กรุณาชำระเงินและแนบหลักฐาน</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
