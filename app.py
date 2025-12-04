@@ -4317,7 +4317,7 @@ def get_reseller_cart():
             JOIN products p ON p.id = s.product_id
             LEFT JOIN brands b ON b.id = p.brand_id
             WHERE ci.cart_id = %s
-            ORDER BY ci.created_at DESC
+            ORDER BY ci.created_at ASC
         ''', (cart_id,))
         
         items = []
