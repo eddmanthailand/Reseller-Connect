@@ -526,6 +526,11 @@ function openProductModal(product) {
     `;
     
     document.getElementById('productModal').classList.add('active');
+    
+    // Sync selectedSkuId with auto-selected options after modal is rendered
+    setTimeout(() => {
+        updateSelectedSku();
+    }, 0);
 }
 
 function closeProductModal() {
