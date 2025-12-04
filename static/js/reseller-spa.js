@@ -877,18 +877,33 @@ function renderCheckout() {
 function renderCheckoutItems() {
     const container = document.getElementById('checkoutItems');
     container.innerHTML = checkoutData.items.map(item => {
-        const customizations = item.customization_data ? 
-            Object.entries(item.customization_data).map(([k, v]) => v).flat().join(', ') : '';
+        // SKU variant options (e.g., สี: ขาว, ไซส์: 2XL)
+        const skuOptionsHtml = (item.sku_options && item.sku_options.length > 0) ?
+            item.sku_options.map(opt => `<span class="sku-option-tag">${opt.option_name}: ${opt.option_value}</span>`).join('') : '';
+        
+        // Customization data (e.g., ปักชื่อ: สมชาย)
+        let customizationsHtml = '';
+        if (item.customization_data && Object.keys(item.customization_data).length > 0) {
+            const custItems = Object.entries(item.customization_data).map(([name, value]) => {
+                if (Array.isArray(value)) {
+                    return value.map(v => `<span class="customization-tag">${name}: ${v}</span>`).join('');
+                }
+                return `<span class="customization-tag">${name}: ${value}</span>`;
+            }).join('');
+            customizationsHtml = custItems;
+        }
+        
         return `
             <div class="checkout-item">
                 <img class="checkout-item-image" src="${item.image_url || '/static/images/no-image.png'}" alt="${item.product_name}">
                 <div class="checkout-item-info">
                     <div class="checkout-item-name">${item.product_name}</div>
                     <div class="checkout-item-sku">${item.sku_code || ''}</div>
-                    ${customizations ? `<div class="checkout-item-customizations">${customizations}</div>` : ''}
+                    ${skuOptionsHtml ? `<div class="checkout-item-options">${skuOptionsHtml}</div>` : ''}
+                    ${customizationsHtml ? `<div class="checkout-item-customizations">${customizationsHtml}</div>` : ''}
                 </div>
                 <div class="checkout-item-price">
-                    <div class="price">฿${(item.price * item.quantity).toLocaleString()}</div>
+                    <div class="price">฿${(item.final_price * item.quantity).toLocaleString()}</div>
                     <div class="qty">x${item.quantity}</div>
                 </div>
             </div>

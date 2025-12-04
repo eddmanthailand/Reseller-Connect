@@ -4327,6 +4327,19 @@ def get_reseller_cart():
             item['tier_discount_percent'] = float(item['tier_discount_percent']) if item['tier_discount_percent'] else 0
             item['final_price'] = round(item['unit_price'] * (1 - item['tier_discount_percent']/100), 2)
             item['subtotal'] = round(item['final_price'] * item['quantity'], 2)
+            
+            # Get SKU variant options (e.g., Color: White, Size: XL)
+            cursor.execute('''
+                SELECT o.name as option_name, ov.value as option_value
+                FROM sku_values_map svm
+                JOIN option_values ov ON ov.id = svm.option_value_id
+                JOIN options o ON o.id = ov.option_id
+                WHERE svm.sku_id = %s
+                ORDER BY o.sort_order, ov.sort_order
+            ''', (item['sku_id'],))
+            sku_options = cursor.fetchall()
+            item['sku_options'] = [dict(opt) for opt in sku_options]
+            
             items.append(item)
         
         total = sum(item['subtotal'] for item in items)
