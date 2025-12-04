@@ -722,14 +722,30 @@ function renderCart() {
     container.innerHTML = `
         <div style="display: grid; grid-template-columns: 1fr 300px; gap: 24px;">
             <div>
-                ${cartItems.map(item => `
+                ${cartItems.map(item => {
+                    // SKU variant options
+                    const skuOptionsHtml = (item.sku_options && item.sku_options.length > 0) ?
+                        `<div class="cart-item-options">${item.sku_options.map(opt => 
+                            `<span class="sku-option-tag">${opt.option_name}: ${opt.option_value}</span>`
+                        ).join('')}</div>` : '';
+                    
+                    // Customizations (resolved names from API)
+                    let customizationsHtml = '';
+                    if (item.customizations && item.customizations.length > 0) {
+                        const custTags = item.customizations.map(c => 
+                            `<span class="customization-tag">${c.name}: ${c.value}</span>`
+                        ).join('');
+                        customizationsHtml = `<div class="cart-item-customizations">${custTags}</div>`;
+                    }
+                    
+                    return `
                     <div class="cart-item">
-                        <div class="cart-item-image" style="display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                        </div>
+                        <img class="cart-item-image" src="${item.image_url || ''}" onerror="this.style.display='none'" alt="">
                         <div class="cart-item-info">
                             <div class="cart-item-name">${item.product_name}</div>
                             <div class="cart-item-sku">${item.sku_code}</div>
+                            ${skuOptionsHtml}
+                            ${customizationsHtml}
                             <div class="cart-item-price">฿${item.final_price.toLocaleString()}</div>
                             <div class="cart-item-qty">
                                 <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity - 1})">-</button>
@@ -741,7 +757,7 @@ function renderCart() {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `}).join('')}
             </div>
             <div class="cart-summary">
                 <h3 style="margin-bottom: 16px;">สรุปคำสั่งซื้อ</h3>
@@ -881,16 +897,12 @@ function renderCheckoutItems() {
         const skuOptionsHtml = (item.sku_options && item.sku_options.length > 0) ?
             item.sku_options.map(opt => `<span class="sku-option-tag">${opt.option_name}: ${opt.option_value}</span>`).join('') : '';
         
-        // Customization data (e.g., ปักชื่อ: สมชาย)
+        // Customization data (resolved names from API)
         let customizationsHtml = '';
-        if (item.customization_data && Object.keys(item.customization_data).length > 0) {
-            const custItems = Object.entries(item.customization_data).map(([name, value]) => {
-                if (Array.isArray(value)) {
-                    return value.map(v => `<span class="customization-tag">${name}: ${v}</span>`).join('');
-                }
-                return `<span class="customization-tag">${name}: ${value}</span>`;
-            }).join('');
-            customizationsHtml = custItems;
+        if (item.customizations && item.customizations.length > 0) {
+            customizationsHtml = item.customizations.map(c => 
+                `<span class="customization-tag">${c.name}: ${c.value}</span>`
+            ).join('');
         }
         
         return `

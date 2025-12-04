@@ -4340,6 +4340,32 @@ def get_reseller_cart():
             sku_options = cursor.fetchall()
             item['sku_options'] = [dict(opt) for opt in sku_options]
             
+            # Resolve customization_data IDs to names
+            if item['customization_data']:
+                cust_data = item['customization_data'] if isinstance(item['customization_data'], dict) else {}
+                resolved_customizations = []
+                for cust_id_str, choice_ids in cust_data.items():
+                    try:
+                        cust_id = int(cust_id_str)
+                        # Get customization name
+                        cursor.execute('SELECT name FROM product_customizations WHERE id = %s', (cust_id,))
+                        cust_row = cursor.fetchone()
+                        cust_name = cust_row['name'] if cust_row else f'Option {cust_id}'
+                        
+                        # Get choice labels
+                        if choice_ids:
+                            choice_id_list = choice_ids if isinstance(choice_ids, list) else [choice_ids]
+                            for choice_id in choice_id_list:
+                                cursor.execute('SELECT label FROM customization_choices WHERE id = %s', (choice_id,))
+                                choice_row = cursor.fetchone()
+                                choice_label = choice_row['label'] if choice_row else f'Choice {choice_id}'
+                                resolved_customizations.append({'name': cust_name, 'value': choice_label})
+                    except:
+                        pass
+                item['customizations'] = resolved_customizations
+            else:
+                item['customizations'] = []
+            
             items.append(item)
         
         total = sum(item['subtotal'] for item in items)
