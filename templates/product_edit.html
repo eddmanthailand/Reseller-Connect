@@ -214,6 +214,29 @@
             color: rgba(255, 255, 255, 0.5);
         }
 
+        select.form-input {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpolyline points='6,9 12,15 18,9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+
+        select.form-input option {
+            background: #1e1b4b;
+            color: white;
+            padding: 12px;
+        }
+
+        select.form-input option:hover,
+        select.form-input option:focus,
+        select.form-input option:checked {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+        }
+
         .form-label {
             display: block;
             color: rgba(255, 255, 255, 0.9);
