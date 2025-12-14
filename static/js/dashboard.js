@@ -3015,7 +3015,7 @@ function renderBrandSalesGrid(brands) {
 
 async function loadWarehousesPage() {
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses`);
+        const response = await fetch(`${API_URL}/admin/warehouses`, { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to load warehouses');
         const warehouses = await response.json();
         
@@ -3092,6 +3092,7 @@ async function handleWarehouseSubmit(event) {
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(data)
         });
         
@@ -3111,7 +3112,7 @@ async function handleWarehouseSubmit(event) {
 
 async function editWarehouse(id) {
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses/${id}`);
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to load warehouse');
         const w = await response.json();
         
@@ -3137,7 +3138,7 @@ async function deleteWarehouse(id, name) {
     if (!confirm(`คุณต้องการลบโกดัง "${name}" ใช่หรือไม่?`)) return;
     
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || 'Failed to delete warehouse');
