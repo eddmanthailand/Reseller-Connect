@@ -90,7 +90,7 @@ async function init() {
 function handleHashNavigation() {
     const hash = window.location.hash.substring(1); // Remove the '#'
     if (hash) {
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'orders', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'orders', 'tier-settings', 'settings'];
         if (validPages.includes(hash)) {
             switchPage(hash);
         }
@@ -472,6 +472,8 @@ function switchPage(pageName) {
         loadBrandsPage();
     } else if (pageName === 'categories') {
         loadCategoriesPage();
+    } else if (pageName === 'warehouses') {
+        loadWarehousesPage();
     }
 }
 
@@ -3007,6 +3009,152 @@ function renderBrandSalesGrid(brands) {
     });
     
     container.innerHTML = html;
+}
+
+// ==================== WAREHOUSE MANAGEMENT ====================
+
+async function loadWarehousesPage() {
+    try {
+        const response = await fetch(`${API_URL}/admin/warehouses`);
+        if (!response.ok) throw new Error('Failed to load warehouses');
+        const warehouses = await response.json();
+        
+        const tbody = document.getElementById('warehousesTableBody');
+        const countEl = document.getElementById('warehouseCount');
+        
+        if (countEl) countEl.textContent = warehouses.length;
+        
+        if (!tbody) return;
+        
+        if (warehouses.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">ยังไม่มีโกดัง</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = warehouses.map(w => `
+            <tr>
+                <td><strong>${escapeHtml(w.name)}</strong></td>
+                <td>${w.address ? escapeHtml(w.address) : '-'}<br>
+                    <small style="opacity: 0.6;">${[w.subdistrict, w.district, w.province, w.postal_code].filter(Boolean).join(', ') || ''}</small>
+                </td>
+                <td>${w.phone ? escapeHtml(w.phone) : '-'}</td>
+                <td>${w.contact_name ? escapeHtml(w.contact_name) : '-'}</td>
+                <td>
+                    <span class="status-badge ${w.is_active ? 'active' : 'inactive'}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px; ${w.is_active ? 'background: rgba(34,197,94,0.2); color: #22c55e;' : 'background: rgba(239,68,68,0.2); color: #ef4444;'}">
+                        ${w.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'}
+                    </span>
+                </td>
+                <td>
+                    <button onclick="editWarehouse(${w.id})" class="btn-icon" title="แก้ไข">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                        </svg>
+                    </button>
+                    <button onclick="deleteWarehouse(${w.id}, '${escapeHtml(w.name)}')" class="btn-icon delete" title="ลบ">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading warehouses:', error);
+        showGlobalAlert('ไม่สามารถโหลดข้อมูลโกดังได้', 'error');
+    }
+}
+
+async function handleWarehouseSubmit(event) {
+    event.preventDefault();
+    
+    const editId = document.getElementById('editWarehouseId').value;
+    const data = {
+        name: document.getElementById('warehouseName').value.trim(),
+        address: document.getElementById('warehouseAddress').value.trim(),
+        province: document.getElementById('warehouseProvince').value.trim(),
+        district: document.getElementById('warehouseDistrict').value.trim(),
+        subdistrict: document.getElementById('warehouseSubdistrict').value.trim(),
+        postal_code: document.getElementById('warehousePostalCode').value.trim(),
+        phone: document.getElementById('warehousePhone').value.trim(),
+        contact_name: document.getElementById('warehouseContactName').value.trim()
+    };
+    
+    if (!data.name) {
+        showGlobalAlert('กรุณาระบุชื่อโกดัง', 'error');
+        return;
+    }
+    
+    try {
+        const url = editId ? `${API_URL}/admin/warehouses/${editId}` : `${API_URL}/admin/warehouses`;
+        const method = editId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save warehouse');
+        }
+        
+        showGlobalAlert(editId ? 'อัปเดตโกดังเรียบร้อย' : 'เพิ่มโกดังเรียบร้อย', 'success');
+        resetWarehouseForm();
+        loadWarehousesPage();
+    } catch (error) {
+        console.error('Error saving warehouse:', error);
+        showGlobalAlert(error.message || 'ไม่สามารถบันทึกโกดังได้', 'error');
+    }
+}
+
+async function editWarehouse(id) {
+    try {
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`);
+        if (!response.ok) throw new Error('Failed to load warehouse');
+        const w = await response.json();
+        
+        document.getElementById('editWarehouseId').value = w.id;
+        document.getElementById('warehouseName').value = w.name || '';
+        document.getElementById('warehouseAddress').value = w.address || '';
+        document.getElementById('warehouseProvince').value = w.province || '';
+        document.getElementById('warehouseDistrict').value = w.district || '';
+        document.getElementById('warehouseSubdistrict').value = w.subdistrict || '';
+        document.getElementById('warehousePostalCode').value = w.postal_code || '';
+        document.getElementById('warehousePhone').value = w.phone || '';
+        document.getElementById('warehouseContactName').value = w.contact_name || '';
+        
+        document.getElementById('warehouseFormTitle').textContent = 'แก้ไขโกดัง';
+        document.getElementById('warehouseName').focus();
+    } catch (error) {
+        console.error('Error loading warehouse:', error);
+        showGlobalAlert('ไม่สามารถโหลดข้อมูลโกดังได้', 'error');
+    }
+}
+
+async function deleteWarehouse(id, name) {
+    if (!confirm(`คุณต้องการลบโกดัง "${name}" ใช่หรือไม่?`)) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to delete warehouse');
+        }
+        
+        showGlobalAlert('ลบโกดังเรียบร้อย', 'success');
+        loadWarehousesPage();
+    } catch (error) {
+        console.error('Error deleting warehouse:', error);
+        showGlobalAlert(error.message || 'ไม่สามารถลบโกดังได้', 'error');
+    }
+}
+
+function resetWarehouseForm() {
+    document.getElementById('warehouseForm').reset();
+    document.getElementById('editWarehouseId').value = '';
+    document.getElementById('warehouseFormTitle').textContent = 'เพิ่มโกดังใหม่';
 }
 
 // Initialize on page load

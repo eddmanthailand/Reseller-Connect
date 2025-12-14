@@ -572,6 +572,68 @@ def init_db():
             END $$;
         ''')
         
+        # Create warehouses table (warehouse/storage locations)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS warehouses (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                address TEXT,
+                province VARCHAR(50),
+                district VARCHAR(50),
+                subdistrict VARCHAR(50),
+                postal_code VARCHAR(10),
+                phone VARCHAR(20),
+                contact_name VARCHAR(100),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create sku_warehouse_stock table (stock per SKU per warehouse)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sku_warehouse_stock (
+                id SERIAL PRIMARY KEY,
+                sku_id INTEGER NOT NULL REFERENCES skus(id) ON DELETE CASCADE,
+                warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+                stock INTEGER DEFAULT 0,
+                UNIQUE(sku_id, warehouse_id)
+            )
+        ''')
+        
+        # Create order_shipments table (shipments grouped by warehouse per order)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_shipments (
+                id SERIAL PRIMARY KEY,
+                order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+                warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+                tracking_number VARCHAR(50),
+                shipping_provider VARCHAR(50),
+                status VARCHAR(20) DEFAULT 'pending',
+                shipped_at TIMESTAMP,
+                delivered_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create order_shipment_items table (items in each shipment)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_shipment_items (
+                id SERIAL PRIMARY KEY,
+                shipment_id INTEGER NOT NULL REFERENCES order_shipments(id) ON DELETE CASCADE,
+                order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+                quantity INTEGER NOT NULL DEFAULT 1
+            )
+        ''')
+        
+        # Insert default warehouse if none exists
+        cursor.execute('SELECT COUNT(*) FROM warehouses')
+        warehouse_count = cursor.fetchone()[0]
+        if warehouse_count == 0:
+            cursor.execute('''
+                INSERT INTO warehouses (name, address, is_active)
+                VALUES ('โกดังหลัก', 'โกดังเริ่มต้น', TRUE)
+            ''')
+        
         # Create reseller_customers table (customers of resellers for direct shipping)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS reseller_customers (

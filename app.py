@@ -5962,5 +5962,321 @@ def cancel_order(order_id):
         if conn:
             conn.close()
 
+# ==================== WAREHOUSE MANAGEMENT ROUTES ====================
+
+@app.route('/api/admin/warehouses', methods=['GET'])
+@admin_required
+def get_warehouses():
+    """Get all warehouses"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, address, province, district, subdistrict, postal_code, 
+                   phone, contact_name, is_active, created_at
+            FROM warehouses
+            ORDER BY name ASC
+        ''')
+        
+        warehouses = []
+        for row in cursor.fetchall():
+            w = dict(row)
+            w['is_active'] = bool(w.get('is_active', True))
+            warehouses.append(w)
+        return jsonify(warehouses), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/warehouses', methods=['POST'])
+@admin_required
+def create_warehouse():
+    """Create a new warehouse"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can create warehouses'}), 403
+    
+    data = request.json
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Warehouse name is required'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO warehouses (name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active, created_at
+        ''', (
+            data['name'],
+            data.get('address', ''),
+            data.get('province', ''),
+            data.get('district', ''),
+            data.get('subdistrict', ''),
+            data.get('postal_code', ''),
+            data.get('phone', ''),
+            data.get('contact_name', ''),
+            data.get('is_active', True)
+        ))
+        
+        warehouse = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(warehouse), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/warehouses/<int:warehouse_id>', methods=['GET'])
+@admin_required
+def get_warehouse(warehouse_id):
+    """Get a single warehouse"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, address, province, district, subdistrict, postal_code, 
+                   phone, contact_name, is_active, created_at
+            FROM warehouses
+            WHERE id = %s
+        ''', (warehouse_id,))
+        
+        warehouse = cursor.fetchone()
+        if not warehouse:
+            return jsonify({'error': 'Warehouse not found'}), 404
+        
+        result = dict(warehouse)
+        result['is_active'] = bool(result.get('is_active', True))
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/warehouses/<int:warehouse_id>', methods=['PUT'])
+@admin_required
+def update_warehouse(warehouse_id):
+    """Update a warehouse"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can update warehouses'}), 403
+    
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM warehouses WHERE id = %s', (warehouse_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Warehouse not found'}), 404
+        
+        update_fields = []
+        update_values = []
+        
+        for field in ['name', 'address', 'province', 'district', 'subdistrict', 'postal_code', 'phone', 'contact_name']:
+            if field in data:
+                update_fields.append(f'{field} = %s')
+                update_values.append(data[field])
+        
+        if 'is_active' in data:
+            update_fields.append('is_active = %s')
+            update_values.append(data['is_active'])
+        
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        update_values.append(warehouse_id)
+        cursor.execute(f'''
+            UPDATE warehouses SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active, created_at
+        ''', update_values)
+        
+        warehouse = dict(cursor.fetchone())
+        warehouse['is_active'] = bool(warehouse.get('is_active'))
+        conn.commit()
+        
+        return jsonify(warehouse), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/warehouses/<int:warehouse_id>', methods=['DELETE'])
+@admin_required
+def delete_warehouse(warehouse_id):
+    """Delete a warehouse"""
+    if session.get('role') != 'Super Admin':
+        return jsonify({'error': 'Only Super Admin can delete warehouses'}), 403
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT COUNT(*) as cnt FROM sku_warehouse_stock WHERE warehouse_id = %s AND stock > 0', (warehouse_id,))
+        if cursor.fetchone()['cnt'] > 0:
+            return jsonify({'error': 'Cannot delete warehouse with stock. Move stock first.'}), 400
+        
+        cursor.execute('DELETE FROM warehouses WHERE id = %s RETURNING id', (warehouse_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Warehouse not found'}), 404
+        
+        conn.commit()
+        return jsonify({'message': 'Warehouse deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/products/<int:product_id>/warehouse-stock', methods=['GET'])
+@admin_required
+def get_product_warehouse_stock(product_id):
+    """Get warehouse stock for all SKUs of a product"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        cursor.execute('''
+            SELECT s.id as sku_id, s.sku_code, s.stock as total_stock,
+                   w.id as warehouse_id, w.name as warehouse_name,
+                   COALESCE(sws.stock, 0) as warehouse_stock
+            FROM skus s
+            CROSS JOIN warehouses w
+            LEFT JOIN sku_warehouse_stock sws ON s.id = sws.sku_id AND w.id = sws.warehouse_id
+            WHERE s.product_id = %s AND w.is_active = TRUE
+            ORDER BY s.id, w.name
+        ''', (product_id,))
+        
+        rows = cursor.fetchall()
+        
+        sku_stock = {}
+        for row in rows:
+            sku_id = row['sku_id']
+            if sku_id not in sku_stock:
+                sku_stock[sku_id] = {
+                    'sku_id': sku_id,
+                    'sku_code': row['sku_code'],
+                    'total_stock': row['total_stock'],
+                    'warehouses': []
+                }
+            sku_stock[sku_id]['warehouses'].append({
+                'warehouse_id': row['warehouse_id'],
+                'warehouse_name': row['warehouse_name'],
+                'stock': row['warehouse_stock']
+            })
+        
+        return jsonify(list(sku_stock.values())), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/products/<int:product_id>/warehouse-stock', methods=['PUT'])
+@admin_required
+def update_product_warehouse_stock(product_id):
+    """Update warehouse stock for SKUs of a product"""
+    data = request.json
+    if not data or 'stocks' not in data:
+        return jsonify({'error': 'Stock data required'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Product not found'}), 404
+        
+        for stock_item in data['stocks']:
+            sku_id = stock_item.get('sku_id')
+            warehouse_id = stock_item.get('warehouse_id')
+            stock = stock_item.get('stock', 0)
+            
+            if not sku_id or not warehouse_id:
+                continue
+            
+            cursor.execute('''
+                INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (sku_id, warehouse_id) 
+                DO UPDATE SET stock = EXCLUDED.stock
+            ''', (sku_id, warehouse_id, stock))
+        
+        cursor.execute('''
+            UPDATE skus SET stock = (
+                SELECT COALESCE(SUM(sws.stock), 0) 
+                FROM sku_warehouse_stock sws 
+                WHERE sws.sku_id = skus.id
+            )
+            WHERE product_id = %s
+        ''', (product_id,))
+        
+        conn.commit()
+        return jsonify({'message': 'Stock updated successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
