@@ -27,7 +27,7 @@ async function init() {
 
 function handleHashNavigation() {
     const hash = window.location.hash.substring(1) || 'home';
-    const validPages = ['home', 'catalog', 'cart', 'orders', 'customers', 'profile'];
+    const validPages = ['home', 'catalog', 'cart', 'checkout', 'orders', 'customers', 'profile'];
     if (validPages.includes(hash)) {
         switchPage(hash);
     }

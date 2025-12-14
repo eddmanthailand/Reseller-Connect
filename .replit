@@ -31,18 +31,6 @@ waitForPort = 5000
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 34209
-externalPort = 3000
-
-[[ports]]
-localPort = 35149
-externalPort = 3001
-
-[[ports]]
-localPort = 40669
-externalPort = 3002
-
 [nix]
 channel = "stable-25_05"
 packages = ["cargo", "libiconv", "rustc"]
