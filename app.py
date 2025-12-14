@@ -19,7 +19,7 @@ if not session_secret:
     )
 app.secret_key = session_secret
 
-CORS(app)
+CORS(app, supports_credentials=True)
 
 # Initialize database on startup
 init_db()
@@ -38,6 +38,8 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Unauthorized - Please login'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated_function
@@ -46,6 +48,8 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Unauthorized - Please login'}), 401
             return redirect(url_for('login_page'))
         if session.get('role') not in ['Super Admin', 'Assistant Admin']:
             return jsonify({'error': 'Unauthorized - Admin access required'}), 403
