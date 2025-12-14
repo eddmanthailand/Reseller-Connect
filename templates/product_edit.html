@@ -2138,11 +2138,25 @@
                 if (heightEl) heightEl.value = product.height || '';
                 if (lowStockEl) lowStockEl.value = product.low_stock_threshold || 5;
                 
-                // Set default warehouse if available
-                const warehouseSelect = document.getElementById('default_warehouse_id');
-                if (warehouseSelect && product.default_warehouse_id) {
-                    warehouseSelect.value = product.default_warehouse_id;
-                }
+                // Set default warehouse if available - with a small delay to ensure options are populated
+                setTimeout(() => {
+                    const warehouseSelect = document.getElementById('default_warehouse_id');
+                    if (warehouseSelect && product.default_warehouse_id) {
+                        console.log('Setting warehouse to:', product.default_warehouse_id);
+                        const warehouseId = String(product.default_warehouse_id);
+                        // Find option with matching value
+                        const option = Array.from(warehouseSelect.options).find(opt => opt.value === warehouseId);
+                        if (option) {
+                            warehouseSelect.value = warehouseId;
+                            console.log('Warehouse set successfully:', warehouseSelect.value);
+                        } else {
+                            console.warn('Warehouse option not found for ID:', warehouseId);
+                        }
+                    } else {
+                        console.log('No default warehouse or not found - default_warehouse_id:', product.default_warehouse_id);
+                    }
+                }, 100);
+                
                 
                 // Load existing product images
                 if (product.images && product.images.length > 0) {
