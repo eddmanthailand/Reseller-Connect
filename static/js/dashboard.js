@@ -1,6 +1,14 @@
 // API Base URL (use window.API_URL set by template, fallback to '/api')
 const API_URL = (typeof window !== 'undefined' && window.API_URL) ? window.API_URL : '/api';
 
+// Utility function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Sidebar Toggle Function
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
