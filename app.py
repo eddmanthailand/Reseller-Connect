@@ -1207,6 +1207,19 @@ def get_product(product_id):
         skus = [dict(row) for row in cursor.fetchall()]
         product['skus'] = skus
         
+        # Get default warehouse from sku_warehouse_stock (find the most common warehouse used by SKUs)
+        cursor.execute('''
+            SELECT sws.warehouse_id, COUNT(*) as count
+            FROM sku_warehouse_stock sws
+            JOIN skus s ON sws.sku_id = s.id
+            WHERE s.product_id = %s AND sws.stock > 0
+            GROUP BY sws.warehouse_id
+            ORDER BY count DESC
+            LIMIT 1
+        ''', (product_id,))
+        warehouse_row = cursor.fetchone()
+        product['default_warehouse_id'] = warehouse_row['warehouse_id'] if warehouse_row else None
+        
         return jsonify(product), 200
         
     except Exception as e:

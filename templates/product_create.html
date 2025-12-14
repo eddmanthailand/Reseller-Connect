@@ -1863,6 +1863,10 @@
             const skus = [];
             const rows = document.querySelectorAll('#variants-table tbody tr');
             const activeWarehouses = warehousesList.filter(w => w.is_active);
+            
+            // Get selected default warehouse from dropdown
+            const defaultWarehouseSelect = document.getElementById('default_warehouse_id');
+            const defaultWarehouseId = defaultWarehouseSelect ? parseInt(defaultWarehouseSelect.value) || null : null;
 
             rows.forEach(row => {
                 const skuCode = row.querySelector('.sku-code').value;
@@ -1873,7 +1877,10 @@
                 const stockInputs = row.querySelectorAll('.sku-stock');
                 let totalStock = 0;
                 
-                if (activeWarehouses.length > 0) {
+                // Check if stock inputs have warehouse IDs (detailed multi-warehouse mode)
+                const hasWarehouseInputs = stockInputs.length > 0 && stockInputs[0].dataset.warehouseId;
+                
+                if (hasWarehouseInputs && activeWarehouses.length > 0) {
                     stockInputs.forEach(input => {
                         const warehouseId = parseInt(input.dataset.warehouseId);
                         const stock = parseInt(input.value) || 0;
@@ -1884,7 +1891,14 @@
                         });
                     });
                 } else {
+                    // Single stock input mode - use default_warehouse_id from dropdown
                     totalStock = parseInt(stockInputs[0]?.value) || 0;
+                    if (defaultWarehouseId && totalStock > 0) {
+                        warehouseStock.push({
+                            warehouse_id: defaultWarehouseId,
+                            stock: totalStock
+                        });
+                    }
                 }
 
                 // Collect option_value_ids (we'll need to map them properly in backend)
