@@ -103,6 +103,11 @@
         return showAlert(message, 'info', duration);
     };
 
+    // Alias for backward compatibility
+    window.showGlobalAlert = function(message, type, duration) {
+        return showAlert(message, type, duration);
+    };
+
     // Confirm alert with callback
     window.showConfirmAlert = function(message, onConfirm, onCancel) {
         // Create overlay
