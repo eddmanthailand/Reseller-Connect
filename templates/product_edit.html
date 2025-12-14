@@ -908,6 +908,7 @@
                 // Populate warehouse dropdown
                 const warehouseSelect = document.getElementById('default_warehouse_id');
                 if (warehouseSelect) {
+                    const currentValue = warehouseSelect.value; // Save current value
                     warehouseSelect.innerHTML = '<option value="">-- เลือกโกดัง (ไม่บังคับ) --</option>';
                     warehousesList.forEach(wh => {
                         const option = document.createElement('option');
@@ -915,6 +916,10 @@
                         option.textContent = wh.name;
                         warehouseSelect.appendChild(option);
                     });
+                    // Restore previous value if it exists
+                    if (currentValue) {
+                        warehouseSelect.value = currentValue;
+                    }
                 }
             } catch (error) {
                 console.error('Error loading warehouses:', error);
