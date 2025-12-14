@@ -4680,7 +4680,7 @@ def generate_order_number(cursor):
 @app.route('/api/orders', methods=['POST'])
 @login_required
 def create_order():
-    """Create order from cart"""
+    """Create order from cart with automatic shipment splitting by warehouse"""
     conn = None
     cursor = None
     try:
@@ -4716,11 +4716,37 @@ def create_order():
         if not items:
             return jsonify({'error': 'Cart is empty'}), 400
         
-        # Validate stock (show available stock, don't deduct yet)
+        # Get all sku_ids from cart
+        sku_ids = [item['sku_id'] for item in items]
+        
+        # Get warehouse stock for all SKUs
+        cursor.execute('''
+            SELECT sws.sku_id, sws.warehouse_id, sws.stock, w.name as warehouse_name, w.is_active
+            FROM sku_warehouse_stock sws
+            JOIN warehouses w ON w.id = sws.warehouse_id
+            WHERE sws.sku_id = ANY(%s) AND sws.stock > 0 AND w.is_active = TRUE
+            ORDER BY sws.warehouse_id, sws.sku_id
+        ''', (sku_ids,))
+        warehouse_stocks = cursor.fetchall()
+        
+        # Build a lookup: {sku_id: [{warehouse_id, stock, warehouse_name}, ...]}
+        sku_warehouse_map = {}
+        for ws in warehouse_stocks:
+            sku_id = ws['sku_id']
+            if sku_id not in sku_warehouse_map:
+                sku_warehouse_map[sku_id] = []
+            sku_warehouse_map[sku_id].append({
+                'warehouse_id': ws['warehouse_id'],
+                'stock': ws['stock'],
+                'warehouse_name': ws['warehouse_name']
+            })
+        
+        # Calculate total available stock per SKU (from all warehouses)
         for item in items:
-            if item['stock'] < item['quantity']:
+            total_available = sum(ws['stock'] for ws in sku_warehouse_map.get(item['sku_id'], []))
+            if total_available < item['quantity']:
                 return jsonify({
-                    'error': f'สินค้า {item["product_name"]} ({item["sku_code"]}) สต็อกไม่พอ เหลือ {item["stock"]} ชิ้น'
+                    'error': f'สินค้า {item["product_name"]} ({item["sku_code"]}) สต็อกไม่พอ เหลือ {total_available} ชิ้น'
                 }), 400
         
         # Calculate totals
@@ -4749,7 +4775,8 @@ def create_order():
         ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes))
         order = dict(cursor.fetchone())
         
-        # Create order items
+        # Create order items and track their IDs using cart_item_id as unique key
+        order_item_map = {}  # {cart_item_id: order_item_id}
         for item in items:
             unit_price = float(item['unit_price'])
             discount_pct = float(item['tier_discount_percent'] or 0)
@@ -4758,12 +4785,78 @@ def create_order():
             cursor.execute('''
                 INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discounted_price, item['customization_data']))
+            order_item_id = cursor.fetchone()['id']
+            
+            # Use cart item id as unique key (guaranteed unique per cart item)
+            order_item_map[item['id']] = order_item_id
+        
+        # Re-allocate items to warehouses using cart_item_id for accurate tracking
+        warehouse_shipments = {}  # {warehouse_id: {shipment items grouped by order_item_id}}
+        stock_deductions = []  # Track deductions: [(sku_id, warehouse_id, quantity)]
+        
+        for item in items:
+            remaining_qty = item['quantity']
+            warehouses_for_sku = sku_warehouse_map.get(item['sku_id'], [])
+            order_item_id = order_item_map[item['id']]
+            
+            for wh in warehouses_for_sku:
+                if remaining_qty <= 0:
+                    break
+                
+                allocate_qty = min(remaining_qty, wh['stock'])
+                if allocate_qty > 0:
+                    wh_id = wh['warehouse_id']
+                    if wh_id not in warehouse_shipments:
+                        warehouse_shipments[wh_id] = []
+                    
+                    warehouse_shipments[wh_id].append({
+                        'order_item_id': order_item_id,
+                        'quantity': allocate_qty
+                    })
+                    
+                    stock_deductions.append((item['sku_id'], wh_id, allocate_qty))
+                    wh['stock'] -= allocate_qty
+                    remaining_qty -= allocate_qty
+        
+        # Create shipments per warehouse
+        for wh_id, shipment_items in warehouse_shipments.items():
+            cursor.execute('''
+                INSERT INTO order_shipments (order_id, warehouse_id, status)
+                VALUES (%s, %s, 'pending')
+                RETURNING id
+            ''', (order['id'], wh_id))
+            shipment_id = cursor.fetchone()['id']
+            
+            # Create shipment items with verified order_item_ids
+            for ship_item in shipment_items:
+                cursor.execute('''
+                    INSERT INTO order_shipment_items (shipment_id, order_item_id, quantity)
+                    VALUES (%s, %s, %s)
+                ''', (shipment_id, ship_item['order_item_id'], ship_item['quantity']))
+        
+        # Deduct stock from warehouses
+        for sku_id, wh_id, qty in stock_deductions:
+            cursor.execute('''
+                UPDATE sku_warehouse_stock
+                SET stock = stock - %s
+                WHERE sku_id = %s AND warehouse_id = %s
+            ''', (qty, sku_id, wh_id))
+        
+        # Also update the main SKU stock in skus table
+        for item in items:
+            cursor.execute('''
+                UPDATE skus SET stock = stock - %s WHERE id = %s
+            ''', (item['quantity'], item['sku_id']))
         
         # Clear cart items
         cursor.execute('DELETE FROM cart_items WHERE cart_id = %s', (cart['cart_id'],))
         
         conn.commit()
+        
+        # Add shipment count to response
+        order['shipment_count'] = len(warehouse_shipments)
         
         return jsonify({
             'message': 'Order created successfully',
@@ -4894,9 +4987,109 @@ def get_order_detail(order_id):
         ''', (order_id,))
         order['payment_slips'] = [dict(s) for s in cursor.fetchall()]
         
+        # Get shipments with warehouse info
+        cursor.execute('''
+            SELECT os.id, os.warehouse_id, os.tracking_number, os.shipping_provider,
+                   os.status, os.shipped_at, os.delivered_at, os.created_at,
+                   w.name as warehouse_name
+            FROM order_shipments os
+            JOIN warehouses w ON w.id = os.warehouse_id
+            WHERE os.order_id = %s
+            ORDER BY os.id
+        ''', (order_id,))
+        shipments = []
+        for shipment in cursor.fetchall():
+            shipment_dict = dict(shipment)
+            # Get items in this shipment
+            cursor.execute('''
+                SELECT osi.id, osi.order_item_id, osi.quantity,
+                       oi.sku_id, s.sku_code, p.name as product_name
+                FROM order_shipment_items osi
+                JOIN order_items oi ON oi.id = osi.order_item_id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE osi.shipment_id = %s
+            ''', (shipment_dict['id'],))
+            shipment_dict['items'] = [dict(item) for item in cursor.fetchall()]
+            shipments.append(shipment_dict)
+        
+        order['shipments'] = shipments
+        
         return jsonify(order), 200
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/orders/<int:order_id>/shipments/<int:shipment_id>', methods=['PATCH'])
+@admin_required
+def update_shipment(order_id, shipment_id):
+    """Update shipment tracking and status"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify shipment exists and belongs to this order
+        cursor.execute('''
+            SELECT id, status FROM order_shipments
+            WHERE id = %s AND order_id = %s
+        ''', (shipment_id, order_id))
+        shipment = cursor.fetchone()
+        
+        if not shipment:
+            return jsonify({'error': 'Shipment not found'}), 404
+        
+        # Build update query
+        update_fields = []
+        update_values = []
+        
+        if 'tracking_number' in data:
+            update_fields.append('tracking_number = %s')
+            update_values.append(data['tracking_number'])
+        
+        if 'shipping_provider' in data:
+            update_fields.append('shipping_provider = %s')
+            update_values.append(data['shipping_provider'])
+        
+        if 'status' in data:
+            update_fields.append('status = %s')
+            update_values.append(data['status'])
+            
+            # Set timestamps based on status
+            if data['status'] == 'shipped' and shipment['status'] != 'shipped':
+                update_fields.append('shipped_at = CURRENT_TIMESTAMP')
+            elif data['status'] == 'delivered' and shipment['status'] != 'delivered':
+                update_fields.append('delivered_at = CURRENT_TIMESTAMP')
+        
+        if not update_fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        
+        update_values.append(shipment_id)
+        cursor.execute(f'''
+            UPDATE order_shipments SET {', '.join(update_fields)}
+            WHERE id = %s
+            RETURNING id, tracking_number, shipping_provider, status, shipped_at, delivered_at
+        ''', update_values)
+        
+        updated = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify({
+            'message': 'Shipment updated successfully',
+            'shipment': updated
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if cursor:
