@@ -690,17 +690,30 @@
         
         .customer-select-wrapper label { font-size: 13px; color: var(--text-muted); }
         
+        .customer-select-wrapper .form-select {
+            background: rgba(30, 10, 50, 0.9) !important;
+            color: white !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .customer-select-wrapper .form-select option {
+            background: #1a0a2e;
+            color: white;
+            padding: 10px;
+        }
+        
         .btn-link {
             background: none;
             border: none;
-            color: var(--primary);
+            color: #4fc3f7;
             font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            padding: 0;
+            padding: 4px 0;
             text-align: left;
         }
         
-        .btn-link:hover { text-decoration: underline; }
+        .btn-link:hover { text-decoration: underline; color: #81d4fa; }
         
         .selected-address-card {
             background: rgba(255, 255, 255, 0.05);
