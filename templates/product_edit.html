@@ -781,9 +781,23 @@
                         </div>
                     </div>
 
-                    <!-- ส่วนที่ 5: ส่วนลดตามระดับตัวแทน -->
+                    <!-- ส่วนที่ 5: สต็อกตามโกดัง -->
+                    <div id="warehouse-stock-section" class="section-card" style="display: none;">
+                        <h2 class="section-title">5. สต็อกตามโกดัง</h2>
+                        <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px; font-size: 13px;">
+                            กำหนดจำนวนสต็อกสำหรับแต่ละ SKU แยกตามโกดัง (สต็อกรวมจะคำนวณอัตโนมัติ)
+                        </p>
+                        
+                        <div id="warehouse-stock-container">
+                            <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
+                                กำลังโหลดข้อมูลโกดัง...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ส่วนที่ 6: ส่วนลดตามระดับตัวแทน -->
                     <div class="section-card">
-                        <h2 class="section-title">5. ส่วนลดตามระดับตัวแทน</h2>
+                        <h2 class="section-title">6. ส่วนลดตามระดับตัวแทน</h2>
                         <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px; font-size: 13px;">
                             กำหนด % ส่วนลดสำหรับตัวแทนจำหน่ายแต่ละระดับ (บังคับกรอกทุกระดับ)
                         </p>
@@ -796,9 +810,9 @@
                         </div>
                     </div>
 
-                    <!-- ส่วนที่ 6: ตัวเลือกเสริม (Customization Options) -->
+                    <!-- ส่วนที่ 7: ตัวเลือกเสริม (Customization Options) -->
                     <div class="section-card">
-                        <h2 class="section-title">6. ตัวเลือกเสริม (ไม่สร้าง SKU)</h2>
+                        <h2 class="section-title">7. ตัวเลือกเสริม (ไม่สร้าง SKU)</h2>
                         <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px; font-size: 13px;">
                             สำหรับตัวเลือกที่ลูกค้าเลือกตอนสั่งซื้อ เช่น ประเภทกระดุม, ปักชื่อ ฯลฯ (ไม่กระทบสต็อก)
                         </p>
@@ -1706,6 +1720,9 @@
                     // Save customizations after product is saved
                     await saveCustomizations();
                     
+                    // Save warehouse stock
+                    await saveWarehouseStock();
+                    
                     showAlert('บันทึกสำเร็จ', 'success');
                     setTimeout(() => {
                         window.location.href = '/admin#products';
@@ -1888,6 +1905,143 @@
             }
         }
 
+        // ==================== WAREHOUSE STOCK MANAGEMENT ====================
+        let warehouseStockData = [];
+        let warehousesList = [];
+        
+        async function loadWarehouses() {
+            try {
+                const response = await fetch('/api/admin/warehouses');
+                if (response.ok) {
+                    warehousesList = await response.json();
+                    warehousesList = warehousesList.filter(w => w.is_active);
+                }
+            } catch (error) {
+                console.error('Error loading warehouses:', error);
+            }
+        }
+        
+        async function loadWarehouseStock() {
+            try {
+                await loadWarehouses();
+                
+                if (warehousesList.length === 0) {
+                    document.getElementById('warehouse-stock-container').innerHTML = 
+                        '<p style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">ยังไม่มีโกดังที่เปิดใช้งาน กรุณาสร้างโกดังก่อน</p>';
+                    return;
+                }
+                
+                const response = await fetch(`${API_URL}/products/${productId}/warehouse-stock`);
+                if (response.ok) {
+                    warehouseStockData = await response.json();
+                    renderWarehouseStockTable();
+                }
+            } catch (error) {
+                console.error('Error loading warehouse stock:', error);
+            }
+        }
+        
+        function renderWarehouseStockTable() {
+            const container = document.getElementById('warehouse-stock-container');
+            
+            if (warehouseStockData.length === 0 || warehousesList.length === 0) {
+                container.innerHTML = '<p style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">รอสร้าง SKU ก่อนจึงจะกำหนดสต็อกตามโกดังได้</p>';
+                return;
+            }
+            
+            let html = `
+                <div style="overflow-x: auto;">
+                    <table class="variants-table" id="warehouse-stock-table">
+                        <thead>
+                            <tr>
+                                <th>SKU Code</th>
+                                ${warehousesList.map(w => `<th>${w.name}</th>`).join('')}
+                                <th style="background: rgba(59,130,246,0.2);">สต็อกรวม</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            warehouseStockData.forEach(sku => {
+                html += '<tr>';
+                html += `<td style="font-weight: 500;">${sku.sku_code}</td>`;
+                
+                let totalStock = 0;
+                warehousesList.forEach(warehouse => {
+                    const warehouseData = sku.warehouses.find(w => w.warehouse_id === warehouse.id);
+                    const stock = warehouseData ? warehouseData.stock : 0;
+                    totalStock += stock;
+                    
+                    html += `
+                        <td>
+                            <input type="number" 
+                                   class="warehouse-stock-input form-input" 
+                                   data-sku-id="${sku.sku_id}" 
+                                   data-warehouse-id="${warehouse.id}"
+                                   value="${stock}" 
+                                   min="0" 
+                                   style="width: 80px; text-align: center;"
+                                   onchange="updateWarehouseStockTotal(${sku.sku_id})">
+                        </td>
+                    `;
+                });
+                
+                html += `<td style="background: rgba(59,130,246,0.1); font-weight: 600;" id="total-stock-${sku.sku_id}">${totalStock}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            
+            document.getElementById('warehouse-stock-section').style.display = 'block';
+        }
+        
+        function updateWarehouseStockTotal(skuId) {
+            const inputs = document.querySelectorAll(`.warehouse-stock-input[data-sku-id="${skuId}"]`);
+            let total = 0;
+            inputs.forEach(input => {
+                total += parseInt(input.value) || 0;
+            });
+            const totalCell = document.getElementById(`total-stock-${skuId}`);
+            if (totalCell) totalCell.textContent = total;
+        }
+        
+        function collectWarehouseStockData() {
+            const stocks = [];
+            const inputs = document.querySelectorAll('.warehouse-stock-input');
+            inputs.forEach(input => {
+                stocks.push({
+                    sku_id: parseInt(input.dataset.skuId),
+                    warehouse_id: parseInt(input.dataset.warehouseId),
+                    stock: parseInt(input.value) || 0
+                });
+            });
+            return stocks;
+        }
+        
+        async function saveWarehouseStock() {
+            const stocks = collectWarehouseStockData();
+            if (stocks.length === 0) return true;
+            
+            try {
+                const response = await fetch(`${API_URL}/products/${productId}/warehouse-stock`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stocks })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save warehouse stock');
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving warehouse stock:', error);
+                throw error;
+            }
+        }
+
         // Load existing product data
         async function loadProductData() {
             try {
@@ -1980,7 +2134,10 @@
                 if (product.skus && product.skus.length > 0) {
                     setTimeout(() => {
                         populateExistingSkus(product.skus);
+                        loadWarehouseStock();
                     }, 500);
+                } else {
+                    loadWarehouseStock();
                 }
                 
             } catch (error) {
