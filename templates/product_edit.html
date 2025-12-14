@@ -883,8 +883,9 @@
             try {
                 const response = await fetch(`${API_URL}/admin/warehouses`);
                 if (!response.ok) throw new Error('Failed to load warehouses');
-                warehousesList = await response.json();
-                console.log('Loaded', warehousesList.length, 'warehouses');
+                const allWarehouses = await response.json();
+                warehousesList = allWarehouses.filter(w => w.is_active);
+                console.log('Loaded', warehousesList.length, 'active warehouses');
             } catch (error) {
                 console.error('Error loading warehouses:', error);
                 warehousesList = [];
@@ -1943,19 +1944,6 @@
 
         // ==================== WAREHOUSE STOCK MANAGEMENT ====================
         let warehouseStockData = [];
-        let warehousesList = [];
-        
-        async function loadWarehouses() {
-            try {
-                const response = await fetch('/api/admin/warehouses');
-                if (response.ok) {
-                    warehousesList = await response.json();
-                    warehousesList = warehousesList.filter(w => w.is_active);
-                }
-            } catch (error) {
-                console.error('Error loading warehouses:', error);
-            }
-        }
         
         async function loadWarehouseStock() {
             try {
