@@ -1420,8 +1420,8 @@ async function saveAllPrices() {
     }
 }
 
-// Open Edit Stock Modal
-function openEditStockModal(productId) {
+// Open Edit Stock Modal - with warehouse support
+async function openEditStockModal(productId) {
     const product = allProducts.find(p => p.id === productId);
     if (!product) return;
     
@@ -1429,41 +1429,66 @@ function openEditStockModal(productId) {
     const modal = document.getElementById('editStockModal');
     const skuList = document.getElementById('stockModalSkuList');
     
-    // Render SKU list
-    skuList.innerHTML = '';
+    skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">กำลังโหลด...</div>';
+    modal.classList.add('active');
     
-    if (!product.skus || product.skus.length === 0) {
-        skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">ไม่มี SKU สำหรับสินค้านี้</div>';
-    } else {
-        product.skus.forEach(sku => {
-            const itemHtml = `
-                <div class="modal-sku-item" data-sku-id="${sku.id}">
+    try {
+        const response = await fetch(`${API_URL}/admin/products/${productId}/warehouse-stock`);
+        if (!response.ok) throw new Error('Failed to load warehouse stock');
+        const warehouseStockData = await response.json();
+        
+        if (!warehouseStockData || warehouseStockData.length === 0) {
+            skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">ไม่มี SKU สำหรับสินค้านี้</div>';
+            return;
+        }
+        
+        let html = '';
+        warehouseStockData.forEach(skuData => {
+            const sku = product.skus?.find(s => s.id === skuData.sku_id);
+            const variantName = sku?.variant_name || '';
+            
+            let warehouseInputsHtml = '';
+            if (skuData.warehouses && skuData.warehouses.length > 0) {
+                skuData.warehouses.forEach(wh => {
+                    warehouseInputsHtml += `
+                        <div class="warehouse-stock-row" style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="flex: 1; font-size: 12px; color: rgba(255,255,255,0.7);">${escapeHtml(wh.warehouse_name)}</span>
+                            <input type="number" class="modal-sku-input warehouse-stock-input" 
+                                   data-sku-id="${skuData.sku_id}" 
+                                   data-warehouse-id="${wh.warehouse_id}"
+                                   value="${wh.stock || 0}" 
+                                   min="0" step="1"
+                                   style="width: 80px;">
+                        </div>
+                    `;
+                });
+            } else {
+                warehouseInputsHtml = '<div style="font-size: 12px; color: rgba(255,255,255,0.5);">ไม่มีโกดัง</div>';
+            }
+            
+            html += `
+                <div class="modal-sku-item" data-sku-id="${skuData.sku_id}">
                     <div class="modal-sku-image-placeholder">📦</div>
                     <div class="modal-sku-info">
-                        <div class="modal-sku-name">${product.name}${sku.variant_name ? ',' + sku.variant_name : ''}</div>
-                        <div class="modal-sku-code">Seller SKU: ${sku.sku_code || '-'}</div>
+                        <div class="modal-sku-name">${escapeHtml(product.name)}${variantName ? ', ' + escapeHtml(variantName) : ''}</div>
+                        <div class="modal-sku-code">SKU: ${escapeHtml(skuData.sku_code || '-')} | รวม: ${skuData.total_stock || 0}</div>
                     </div>
-                    <div class="modal-sku-inputs">
-                        <div class="modal-sku-input-group">
-                            <label>สินค้าพร้อมส่ง</label>
-                            <input type="number" class="modal-sku-input sku-stock-input" 
-                                   data-sku-id="${sku.id}" 
-                                   value="${sku.stock || 0}" 
-                                   min="0" step="1">
-                        </div>
+                    <div class="modal-sku-inputs" style="min-width: 200px;">
+                        ${warehouseInputsHtml}
                     </div>
                 </div>
             `;
-            skuList.innerHTML += itemHtml;
         });
+        
+        skuList.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading warehouse stock:', error);
+        skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
     }
     
-    // Setup search filter
     const searchInput = document.getElementById('stockModalSearch');
     searchInput.value = '';
     searchInput.oninput = () => filterModalSkus('stockModalSkuList', searchInput.value);
-    
-    modal.classList.add('active');
 }
 
 // Close Edit Stock Modal
@@ -1473,46 +1498,47 @@ function closeEditStockModal() {
     currentEditingProduct = null;
 }
 
-// Save all stock
+// Save all stock - with warehouse support
 async function saveAllStock() {
-    const inputs = document.querySelectorAll('#stockModalSkuList .sku-stock-input');
-    const updates = [];
+    if (!currentEditingProduct) {
+        closeEditStockModal();
+        return;
+    }
+    
+    const inputs = document.querySelectorAll('#stockModalSkuList .warehouse-stock-input');
+    const stocks = [];
     
     inputs.forEach(input => {
-        const skuId = input.dataset.skuId;
+        const skuId = parseInt(input.dataset.skuId);
+        const warehouseId = parseInt(input.dataset.warehouseId);
         const stockVal = parseInt(input.value);
         const stock = isNaN(stockVal) || stockVal < 0 ? 0 : stockVal;
-        updates.push({ skuId, stock });
+        stocks.push({ sku_id: skuId, warehouse_id: warehouseId, stock });
     });
     
-    if (updates.length === 0) {
+    if (stocks.length === 0) {
         closeEditStockModal();
         return;
     }
     
     try {
-        const results = await Promise.all(updates.map(async u => {
-            const response = await fetch(`${API_URL}/skus/${u.skuId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock: u.stock })
-            });
-            return response.ok;
-        }));
+        const response = await fetch(`${API_URL}/admin/products/${currentEditingProduct.id}/warehouse-stock`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stocks })
+        });
         
-        const failedCount = results.filter(r => !r).length;
-        
-        if (failedCount === 0) {
-            showAlert('บันทึกสต็อกสำเร็จ', 'success');
-        } else {
-            showAlert(`บันทึกสำเร็จ ${results.length - failedCount}/${results.length} รายการ`, 'error');
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save stock');
         }
         
+        showAlert('บันทึกสต็อกสำเร็จ', 'success');
         closeEditStockModal();
         await loadProducts();
     } catch (error) {
         console.error('Error saving stock:', error);
-        showAlert('เกิดข้อผิดพลาดในการบันทึกสต็อก', 'error');
+        showAlert(error.message || 'เกิดข้อผิดพลาดในการบันทึกสต็อก', 'error');
     }
 }
 
@@ -3015,9 +3041,10 @@ function renderBrandSalesGrid(brands) {
 
 async function loadWarehousesPage() {
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses`, { credentials: 'include' });
+        const response = await fetch(`${API_URL}/admin/warehouses`);
         if (!response.ok) throw new Error('Failed to load warehouses');
         const warehouses = await response.json();
+        console.log('Loaded', warehouses.length, 'warehouses');
         
         const tbody = document.getElementById('warehousesTableBody');
         const countEl = document.getElementById('warehouseCount');
@@ -3092,7 +3119,6 @@ async function handleWarehouseSubmit(event) {
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify(data)
         });
         
@@ -3112,7 +3138,7 @@ async function handleWarehouseSubmit(event) {
 
 async function editWarehouse(id) {
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { credentials: 'include' });
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`);
         if (!response.ok) throw new Error('Failed to load warehouse');
         const w = await response.json();
         
@@ -3138,7 +3164,7 @@ async function deleteWarehouse(id, name) {
     if (!confirm(`คุณต้องการลบโกดัง "${name}" ใช่หรือไม่?`)) return;
     
     try {
-        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { method: 'DELETE', credentials: 'include' });
+        const response = await fetch(`${API_URL}/admin/warehouses/${id}`, { method: 'DELETE' });
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || 'Failed to delete warehouse');
