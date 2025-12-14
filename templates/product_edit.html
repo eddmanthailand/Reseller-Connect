@@ -2069,6 +2069,9 @@
         // Load existing product data
         async function loadProductData() {
             try {
+                // Ensure warehouses are loaded first
+                await loadWarehouses();
+                
                 const response = await fetch(`${API_URL}/products/${productId}`);
                 
                 if (!response.ok) {
