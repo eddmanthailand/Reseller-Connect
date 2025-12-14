@@ -1335,6 +1335,18 @@ def create_product():
             
             sku_id = cursor.fetchone()['id']
             
+            # Insert warehouse stock if provided
+            warehouse_stock = sku_data.get('warehouse_stock', [])
+            for wh_stock in warehouse_stock:
+                warehouse_id = wh_stock.get('warehouse_id')
+                stock_amount = wh_stock.get('stock', 0)
+                if warehouse_id is not None:
+                    cursor.execute('''
+                        INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = EXCLUDED.stock
+                    ''', (sku_id, warehouse_id, stock_amount))
+            
             # Map SKU to option values
             for value_id in sku_data.get('option_value_ids', []):
                 cursor.execute('''
