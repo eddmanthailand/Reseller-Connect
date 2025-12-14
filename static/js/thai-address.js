@@ -9473,3 +9473,102 @@ function getPostalCode(province, district, subdistrict) {
     if (!districtData) return '';
     return districtData[subdistrict] || '';
 }
+
+function initWarehouseAddressCascade() {
+    const provinceEl = document.getElementById('warehouseProvince');
+    const districtEl = document.getElementById('warehouseDistrict');
+    const subdistrictEl = document.getElementById('warehouseSubdistrict');
+    const postalCodeEl = document.getElementById('warehousePostalCode');
+    
+    if (!provinceEl || !districtEl || !subdistrictEl || !postalCodeEl) return;
+    
+    // Populate provinces
+    const provinces = getProvinces();
+    provinceEl.innerHTML = '<option value="">-- เลือกจังหวัด --</option>';
+    provinces.forEach(prov => {
+        provinceEl.innerHTML += `<option value="${prov}">${prov}</option>`;
+    });
+    
+    // Province change handler
+    provinceEl.addEventListener('change', function() {
+        const province = this.value;
+        districtEl.innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+        subdistrictEl.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+        postalCodeEl.value = '';
+        
+        if (province) {
+            const districts = getDistricts(province);
+            districts.forEach(dist => {
+                districtEl.innerHTML += `<option value="${dist}">${dist}</option>`;
+            });
+        }
+    });
+    
+    // District change handler
+    districtEl.addEventListener('change', function() {
+        const province = provinceEl.value;
+        const district = this.value;
+        subdistrictEl.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+        postalCodeEl.value = '';
+        
+        if (province && district) {
+            const subdistricts = getSubdistricts(province, district);
+            subdistricts.forEach(sub => {
+                subdistrictEl.innerHTML += `<option value="${sub}">${sub}</option>`;
+            });
+        }
+    });
+    
+    // Subdistrict change handler - auto-fill postal code
+    subdistrictEl.addEventListener('change', function() {
+        const province = provinceEl.value;
+        const district = districtEl.value;
+        const subdistrict = this.value;
+        
+        if (province && district && subdistrict) {
+            postalCodeEl.value = getPostalCode(province, district, subdistrict);
+        } else {
+            postalCodeEl.value = '';
+        }
+    });
+}
+
+function populateWarehouseAddressFields(province, district, subdistrict, postalCode) {
+    const provinceEl = document.getElementById('warehouseProvince');
+    const districtEl = document.getElementById('warehouseDistrict');
+    const subdistrictEl = document.getElementById('warehouseSubdistrict');
+    const postalCodeEl = document.getElementById('warehousePostalCode');
+    
+    if (!provinceEl) return;
+    
+    // Set province and trigger district population
+    if (province) {
+        provinceEl.value = province;
+        
+        // Populate districts
+        districtEl.innerHTML = '<option value="">-- เลือกเขต/อำเภอ --</option>';
+        const districts = getDistricts(province);
+        districts.forEach(dist => {
+            districtEl.innerHTML += `<option value="${dist}">${dist}</option>`;
+        });
+        
+        if (district) {
+            districtEl.value = district;
+            
+            // Populate subdistricts
+            subdistrictEl.innerHTML = '<option value="">-- เลือกแขวง/ตำบล --</option>';
+            const subdistricts = getSubdistricts(province, district);
+            subdistricts.forEach(sub => {
+                subdistrictEl.innerHTML += `<option value="${sub}">${sub}</option>`;
+            });
+            
+            if (subdistrict) {
+                subdistrictEl.value = subdistrict;
+            }
+        }
+    }
+    
+    if (postalCode) {
+        postalCodeEl.value = postalCode;
+    }
+}
