@@ -41,6 +41,8 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Sales History & Brand Sales Analytics:** Sales history table with advanced filters (date range, channel, status, keyword), summary stats. Brand sales grid with revenue, items, orders per brand.
 - **Customer Database (Reseller):** Resellers can manage their own customer database for direct shipping with reseller branding. Full CRUD for customers with shipping info (name, phone, email, address, province, district, subdistrict, postal_code).
 - **Reseller Profile Management:** Resellers can edit their shipping information and brand name for label printing.
+- **Warehouse Management:** Full CRUD for warehouses (name, address, contact info). Multi-warehouse stock tracking per SKU via `sku_warehouse_stock` table.
+- **Order Shipment System:** Automatic shipment splitting by warehouse during order creation. Each shipment tracks warehouse source, tracking number, shipping provider, and status (pending/shipped/delivered).
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -61,6 +63,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Tier Pricing:** `product_tier_pricing`.
 - **Order Settings:** `order_number_settings`.
 - **Reseller Customer Database:** `reseller_customers` (with `reseller_id`, `full_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `notes`).
+- **Warehouse System:** `warehouses` (id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active), `sku_warehouse_stock` (sku_id, warehouse_id, stock), `order_shipments` (order_id, warehouse_id, tracking_number, shipping_provider, status, shipped_at, delivered_at), `order_shipment_items` (shipment_id, order_item_id, quantity).
 
 ## External Dependencies
 
