@@ -637,6 +637,24 @@
                             <textarea id="product_description" class="form-input" rows="3" placeholder="รายละเอียดสินค้า..."></textarea>
                         </div>
                         
+                        <!-- Warehouse Selection -->
+                        <div style="margin-top: 16px;">
+                            <label class="form-label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; color: #22c55e;">
+                                    <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
+                                    <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
+                                    <path d="M12 3v6"/>
+                                </svg>
+                                โกดังสำหรับสินค้านี้
+                            </label>
+                            <select id="default_warehouse_id" class="form-input" style="cursor: pointer;">
+                                <option value="">-- เลือกโกดัง (ไม่บังคับ) --</option>
+                            </select>
+                            <p style="margin-top: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.6);">
+                                เลือกโกดังที่จัดเก็บสินค้านี้ SKU ทั้งหมดจะใช้โกดังเดียวกัน
+                            </p>
+                        </div>
+                        
                         <!-- Shipping Info Section -->
                         <div style="margin-top: 24px; padding: 20px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
                             <h3 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); display: flex; align-items: center; gap: 8px;">
@@ -878,7 +896,7 @@
         // Load current user
         loadCurrentUser();
         
-        // Load warehouses for stock inputs
+        // Load warehouses for stock inputs and dropdown
         async function loadWarehouses() {
             try {
                 const response = await fetch(`${API_URL}/admin/warehouses`);
@@ -886,12 +904,23 @@
                 const allWarehouses = await response.json();
                 warehousesList = allWarehouses.filter(w => w.is_active);
                 console.log('Loaded', warehousesList.length, 'active warehouses');
+                
+                // Populate warehouse dropdown
+                const warehouseSelect = document.getElementById('default_warehouse_id');
+                if (warehouseSelect) {
+                    warehouseSelect.innerHTML = '<option value="">-- เลือกโกดัง (ไม่บังคับ) --</option>';
+                    warehousesList.forEach(wh => {
+                        const option = document.createElement('option');
+                        option.value = wh.id;
+                        option.textContent = wh.name;
+                        warehouseSelect.appendChild(option);
+                    });
+                }
             } catch (error) {
                 console.error('Error loading warehouses:', error);
                 warehousesList = [];
             }
         }
-        loadWarehouses();
         
         function escapeHtml(text) {
             if (!text) return '';
