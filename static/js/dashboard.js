@@ -3410,10 +3410,14 @@ async function loadTransferHistory() {
 
 let adjustSkuData = null;
 let adjustSearchTimeout = null;
+let bulkRowId = 1;
+let bulkSearchTimeouts = {};
+let bulkSkuCache = {};
 
 async function loadStockAdjustmentPage() {
-    await loadWarehouseDropdowns('adjust');
+    await loadWarehouseDropdowns('bulk');
     loadAdjustmentHistory();
+    updateBulkAdjustSummary();
 }
 
 function searchSkuForAdjust(keyword) {
@@ -3536,11 +3540,237 @@ async function handleStockAdjustment(event) {
 }
 
 function resetAdjustmentForm() {
-    document.getElementById('stockAdjustmentForm').reset();
-    document.getElementById('adjustSkuId').value = '';
-    document.getElementById('adjustSkuInfo').style.display = 'none';
-    document.getElementById('adjustWarehouseStock').style.display = 'none';
+    const form = document.getElementById('stockAdjustmentForm');
+    if (form) {
+        form.reset();
+        const skuId = document.getElementById('adjustSkuId');
+        if (skuId) skuId.value = '';
+        const skuInfo = document.getElementById('adjustSkuInfo');
+        if (skuInfo) skuInfo.style.display = 'none';
+        const stockInfo = document.getElementById('adjustWarehouseStock');
+        if (stockInfo) stockInfo.style.display = 'none';
+    }
     adjustSkuData = null;
+}
+
+// ==================== BULK ADJUSTMENT FUNCTIONS ====================
+
+function addBulkAdjustmentRow() {
+    bulkRowId++;
+    const tbody = document.getElementById('bulkAdjustmentRows');
+    const newRow = document.createElement('tr');
+    newRow.className = 'bulk-adjust-row';
+    newRow.setAttribute('data-row-id', bulkRowId);
+    newRow.innerHTML = `
+        <td style="position: relative;">
+            <input type="text" class="form-input bulk-sku-search" placeholder="พิมพ์ค้นหา SKU / ชื่อสินค้า" oninput="searchSkuForBulkAdjust(this, ${bulkRowId})">
+            <div class="bulk-sku-results" style="display: none;"></div>
+            <input type="hidden" class="bulk-sku-id">
+            <div class="bulk-sku-name" style="font-size: 11px; color: #aaa; margin-top: 2px;"></div>
+        </td>
+        <td class="bulk-current-stock" style="text-align: center; color: #888;">-</td>
+        <td>
+            <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="text-align: center;">
+        </td>
+        <td style="text-align: center;">
+            <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(${bulkRowId})" title="ลบรายการ">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                </svg>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(newRow);
+    updateBulkAdjustSummary();
+}
+
+function removeBulkAdjustmentRow(rowId) {
+    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    if (row) {
+        const tbody = document.getElementById('bulkAdjustmentRows');
+        if (tbody.children.length > 1) {
+            row.remove();
+        } else {
+            row.querySelector('.bulk-sku-search').value = '';
+            row.querySelector('.bulk-sku-id').value = '';
+            row.querySelector('.bulk-sku-name').textContent = '';
+            row.querySelector('.bulk-current-stock').textContent = '-';
+            row.querySelector('.bulk-quantity').value = '';
+        }
+        delete bulkSkuCache[rowId];
+    }
+    updateBulkAdjustSummary();
+}
+
+function searchSkuForBulkAdjust(input, rowId) {
+    const keyword = input.value.trim();
+    clearTimeout(bulkSearchTimeouts[rowId]);
+    
+    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    const resultsDiv = row.querySelector('.bulk-sku-results');
+    
+    if (!keyword || keyword.length < 1) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    bulkSearchTimeouts[rowId] = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
+            if (!response.ok) throw new Error('Failed to search SKUs');
+            const skus = await response.json();
+            
+            if (skus.length === 0) {
+                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6;">ไม่พบ SKU</div>';
+            } else {
+                resultsDiv.innerHTML = skus.slice(0, 10).map(s => `
+                    <div class="sku-result-item" onclick="selectBulkSku(${rowId}, ${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}', ${s.total_stock})">
+                        <strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}
+                        <span class="stock-badge">สต็อก: ${s.total_stock}</span>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching SKUs:', error);
+        }
+    }, 200);
+}
+
+async function selectBulkSku(rowId, skuId, skuCode, productName, totalStock) {
+    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    if (!row) return;
+    
+    row.querySelector('.bulk-sku-search').value = skuCode;
+    row.querySelector('.bulk-sku-id').value = skuId;
+    row.querySelector('.bulk-sku-name').textContent = productName;
+    row.querySelector('.bulk-sku-results').style.display = 'none';
+    
+    const warehouseId = document.getElementById('bulkWarehouse').value;
+    
+    if (warehouseId) {
+        try {
+            const response = await fetch(`${API_URL}/admin/skus/${skuId}/warehouse-stock`);
+            if (response.ok) {
+                const data = await response.json();
+                bulkSkuCache[rowId] = data;
+                const warehouse = data.warehouses?.find(w => w.warehouse_id == warehouseId);
+                const stock = warehouse ? warehouse.stock : 0;
+                row.querySelector('.bulk-current-stock').textContent = stock;
+            }
+        } catch (error) {
+            row.querySelector('.bulk-current-stock').textContent = totalStock;
+        }
+    } else {
+        row.querySelector('.bulk-current-stock').textContent = totalStock;
+    }
+    
+    updateBulkAdjustSummary();
+}
+
+function updateBulkAdjustSummary() {
+    const rows = document.querySelectorAll('.bulk-adjust-row');
+    let count = 0;
+    rows.forEach(row => {
+        const skuId = row.querySelector('.bulk-sku-id')?.value;
+        if (skuId) count++;
+    });
+    const summary = document.getElementById('bulkAdjustSummary');
+    if (summary) {
+        summary.textContent = `รายการที่เลือก: ${count} SKU`;
+    }
+}
+
+async function handleBulkAdjustment(event) {
+    event.preventDefault();
+    
+    const warehouseId = parseInt(document.getElementById('bulkWarehouse').value);
+    const adjustType = document.getElementById('bulkAdjustType').value;
+    const notes = document.getElementById('bulkAdjustNotes').value.trim();
+    
+    if (!warehouseId) {
+        showGlobalAlert('กรุณาเลือกโกดัง', 'error');
+        return;
+    }
+    if (!adjustType) {
+        showGlobalAlert('กรุณาเลือกประเภทการปรับ', 'error');
+        return;
+    }
+    
+    const rows = document.querySelectorAll('.bulk-adjust-row');
+    const adjustments = [];
+    
+    rows.forEach(row => {
+        const skuId = parseInt(row.querySelector('.bulk-sku-id')?.value);
+        const quantity = parseInt(row.querySelector('.bulk-quantity')?.value);
+        if (skuId && quantity && quantity > 0) {
+            adjustments.push({ sku_id: skuId, quantity: quantity });
+        }
+    });
+    
+    if (adjustments.length === 0) {
+        showGlobalAlert('กรุณาเลือก SKU และระบุจำนวนอย่างน้อย 1 รายการ', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock-adjustments/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                warehouse_id: warehouseId,
+                adjustment_type: adjustType,
+                notes: notes,
+                adjustments: adjustments
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to adjust stock');
+        }
+        
+        const result = await response.json();
+        showGlobalAlert(`ปรับสต็อกเรียบร้อย ${result.success_count} รายการ`, 'success');
+        resetBulkAdjustmentForm();
+        loadAdjustmentHistory();
+    } catch (error) {
+        console.error('Error bulk adjusting stock:', error);
+        showGlobalAlert(error.message || 'ไม่สามารถปรับสต็อกได้', 'error');
+    }
+}
+
+function resetBulkAdjustmentForm() {
+    document.getElementById('bulkAdjustmentForm').reset();
+    const tbody = document.getElementById('bulkAdjustmentRows');
+    tbody.innerHTML = `
+        <tr class="bulk-adjust-row" data-row-id="1">
+            <td style="position: relative;">
+                <input type="text" class="form-input bulk-sku-search" placeholder="พิมพ์ค้นหา SKU / ชื่อสินค้า" oninput="searchSkuForBulkAdjust(this, 1)">
+                <div class="bulk-sku-results" style="display: none;"></div>
+                <input type="hidden" class="bulk-sku-id">
+                <div class="bulk-sku-name" style="font-size: 11px; color: #aaa; margin-top: 2px;"></div>
+            </td>
+            <td class="bulk-current-stock" style="text-align: center; color: #888;">-</td>
+            <td>
+                <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="text-align: center;">
+            </td>
+            <td style="text-align: center;">
+                <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(1)" title="ลบรายการ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </td>
+        </tr>
+    `;
+    bulkRowId = 1;
+    bulkSkuCache = {};
+    updateBulkAdjustSummary();
 }
 
 const ADJUSTMENT_TYPE_LABELS = {

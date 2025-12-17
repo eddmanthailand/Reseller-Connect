@@ -6855,6 +6855,124 @@ def create_stock_adjustment():
         if conn:
             conn.close()
 
+@app.route('/api/admin/stock-adjustments/bulk', methods=['POST'])
+@admin_required
+def create_bulk_stock_adjustment():
+    """Create multiple stock adjustments at once"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    required = ['warehouse_id', 'adjustment_type', 'adjustments']
+    for field in required:
+        if field not in data:
+            return jsonify({'error': f'{field} is required'}), 400
+    
+    if not data['adjustments'] or len(data['adjustments']) == 0:
+        return jsonify({'error': 'At least one adjustment is required'}), 400
+    
+    adjustment_type = data['adjustment_type']
+    if adjustment_type not in ADJUSTMENT_TYPES:
+        return jsonify({'error': 'Invalid adjustment type'}), 400
+    
+    direction = ADJUSTMENT_TYPES[adjustment_type]['direction']
+    warehouse_id = data['warehouse_id']
+    notes = data.get('notes', '')
+    user_id = session.get('user_id')
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        success_count = 0
+        errors = []
+        
+        for adj in data['adjustments']:
+            sku_id = adj.get('sku_id')
+            quantity = adj.get('quantity', 0)
+            
+            if not sku_id or quantity <= 0:
+                errors.append({'sku_id': sku_id, 'error': 'Invalid data'})
+                continue
+            
+            quantity_change = quantity if direction == 'increase' else -quantity
+            
+            cursor.execute('''
+                SELECT COALESCE(sws.stock, 0) as stock FROM sku_warehouse_stock sws
+                WHERE sws.sku_id = %s AND sws.warehouse_id = %s
+            ''', (sku_id, warehouse_id))
+            stock_row = cursor.fetchone()
+            current_stock = stock_row['stock'] if stock_row else 0
+            
+            new_stock = current_stock + quantity_change
+            if new_stock < 0:
+                errors.append({'sku_id': sku_id, 'error': f'Insufficient stock. Available: {current_stock}'})
+                continue
+            
+            if direction == 'decrease':
+                cursor.execute('''
+                    UPDATE sku_warehouse_stock 
+                    SET stock = stock + %s
+                    WHERE sku_id = %s AND warehouse_id = %s
+                ''', (quantity_change, sku_id, warehouse_id))
+            else:
+                cursor.execute('''
+                    INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (sku_id, warehouse_id) 
+                    DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+                ''', (sku_id, warehouse_id, quantity))
+            
+            sales_channel = None
+            if adjustment_type.endswith('_sale'):
+                sales_channel = adjustment_type.replace('_sale', '')
+            
+            cursor.execute('''
+                INSERT INTO stock_adjustments (sku_id, warehouse_id, quantity_change, adjustment_type, sales_channel, notes, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (sku_id, warehouse_id, quantity_change, adjustment_type, 
+                  sales_channel, notes, user_id))
+            adjustment_id = cursor.fetchone()['id']
+            
+            cursor.execute('''
+                INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, 
+                                             change_type, reference_id, reference_type, notes, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (sku_id, warehouse_id, current_stock, new_stock,
+                  adjustment_type, adjustment_id, 'stock_adjustment', 
+                  notes, user_id))
+            
+            cursor.execute('''
+                UPDATE skus SET stock = (
+                    SELECT COALESCE(SUM(sws.stock), 0) 
+                    FROM sku_warehouse_stock sws 
+                    WHERE sws.sku_id = skus.id
+                )
+                WHERE id = %s
+            ''', (sku_id,))
+            
+            success_count += 1
+        
+        conn.commit()
+        return jsonify({
+            'message': 'Bulk stock adjustment completed', 
+            'success_count': success_count,
+            'errors': errors
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== STOCK AUDIT LOG ROUTES ====================
 
 @app.route('/api/admin/stock-audit-log', methods=['GET'])
