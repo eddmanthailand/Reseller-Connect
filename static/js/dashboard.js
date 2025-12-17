@@ -3557,40 +3557,46 @@ function resetAdjustmentForm() {
 
 function addBulkAdjustmentRow() {
     bulkRowId++;
-    const tbody = document.getElementById('bulkAdjustmentRows');
-    const newRow = document.createElement('tr');
-    newRow.className = 'bulk-adjust-row';
+    const container = document.getElementById('bulkSkuContainer');
+    const newRow = document.createElement('div');
+    newRow.className = 'bulk-sku-row';
     newRow.setAttribute('data-row-id', bulkRowId);
+    newRow.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 140px 50px; gap: 12px; align-items: start; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 12px;';
     newRow.innerHTML = `
-        <td style="position: relative;">
-            <input type="text" class="form-input bulk-sku-search" placeholder="พิมพ์ค้นหา SKU / ชื่อสินค้า" oninput="searchSkuForBulkAdjust(this, ${bulkRowId})">
-            <div class="bulk-sku-results" style="display: none;"></div>
+        <div style="position: relative;">
+            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
+            <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, ${bulkRowId})">
+            <div class="bulk-sku-results"></div>
             <input type="hidden" class="bulk-sku-id">
-            <div class="bulk-sku-name" style="font-size: 11px; color: #aaa; margin-top: 2px;"></div>
-        </td>
-        <td class="bulk-current-stock" style="text-align: center; color: #888;">-</td>
-        <td>
-            <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="text-align: center;">
-        </td>
-        <td style="text-align: center;">
-            <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(${bulkRowId})" title="ลบรายการ">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">สต็อกปัจจุบัน</label>
+            <div class="bulk-current-stock" style="padding: 12px; font-size: 14px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวนที่ปรับ *</label>
+            <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 14px; text-align: center;">
+        </div>
+        <div style="padding-top: 28px;">
+            <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(${bulkRowId})" title="ลบรายการ" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 6h18"></path>
                     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                 </svg>
             </button>
-        </td>
+        </div>
     `;
-    tbody.appendChild(newRow);
+    container.appendChild(newRow);
     updateBulkAdjustSummary();
 }
 
 function removeBulkAdjustmentRow(rowId) {
-    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    const row = document.querySelector(`.bulk-sku-row[data-row-id="${rowId}"]`);
     if (row) {
-        const tbody = document.getElementById('bulkAdjustmentRows');
-        if (tbody.children.length > 1) {
+        const container = document.getElementById('bulkSkuContainer');
+        if (container.children.length > 1) {
             row.remove();
         } else {
             row.querySelector('.bulk-sku-search').value = '';
@@ -3608,11 +3614,11 @@ function searchSkuForBulkAdjust(input, rowId) {
     const keyword = input.value.trim();
     clearTimeout(bulkSearchTimeouts[rowId]);
     
-    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    const row = document.querySelector(`.bulk-sku-row[data-row-id="${rowId}"]`);
     const resultsDiv = row.querySelector('.bulk-sku-results');
     
     if (!keyword || keyword.length < 1) {
-        resultsDiv.style.display = 'none';
+        resultsDiv.classList.remove('show');
         return;
     }
     
@@ -3623,16 +3629,16 @@ function searchSkuForBulkAdjust(input, rowId) {
             const skus = await response.json();
             
             if (skus.length === 0) {
-                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6;">ไม่พบ SKU</div>';
+                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6; justify-content: center;">ไม่พบ SKU</div>';
             } else {
                 resultsDiv.innerHTML = skus.slice(0, 10).map(s => `
                     <div class="sku-result-item" onclick="selectBulkSku(${rowId}, ${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}', ${s.total_stock})">
-                        <strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}
+                        <div><strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}</div>
                         <span class="stock-badge">สต็อก: ${s.total_stock}</span>
                     </div>
                 `).join('');
             }
-            resultsDiv.style.display = 'block';
+            resultsDiv.classList.add('show');
         } catch (error) {
             console.error('Error searching SKUs:', error);
         }
@@ -3640,13 +3646,13 @@ function searchSkuForBulkAdjust(input, rowId) {
 }
 
 async function selectBulkSku(rowId, skuId, skuCode, productName, totalStock) {
-    const row = document.querySelector(`tr[data-row-id="${rowId}"]`);
+    const row = document.querySelector(`.bulk-sku-row[data-row-id="${rowId}"]`);
     if (!row) return;
     
     row.querySelector('.bulk-sku-search').value = skuCode;
     row.querySelector('.bulk-sku-id').value = skuId;
     row.querySelector('.bulk-sku-name').textContent = productName;
-    row.querySelector('.bulk-sku-results').style.display = 'none';
+    row.querySelector('.bulk-sku-results').classList.remove('show');
     
     const warehouseId = document.getElementById('bulkWarehouse').value;
     
@@ -3671,7 +3677,7 @@ async function selectBulkSku(rowId, skuId, skuCode, productName, totalStock) {
 }
 
 function updateBulkAdjustSummary() {
-    const rows = document.querySelectorAll('.bulk-adjust-row');
+    const rows = document.querySelectorAll('.bulk-sku-row');
     let count = 0;
     rows.forEach(row => {
         const skuId = row.querySelector('.bulk-sku-id')?.value;
@@ -3699,7 +3705,7 @@ async function handleBulkAdjustment(event) {
         return;
     }
     
-    const rows = document.querySelectorAll('.bulk-adjust-row');
+    const rows = document.querySelectorAll('.bulk-sku-row');
     const adjustments = [];
     
     rows.forEach(row => {
@@ -3744,29 +3750,34 @@ async function handleBulkAdjustment(event) {
 
 function resetBulkAdjustmentForm() {
     document.getElementById('bulkAdjustmentForm').reset();
-    const tbody = document.getElementById('bulkAdjustmentRows');
-    tbody.innerHTML = `
-        <tr class="bulk-adjust-row" data-row-id="1">
-            <td style="position: relative;">
-                <input type="text" class="form-input bulk-sku-search" placeholder="พิมพ์ค้นหา SKU / ชื่อสินค้า" oninput="searchSkuForBulkAdjust(this, 1)">
-                <div class="bulk-sku-results" style="display: none;"></div>
+    const container = document.getElementById('bulkSkuContainer');
+    container.innerHTML = `
+        <div class="bulk-sku-row" data-row-id="1" style="display: grid; grid-template-columns: 1fr 120px 140px 50px; gap: 12px; align-items: start; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 12px;">
+            <div style="position: relative;">
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
+                <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, 1)">
+                <div class="bulk-sku-results"></div>
                 <input type="hidden" class="bulk-sku-id">
-                <div class="bulk-sku-name" style="font-size: 11px; color: #aaa; margin-top: 2px;"></div>
-            </td>
-            <td class="bulk-current-stock" style="text-align: center; color: #888;">-</td>
-            <td>
-                <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="text-align: center;">
-            </td>
-            <td style="text-align: center;">
-                <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(1)" title="ลบรายการ">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">สต็อกปัจจุบัน</label>
+                <div class="bulk-current-stock" style="padding: 12px; font-size: 14px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวนที่ปรับ *</label>
+                <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 14px; text-align: center;">
+            </div>
+            <div style="padding-top: 28px;">
+                <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(1)" title="ลบรายการ" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 6h18"></path>
                         <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                         <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                     </svg>
                 </button>
-            </td>
-        </tr>
+            </div>
+        </div>
     `;
     bulkRowId = 1;
     bulkSkuCache = {};
