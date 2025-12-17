@@ -7105,27 +7105,33 @@ def search_skus_for_stock():
         keyword = request.args.get('keyword', '')
         warehouse_id = request.args.get('warehouse_id')
         
-        query = '''
-            SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
-                   p.id as product_id, p.name as product_name, p.spu,
-                   COALESCE(sws.stock, 0) as warehouse_stock
-            FROM skus s
-            JOIN products p ON p.id = s.product_id
-            LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = s.id 
-        '''
-        params = []
+        search_term = f'%{keyword}%'
         
         if warehouse_id:
-            query += ' AND sws.warehouse_id = %s'
-            params.append(warehouse_id)
-        
-        query += '''
-            WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
-            ORDER BY p.name, s.sku_code
-            LIMIT 50
-        '''
-        search_term = f'%{keyword}%'
-        params.extend([search_term, search_term, search_term])
+            query = '''
+                SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
+                       p.id as product_id, p.name as product_name, p.spu,
+                       COALESCE(sws.stock, 0) as warehouse_stock
+                FROM skus s
+                JOIN products p ON p.id = s.product_id
+                LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = s.id AND sws.warehouse_id = %s
+                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
+                ORDER BY p.name, s.sku_code
+                LIMIT 50
+            '''
+            params = [warehouse_id, search_term, search_term, search_term]
+        else:
+            query = '''
+                SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
+                       p.id as product_id, p.name as product_name, p.spu,
+                       0 as warehouse_stock
+                FROM skus s
+                JOIN products p ON p.id = s.product_id
+                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
+                ORDER BY p.name, s.sku_code
+                LIMIT 50
+            '''
+            params = [search_term, search_term, search_term]
         
         cursor.execute(query, params)
         skus = [dict(row) for row in cursor.fetchall()]
