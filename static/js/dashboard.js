@@ -98,7 +98,7 @@ async function init() {
 function handleHashNavigation() {
     const hash = window.location.hash.substring(1); // Remove the '#'
     if (hash) {
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'orders', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-transfer', 'stock-adjustment', 'stock-history', 'orders', 'tier-settings', 'settings'];
         if (validPages.includes(hash)) {
             switchPage(hash);
         }
@@ -482,6 +482,12 @@ function switchPage(pageName) {
         loadCategoriesPage();
     } else if (pageName === 'warehouses') {
         loadWarehousesPage();
+    } else if (pageName === 'stock-transfer') {
+        loadStockTransferPage();
+    } else if (pageName === 'stock-adjustment') {
+        loadStockAdjustmentPage();
+    } else if (pageName === 'stock-history') {
+        loadStockHistoryPage();
     }
 }
 
@@ -3190,6 +3196,492 @@ function resetWarehouseForm() {
     document.getElementById('warehouseForm').reset();
     document.getElementById('editWarehouseId').value = '';
     document.getElementById('warehouseFormTitle').textContent = 'เพิ่มโกดังใหม่';
+}
+
+// ==================== STOCK TRANSFER FUNCTIONS ====================
+
+let transferSkuData = null;
+let transferSearchTimeout = null;
+
+async function loadStockTransferPage() {
+    await loadWarehouseDropdowns('transfer');
+    loadTransferHistory();
+}
+
+async function loadWarehouseDropdowns(prefix) {
+    try {
+        const response = await fetch(`${API_URL}/admin/warehouses`);
+        if (!response.ok) throw new Error('Failed to load warehouses');
+        const warehouses = await response.json();
+        const activeWarehouses = warehouses.filter(w => w.is_active);
+        
+        const fromSelect = document.getElementById(`${prefix}FromWarehouse`) || document.getElementById(`${prefix}Warehouse`);
+        const toSelect = document.getElementById(`${prefix}ToWarehouse`);
+        
+        if (fromSelect) {
+            fromSelect.innerHTML = '<option value="">-- เลือกโกดัง --</option>';
+            activeWarehouses.forEach(w => {
+                fromSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+            });
+        }
+        
+        if (toSelect) {
+            toSelect.innerHTML = '<option value="">-- เลือกโกดัง --</option>';
+            activeWarehouses.forEach(w => {
+                toSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+            });
+        }
+        
+        const historyWarehouse = document.getElementById('historyWarehouse');
+        if (historyWarehouse) {
+            historyWarehouse.innerHTML = '<option value="">ทุกโกดัง</option>';
+            activeWarehouses.forEach(w => {
+                historyWarehouse.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading warehouses:', error);
+    }
+}
+
+function searchSkuForTransfer(keyword) {
+    clearTimeout(transferSearchTimeout);
+    if (!keyword || keyword.length < 2) {
+        document.getElementById('transferSkuResults').style.display = 'none';
+        return;
+    }
+    
+    transferSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
+            if (!response.ok) throw new Error('Failed to search SKUs');
+            const skus = await response.json();
+            
+            const resultsDiv = document.getElementById('transferSkuResults');
+            if (skus.length === 0) {
+                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6;">ไม่พบ SKU</div>';
+            } else {
+                resultsDiv.innerHTML = skus.map(s => `
+                    <div class="sku-result-item" onclick="selectTransferSku(${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}')">
+                        <strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}
+                        <span class="stock-badge">สต็อก: ${s.total_stock}</span>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching SKUs:', error);
+        }
+    }, 300);
+}
+
+async function selectTransferSku(skuId, skuCode, productName) {
+    document.getElementById('transferSkuId').value = skuId;
+    document.getElementById('transferSkuSearch').value = skuCode;
+    document.getElementById('transferSkuResults').style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/skus/${skuId}/warehouse-stock`);
+        if (!response.ok) throw new Error('Failed to load SKU stock');
+        transferSkuData = await response.json();
+        
+        document.getElementById('transferSkuDetails').innerHTML = `
+            <strong>${escapeHtml(transferSkuData.sku_code)}</strong> - ${escapeHtml(transferSkuData.product_name)}<br>
+            <small>สต็อกรวม: ${transferSkuData.total_stock}</small>
+        `;
+        document.getElementById('transferSkuInfo').style.display = 'block';
+        
+        updateTransferStock();
+    } catch (error) {
+        console.error('Error loading SKU stock:', error);
+    }
+}
+
+function updateTransferStock() {
+    if (!transferSkuData) return;
+    
+    const fromWarehouseId = document.getElementById('transferFromWarehouse').value;
+    const stockInfoDiv = document.getElementById('fromWarehouseStock');
+    
+    if (fromWarehouseId && transferSkuData.warehouses) {
+        const warehouse = transferSkuData.warehouses.find(w => w.warehouse_id == fromWarehouseId);
+        const stock = warehouse ? warehouse.stock : 0;
+        stockInfoDiv.innerHTML = `<span class="stock-available">สต็อกในโกดังนี้: <strong>${stock}</strong></span>`;
+        stockInfoDiv.style.display = 'block';
+    } else {
+        stockInfoDiv.style.display = 'none';
+    }
+}
+
+async function handleStockTransfer(event) {
+    event.preventDefault();
+    
+    const data = {
+        sku_id: parseInt(document.getElementById('transferSkuId').value),
+        from_warehouse_id: parseInt(document.getElementById('transferFromWarehouse').value),
+        to_warehouse_id: parseInt(document.getElementById('transferToWarehouse').value),
+        quantity: parseInt(document.getElementById('transferQuantity').value),
+        notes: document.getElementById('transferNotes').value.trim()
+    };
+    
+    if (!data.sku_id) {
+        showGlobalAlert('กรุณาเลือก SKU', 'error');
+        return;
+    }
+    if (!data.from_warehouse_id || !data.to_warehouse_id) {
+        showGlobalAlert('กรุณาเลือกโกดังต้นทางและปลายทาง', 'error');
+        return;
+    }
+    if (data.from_warehouse_id === data.to_warehouse_id) {
+        showGlobalAlert('โกดังต้นทางและปลายทางต้องไม่ซ้ำกัน', 'error');
+        return;
+    }
+    if (!data.quantity || data.quantity <= 0) {
+        showGlobalAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock-transfers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to transfer stock');
+        }
+        
+        showGlobalAlert('ย้ายสต็อกเรียบร้อย', 'success');
+        resetTransferForm();
+        loadTransferHistory();
+    } catch (error) {
+        console.error('Error transferring stock:', error);
+        showGlobalAlert(error.message || 'ไม่สามารถย้ายสต็อกได้', 'error');
+    }
+}
+
+function resetTransferForm() {
+    document.getElementById('stockTransferForm').reset();
+    document.getElementById('transferSkuId').value = '';
+    document.getElementById('transferSkuInfo').style.display = 'none';
+    document.getElementById('fromWarehouseStock').style.display = 'none';
+    transferSkuData = null;
+}
+
+async function loadTransferHistory() {
+    const dateFrom = document.getElementById('transferDateFrom')?.value;
+    const dateTo = document.getElementById('transferDateTo')?.value;
+    
+    let url = `${API_URL}/admin/stock-transfers?`;
+    if (dateFrom) url += `date_from=${dateFrom}&`;
+    if (dateTo) url += `date_to=${dateTo}&`;
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load transfers');
+        const transfers = await response.json();
+        
+        const tbody = document.getElementById('transferHistoryBody');
+        if (!tbody) return;
+        
+        if (transfers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">ไม่มีข้อมูล</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = transfers.map(t => `
+            <tr>
+                <td>${formatDateTime(t.created_at)}</td>
+                <td><strong>${escapeHtml(t.sku_code)}</strong><br><small>${escapeHtml(t.product_name)}</small></td>
+                <td>${escapeHtml(t.from_warehouse_name)}</td>
+                <td>${escapeHtml(t.to_warehouse_name)}</td>
+                <td><strong>${t.quantity}</strong></td>
+                <td>${t.created_by_name || '-'}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading transfer history:', error);
+    }
+}
+
+// ==================== STOCK ADJUSTMENT FUNCTIONS ====================
+
+let adjustSkuData = null;
+let adjustSearchTimeout = null;
+
+async function loadStockAdjustmentPage() {
+    await loadWarehouseDropdowns('adjust');
+    loadAdjustmentHistory();
+}
+
+function searchSkuForAdjust(keyword) {
+    clearTimeout(adjustSearchTimeout);
+    if (!keyword || keyword.length < 2) {
+        document.getElementById('adjustSkuResults').style.display = 'none';
+        return;
+    }
+    
+    adjustSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
+            if (!response.ok) throw new Error('Failed to search SKUs');
+            const skus = await response.json();
+            
+            const resultsDiv = document.getElementById('adjustSkuResults');
+            if (skus.length === 0) {
+                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6;">ไม่พบ SKU</div>';
+            } else {
+                resultsDiv.innerHTML = skus.map(s => `
+                    <div class="sku-result-item" onclick="selectAdjustSku(${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}')">
+                        <strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}
+                        <span class="stock-badge">สต็อก: ${s.total_stock}</span>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching SKUs:', error);
+        }
+    }, 300);
+}
+
+async function selectAdjustSku(skuId, skuCode, productName) {
+    document.getElementById('adjustSkuId').value = skuId;
+    document.getElementById('adjustSkuSearch').value = skuCode;
+    document.getElementById('adjustSkuResults').style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/skus/${skuId}/warehouse-stock`);
+        if (!response.ok) throw new Error('Failed to load SKU stock');
+        adjustSkuData = await response.json();
+        
+        document.getElementById('adjustSkuDetails').innerHTML = `
+            <strong>${escapeHtml(adjustSkuData.sku_code)}</strong> - ${escapeHtml(adjustSkuData.product_name)}<br>
+            <small>สต็อกรวม: ${adjustSkuData.total_stock}</small>
+        `;
+        document.getElementById('adjustSkuInfo').style.display = 'block';
+        
+        updateAdjustStock();
+    } catch (error) {
+        console.error('Error loading SKU stock:', error);
+    }
+}
+
+function updateAdjustStock() {
+    if (!adjustSkuData) return;
+    
+    const warehouseId = document.getElementById('adjustWarehouse').value;
+    const stockInfoDiv = document.getElementById('adjustWarehouseStock');
+    
+    if (warehouseId && adjustSkuData.warehouses) {
+        const warehouse = adjustSkuData.warehouses.find(w => w.warehouse_id == warehouseId);
+        const stock = warehouse ? warehouse.stock : 0;
+        stockInfoDiv.innerHTML = `<span class="stock-available">สต็อกในโกดังนี้: <strong>${stock}</strong></span>`;
+        stockInfoDiv.style.display = 'block';
+    } else {
+        stockInfoDiv.style.display = 'none';
+    }
+}
+
+async function handleStockAdjustment(event) {
+    event.preventDefault();
+    
+    const data = {
+        sku_id: parseInt(document.getElementById('adjustSkuId').value),
+        warehouse_id: parseInt(document.getElementById('adjustWarehouse').value),
+        quantity: parseInt(document.getElementById('adjustQuantity').value),
+        adjustment_type: document.getElementById('adjustType').value,
+        notes: document.getElementById('adjustNotes').value.trim()
+    };
+    
+    if (!data.sku_id) {
+        showGlobalAlert('กรุณาเลือก SKU', 'error');
+        return;
+    }
+    if (!data.warehouse_id) {
+        showGlobalAlert('กรุณาเลือกโกดัง', 'error');
+        return;
+    }
+    if (!data.adjustment_type) {
+        showGlobalAlert('กรุณาเลือกประเภทการปรับ', 'error');
+        return;
+    }
+    if (!data.quantity || data.quantity <= 0) {
+        showGlobalAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock-adjustments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to adjust stock');
+        }
+        
+        const result = await response.json();
+        showGlobalAlert(`ปรับสต็อกเรียบร้อย (สต็อกใหม่: ${result.new_stock})`, 'success');
+        resetAdjustmentForm();
+        loadAdjustmentHistory();
+    } catch (error) {
+        console.error('Error adjusting stock:', error);
+        showGlobalAlert(error.message || 'ไม่สามารถปรับสต็อกได้', 'error');
+    }
+}
+
+function resetAdjustmentForm() {
+    document.getElementById('stockAdjustmentForm').reset();
+    document.getElementById('adjustSkuId').value = '';
+    document.getElementById('adjustSkuInfo').style.display = 'none';
+    document.getElementById('adjustWarehouseStock').style.display = 'none';
+    adjustSkuData = null;
+}
+
+const ADJUSTMENT_TYPE_LABELS = {
+    'shopee_sale': 'ขาย Shopee',
+    'lazada_sale': 'ขาย Lazada',
+    'tiktok_sale': 'ขาย TikTok',
+    'facebook_sale': 'ขาย Facebook',
+    'line_sale': 'ขาย LINE',
+    'offline_sale': 'ขายหน้าร้าน',
+    'other_sale': 'ขายช่องทางอื่น',
+    'damaged': 'ชำรุด/เสียหาย',
+    'lost': 'สูญหาย',
+    'expired': 'หมดอายุ',
+    'miscount_decrease': 'นับผิด (ลด)',
+    'miscount_increase': 'นับผิด (เพิ่ม)',
+    'stock_in': 'รับเข้าสต็อก',
+    'return': 'รับคืนสินค้า',
+    'other_increase': 'อื่นๆ (เพิ่ม)',
+    'other_decrease': 'อื่นๆ (ลด)',
+    'transfer_in': 'ย้ายเข้า',
+    'transfer_out': 'ย้ายออก'
+};
+
+async function loadAdjustmentHistory() {
+    const adjustType = document.getElementById('adjustFilterType')?.value;
+    const dateFrom = document.getElementById('adjustDateFrom')?.value;
+    const dateTo = document.getElementById('adjustDateTo')?.value;
+    
+    let url = `${API_URL}/admin/stock-adjustments?`;
+    if (adjustType) url += `adjustment_type=${adjustType}&`;
+    if (dateFrom) url += `date_from=${dateFrom}&`;
+    if (dateTo) url += `date_to=${dateTo}&`;
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load adjustments');
+        const adjustments = await response.json();
+        
+        const tbody = document.getElementById('adjustmentHistoryBody');
+        if (!tbody) return;
+        
+        if (adjustments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">ไม่มีข้อมูล</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = adjustments.map(a => {
+            const typeLabel = ADJUSTMENT_TYPE_LABELS[a.adjustment_type] || a.adjustment_type;
+            const qtyClass = a.quantity_change < 0 ? 'qty-decrease' : 'qty-increase';
+            const qtySign = a.quantity_change > 0 ? '+' : '';
+            return `
+                <tr>
+                    <td>${formatDateTime(a.created_at)}</td>
+                    <td><strong>${escapeHtml(a.sku_code)}</strong><br><small>${escapeHtml(a.product_name)}</small></td>
+                    <td>${escapeHtml(a.warehouse_name)}</td>
+                    <td><span class="type-badge">${typeLabel}</span></td>
+                    <td class="${qtyClass}"><strong>${qtySign}${a.quantity_change}</strong></td>
+                    <td>${a.created_by_name || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading adjustment history:', error);
+    }
+}
+
+// ==================== STOCK HISTORY FUNCTIONS ====================
+
+async function loadStockHistoryPage() {
+    await loadWarehouseDropdowns('history');
+    loadStockHistory();
+}
+
+async function loadStockHistory() {
+    const search = document.getElementById('historySearch')?.value;
+    const warehouseId = document.getElementById('historyWarehouse')?.value;
+    const changeType = document.getElementById('historyChangeType')?.value;
+    const dateFrom = document.getElementById('historyDateFrom')?.value;
+    const dateTo = document.getElementById('historyDateTo')?.value;
+    
+    let url = `${API_URL}/admin/stock-audit-log?`;
+    if (warehouseId) url += `warehouse_id=${warehouseId}&`;
+    if (changeType) url += `change_type=${changeType}&`;
+    if (dateFrom) url += `date_from=${dateFrom}&`;
+    if (dateTo) url += `date_to=${dateTo}&`;
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load stock history');
+        let logs = await response.json();
+        
+        if (search) {
+            const searchLower = search.toLowerCase();
+            logs = logs.filter(l => 
+                l.sku_code.toLowerCase().includes(searchLower) ||
+                l.product_name.toLowerCase().includes(searchLower)
+            );
+        }
+        
+        const tbody = document.getElementById('stockHistoryBody');
+        if (!tbody) return;
+        
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; opacity: 0.6;">ไม่มีข้อมูล</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = logs.map(l => {
+            const typeLabel = ADJUSTMENT_TYPE_LABELS[l.change_type] || l.change_type;
+            const change = l.quantity_after - l.quantity_before;
+            const changeClass = change < 0 ? 'qty-decrease' : 'qty-increase';
+            const changeSign = change > 0 ? '+' : '';
+            return `
+                <tr>
+                    <td>${formatDateTime(l.created_at)}</td>
+                    <td><strong>${escapeHtml(l.sku_code)}</strong><br><small>${escapeHtml(l.product_name)}</small></td>
+                    <td>${l.warehouse_name ? escapeHtml(l.warehouse_name) : '-'}</td>
+                    <td><span class="type-badge">${typeLabel}</span></td>
+                    <td>${l.quantity_before}</td>
+                    <td>${l.quantity_after}</td>
+                    <td class="${changeClass}"><strong>${changeSign}${change}</strong></td>
+                    <td>${l.created_by_name || '-'}</td>
+                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${l.notes ? escapeHtml(l.notes) : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading stock history:', error);
+    }
+}
+
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleString('th-TH', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
 // Initialize on page load

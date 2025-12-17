@@ -6500,5 +6500,573 @@ def update_product_warehouse_stock(product_id):
         if conn:
             conn.close()
 
+# ==================== STOCK TRANSFER ROUTES ====================
+
+@app.route('/api/admin/stock-transfers', methods=['GET'])
+@admin_required
+def get_stock_transfers():
+    """Get all stock transfers with filters"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        sku_id = request.args.get('sku_id')
+        warehouse_id = request.args.get('warehouse_id')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        query = '''
+            SELECT st.id, st.sku_id, st.from_warehouse_id, st.to_warehouse_id,
+                   st.quantity, st.notes, st.created_at, st.created_by,
+                   s.sku_code, p.name as product_name,
+                   fw.name as from_warehouse_name, tw.name as to_warehouse_name,
+                   u.username as created_by_name
+            FROM stock_transfers st
+            JOIN skus s ON s.id = st.sku_id
+            JOIN products p ON p.id = s.product_id
+            JOIN warehouses fw ON fw.id = st.from_warehouse_id
+            JOIN warehouses tw ON tw.id = st.to_warehouse_id
+            LEFT JOIN users u ON u.id = st.created_by
+            WHERE 1=1
+        '''
+        params = []
+        
+        if sku_id:
+            query += ' AND st.sku_id = %s'
+            params.append(sku_id)
+        if warehouse_id:
+            query += ' AND (st.from_warehouse_id = %s OR st.to_warehouse_id = %s)'
+            params.extend([warehouse_id, warehouse_id])
+        if date_from:
+            query += ' AND st.created_at >= %s'
+            params.append(date_from)
+        if date_to:
+            query += ' AND st.created_at <= %s'
+            params.append(date_to + ' 23:59:59')
+        
+        query += ' ORDER BY st.created_at DESC LIMIT 500'
+        
+        cursor.execute(query, params)
+        transfers = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(transfers), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock-transfers', methods=['POST'])
+@admin_required
+def create_stock_transfer():
+    """Create a stock transfer between warehouses"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    required = ['sku_id', 'from_warehouse_id', 'to_warehouse_id', 'quantity']
+    for field in required:
+        if field not in data:
+            return jsonify({'error': f'{field} is required'}), 400
+    
+    if data['from_warehouse_id'] == data['to_warehouse_id']:
+        return jsonify({'error': 'Source and destination warehouses must be different'}), 400
+    
+    if data['quantity'] <= 0:
+        return jsonify({'error': 'Quantity must be greater than 0'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT sws.stock FROM sku_warehouse_stock sws
+            WHERE sws.sku_id = %s AND sws.warehouse_id = %s
+        ''', (data['sku_id'], data['from_warehouse_id']))
+        stock_row = cursor.fetchone()
+        current_stock = stock_row['stock'] if stock_row else 0
+        
+        if current_stock < data['quantity']:
+            return jsonify({'error': f'Insufficient stock. Available: {current_stock}'}), 400
+        
+        cursor.execute('''
+            UPDATE sku_warehouse_stock 
+            SET stock = stock - %s
+            WHERE sku_id = %s AND warehouse_id = %s
+        ''', (data['quantity'], data['sku_id'], data['from_warehouse_id']))
+        
+        cursor.execute('''
+            INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (sku_id, warehouse_id) 
+            DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+        ''', (data['sku_id'], data['to_warehouse_id'], data['quantity']))
+        
+        cursor.execute('''
+            INSERT INTO stock_transfers (sku_id, from_warehouse_id, to_warehouse_id, quantity, notes, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (data['sku_id'], data['from_warehouse_id'], data['to_warehouse_id'], 
+              data['quantity'], data.get('notes', ''), session.get('user_id')))
+        transfer_id = cursor.fetchone()['id']
+        
+        cursor.execute('''
+            SELECT COALESCE(stock, 0) as stock FROM sku_warehouse_stock 
+            WHERE sku_id = %s AND warehouse_id = %s
+        ''', (data['sku_id'], data['from_warehouse_id']))
+        new_from_stock = cursor.fetchone()['stock']
+        
+        cursor.execute('''
+            SELECT COALESCE(stock, 0) as stock FROM sku_warehouse_stock 
+            WHERE sku_id = %s AND warehouse_id = %s
+        ''', (data['sku_id'], data['to_warehouse_id']))
+        new_to_stock = cursor.fetchone()['stock']
+        
+        cursor.execute('''
+            INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, 
+                                         change_type, reference_id, reference_type, notes, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (data['sku_id'], data['from_warehouse_id'], current_stock, new_from_stock,
+              'transfer_out', transfer_id, 'stock_transfer', 
+              f"Transfer to warehouse ID {data['to_warehouse_id']}", session.get('user_id')))
+        
+        cursor.execute('''
+            INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, 
+                                         change_type, reference_id, reference_type, notes, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (data['sku_id'], data['to_warehouse_id'], new_to_stock - data['quantity'], new_to_stock,
+              'transfer_in', transfer_id, 'stock_transfer', 
+              f"Transfer from warehouse ID {data['from_warehouse_id']}", session.get('user_id')))
+        
+        conn.commit()
+        return jsonify({'message': 'Stock transferred successfully', 'transfer_id': transfer_id}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== STOCK ADJUSTMENT ROUTES ====================
+
+ADJUSTMENT_TYPES = {
+    'shopee_sale': {'label': 'ขาย Shopee', 'direction': 'decrease'},
+    'lazada_sale': {'label': 'ขาย Lazada', 'direction': 'decrease'},
+    'tiktok_sale': {'label': 'ขาย TikTok', 'direction': 'decrease'},
+    'facebook_sale': {'label': 'ขาย Facebook', 'direction': 'decrease'},
+    'line_sale': {'label': 'ขาย LINE', 'direction': 'decrease'},
+    'offline_sale': {'label': 'ขายหน้าร้าน', 'direction': 'decrease'},
+    'other_sale': {'label': 'ขายช่องทางอื่น', 'direction': 'decrease'},
+    'damaged': {'label': 'ชำรุด/เสียหาย', 'direction': 'decrease'},
+    'lost': {'label': 'สูญหาย', 'direction': 'decrease'},
+    'expired': {'label': 'หมดอายุ', 'direction': 'decrease'},
+    'miscount_decrease': {'label': 'นับผิด (ลด)', 'direction': 'decrease'},
+    'miscount_increase': {'label': 'นับผิด (เพิ่ม)', 'direction': 'increase'},
+    'stock_in': {'label': 'รับเข้าสต็อก', 'direction': 'increase'},
+    'return': {'label': 'รับคืนสินค้า', 'direction': 'increase'},
+    'other_increase': {'label': 'อื่นๆ (เพิ่ม)', 'direction': 'increase'},
+    'other_decrease': {'label': 'อื่นๆ (ลด)', 'direction': 'decrease'}
+}
+
+@app.route('/api/admin/adjustment-types', methods=['GET'])
+@admin_required
+def get_adjustment_types():
+    """Get all available adjustment types"""
+    types_list = []
+    for key, val in ADJUSTMENT_TYPES.items():
+        types_list.append({
+            'value': key,
+            'label': val['label'],
+            'direction': val['direction']
+        })
+    return jsonify(types_list), 200
+
+@app.route('/api/admin/stock-adjustments', methods=['GET'])
+@admin_required
+def get_stock_adjustments():
+    """Get all stock adjustments with filters"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        sku_id = request.args.get('sku_id')
+        warehouse_id = request.args.get('warehouse_id')
+        adjustment_type = request.args.get('adjustment_type')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        query = '''
+            SELECT sa.id, sa.sku_id, sa.warehouse_id, sa.quantity_change,
+                   sa.adjustment_type, sa.sales_channel, sa.notes, 
+                   sa.created_at, sa.created_by,
+                   s.sku_code, p.name as product_name,
+                   w.name as warehouse_name,
+                   u.username as created_by_name
+            FROM stock_adjustments sa
+            JOIN skus s ON s.id = sa.sku_id
+            JOIN products p ON p.id = s.product_id
+            JOIN warehouses w ON w.id = sa.warehouse_id
+            LEFT JOIN users u ON u.id = sa.created_by
+            WHERE 1=1
+        '''
+        params = []
+        
+        if sku_id:
+            query += ' AND sa.sku_id = %s'
+            params.append(sku_id)
+        if warehouse_id:
+            query += ' AND sa.warehouse_id = %s'
+            params.append(warehouse_id)
+        if adjustment_type:
+            query += ' AND sa.adjustment_type = %s'
+            params.append(adjustment_type)
+        if date_from:
+            query += ' AND sa.created_at >= %s'
+            params.append(date_from)
+        if date_to:
+            query += ' AND sa.created_at <= %s'
+            params.append(date_to + ' 23:59:59')
+        
+        query += ' ORDER BY sa.created_at DESC LIMIT 500'
+        
+        cursor.execute(query, params)
+        adjustments = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(adjustments), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock-adjustments', methods=['POST'])
+@admin_required
+def create_stock_adjustment():
+    """Create a stock adjustment"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    required = ['sku_id', 'warehouse_id', 'quantity', 'adjustment_type']
+    for field in required:
+        if field not in data:
+            return jsonify({'error': f'{field} is required'}), 400
+    
+    if data['quantity'] <= 0:
+        return jsonify({'error': 'Quantity must be greater than 0'}), 400
+    
+    adjustment_type = data['adjustment_type']
+    if adjustment_type not in ADJUSTMENT_TYPES:
+        return jsonify({'error': 'Invalid adjustment type'}), 400
+    
+    direction = ADJUSTMENT_TYPES[adjustment_type]['direction']
+    quantity_change = data['quantity'] if direction == 'increase' else -data['quantity']
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT COALESCE(sws.stock, 0) as stock FROM sku_warehouse_stock sws
+            WHERE sws.sku_id = %s AND sws.warehouse_id = %s
+        ''', (data['sku_id'], data['warehouse_id']))
+        stock_row = cursor.fetchone()
+        current_stock = stock_row['stock'] if stock_row else 0
+        
+        new_stock = current_stock + quantity_change
+        if new_stock < 0:
+            return jsonify({'error': f'Insufficient stock. Available: {current_stock}'}), 400
+        
+        if direction == 'decrease':
+            cursor.execute('''
+                UPDATE sku_warehouse_stock 
+                SET stock = stock + %s
+                WHERE sku_id = %s AND warehouse_id = %s
+            ''', (quantity_change, data['sku_id'], data['warehouse_id']))
+        else:
+            cursor.execute('''
+                INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (sku_id, warehouse_id) 
+                DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+            ''', (data['sku_id'], data['warehouse_id'], data['quantity']))
+        
+        sales_channel = None
+        if adjustment_type.endswith('_sale'):
+            sales_channel = adjustment_type.replace('_sale', '')
+        
+        cursor.execute('''
+            INSERT INTO stock_adjustments (sku_id, warehouse_id, quantity_change, adjustment_type, sales_channel, notes, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (data['sku_id'], data['warehouse_id'], quantity_change, adjustment_type, 
+              sales_channel, data.get('notes', ''), session.get('user_id')))
+        adjustment_id = cursor.fetchone()['id']
+        
+        cursor.execute('''
+            INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, 
+                                         change_type, reference_id, reference_type, notes, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (data['sku_id'], data['warehouse_id'], current_stock, new_stock,
+              adjustment_type, adjustment_id, 'stock_adjustment', 
+              data.get('notes', ''), session.get('user_id')))
+        
+        cursor.execute('''
+            UPDATE skus SET stock = (
+                SELECT COALESCE(SUM(sws.stock), 0) 
+                FROM sku_warehouse_stock sws 
+                WHERE sws.sku_id = skus.id
+            )
+            WHERE id = %s
+        ''', (data['sku_id'],))
+        
+        conn.commit()
+        return jsonify({
+            'message': 'Stock adjusted successfully', 
+            'adjustment_id': adjustment_id,
+            'new_stock': new_stock
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== STOCK AUDIT LOG ROUTES ====================
+
+@app.route('/api/admin/stock-audit-log', methods=['GET'])
+@admin_required
+def get_stock_audit_log():
+    """Get stock audit log with filters"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        sku_id = request.args.get('sku_id')
+        warehouse_id = request.args.get('warehouse_id')
+        change_type = request.args.get('change_type')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        product_id = request.args.get('product_id')
+        
+        query = '''
+            SELECT sal.id, sal.sku_id, sal.warehouse_id, sal.quantity_before, sal.quantity_after,
+                   sal.change_type, sal.reference_id, sal.reference_type, sal.notes,
+                   sal.created_at, sal.created_by,
+                   s.sku_code, p.name as product_name, p.id as product_id,
+                   w.name as warehouse_name,
+                   u.username as created_by_name
+            FROM stock_audit_log sal
+            JOIN skus s ON s.id = sal.sku_id
+            JOIN products p ON p.id = s.product_id
+            LEFT JOIN warehouses w ON w.id = sal.warehouse_id
+            LEFT JOIN users u ON u.id = sal.created_by
+            WHERE 1=1
+        '''
+        params = []
+        
+        if sku_id:
+            query += ' AND sal.sku_id = %s'
+            params.append(sku_id)
+        if warehouse_id:
+            query += ' AND sal.warehouse_id = %s'
+            params.append(warehouse_id)
+        if change_type:
+            query += ' AND sal.change_type = %s'
+            params.append(change_type)
+        if product_id:
+            query += ' AND p.id = %s'
+            params.append(product_id)
+        if date_from:
+            query += ' AND sal.created_at >= %s'
+            params.append(date_from)
+        if date_to:
+            query += ' AND sal.created_at <= %s'
+            params.append(date_to + ' 23:59:59')
+        
+        query += ' ORDER BY sal.created_at DESC LIMIT 1000'
+        
+        cursor.execute(query, params)
+        logs = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(logs), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock-audit-log/summary', methods=['GET'])
+@admin_required
+def get_stock_audit_summary():
+    """Get stock audit summary by change type"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        warehouse_id = request.args.get('warehouse_id')
+        
+        query = '''
+            SELECT sal.change_type, 
+                   COUNT(*) as count,
+                   SUM(ABS(sal.quantity_after - sal.quantity_before)) as total_quantity
+            FROM stock_audit_log sal
+            WHERE 1=1
+        '''
+        params = []
+        
+        if warehouse_id:
+            query += ' AND sal.warehouse_id = %s'
+            params.append(warehouse_id)
+        if date_from:
+            query += ' AND sal.created_at >= %s'
+            params.append(date_from)
+        if date_to:
+            query += ' AND sal.created_at <= %s'
+            params.append(date_to + ' 23:59:59')
+        
+        query += ' GROUP BY sal.change_type ORDER BY count DESC'
+        
+        cursor.execute(query, params)
+        summary = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== SKU SEARCH FOR STOCK MANAGEMENT ====================
+
+@app.route('/api/admin/skus/search', methods=['GET'])
+@admin_required
+def search_skus_for_stock():
+    """Search SKUs for stock management"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        keyword = request.args.get('keyword', '')
+        warehouse_id = request.args.get('warehouse_id')
+        
+        query = '''
+            SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
+                   p.id as product_id, p.name as product_name, p.spu,
+                   COALESCE(sws.stock, 0) as warehouse_stock
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = s.id 
+        '''
+        params = []
+        
+        if warehouse_id:
+            query += ' AND sws.warehouse_id = %s'
+            params.append(warehouse_id)
+        
+        query += '''
+            WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
+            ORDER BY p.name, s.sku_code
+            LIMIT 50
+        '''
+        search_term = f'%{keyword}%'
+        params.extend([search_term, search_term, search_term])
+        
+        cursor.execute(query, params)
+        skus = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(skus), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/skus/<int:sku_id>/warehouse-stock', methods=['GET'])
+@admin_required
+def get_sku_warehouse_stock(sku_id):
+    """Get warehouse stock for a specific SKU"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT s.id, s.sku_code, s.stock as total_stock,
+                   p.name as product_name, p.spu
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            WHERE s.id = %s
+        ''', (sku_id,))
+        
+        sku = cursor.fetchone()
+        if not sku:
+            return jsonify({'error': 'SKU not found'}), 404
+        
+        cursor.execute('''
+            SELECT w.id as warehouse_id, w.name as warehouse_name,
+                   COALESCE(sws.stock, 0) as stock
+            FROM warehouses w
+            LEFT JOIN sku_warehouse_stock sws ON sws.warehouse_id = w.id AND sws.sku_id = %s
+            WHERE w.is_active = TRUE
+            ORDER BY w.name
+        ''', (sku_id,))
+        
+        warehouses = [dict(row) for row in cursor.fetchall()]
+        
+        result = dict(sku)
+        result['warehouses'] = warehouses
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

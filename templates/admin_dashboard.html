@@ -82,6 +82,21 @@
         .btn-icon:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
         .btn-icon.delete:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         @media (max-width: 768px) { .settings-grid { grid-template-columns: 1fr; } .tier-form-row { grid-template-columns: 1fr; } }
+        
+        /* Stock Management Styles */
+        .sku-search-results { position: absolute; top: 100%; left: 0; right: 0; background: rgba(30, 30, 40, 0.98); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 100; margin-top: 4px; }
+        .sku-result-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .sku-result-item:hover { background: rgba(147, 51, 234, 0.2); }
+        .sku-result-item:last-child { border-bottom: none; }
+        .stock-badge { background: rgba(147, 51, 234, 0.3); color: #a855f7; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+        .sku-info-box { background: rgba(147, 51, 234, 0.15); border: 1px solid rgba(147, 51, 234, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+        .sku-info-label { font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+        .stock-info { margin-top: 6px; font-size: 13px; }
+        .stock-available { color: #22c55e; }
+        .type-badge { background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .qty-increase { color: #22c55e; }
+        .qty-decrease { color: #ef4444; }
+        .form-group { position: relative; margin-bottom: 16px; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -185,6 +200,34 @@
                             </svg>
                         </span>
                         <span class="sidebar-text">จัดการโกดัง</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="stock-transfer">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M7 16V4M7 4L3 8M7 4L11 8"/>
+                                <path d="M17 8v12M17 20l4-4M17 20l-4-4"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ย้ายสต็อก</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="stock-adjustment">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ปรับสต็อก</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="stock-history">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 3v5h5"/>
+                                <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+                                <path d="M12 7v5l4 2"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ประวัติสต็อก</span>
                     </a>
                 </div>
                 
@@ -855,6 +898,265 @@
                                 </thead>
                                 <tbody id="warehousesTableBody">
                                     <tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Transfer Page -->
+            <div id="page-stock-transfer" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M7 16V4M7 4L3 8M7 4L11 8"/>
+                            <path d="M17 8v12M17 20l4-4M17 20l-4-4"/>
+                        </svg>
+                        ย้ายสต็อกระหว่างโกดัง
+                    </h1>
+                    <p>ย้ายสินค้าจากโกดังหนึ่งไปอีกโกดัง</p>
+                </div>
+
+                <div class="content-wrapper" style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+                    <div class="card">
+                        <h3 style="margin-bottom: 16px; font-size: 16px;">ย้ายสต็อก</h3>
+                        <form id="stockTransferForm" onsubmit="handleStockTransfer(event)">
+                            <div class="form-group">
+                                <label class="form-label">ค้นหา SKU *</label>
+                                <input type="text" id="transferSkuSearch" class="form-input" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="searchSkuForTransfer(this.value)">
+                                <div id="transferSkuResults" class="sku-search-results" style="display: none;"></div>
+                                <input type="hidden" id="transferSkuId">
+                            </div>
+                            <div id="transferSkuInfo" class="sku-info-box" style="display: none;">
+                                <div class="sku-info-label">สินค้าที่เลือก:</div>
+                                <div id="transferSkuDetails"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">โกดังต้นทาง *</label>
+                                <select id="transferFromWarehouse" class="form-input" required onchange="updateTransferStock()">
+                                    <option value="">-- เลือกโกดัง --</option>
+                                </select>
+                                <div id="fromWarehouseStock" class="stock-info" style="display: none;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">โกดังปลายทาง *</label>
+                                <select id="transferToWarehouse" class="form-input" required>
+                                    <option value="">-- เลือกโกดัง --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">จำนวนที่ย้าย *</label>
+                                <input type="number" id="transferQuantity" class="form-input" min="1" required placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">หมายเหตุ</label>
+                                <textarea id="transferNotes" class="form-input" rows="2" placeholder="เหตุผลการย้าย (ถ้ามี)"></textarea>
+                            </div>
+                            <button type="submit" class="btn" style="width: 100%;">ย้ายสต็อก</button>
+                        </form>
+                    </div>
+                    
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="font-size: 16px;">ประวัติการย้ายสต็อก</h3>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="date" id="transferDateFrom" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadTransferHistory()">
+                                <input type="date" id="transferDateTo" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadTransferHistory()">
+                            </div>
+                        </div>
+                        <div class="table-wrapper" style="border: none; border-radius: 0; max-height: 500px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>วันที่</th>
+                                        <th>สินค้า / SKU</th>
+                                        <th>จากโกดัง</th>
+                                        <th>ไปโกดัง</th>
+                                        <th>จำนวน</th>
+                                        <th>ผู้ทำรายการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transferHistoryBody">
+                                    <tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Adjustment Page -->
+            <div id="page-stock-adjustment" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                        </svg>
+                        ปรับสต็อก / ตัดยอดขาย
+                    </h1>
+                    <p>ปรับสต็อกสำหรับยอดขายช่องทางอื่น (Shopee, Lazada, TikTok, หน้าร้าน) หรือกรณีอื่นๆ</p>
+                </div>
+
+                <div class="content-wrapper" style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+                    <div class="card">
+                        <h3 style="margin-bottom: 16px; font-size: 16px;">ปรับสต็อก</h3>
+                        <form id="stockAdjustmentForm" onsubmit="handleStockAdjustment(event)">
+                            <div class="form-group">
+                                <label class="form-label">ค้นหา SKU *</label>
+                                <input type="text" id="adjustSkuSearch" class="form-input" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="searchSkuForAdjust(this.value)">
+                                <div id="adjustSkuResults" class="sku-search-results" style="display: none;"></div>
+                                <input type="hidden" id="adjustSkuId">
+                            </div>
+                            <div id="adjustSkuInfo" class="sku-info-box" style="display: none;">
+                                <div class="sku-info-label">สินค้าที่เลือก:</div>
+                                <div id="adjustSkuDetails"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">โกดัง *</label>
+                                <select id="adjustWarehouse" class="form-input" required onchange="updateAdjustStock()">
+                                    <option value="">-- เลือกโกดัง --</option>
+                                </select>
+                                <div id="adjustWarehouseStock" class="stock-info" style="display: none;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">ประเภทการปรับ *</label>
+                                <select id="adjustType" class="form-input" required>
+                                    <option value="">-- เลือกประเภท --</option>
+                                    <optgroup label="ขายช่องทางอื่น (ตัดสต็อก)">
+                                        <option value="shopee_sale">ขาย Shopee</option>
+                                        <option value="lazada_sale">ขาย Lazada</option>
+                                        <option value="tiktok_sale">ขาย TikTok</option>
+                                        <option value="facebook_sale">ขาย Facebook</option>
+                                        <option value="line_sale">ขาย LINE</option>
+                                        <option value="offline_sale">ขายหน้าร้าน</option>
+                                        <option value="other_sale">ขายช่องทางอื่น</option>
+                                    </optgroup>
+                                    <optgroup label="ลดสต็อก">
+                                        <option value="damaged">ชำรุด/เสียหาย</option>
+                                        <option value="lost">สูญหาย</option>
+                                        <option value="expired">หมดอายุ</option>
+                                        <option value="miscount_decrease">นับผิด (ลด)</option>
+                                        <option value="other_decrease">อื่นๆ (ลด)</option>
+                                    </optgroup>
+                                    <optgroup label="เพิ่มสต็อก">
+                                        <option value="stock_in">รับเข้าสต็อก</option>
+                                        <option value="return">รับคืนสินค้า</option>
+                                        <option value="miscount_increase">นับผิด (เพิ่ม)</option>
+                                        <option value="other_increase">อื่นๆ (เพิ่ม)</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">จำนวน *</label>
+                                <input type="number" id="adjustQuantity" class="form-input" min="1" required placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">หมายเหตุ</label>
+                                <textarea id="adjustNotes" class="form-input" rows="2" placeholder="รายละเอียดเพิ่มเติม (เช่น หมายเลขออเดอร์)"></textarea>
+                            </div>
+                            <button type="submit" class="btn" style="width: 100%;">บันทึกการปรับสต็อก</button>
+                        </form>
+                    </div>
+                    
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <h3 style="font-size: 16px;">ประวัติการปรับสต็อก</h3>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <select id="adjustFilterType" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadAdjustmentHistory()">
+                                    <option value="">ทุกประเภท</option>
+                                    <option value="shopee_sale">ขาย Shopee</option>
+                                    <option value="lazada_sale">ขาย Lazada</option>
+                                    <option value="tiktok_sale">ขาย TikTok</option>
+                                    <option value="facebook_sale">ขาย Facebook</option>
+                                    <option value="line_sale">ขาย LINE</option>
+                                    <option value="offline_sale">ขายหน้าร้าน</option>
+                                </select>
+                                <input type="date" id="adjustDateFrom" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadAdjustmentHistory()">
+                                <input type="date" id="adjustDateTo" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadAdjustmentHistory()">
+                            </div>
+                        </div>
+                        <div class="table-wrapper" style="border: none; border-radius: 0; max-height: 500px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>วันที่</th>
+                                        <th>สินค้า / SKU</th>
+                                        <th>โกดัง</th>
+                                        <th>ประเภท</th>
+                                        <th>จำนวน</th>
+                                        <th>ผู้ทำรายการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adjustmentHistoryBody">
+                                    <tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock History Page -->
+            <div id="page-stock-history" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M3 3v5h5"/>
+                            <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+                            <path d="M12 7v5l4 2"/>
+                        </svg>
+                        ประวัติสต็อก (Audit Log)
+                    </h1>
+                    <p>ดูประวัติการเปลี่ยนแปลงสต็อกทั้งหมด</p>
+                </div>
+
+                <div class="content-wrapper">
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <h3 style="font-size: 16px;">บันทึกการเปลี่ยนแปลงสต็อก</h3>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <input type="text" id="historySearch" class="form-input" style="width: 180px; padding: 6px 10px; font-size: 12px;" placeholder="ค้นหา SKU / สินค้า" oninput="loadStockHistory()">
+                                <select id="historyWarehouse" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                                    <option value="">ทุกโกดัง</option>
+                                </select>
+                                <select id="historyChangeType" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                                    <option value="">ทุกประเภท</option>
+                                    <option value="transfer_in">ย้ายเข้า</option>
+                                    <option value="transfer_out">ย้ายออก</option>
+                                    <option value="shopee_sale">ขาย Shopee</option>
+                                    <option value="lazada_sale">ขาย Lazada</option>
+                                    <option value="tiktok_sale">ขาย TikTok</option>
+                                    <option value="facebook_sale">ขาย Facebook</option>
+                                    <option value="line_sale">ขาย LINE</option>
+                                    <option value="offline_sale">ขายหน้าร้าน</option>
+                                    <option value="damaged">ชำรุด</option>
+                                    <option value="lost">สูญหาย</option>
+                                    <option value="stock_in">รับเข้าสต็อก</option>
+                                    <option value="return">รับคืน</option>
+                                </select>
+                                <input type="date" id="historyDateFrom" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                                <input type="date" id="historyDateTo" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                            </div>
+                        </div>
+                        <div class="table-wrapper" style="border: none; border-radius: 0; max-height: 600px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>วันที่/เวลา</th>
+                                        <th>สินค้า / SKU</th>
+                                        <th>โกดัง</th>
+                                        <th>ประเภท</th>
+                                        <th>ก่อน</th>
+                                        <th>หลัง</th>
+                                        <th>เปลี่ยน</th>
+                                        <th>ผู้ทำรายการ</th>
+                                        <th>หมายเหตุ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockHistoryBody">
+                                    <tr><td colspan="9" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
                                 </tbody>
                             </table>
                         </div>

@@ -42,6 +42,9 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Customer Database (Reseller):** Resellers can manage their own customer database for direct shipping with reseller branding. Full CRUD for customers with shipping info (name, phone, email, address, province, district, subdistrict, postal_code).
 - **Reseller Profile Management:** Resellers can edit their shipping information and brand name for label printing.
 - **Warehouse Management:** Full CRUD for warehouses (name, address, contact info). Multi-warehouse stock tracking per SKU via `sku_warehouse_stock` table.
+- **Stock Transfer System:** Move stock between warehouses with automatic audit logging. API validates source stock availability before transfer.
+- **Stock Adjustment System:** Adjust stock for external sales channels (Shopee, Lazada, TikTok, Facebook, LINE, offline stores) and other reasons (damaged, lost, expired, miscount, stock-in, returns). All adjustments automatically update total SKU stock and create audit log entries.
+- **Stock Audit Log:** Complete history of all stock changes with before/after quantities, change type, reference to source transaction, user who made the change, and timestamps. Supports filtering by date, warehouse, change type.
 - **Order Shipment System:** Automatic shipment splitting by warehouse during order creation. Each shipment tracks warehouse source, tracking number, shipping provider, and status (pending/shipped/delivered).
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
@@ -64,6 +67,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Order Settings:** `order_number_settings`.
 - **Reseller Customer Database:** `reseller_customers` (with `reseller_id`, `full_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `notes`).
 - **Warehouse System:** `warehouses` (id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active), `sku_warehouse_stock` (sku_id, warehouse_id, stock), `order_shipments` (order_id, warehouse_id, tracking_number, shipping_provider, status, shipped_at, delivered_at), `order_shipment_items` (shipment_id, order_item_id, quantity).
+- **Stock Management:** `stock_transfers` (id, sku_id, from_warehouse_id, to_warehouse_id, quantity, notes, created_at, created_by), `stock_adjustments` (id, sku_id, warehouse_id, quantity_change, adjustment_type, sales_channel, notes, created_at, created_by), `stock_audit_log` (id, sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_at, created_by).
 
 ## External Dependencies
 
