@@ -773,7 +773,18 @@
 
                     <!-- ส่วนที่ 4: ตาราง Variant Matrix (ซ่อนไว้ตอนแรก) -->
                     <div id="variants-section" class="section-card" style="display: none;">
-                        <h2 class="section-title">4. กรอกข้อมูล Variant Matrix</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 class="section-title" style="margin-bottom: 0;">4. กรอกข้อมูล Variant Matrix</h2>
+                            <a id="adjust-stock-link" href="/admin#stock-adjustment" onclick="goToStockAdjustment(event)" 
+                               style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 500;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                    <line x1="12" x2="12" y1="22.08" y2="12"/>
+                                </svg>
+                                ปรับสต็อกสินค้านี้
+                            </a>
+                        </div>
                         
                         <!-- Master Inputs (Bulk Actions) -->
                         <div class="master-inputs">
@@ -1573,6 +1584,7 @@
                 html += `<th>${opt.name}</th>`;
             });
             html += '<th>ราคา (บาท)</th>';
+            html += '<th style="text-align: center;">สต็อก</th>';
             html += '</tr></thead>';
             html += '<tbody>';
 
@@ -1584,6 +1596,7 @@
                     html += `<td style="background: rgba(255,255,255,0.08);">${escapeHtml(val)}</td>`;
                 });
                 html += `<td><input type="number" class="sku-price" placeholder="0.00" step="0.01"></td>`;
+                html += `<td style="text-align: center;" class="sku-stock-display">0</td>`;
                 html += '</tr>';
             });
 
@@ -2165,8 +2178,21 @@
                     if (priceInput) {
                         priceInput.value = sku.price || 0;
                     }
+                    const stockCell = existingRow.querySelector('.sku-stock-display');
+                    if (stockCell) {
+                        const stock = sku.stock || 0;
+                        stockCell.textContent = stock;
+                        stockCell.style.color = stock <= 0 ? '#ef4444' : stock <= 5 ? '#f59e0b' : '#10b981';
+                        stockCell.style.fontWeight = '600';
+                    }
                 }
             });
+        }
+        
+        // Navigate to stock adjustment page with product pre-selected
+        function goToStockAdjustment(event) {
+            event.preventDefault();
+            window.location.href = `/admin#stock-adjustment?product_id=${productId}`;
         }
         
         // Load product data on page load (wait for DOM to be ready)

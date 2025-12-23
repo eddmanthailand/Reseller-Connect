@@ -773,6 +773,10 @@
                     <!-- ส่วนที่ 4: ตาราง Variant Matrix (ซ่อนไว้ตอนแรก) -->
                     <div id="variants-section" class="section-card" style="display: none;">
                         <h2 class="section-title">4. กรอกข้อมูล Variant Matrix</h2>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 16px; padding: 10px; background: rgba(59,130,246,0.1); border-radius: 6px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            สต็อกจะเริ่มต้นที่ 0 - หลังสร้างสินค้าเสร็จ ให้ไปหน้า "ปรับสต็อก / ตัดยอดขาย" เพื่อเพิ่มสต็อกเข้าระบบ
+                        </p>
                         
                         <!-- Master Inputs (Bulk Actions) -->
                         <div class="master-inputs">
@@ -784,10 +788,6 @@
                                 </div>
                             </div>
                         </div>
-                        <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 8px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 6px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                            สต็อกสินค้าจะเริ่มต้นที่ 0 - หลังบันทึกสินค้าสำเร็จ กรุณาไปที่หน้า "ปรับสต็อก" เพื่อรับสินค้าเข้าคลัง
-                        </p>
 
                         <!-- ตาราง Variant -->
                         <div style="overflow-x: auto;">
@@ -1518,6 +1518,7 @@
                 html += `<th>${opt.name}</th>`;
             });
             html += '<th>ราคา (บาท)</th>';
+            html += '<th style="text-align: center;">สต็อก</th>';
             html += '</tr></thead>';
             html += '<tbody>';
 
@@ -1529,6 +1530,7 @@
                     html += `<td style="background: rgba(255,255,255,0.08);">${escapeHtml(val)}</td>`;
                 });
                 html += `<td><input type="number" class="sku-price" placeholder="0.00" step="0.01"></td>`;
+                html += `<td style="text-align: center; color: #9ca3af;" class="sku-stock-display">-</td>`;
                 html += '</tr>';
             });
 
