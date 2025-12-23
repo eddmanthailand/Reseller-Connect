@@ -3311,6 +3311,36 @@ async function loadStockAdjustmentPage() {
     await loadWarehouseDropdowns('bulk');
     loadAdjustmentHistory();
     updateBulkAdjustSummary();
+    
+    // Check for pre-selected SKU from URL parameters (e.g., from product edit page)
+    const hash = window.location.hash;
+    if (hash.includes('?')) {
+        const params = new URLSearchParams(hash.split('?')[1]);
+        const skuId = params.get('sku_id');
+        const skuCode = params.get('sku_code');
+        
+        if (skuId && skuCode) {
+            // Pre-fill and select the SKU in bulk adjustment
+            addBulkAdjustmentRow();
+            const lastRowId = bulkRowId - 1;
+            
+            // Wait for row to be added then load SKU data
+            setTimeout(async () => {
+                try {
+                    const response = await fetch(`${API_URL}/admin/skus/${skuId}/warehouse-stock`);
+                    if (response.ok) {
+                        const skuData = await response.json();
+                        selectBulkSku(lastRowId, parseInt(skuId), skuCode, skuData.product_name, skuData.total_stock);
+                    }
+                } catch (error) {
+                    console.error('Error pre-loading SKU:', error);
+                }
+            }, 100);
+            
+            // Clear URL parameters after processing
+            history.replaceState(null, '', hash.split('?')[0]);
+        }
+    }
 }
 
 function searchSkuForAdjust(keyword) {

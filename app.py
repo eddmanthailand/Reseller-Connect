@@ -1338,32 +1338,19 @@ def create_product():
             if not sku_data.get('sku_code'):
                 continue
             
-            # Insert SKU with cost_price
+            # Insert SKU with cost_price (stock always starts at 0, use Stock Adjustment to add inventory)
             cursor.execute('''
                 INSERT INTO skus (product_id, sku_code, price, stock, cost_price)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, 0, %s)
                 RETURNING id
             ''', (
                 product_id,
                 sku_data['sku_code'],
                 sku_data.get('price', 0),
-                sku_data.get('stock', 0),
                 sku_data.get('cost_price')
             ))
             
             sku_id = cursor.fetchone()['id']
-            
-            # Insert warehouse stock if provided
-            warehouse_stock = sku_data.get('warehouse_stock', [])
-            for wh_stock in warehouse_stock:
-                warehouse_id = wh_stock.get('warehouse_id')
-                stock_amount = wh_stock.get('stock', 0)
-                if warehouse_id is not None:
-                    cursor.execute('''
-                        INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = EXCLUDED.stock
-                    ''', (sku_id, warehouse_id, stock_amount))
             
             # Map SKU to option values
             for value_id in sku_data.get('option_value_ids', []):
@@ -1599,17 +1586,17 @@ def update_product(product_id):
             
             new_sku_codes.add(sku_code)
             new_price = sku_data.get('price', 0)
-            new_stock = sku_data.get('stock', 0)
             new_cost_price = sku_data.get('cost_price')
             variant_values = sku_data.get('variant_values', [])
             
             if sku_code in existing_skus:
-                # SKU exists - UPDATE price, stock, and cost_price (preserve sku_id)
+                # SKU exists - UPDATE price and cost_price only (preserve sku_id and stock)
+                # Stock must be changed through Stock Adjustment page for audit trail
                 sku_id = existing_skus[sku_code]['id']
                 cursor.execute('''
-                    UPDATE skus SET price = %s, stock = %s, cost_price = %s, updated_at = CURRENT_TIMESTAMP
+                    UPDATE skus SET price = %s, cost_price = %s, updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
-                ''', (new_price, new_stock, new_cost_price, sku_id))
+                ''', (new_price, new_cost_price, sku_id))
                 
                 # Update sku_values_map if variant_values changed
                 cursor.execute('DELETE FROM sku_values_map WHERE sku_id = %s', (sku_id,))
@@ -1620,11 +1607,11 @@ def update_product(product_id):
                             cursor.execute('INSERT INTO sku_values_map (sku_id, option_value_id) VALUES (%s, %s)',
                                           (sku_id, value_id))
             else:
-                # New SKU - INSERT with cost_price
+                # New SKU - INSERT with stock=0 (use Stock Adjustment to add inventory)
                 cursor.execute('''
                     INSERT INTO skus (product_id, sku_code, price, stock, cost_price)
-                    VALUES (%s, %s, %s, %s, %s) RETURNING id
-                ''', (product_id, sku_code, new_price, new_stock, new_cost_price))
+                    VALUES (%s, %s, %s, 0, %s) RETURNING id
+                ''', (product_id, sku_code, new_price, new_cost_price))
                 sku_id = cursor.fetchone()['id']
                 
                 # Map to option values

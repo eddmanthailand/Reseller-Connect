@@ -784,13 +784,6 @@
                                     <button type="button" id="btn_apply_price" class="btn-primary btn-gray">Apply to All</button>
                                 </div>
                             </div>
-                            <div>
-                                <label class="form-label">Master Stock</label>
-                                <div class="input-group">
-                                    <input type="number" id="master_stock" class="form-input" placeholder="50">
-                                    <button type="button" id="btn_apply_stock" class="btn-primary btn-gray">Apply to All</button>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- ตาราง Variant -->
@@ -799,16 +792,19 @@
                         </div>
                     </div>
 
-                    <!-- ส่วนที่ 5: สต็อกตามโกดัง -->
+                    <!-- ส่วนที่ 5: สต็อกตามโกดัง (Read-only) -->
                     <div id="warehouse-stock-section" class="section-card" style="display: none;">
-                        <h2 class="section-title">5. สต็อกตามโกดัง</h2>
-                        <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px; font-size: 13px;">
-                            กำหนดจำนวนสต็อกสำหรับแต่ละ SKU แยกตามโกดัง (สต็อกรวมจะคำนวณอัตโนมัติ)
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 class="section-title" style="margin-bottom: 0;">5. สต็อกปัจจุบัน</h2>
+                        </div>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 16px; padding: 10px; background: rgba(59,130,246,0.1); border-radius: 6px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                            การแก้ไขสต็อกต้องทำผ่านหน้า "ปรับสต็อก" เพื่อให้มีประวัติการเปลี่ยนแปลง - คลิกที่ปุ่ม "ปรับสต็อก" ของแต่ละ SKU ด้านล่าง
                         </p>
                         
                         <div id="warehouse-stock-container">
                             <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
-                                กำลังโหลดข้อมูลโกดัง...
+                                กำลังโหลดข้อมูลสต็อก...
                             </div>
                         </div>
                     </div>
@@ -1570,8 +1566,6 @@
         function displayVariantsTable(variants, options) {
             const table = document.getElementById('variants-table');
             const parentSku = document.getElementById('parent_sku').value.trim() || 'SKU';
-            
-            const activeWarehouses = warehousesList.filter(w => w.is_active);
 
             let html = '<thead><tr>';
             html += '<th>SKU Code</th>';
@@ -1579,13 +1573,6 @@
                 html += `<th>${opt.name}</th>`;
             });
             html += '<th>ราคา (บาท)</th>';
-            if (activeWarehouses.length > 0) {
-                activeWarehouses.forEach(wh => {
-                    html += `<th style="min-width: 80px;">สต็อก<br><small style="opacity: 0.7; font-weight: normal;">${escapeHtml(wh.name)}</small></th>`;
-                });
-            } else {
-                html += '<th>สต็อก</th>';
-            }
             html += '</tr></thead>';
             html += '<tbody>';
 
@@ -1597,13 +1584,6 @@
                     html += `<td style="background: rgba(255,255,255,0.08);">${escapeHtml(val)}</td>`;
                 });
                 html += `<td><input type="number" class="sku-price" placeholder="0.00" step="0.01"></td>`;
-                if (activeWarehouses.length > 0) {
-                    activeWarehouses.forEach(wh => {
-                        html += `<td><input type="number" class="sku-stock" data-warehouse-id="${wh.id}" placeholder="0" min="0"></td>`;
-                    });
-                } else {
-                    html += `<td><input type="number" class="sku-stock" placeholder="0" min="0"></td>`;
-                }
                 html += '</tr>';
             });
 
@@ -1611,7 +1591,7 @@
             table.innerHTML = html;
         }
 
-        // Master price/stock handlers
+        // Master price handler
         document.getElementById('btn_apply_price').addEventListener('click', () => {
             const masterPrice = document.getElementById('master_price').value;
             if (!masterPrice) {
@@ -1620,17 +1600,6 @@
             }
             document.querySelectorAll('.sku-price').forEach(input => {
                 input.value = masterPrice;
-            });
-        });
-
-        document.getElementById('btn_apply_stock').addEventListener('click', () => {
-            const masterStock = document.getElementById('master_stock').value;
-            if (!masterStock) {
-                showAlert('กรุณากรอก Master Stock', 'warning');
-                return;
-            }
-            document.querySelectorAll('.sku-stock').forEach(input => {
-                input.value = masterStock;
             });
         });
 
@@ -1790,9 +1759,6 @@
                     
                     // Save customizations after product is saved
                     await saveCustomizations();
-                    
-                    // Save warehouse stock
-                    await saveWarehouseStock();
                     
                     showAlert('บันทึกสำเร็จ', 'success');
                     setTimeout(() => {
@@ -2003,7 +1969,7 @@
             const container = document.getElementById('warehouse-stock-container');
             
             if (warehouseStockData.length === 0 || warehousesList.length === 0) {
-                container.innerHTML = '<p style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">รอสร้าง SKU ก่อนจึงจะกำหนดสต็อกตามโกดังได้</p>';
+                container.innerHTML = '<p style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">ยังไม่มี SKU สำหรับสินค้านี้</p>';
                 return;
             }
             
@@ -2013,8 +1979,9 @@
                         <thead>
                             <tr>
                                 <th>SKU Code</th>
-                                ${warehousesList.map(w => `<th>${w.name}</th>`).join('')}
+                                ${warehousesList.map(w => `<th>${escapeHtml(w.name)}</th>`).join('')}
                                 <th style="background: rgba(59,130,246,0.2);">สต็อกรวม</th>
+                                <th>จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2022,7 +1989,7 @@
             
             warehouseStockData.forEach(sku => {
                 html += '<tr>';
-                html += `<td style="font-weight: 500;">${sku.sku_code}</td>`;
+                html += `<td style="font-weight: 500;">${escapeHtml(sku.sku_code)}</td>`;
                 
                 let totalStock = 0;
                 warehousesList.forEach(warehouse => {
@@ -2030,21 +1997,18 @@
                     const stock = warehouseData ? warehouseData.stock : 0;
                     totalStock += stock;
                     
-                    html += `
-                        <td>
-                            <input type="number" 
-                                   class="warehouse-stock-input form-input" 
-                                   data-sku-id="${sku.sku_id}" 
-                                   data-warehouse-id="${warehouse.id}"
-                                   value="${stock}" 
-                                   min="0" 
-                                   style="width: 80px; text-align: center;"
-                                   onchange="updateWarehouseStockTotal(${sku.sku_id})">
-                        </td>
-                    `;
+                    html += `<td style="text-align: center;">${stock.toLocaleString()}</td>`;
                 });
                 
-                html += `<td style="background: rgba(59,130,246,0.1); font-weight: 600;" id="total-stock-${sku.sku_id}">${totalStock}</td>`;
+                html += `<td style="background: rgba(59,130,246,0.1); font-weight: 600; text-align: center;">${totalStock.toLocaleString()}</td>`;
+                html += `<td>
+                    <a href="/admin#stock-adjustment?sku_id=${sku.sku_id}&sku_code=${encodeURIComponent(sku.sku_code)}" 
+                       class="btn-primary" 
+                       style="padding: 4px 10px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        ปรับสต็อก
+                    </a>
+                </td>`;
                 html += '</tr>';
             });
             
@@ -2054,51 +2018,6 @@
             document.getElementById('warehouse-stock-section').style.display = 'block';
         }
         
-        function updateWarehouseStockTotal(skuId) {
-            const inputs = document.querySelectorAll(`.warehouse-stock-input[data-sku-id="${skuId}"]`);
-            let total = 0;
-            inputs.forEach(input => {
-                total += parseInt(input.value) || 0;
-            });
-            const totalCell = document.getElementById(`total-stock-${skuId}`);
-            if (totalCell) totalCell.textContent = total;
-        }
-        
-        function collectWarehouseStockData() {
-            const stocks = [];
-            const inputs = document.querySelectorAll('.warehouse-stock-input');
-            inputs.forEach(input => {
-                stocks.push({
-                    sku_id: parseInt(input.dataset.skuId),
-                    warehouse_id: parseInt(input.dataset.warehouseId),
-                    stock: parseInt(input.value) || 0
-                });
-            });
-            return stocks;
-        }
-        
-        async function saveWarehouseStock() {
-            const stocks = collectWarehouseStockData();
-            if (stocks.length === 0) return true;
-            
-            try {
-                const response = await fetch(`${API_URL}/products/${productId}/warehouse-stock`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stocks })
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to save warehouse stock');
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Error saving warehouse stock:', error);
-                throw error;
-            }
-        }
 
         // Load existing product data
         async function loadProductData() {
@@ -2257,60 +2176,24 @@
         function collectSkusData(options) {
             const skus = [];
             const rows = document.querySelectorAll('#variants-table tbody tr');
-            const activeWarehouses = warehousesList.filter(w => w.is_active);
-            
-            // Get selected default warehouse from dropdown
-            const defaultWarehouseSelect = document.getElementById('default_warehouse_id');
-            const defaultWarehouseId = defaultWarehouseSelect ? parseInt(defaultWarehouseSelect.value) || null : null;
 
             rows.forEach(row => {
                 const skuCode = row.querySelector('.sku-code').value;
                 const price = parseFloat(row.querySelector('.sku-price').value) || 0;
 
-                // Collect warehouse stock
-                const warehouseStock = [];
-                const stockInputs = row.querySelectorAll('.sku-stock');
-                let totalStock = 0;
-                
-                // Check if stock inputs have warehouse IDs (detailed multi-warehouse mode)
-                const hasWarehouseInputs = stockInputs.length > 0 && stockInputs[0].dataset.warehouseId;
-                
-                if (hasWarehouseInputs && activeWarehouses.length > 0) {
-                    stockInputs.forEach(input => {
-                        const warehouseId = parseInt(input.dataset.warehouseId);
-                        const stock = parseInt(input.value) || 0;
-                        totalStock += stock;
-                        warehouseStock.push({
-                            warehouse_id: warehouseId,
-                            stock: stock
-                        });
-                    });
-                } else {
-                    // Single stock input mode - use default_warehouse_id from dropdown
-                    totalStock = parseInt(stockInputs[0]?.value) || 0;
-                    if (defaultWarehouseId && totalStock > 0) {
-                        warehouseStock.push({
-                            warehouse_id: defaultWarehouseId,
-                            stock: totalStock
-                        });
-                    }
-                }
-
                 // Collect option_value_ids (we'll need to map them properly in backend)
                 const variantValues = [];
                 const cells = row.querySelectorAll('td');
-                const stockColCount = activeWarehouses.length > 0 ? activeWarehouses.length : 1;
-                for (let i = 1; i < cells.length - stockColCount - 1; i++) {
+                // Skip first (SKU code) and last (price) columns
+                for (let i = 1; i < cells.length - 1; i++) {
                     variantValues.push(cells[i].textContent.trim());
                 }
 
                 skus.push({
                     sku_code: skuCode,
                     price,
-                    stock: totalStock,
-                    warehouse_stock: warehouseStock,
                     variant_values: variantValues,
-                    option_value_ids: [] // Will be populated by backend based on variant_values
+                    option_value_ids: []
                 });
             });
 
