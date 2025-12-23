@@ -3125,6 +3125,15 @@ async function loadWarehouseDropdowns(prefix) {
             });
         }
         
+        // For product-based adjustment
+        const productAdjustSelect = document.getElementById('productAdjustWarehouse');
+        if (productAdjustSelect && prefix === 'productAdjust') {
+            productAdjustSelect.innerHTML = '<option value="">-- เลือกโกดัง --</option>';
+            activeWarehouses.forEach(w => {
+                productAdjustSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+            });
+        }
+        
         const historyWarehouse = document.getElementById('historyWarehouse');
         if (historyWarehouse) {
             historyWarehouse.innerHTML = '<option value="">ทุกโกดัง</option>';
@@ -3307,8 +3316,13 @@ let bulkRowId = 1;
 let bulkSearchTimeouts = {};
 let bulkSkuCache = {};
 
+// Product-based adjustment state
+let productAdjustSearchTimeout = null;
+let selectedProductData = null;
+
 async function loadStockAdjustmentPage() {
     await loadWarehouseDropdowns('bulk');
+    await loadWarehouseDropdowns('productAdjust');
     loadAdjustmentHistory();
     updateBulkAdjustSummary();
     
@@ -3741,6 +3755,230 @@ const ADJUSTMENT_TYPE_LABELS = {
     'transfer_in': 'ย้ายเข้า',
     'transfer_out': 'ย้ายออก'
 };
+
+// ==================== PRODUCT-BASED STOCK ADJUSTMENT ====================
+
+function searchProductForAdjust(keyword) {
+    clearTimeout(productAdjustSearchTimeout);
+    if (!keyword || keyword.length < 2) {
+        document.getElementById('productSearchResults').style.display = 'none';
+        return;
+    }
+    
+    productAdjustSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/products?search=${encodeURIComponent(keyword)}&limit=20`);
+            if (!response.ok) throw new Error('Failed to search products');
+            const data = await response.json();
+            const products = data.products || data;
+            
+            const resultsDiv = document.getElementById('productSearchResults');
+            if (products.length === 0) {
+                resultsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #9ca3af;">ไม่พบสินค้า</div>';
+            } else {
+                resultsDiv.innerHTML = products.map(p => `
+                    <div class="sku-result-item" onclick="selectProductForAdjust(${p.id})" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <img src="${p.image_url || '/static/images/placeholder.png'}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.1);">
+                            <div>
+                                <strong style="font-size: 14px;">${escapeHtml(p.name)}</strong>
+                                <div style="font-size: 12px; color: #9ca3af;">${escapeHtml(p.parent_sku)} | ${p.sku_count || '-'} SKU</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching products:', error);
+        }
+    }, 300);
+}
+
+async function selectProductForAdjust(productId) {
+    document.getElementById('productSearchResults').style.display = 'none';
+    document.getElementById('productSearchForAdjust').value = '';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/products/${productId}/skus-with-stock`);
+        if (!response.ok) throw new Error('Failed to load product SKUs');
+        selectedProductData = await response.json();
+        
+        // Update product card
+        const product = selectedProductData.product;
+        document.getElementById('selectedProductImage').src = product.image_url || '/static/images/placeholder.png';
+        document.getElementById('selectedProductName').textContent = product.name;
+        document.getElementById('selectedProductSku').textContent = `Parent SKU: ${product.parent_sku}`;
+        document.getElementById('selectedProductSkuCount').textContent = `${selectedProductData.sku_count} SKU`;
+        
+        // Populate warehouse dropdown
+        const warehouseSelect = document.getElementById('productAdjustWarehouse');
+        warehouseSelect.innerHTML = '<option value="">-- เลือกโกดัง --</option>';
+        selectedProductData.warehouses.forEach(w => {
+            warehouseSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+        });
+        
+        // Render SKU table
+        renderProductSkuTable();
+        
+        // Show card
+        document.getElementById('selectedProductCard').style.display = 'block';
+    } catch (error) {
+        console.error('Error loading product for adjustment:', error);
+        showGlobalAlert('ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
+    }
+}
+
+function renderProductSkuTable() {
+    if (!selectedProductData) return;
+    
+    const tbody = document.getElementById('productSkuTableBody');
+    const warehouseId = document.getElementById('productAdjustWarehouse').value;
+    
+    tbody.innerHTML = selectedProductData.skus.map(sku => {
+        const warehouseStock = warehouseId 
+            ? (sku.warehouses.find(w => w.warehouse_id == warehouseId)?.stock || 0)
+            : '-';
+        
+        return `
+            <tr data-sku-id="${sku.id}">
+                <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                <td style="padding: 10px 14px; font-size: 13px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
+                <td style="padding: 10px 14px; text-align: center; font-weight: 600;">${sku.total_stock}</td>
+                <td style="padding: 10px 14px; text-align: center;" class="sku-warehouse-stock">${warehouseStock}</td>
+                <td style="padding: 10px 14px; text-align: center;">
+                    <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
+                           style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
+                           oninput="updateProductAdjustSummary()">
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    updateProductAdjustSummary();
+}
+
+function updateProductSkuStocks() {
+    if (!selectedProductData) return;
+    
+    const warehouseId = document.getElementById('productAdjustWarehouse').value;
+    const tbody = document.getElementById('productSkuTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        const skuId = parseInt(row.dataset.skuId);
+        const sku = selectedProductData.skus.find(s => s.id === skuId);
+        if (sku) {
+            const stockCell = row.querySelector('.sku-warehouse-stock');
+            if (warehouseId) {
+                const warehouse = sku.warehouses.find(w => w.warehouse_id == warehouseId);
+                stockCell.textContent = warehouse ? warehouse.stock : 0;
+            } else {
+                stockCell.textContent = '-';
+            }
+        }
+    });
+}
+
+function updateProductAdjustSummary() {
+    const inputs = document.querySelectorAll('#productSkuTableBody .sku-adjust-qty');
+    let count = 0;
+    inputs.forEach(input => {
+        if (input.value && parseInt(input.value) > 0) count++;
+    });
+    document.getElementById('productAdjustSummary').textContent = `รายการที่กรอกจำนวน: ${count} SKU`;
+}
+
+function fillAllSkuQuantity() {
+    const qty = document.getElementById('fillAllQuantityValue').value || 1;
+    const inputs = document.querySelectorAll('#productSkuTableBody .sku-adjust-qty');
+    inputs.forEach(input => {
+        input.value = qty;
+    });
+    updateProductAdjustSummary();
+}
+
+function clearAllSkuQuantity() {
+    const inputs = document.querySelectorAll('#productSkuTableBody .sku-adjust-qty');
+    inputs.forEach(input => {
+        input.value = '';
+    });
+    updateProductAdjustSummary();
+}
+
+function clearSelectedProduct() {
+    selectedProductData = null;
+    document.getElementById('selectedProductCard').style.display = 'none';
+    document.getElementById('productSearchForAdjust').value = '';
+    document.getElementById('productSkuTableBody').innerHTML = '';
+}
+
+async function submitProductAdjustment() {
+    if (!selectedProductData) {
+        showGlobalAlert('กรุณาเลือกสินค้าก่อน', 'error');
+        return;
+    }
+    
+    const warehouseId = document.getElementById('productAdjustWarehouse').value;
+    const adjustType = document.getElementById('productAdjustType').value;
+    const notes = document.getElementById('productAdjustNotes').value.trim();
+    
+    if (!warehouseId) {
+        showGlobalAlert('กรุณาเลือกโกดัง', 'error');
+        return;
+    }
+    
+    if (!adjustType) {
+        showGlobalAlert('กรุณาเลือกประเภทการปรับ', 'error');
+        return;
+    }
+    
+    // Collect adjustments
+    const adjustments = [];
+    const rows = document.querySelectorAll('#productSkuTableBody tr');
+    rows.forEach(row => {
+        const skuId = parseInt(row.dataset.skuId);
+        const qtyInput = row.querySelector('.sku-adjust-qty');
+        const qty = parseInt(qtyInput.value);
+        if (qty > 0) {
+            adjustments.push({
+                sku_id: skuId,
+                warehouse_id: parseInt(warehouseId),
+                quantity: qty,
+                adjustment_type: adjustType,
+                notes: notes
+            });
+        }
+    });
+    
+    if (adjustments.length === 0) {
+        showGlobalAlert('กรุณากรอกจำนวนอย่างน้อย 1 รายการ', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock-adjustments/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adjustments })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to submit adjustments');
+        }
+        
+        const result = await response.json();
+        showGlobalAlert(`บันทึกการปรับสต็อก ${result.success_count} รายการเรียบร้อย`, 'success');
+        
+        // Clear form and reload
+        clearSelectedProduct();
+        loadAdjustmentHistory();
+    } catch (error) {
+        console.error('Error submitting adjustments:', error);
+        showGlobalAlert(error.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
 
 async function loadAdjustmentHistory() {
     const adjustType = document.getElementById('adjustFilterType')?.value;

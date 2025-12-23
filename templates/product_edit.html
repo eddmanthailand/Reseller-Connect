@@ -2161,8 +2161,10 @@
                 });
                 
                 if (existingRow) {
-                    existingRow.querySelector('.sku-price').value = sku.price || 0;
-                    existingRow.querySelector('.sku-stock').value = sku.stock || 0;
+                    const priceInput = existingRow.querySelector('.sku-price');
+                    if (priceInput) {
+                        priceInput.value = sku.price || 0;
+                    }
                 }
             });
         }

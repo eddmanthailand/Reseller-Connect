@@ -6438,6 +6438,122 @@ def update_product_warehouse_stock(product_id):
         'error': 'การแก้ไขสต็อกโดยตรงถูกปิดใช้งาน กรุณาใช้หน้าปรับสต็อกเพื่อให้มีประวัติการเปลี่ยนแปลง'
     }), 400
 
+@app.route('/api/admin/products/<int:product_id>/skus-with-stock', methods=['GET'])
+@admin_required
+def get_product_skus_with_stock(product_id):
+    """Get all SKUs of a product with warehouse stock and variant info for bulk stock adjustment"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get product info
+        cursor.execute('''
+            SELECT p.id, p.name, p.parent_sku, 
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
+            FROM products p
+            WHERE p.id = %s
+        ''', (product_id,))
+        product = cursor.fetchone()
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Get options for this product
+        cursor.execute('''
+            SELECT o.id, o.name, 
+                   json_agg(json_build_object('id', ov.id, 'value', ov.value) ORDER BY ov.sort_order) as values
+            FROM options o
+            LEFT JOIN option_values ov ON o.id = ov.option_id
+            WHERE o.product_id = %s
+            GROUP BY o.id, o.name
+            ORDER BY o.id
+        ''', (product_id,))
+        options = cursor.fetchall()
+        
+        # Get SKUs with variant values and warehouse stock
+        cursor.execute('''
+            SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
+                   json_agg(DISTINCT jsonb_build_object('option_name', o.name, 'value', ov.value)) as variant_values
+            FROM skus s
+            LEFT JOIN sku_values_map svm ON s.id = svm.sku_id
+            LEFT JOIN option_values ov ON svm.option_value_id = ov.id
+            LEFT JOIN options o ON ov.option_id = o.id
+            WHERE s.product_id = %s
+            GROUP BY s.id, s.sku_code, s.stock, s.price
+            ORDER BY s.id
+        ''', (product_id,))
+        skus_raw = cursor.fetchall()
+        
+        # Get warehouses
+        cursor.execute('SELECT id, name FROM warehouses WHERE is_active = TRUE ORDER BY name')
+        warehouses = cursor.fetchall()
+        
+        # Get warehouse stock for all SKUs
+        cursor.execute('''
+            SELECT sws.sku_id, sws.warehouse_id, sws.stock
+            FROM sku_warehouse_stock sws
+            JOIN skus s ON s.id = sws.sku_id
+            WHERE s.product_id = %s
+        ''', (product_id,))
+        warehouse_stocks = cursor.fetchall()
+        
+        # Build warehouse stock map
+        stock_map = {}
+        for ws in warehouse_stocks:
+            key = (ws['sku_id'], ws['warehouse_id'])
+            stock_map[key] = ws['stock']
+        
+        # Build SKU list with warehouse stocks
+        skus = []
+        for sku in skus_raw:
+            # Parse variant values to readable format
+            variant_display = []
+            if sku['variant_values']:
+                for v in sku['variant_values']:
+                    if v.get('option_name') and v.get('value'):
+                        variant_display.append(f"{v['option_name']}: {v['value']}")
+            
+            # Get stock per warehouse
+            sku_warehouses = []
+            for wh in warehouses:
+                stock = stock_map.get((sku['id'], wh['id']), 0)
+                sku_warehouses.append({
+                    'warehouse_id': wh['id'],
+                    'warehouse_name': wh['name'],
+                    'stock': stock
+                })
+            
+            skus.append({
+                'id': sku['id'],
+                'sku_code': sku['sku_code'],
+                'total_stock': sku['total_stock'],
+                'price': float(sku['price']) if sku['price'] else 0,
+                'variant_display': ' / '.join(variant_display) if variant_display else '-',
+                'warehouses': sku_warehouses
+            })
+        
+        return jsonify({
+            'product': {
+                'id': product['id'],
+                'name': product['name'],
+                'parent_sku': product['parent_sku'],
+                'image_url': product['image_url']
+            },
+            'options': [{'id': o['id'], 'name': o['name'], 'values': o['values'] or []} for o in options],
+            'warehouses': [{'id': w['id'], 'name': w['name']} for w in warehouses],
+            'skus': skus,
+            'sku_count': len(skus)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== STOCK TRANSFER ROUTES ====================
 
 @app.route('/api/admin/stock-transfers', methods=['GET'])
