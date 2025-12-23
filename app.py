@@ -1830,15 +1830,8 @@ def update_sku(sku_id):
             except (ValueError, TypeError):
                 return jsonify({'error': 'Invalid price value'}), 400
         
-        if 'stock' in data:
-            try:
-                stock = int(data['stock'])
-                if stock < 0:
-                    return jsonify({'error': 'Stock cannot be negative'}), 400
-                updates.append('stock = %s')
-                params.append(stock)
-            except (ValueError, TypeError):
-                return jsonify({'error': 'Invalid stock value'}), 400
+        # Stock updates disabled - silently ignore to preserve price edit functionality
+        # Stock changes must go through Stock Adjustment page for audit trail
         
         if not updates:
             return jsonify({'error': 'No valid fields to update'}), 400
@@ -6453,57 +6446,10 @@ def get_product_warehouse_stock(product_id):
 @app.route('/api/admin/products/<int:product_id>/warehouse-stock', methods=['PUT'])
 @admin_required
 def update_product_warehouse_stock(product_id):
-    """Update warehouse stock for SKUs of a product"""
-    data = request.json
-    if not data or 'stocks' not in data:
-        return jsonify({'error': 'Stock data required'}), 400
-    
-    conn = None
-    cursor = None
-    try:
-        conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        
-        cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
-        if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
-        
-        for stock_item in data['stocks']:
-            sku_id = stock_item.get('sku_id')
-            warehouse_id = stock_item.get('warehouse_id')
-            stock = stock_item.get('stock', 0)
-            
-            if not sku_id or not warehouse_id:
-                continue
-            
-            cursor.execute('''
-                INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (sku_id, warehouse_id) 
-                DO UPDATE SET stock = EXCLUDED.stock
-            ''', (sku_id, warehouse_id, stock))
-        
-        cursor.execute('''
-            UPDATE skus SET stock = (
-                SELECT COALESCE(SUM(sws.stock), 0) 
-                FROM sku_warehouse_stock sws 
-                WHERE sws.sku_id = skus.id
-            )
-            WHERE product_id = %s
-        ''', (product_id,))
-        
-        conn.commit()
-        return jsonify({'message': 'Stock updated successfully'}), 200
-        
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+    """Disabled - Stock updates must go through Stock Adjustment page for audit trail"""
+    return jsonify({
+        'error': 'การแก้ไขสต็อกโดยตรงถูกปิดใช้งาน กรุณาใช้หน้าปรับสต็อกเพื่อให้มีประวัติการเปลี่ยนแปลง'
+    }), 400
 
 # ==================== STOCK TRANSFER ROUTES ====================
 

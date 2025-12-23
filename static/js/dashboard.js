@@ -1013,11 +1013,10 @@ function renderProducts() {
                 </button>
             </td>
             <td>
-                <button class="edit-stock-btn" onclick="openEditStockModal(${product.id})">
-                    <span style="font-size: 11px;">${totalStock.toLocaleString()}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                </button>
-                ${stockWarningBadge}
+                <div class="stock-display-readonly" style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 500;">${totalStock.toLocaleString()}</span>
+                    ${stockWarningBadge}
+                </div>
             </td>
             <td>
                 <label class="toggle-switch">
@@ -1434,126 +1433,20 @@ async function saveAllPrices() {
     }
 }
 
-// Open Edit Stock Modal - with warehouse support
-async function openEditStockModal(productId) {
-    const product = allProducts.find(p => p.id === productId);
-    if (!product) return;
-    
-    currentEditingProduct = product;
-    const modal = document.getElementById('editStockModal');
-    const skuList = document.getElementById('stockModalSkuList');
-    
-    skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">กำลังโหลด...</div>';
-    modal.classList.add('active');
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/products/${productId}/warehouse-stock`);
-        if (!response.ok) throw new Error('Failed to load warehouse stock');
-        const warehouseStockData = await response.json();
-        
-        if (!warehouseStockData || warehouseStockData.length === 0) {
-            skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.6);">ไม่มี SKU สำหรับสินค้านี้</div>';
-            return;
-        }
-        
-        let html = '';
-        warehouseStockData.forEach(skuData => {
-            const sku = product.skus?.find(s => s.id === skuData.sku_id);
-            const variantName = sku?.variant_name || '';
-            
-            let warehouseInputsHtml = '';
-            if (skuData.warehouses && skuData.warehouses.length > 0) {
-                skuData.warehouses.forEach(wh => {
-                    warehouseInputsHtml += `
-                        <div class="warehouse-stock-row" style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                            <span style="flex: 1; font-size: 12px; color: rgba(255,255,255,0.7);">${escapeHtml(wh.warehouse_name)}</span>
-                            <input type="number" class="modal-sku-input warehouse-stock-input" 
-                                   data-sku-id="${skuData.sku_id}" 
-                                   data-warehouse-id="${wh.warehouse_id}"
-                                   value="${wh.stock || 0}" 
-                                   min="0" step="1"
-                                   style="width: 80px;">
-                        </div>
-                    `;
-                });
-            } else {
-                warehouseInputsHtml = '<div style="font-size: 12px; color: rgba(255,255,255,0.5);">ไม่มีโกดัง</div>';
-            }
-            
-            html += `
-                <div class="modal-sku-item" data-sku-id="${skuData.sku_id}">
-                    <div class="modal-sku-image-placeholder">📦</div>
-                    <div class="modal-sku-info">
-                        <div class="modal-sku-name">${escapeHtml(product.name)}${variantName ? ', ' + escapeHtml(variantName) : ''}</div>
-                        <div class="modal-sku-code">SKU: ${escapeHtml(skuData.sku_code || '-')} | รวม: ${skuData.total_stock || 0}</div>
-                    </div>
-                    <div class="modal-sku-inputs" style="min-width: 200px;">
-                        ${warehouseInputsHtml}
-                    </div>
-                </div>
-            `;
-        });
-        
-        skuList.innerHTML = html;
-    } catch (error) {
-        console.error('Error loading warehouse stock:', error);
-        skuList.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
-    }
-    
-    const searchInput = document.getElementById('stockModalSearch');
-    searchInput.value = '';
-    searchInput.oninput = () => filterModalSkus('stockModalSkuList', searchInput.value);
+// Stock editing from Product Management is disabled
+// All stock changes must go through Stock Adjustment page for audit trail
+function openEditStockModal(productId) {
+    showAlert('กรุณาใช้หน้า "ปรับสต็อก" เพื่อแก้ไขสต็อกสินค้า เพื่อให้มีประวัติการเปลี่ยนแปลง', 'info');
 }
 
-// Close Edit Stock Modal
 function closeEditStockModal() {
     const modal = document.getElementById('editStockModal');
-    modal.classList.remove('active');
-    currentEditingProduct = null;
+    if (modal) modal.classList.remove('active');
 }
 
-// Save all stock - with warehouse support
-async function saveAllStock() {
-    if (!currentEditingProduct) {
-        closeEditStockModal();
-        return;
-    }
-    
-    const inputs = document.querySelectorAll('#stockModalSkuList .warehouse-stock-input');
-    const stocks = [];
-    
-    inputs.forEach(input => {
-        const skuId = parseInt(input.dataset.skuId);
-        const warehouseId = parseInt(input.dataset.warehouseId);
-        const stockVal = parseInt(input.value);
-        const stock = isNaN(stockVal) || stockVal < 0 ? 0 : stockVal;
-        stocks.push({ sku_id: skuId, warehouse_id: warehouseId, stock });
-    });
-    
-    if (stocks.length === 0) {
-        closeEditStockModal();
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/products/${currentEditingProduct.id}/warehouse-stock`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stocks })
-        });
-        
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Failed to save stock');
-        }
-        
-        showAlert('บันทึกสต็อกสำเร็จ', 'success');
-        closeEditStockModal();
-        await loadProducts();
-    } catch (error) {
-        console.error('Error saving stock:', error);
-        showAlert(error.message || 'เกิดข้อผิดพลาดในการบันทึกสต็อก', 'error');
-    }
+function saveAllStock() {
+    showAlert('กรุณาใช้หน้า "ปรับสต็อก" เพื่อแก้ไขสต็อกสินค้า', 'info');
+    closeEditStockModal();
 }
 
 // Filter modal SKUs by search term
