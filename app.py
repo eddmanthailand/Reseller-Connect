@@ -7115,12 +7115,12 @@ def search_skus_for_stock():
         if warehouse_id:
             query = '''
                 SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
-                       p.id as product_id, p.name as product_name, p.spu,
+                       p.id as product_id, p.name as product_name, p.parent_sku,
                        COALESCE(sws.stock, 0) as warehouse_stock
                 FROM skus s
                 JOIN products p ON p.id = s.product_id
                 LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = s.id AND sws.warehouse_id = %s
-                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
+                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.parent_sku ILIKE %s)
                 ORDER BY p.name, s.sku_code
                 LIMIT 50
             '''
@@ -7128,11 +7128,11 @@ def search_skus_for_stock():
         else:
             query = '''
                 SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
-                       p.id as product_id, p.name as product_name, p.spu,
+                       p.id as product_id, p.name as product_name, p.parent_sku,
                        0 as warehouse_stock
                 FROM skus s
                 JOIN products p ON p.id = s.product_id
-                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.spu ILIKE %s)
+                WHERE (s.sku_code ILIKE %s OR p.name ILIKE %s OR p.parent_sku ILIKE %s)
                 ORDER BY p.name, s.sku_code
                 LIMIT 50
             '''
