@@ -6377,6 +6377,48 @@ def delete_warehouse(warehouse_id):
         if conn:
             conn.close()
 
+@app.route('/api/admin/products', methods=['GET'])
+@admin_required
+def api_get_products():
+    """Search/list products for stock adjustment page"""
+    search = request.args.get('search', '').strip()
+    limit = min(int(request.args.get('limit', 20)), 50)
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        query = '''
+            SELECT p.id, p.name, p.parent_sku, p.status,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT COUNT(*) FROM skus WHERE product_id = p.id) as sku_count
+            FROM products p
+            WHERE p.status != 'deleted'
+        '''
+        params = []
+        
+        if search:
+            query += ' AND (p.name ILIKE %s OR p.parent_sku ILIKE %s)'
+            params.extend([f'%{search}%', f'%{search}%'])
+        
+        query += ' ORDER BY p.name LIMIT %s'
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        products = cursor.fetchall()
+        
+        return jsonify({'products': products}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/admin/products/<int:product_id>/warehouse-stock', methods=['GET'])
 @admin_required
 def get_product_warehouse_stock(product_id):
