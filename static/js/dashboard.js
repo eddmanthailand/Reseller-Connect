@@ -3561,31 +3561,34 @@ function addBulkAdjustmentRow() {
     const newRow = document.createElement('div');
     newRow.className = 'bulk-sku-row';
     newRow.setAttribute('data-row-id', bulkRowId);
-    newRow.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 140px 50px; gap: 12px; align-items: start; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 12px;';
+    newRow.style.cssText = 'padding: 16px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08);';
     newRow.innerHTML = `
-        <div style="position: relative;">
-            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
-            <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, ${bulkRowId})">
-            <div class="bulk-sku-results"></div>
-            <input type="hidden" class="bulk-sku-id">
-            <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
-        </div>
-        <div>
-            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">สต็อกปัจจุบัน</label>
-            <div class="bulk-current-stock" style="padding: 12px; font-size: 14px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
-        </div>
-        <div>
-            <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวนที่ปรับ *</label>
-            <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 14px; text-align: center;">
-        </div>
-        <div style="padding-top: 28px;">
-            <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(${bulkRowId})" title="ลบรายการ" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 13px; color: #9ca3af;">รายการที่ ${bulkRowId}</span>
+            <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(${bulkRowId})" title="ลบรายการ" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 6h18"></path>
                     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                 </svg>
             </button>
+        </div>
+        <div style="position: relative; margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">ค้นหา SKU *</label>
+            <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, ${bulkRowId})">
+            <div class="bulk-sku-results"></div>
+            <input type="hidden" class="bulk-sku-id">
+            <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">สต็อกปัจจุบัน</label>
+                <div class="bulk-current-stock" style="padding: 12px; font-size: 16px; font-weight: 600; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">จำนวนที่ปรับ *</label>
+                <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 16px; text-align: center; width: 100%;">
+            </div>
         </div>
     `;
     container.appendChild(newRow);
@@ -3624,7 +3627,9 @@ function searchSkuForBulkAdjust(input, rowId) {
     
     bulkSearchTimeouts[rowId] = setTimeout(async () => {
         try {
-            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
+            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`, {
+                credentials: 'include'
+            });
             if (!response.ok) throw new Error('Failed to search SKUs');
             const skus = await response.json();
             
@@ -3752,30 +3757,33 @@ function resetBulkAdjustmentForm() {
     document.getElementById('bulkAdjustmentForm').reset();
     const container = document.getElementById('bulkSkuContainer');
     container.innerHTML = `
-        <div class="bulk-sku-row" data-row-id="1" style="display: grid; grid-template-columns: 1fr 120px 140px 50px; gap: 12px; align-items: start; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 12px;">
-            <div style="position: relative;">
-                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
-                <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, 1)">
-                <div class="bulk-sku-results"></div>
-                <input type="hidden" class="bulk-sku-id">
-                <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
-            </div>
-            <div>
-                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">สต็อกปัจจุบัน</label>
-                <div class="bulk-current-stock" style="padding: 12px; font-size: 14px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
-            </div>
-            <div>
-                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวนที่ปรับ *</label>
-                <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 14px; text-align: center;">
-            </div>
-            <div style="padding-top: 28px;">
-                <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(1)" title="ลบรายการ" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="bulk-sku-row" data-row-id="1" style="padding: 16px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 13px; color: #9ca3af;">รายการที่ 1</span>
+                <button type="button" class="btn-icon" onclick="removeBulkAdjustmentRow(1)" title="ลบรายการ" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 6h18"></path>
                         <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
                         <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
                     </svg>
                 </button>
+            </div>
+            <div style="position: relative; margin-bottom: 12px;">
+                <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">ค้นหา SKU *</label>
+                <input type="text" class="form-input bulk-sku-search" style="padding: 12px; font-size: 14px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือรหัส SKU..." oninput="searchSkuForBulkAdjust(this, 1)">
+                <div class="bulk-sku-results"></div>
+                <input type="hidden" class="bulk-sku-id">
+                <div class="bulk-sku-name" style="font-size: 12px; color: #9ca3af; margin-top: 4px; min-height: 18px;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">สต็อกปัจจุบัน</label>
+                    <div class="bulk-current-stock" style="padding: 12px; font-size: 16px; font-weight: 600; text-align: center; background: rgba(255,255,255,0.05); border-radius: 8px; color: #9ca3af;">-</div>
+                </div>
+                <div>
+                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px; display: block;">จำนวนที่ปรับ *</label>
+                    <input type="number" class="form-input bulk-quantity" min="1" placeholder="0" style="padding: 12px; font-size: 16px; text-align: center; width: 100%;">
+                </div>
             </div>
         </div>
     `;
