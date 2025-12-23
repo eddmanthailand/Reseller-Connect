@@ -3627,16 +3627,20 @@ function searchSkuForBulkAdjust(input, rowId) {
     
     bulkSearchTimeouts[rowId] = setTimeout(async () => {
         try {
-            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`, {
-                credentials: 'include'
-            });
-            if (!response.ok) throw new Error('Failed to search SKUs');
-            const skus = await response.json();
+            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
+            const data = await response.json();
             
-            if (skus.length === 0) {
+            if (!response.ok) {
+                console.error('SKU search failed:', response.status, data);
+                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6; justify-content: center;">เกิดข้อผิดพลาด</div>';
+                resultsDiv.classList.add('show');
+                return;
+            }
+            
+            if (data.length === 0) {
                 resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6; justify-content: center;">ไม่พบ SKU</div>';
             } else {
-                resultsDiv.innerHTML = skus.slice(0, 10).map(s => `
+                resultsDiv.innerHTML = data.slice(0, 10).map(s => `
                     <div class="sku-result-item" onclick="selectBulkSku(${rowId}, ${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}', ${s.total_stock})">
                         <div><strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}</div>
                         <span class="stock-badge">สต็อก: ${s.total_stock}</span>
@@ -3646,6 +3650,8 @@ function searchSkuForBulkAdjust(input, rowId) {
             resultsDiv.classList.add('show');
         } catch (error) {
             console.error('Error searching SKUs:', error);
+            resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6; justify-content: center;">เกิดข้อผิดพลาด</div>';
+            resultsDiv.classList.add('show');
         }
     }, 200);
 }
