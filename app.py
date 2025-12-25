@@ -6954,26 +6954,17 @@ def create_stock_adjustment():
 @app.route('/api/admin/stock-adjustments/bulk', methods=['POST'])
 @admin_required
 def create_bulk_stock_adjustment():
-    """Create multiple stock adjustments at once"""
+    """Create multiple stock adjustments at once - supports per-item warehouse_id"""
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
-    required = ['warehouse_id', 'adjustment_type', 'adjustments']
-    for field in required:
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
-    
-    if not data['adjustments'] or len(data['adjustments']) == 0:
+    if 'adjustments' not in data or not data['adjustments'] or len(data['adjustments']) == 0:
         return jsonify({'error': 'At least one adjustment is required'}), 400
     
-    adjustment_type = data['adjustment_type']
-    if adjustment_type not in ADJUSTMENT_TYPES:
-        return jsonify({'error': 'Invalid adjustment type'}), 400
-    
-    direction = ADJUSTMENT_TYPES[adjustment_type]['direction']
-    warehouse_id = data['warehouse_id']
-    notes = data.get('notes', '')
+    global_warehouse_id = data.get('warehouse_id')
+    global_adjustment_type = data.get('adjustment_type')
+    global_notes = data.get('notes', '')
     user_id = session.get('user_id')
     
     conn = None
@@ -6988,11 +6979,23 @@ def create_bulk_stock_adjustment():
         for adj in data['adjustments']:
             sku_id = adj.get('sku_id')
             quantity = adj.get('quantity', 0)
+            warehouse_id = adj.get('warehouse_id') or global_warehouse_id
+            adjustment_type = adj.get('adjustment_type') or global_adjustment_type
+            notes = adj.get('notes') or global_notes
             
             if not sku_id or quantity <= 0:
                 errors.append({'sku_id': sku_id, 'error': 'Invalid data'})
                 continue
             
+            if not warehouse_id:
+                errors.append({'sku_id': sku_id, 'error': 'warehouse_id is required'})
+                continue
+                
+            if not adjustment_type or adjustment_type not in ADJUSTMENT_TYPES:
+                errors.append({'sku_id': sku_id, 'error': 'Invalid adjustment type'})
+                continue
+            
+            direction = ADJUSTMENT_TYPES[adjustment_type]['direction']
             quantity_change = quantity if direction == 'increase' else -quantity
             
             cursor.execute('''
