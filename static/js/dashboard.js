@@ -3937,10 +3937,10 @@ async function submitProductAdjustment() {
     const rows = document.querySelectorAll('#productSkuTableBody tr');
     rows.forEach(row => {
         const skuId = parseInt(row.dataset.skuId);
-        const warehouseId = row.dataset.warehouseId;
+        const warehouseId = row.getAttribute('data-warehouse-id');
         const qtyInput = row.querySelector('.sku-adjust-qty');
-        const qty = parseInt(qtyInput.value);
-        if (qty > 0 && warehouseId) {
+        const qty = parseInt(qtyInput.value) || 0;
+        if (qty > 0 && warehouseId && warehouseId !== '' && warehouseId !== 'undefined') {
             adjustments.push({
                 sku_id: skuId,
                 warehouse_id: parseInt(warehouseId),
