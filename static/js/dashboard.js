@@ -3323,7 +3323,6 @@ let productAdjustSearchTimeout = null;
 let selectedProductData = null;
 
 async function loadStockAdjustmentPage() {
-    await loadWarehouseDropdowns('productAdjust');
     loadAdjustmentHistory();
     
     // Check for pre-selected product from URL parameters (e.g., from product edit page)
@@ -3796,16 +3795,15 @@ async function selectProductForAdjust(productId) {
         document.getElementById('selectedProductImage').src = product.image_url || '/static/images/placeholder.png';
         document.getElementById('selectedProductName').textContent = product.name;
         document.getElementById('selectedProductSku').textContent = `Parent SKU: ${product.parent_sku}`;
-        document.getElementById('selectedProductSkuCount').textContent = `${selectedProductData.sku_count} SKU`;
         
-        // Populate warehouse dropdown
-        const warehouseSelect = document.getElementById('productAdjustWarehouse');
-        warehouseSelect.innerHTML = '<option value="">-- เลือกโกดัง --</option>';
-        selectedProductData.warehouses.forEach(w => {
-            warehouseSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+        // Count total rows (SKU x warehouse combinations)
+        let totalRows = 0;
+        selectedProductData.skus.forEach(sku => {
+            totalRows += sku.warehouses.length || 1;
         });
+        document.getElementById('selectedProductSkuCount').textContent = `${selectedProductData.sku_count} SKU | ${selectedProductData.warehouses.length} โกดัง`;
         
-        // Render SKU table
+        // Render SKU table (one row per SKU x warehouse)
         renderProductSkuTable();
         
         // Show card
@@ -3820,28 +3818,48 @@ function renderProductSkuTable() {
     if (!selectedProductData) return;
     
     const tbody = document.getElementById('productSkuTableBody');
-    const warehouseId = document.getElementById('productAdjustWarehouse').value;
+    const rows = [];
     
-    tbody.innerHTML = selectedProductData.skus.map(sku => {
-        const warehouseStock = warehouseId 
-            ? (sku.warehouses.find(w => w.warehouse_id == warehouseId)?.stock || 0)
-            : '-';
-        
-        return `
-            <tr data-sku-id="${sku.id}">
-                <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
-                <td style="padding: 10px 14px; font-size: 13px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
-                <td style="padding: 10px 14px; text-align: center; font-weight: 600;">${sku.total_stock}</td>
-                <td style="padding: 10px 14px; text-align: center;" class="sku-warehouse-stock">${warehouseStock}</td>
-                <td style="padding: 10px 14px; text-align: center;">
-                    <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
-                           style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
-                           oninput="updateProductAdjustSummary()">
-                </td>
-            </tr>
-        `;
-    }).join('');
+    // Generate one row per SKU x warehouse combination
+    selectedProductData.skus.forEach(sku => {
+        if (sku.warehouses && sku.warehouses.length > 0) {
+            sku.warehouses.forEach(warehouse => {
+                const stockColor = warehouse.stock <= 0 ? '#ef4444' : warehouse.stock <= 5 ? '#f59e0b' : '#10b981';
+                rows.push(`
+                    <tr data-sku-id="${sku.id}" data-warehouse-id="${warehouse.warehouse_id}">
+                        <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                        <td style="padding: 10px 14px; font-size: 12px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
+                        <td style="padding: 10px 14px; font-size: 13px;">
+                            <span style="background: rgba(139,92,246,0.15); color: #a78bfa; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${escapeHtml(warehouse.warehouse_name)}</span>
+                        </td>
+                        <td style="padding: 10px 14px; text-align: center; font-weight: 600; color: ${stockColor};">${warehouse.stock}</td>
+                        <td style="padding: 10px 14px; text-align: center;">
+                            <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
+                                   style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
+                                   oninput="updateProductAdjustSummary()">
+                        </td>
+                    </tr>
+                `);
+            });
+        } else {
+            // No warehouse data - show empty row
+            rows.push(`
+                <tr data-sku-id="${sku.id}" data-warehouse-id="">
+                    <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                    <td style="padding: 10px 14px; font-size: 12px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
+                    <td style="padding: 10px 14px; font-size: 13px; color: #9ca3af;">-</td>
+                    <td style="padding: 10px 14px; text-align: center; color: #9ca3af;">0</td>
+                    <td style="padding: 10px 14px; text-align: center;">
+                        <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
+                               style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
+                               oninput="updateProductAdjustSummary()">
+                    </td>
+                </tr>
+            `);
+        }
+    });
     
+    tbody.innerHTML = rows.join('');
     updateProductAdjustSummary();
 }
 
@@ -3906,28 +3924,23 @@ async function submitProductAdjustment() {
         return;
     }
     
-    const warehouseId = document.getElementById('productAdjustWarehouse').value;
     const adjustType = document.getElementById('productAdjustType').value;
     const notes = document.getElementById('productAdjustNotes').value.trim();
-    
-    if (!warehouseId) {
-        showGlobalAlert('กรุณาเลือกโกดัง', 'error');
-        return;
-    }
     
     if (!adjustType) {
         showGlobalAlert('กรุณาเลือกประเภทการปรับ', 'error');
         return;
     }
     
-    // Collect adjustments
+    // Collect adjustments - each row has its own warehouse_id
     const adjustments = [];
     const rows = document.querySelectorAll('#productSkuTableBody tr');
     rows.forEach(row => {
         const skuId = parseInt(row.dataset.skuId);
+        const warehouseId = row.dataset.warehouseId;
         const qtyInput = row.querySelector('.sku-adjust-qty');
         const qty = parseInt(qtyInput.value);
-        if (qty > 0) {
+        if (qty > 0 && warehouseId) {
             adjustments.push({
                 sku_id: skuId,
                 warehouse_id: parseInt(warehouseId),
