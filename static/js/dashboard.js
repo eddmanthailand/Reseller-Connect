@@ -3824,18 +3824,19 @@ function renderProductSkuTable() {
     selectedProductData.skus.forEach(sku => {
         if (sku.warehouses && sku.warehouses.length > 0) {
             sku.warehouses.forEach(warehouse => {
-                const stockColor = warehouse.stock <= 0 ? '#ef4444' : warehouse.stock <= 5 ? '#f59e0b' : '#10b981';
+                const stockBg = warehouse.stock <= 0 ? 'rgba(239,68,68,0.2)' : warehouse.stock <= 5 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)';
+                const stockBorder = warehouse.stock <= 0 ? '#ef4444' : warehouse.stock <= 5 ? '#f59e0b' : '#10b981';
                 rows.push(`
                     <tr data-sku-id="${sku.id}" data-warehouse-id="${warehouse.warehouse_id}">
-                        <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
-                        <td style="padding: 10px 14px; font-size: 12px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
-                        <td style="padding: 10px 14px; font-size: 13px;">
-                            <span style="background: rgba(139,92,246,0.15); color: #a78bfa; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${escapeHtml(warehouse.warehouse_name)}</span>
+                        <td style="padding: 10px 14px; font-size: 13px; color: #fff;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                        <td style="padding: 10px 14px; font-size: 12px; color: #e5e7eb;">${escapeHtml(sku.variant_display)}</td>
+                        <td style="padding: 10px 14px; font-size: 13px; color: #fff;">${escapeHtml(warehouse.warehouse_name)}</td>
+                        <td style="padding: 10px 14px; text-align: center;">
+                            <span style="display: inline-block; min-width: 50px; padding: 6px 12px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fff;">${warehouse.stock}</span>
                         </td>
-                        <td style="padding: 10px 14px; text-align: center; font-weight: 600; color: ${stockColor};">${warehouse.stock}</td>
                         <td style="padding: 10px 14px; text-align: center;">
                             <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
-                                   style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
+                                   style="width: 80px; padding: 8px; font-size: 14px; text-align: center; color: #fff;"
                                    oninput="updateProductAdjustSummary()">
                         </td>
                     </tr>
@@ -3845,13 +3846,15 @@ function renderProductSkuTable() {
             // No warehouse data - show empty row
             rows.push(`
                 <tr data-sku-id="${sku.id}" data-warehouse-id="">
-                    <td style="padding: 10px 14px; font-size: 13px;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
-                    <td style="padding: 10px 14px; font-size: 12px; color: #9ca3af;">${escapeHtml(sku.variant_display)}</td>
+                    <td style="padding: 10px 14px; font-size: 13px; color: #fff;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                    <td style="padding: 10px 14px; font-size: 12px; color: #e5e7eb;">${escapeHtml(sku.variant_display)}</td>
                     <td style="padding: 10px 14px; font-size: 13px; color: #9ca3af;">-</td>
-                    <td style="padding: 10px 14px; text-align: center; color: #9ca3af;">0</td>
+                    <td style="padding: 10px 14px; text-align: center;">
+                        <span style="display: inline-block; min-width: 50px; padding: 6px 12px; background: rgba(156,163,175,0.2); border: 1px solid #9ca3af; border-radius: 6px; font-weight: 700; font-size: 14px; color: #fff;">0</span>
+                    </td>
                     <td style="padding: 10px 14px; text-align: center;">
                         <input type="number" class="form-input sku-adjust-qty" min="0" placeholder="0" 
-                               style="width: 80px; padding: 8px; font-size: 14px; text-align: center;"
+                               style="width: 80px; padding: 8px; font-size: 14px; text-align: center; color: #fff;"
                                oninput="updateProductAdjustSummary()">
                     </td>
                 </tr>
