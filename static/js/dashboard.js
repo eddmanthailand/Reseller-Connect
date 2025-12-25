@@ -3297,12 +3297,14 @@ async function loadTransferHistory() {
         
         tbody.innerHTML = transfers.map(t => `
             <tr>
-                <td>${formatDateTime(t.created_at)}</td>
-                <td><strong>${escapeHtml(t.sku_code)}</strong><br><small>${escapeHtml(t.product_name)}</small></td>
-                <td>${escapeHtml(t.from_warehouse_name)}</td>
-                <td>${escapeHtml(t.to_warehouse_name)}</td>
-                <td><strong>${t.quantity}</strong></td>
-                <td>${t.created_by_name || '-'}</td>
+                <td style="color: #fff;">${formatDateTime(t.created_at)}</td>
+                <td style="color: #fff;"><strong>${escapeHtml(t.sku_code)}</strong><br><small style="color: #e5e7eb;">${escapeHtml(t.product_name)}</small></td>
+                <td style="color: #fff;">${escapeHtml(t.from_warehouse_name)}</td>
+                <td style="color: #fff;">${escapeHtml(t.to_warehouse_name)}</td>
+                <td style="text-align: center;">
+                    <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: rgba(139,92,246,0.2); border: 1px solid #a78bfa; border-radius: 6px; font-weight: 700; color: #fff;">${t.quantity}</span>
+                </td>
+                <td style="color: #fff;">${t.created_by_name || '-'}</td>
             </tr>
         `).join('');
     } catch (error) {
@@ -4074,19 +4076,23 @@ async function loadStockHistory() {
         tbody.innerHTML = logs.map(l => {
             const typeLabel = ADJUSTMENT_TYPE_LABELS[l.change_type] || l.change_type;
             const change = l.quantity_after - l.quantity_before;
-            const changeClass = change < 0 ? 'qty-decrease' : 'qty-increase';
+            const isDecrease = change < 0;
+            const changeBg = isDecrease ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)';
+            const changeBorder = isDecrease ? '#ef4444' : '#10b981';
             const changeSign = change > 0 ? '+' : '';
             return `
                 <tr>
-                    <td>${formatDateTime(l.created_at)}</td>
-                    <td><strong>${escapeHtml(l.sku_code)}</strong><br><small>${escapeHtml(l.product_name)}</small></td>
-                    <td>${l.warehouse_name ? escapeHtml(l.warehouse_name) : '-'}</td>
-                    <td><span class="type-badge">${typeLabel}</span></td>
-                    <td>${l.quantity_before}</td>
-                    <td>${l.quantity_after}</td>
-                    <td class="${changeClass}"><strong>${changeSign}${change}</strong></td>
-                    <td>${l.created_by_name || '-'}</td>
-                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${l.notes ? escapeHtml(l.notes) : '-'}</td>
+                    <td style="color: #fff;">${formatDateTime(l.created_at)}</td>
+                    <td style="color: #fff;"><strong>${escapeHtml(l.sku_code)}</strong><br><small style="color: #e5e7eb;">${escapeHtml(l.product_name)}</small></td>
+                    <td style="color: #fff;">${l.warehouse_name ? escapeHtml(l.warehouse_name) : '-'}</td>
+                    <td><span class="type-badge" style="color: #fff;">${typeLabel}</span></td>
+                    <td style="color: #fff; text-align: center;">${l.quantity_before}</td>
+                    <td style="color: #fff; text-align: center;">${l.quantity_after}</td>
+                    <td style="text-align: center;">
+                        <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: ${changeBg}; border: 1px solid ${changeBorder}; border-radius: 6px; font-weight: 700; color: #fff;">${changeSign}${change}</span>
+                    </td>
+                    <td style="color: #fff;">${l.created_by_name || '-'}</td>
+                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; color: #e5e7eb;">${l.notes ? escapeHtml(l.notes) : '-'}</td>
                 </tr>
             `;
         }).join('');
