@@ -3193,12 +3193,19 @@ async function selectProductForTransfer(productId) {
     try {
         const response = await fetch(`${API_URL}/admin/products/${productId}/skus-with-stock`);
         if (!response.ok) throw new Error('Failed to load product SKUs');
-        selectedTransferProductData = await response.json();
+        const data = await response.json();
         
-        document.getElementById('transferSelectedProductImage').src = selectedTransferProductData.image_url || '/static/images/placeholder.png';
-        document.getElementById('transferSelectedProductName').textContent = selectedTransferProductData.name;
-        document.getElementById('transferSelectedProductSku').textContent = `Parent SKU: ${selectedTransferProductData.parent_sku}`;
-        document.getElementById('transferSelectedProductSkuCount').textContent = `${selectedTransferProductData.skus.length} SKU`;
+        selectedTransferProductData = {
+            product: data.product,
+            skus: data.skus,
+            warehouses: data.warehouses
+        };
+        
+        const product = data.product;
+        document.getElementById('transferSelectedProductImage').src = product.image_url || '/static/images/placeholder.png';
+        document.getElementById('transferSelectedProductName').textContent = product.name;
+        document.getElementById('transferSelectedProductSku').textContent = `Parent SKU: ${product.parent_sku || '-'}`;
+        document.getElementById('transferSelectedProductSkuCount').textContent = `${data.skus.length} SKU`;
         document.getElementById('transferSelectedProductCard').style.display = 'block';
         
         updateTransferSkuTable();
@@ -3227,7 +3234,7 @@ function updateTransferSkuTable() {
     }
     
     const rows = selectedTransferProductData.skus.map(sku => {
-        const warehouseStock = sku.warehouse_stocks ? sku.warehouse_stocks.find(ws => ws.warehouse_id == fromWarehouseId) : null;
+        const warehouseStock = sku.warehouses ? sku.warehouses.find(ws => ws.warehouse_id == fromWarehouseId) : null;
         const stockInWarehouse = warehouseStock ? warehouseStock.stock : 0;
         
         const stockBg = stockInWarehouse === 0 ? 'rgba(239,68,68,0.2)' : (stockInWarehouse <= 5 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)');
@@ -3236,7 +3243,7 @@ function updateTransferSkuTable() {
         return `
             <tr data-sku-id="${sku.id}">
                 <td style="padding: 12px 16px; color: #fff;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
-                <td style="padding: 12px 16px; color: #e5e7eb;">${escapeHtml(sku.option_values || '-')}</td>
+                <td style="padding: 12px 16px; color: #e5e7eb;">${escapeHtml(sku.variant_display || '-')}</td>
                 <td style="padding: 12px 16px; text-align: center;">
                     <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 700; color: #fff;">${stockInWarehouse}</span>
                 </td>
