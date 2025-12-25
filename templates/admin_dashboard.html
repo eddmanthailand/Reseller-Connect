@@ -939,48 +939,68 @@
                     <p>ย้ายสินค้าจากโกดังหนึ่งไปอีกโกดัง</p>
                 </div>
 
-                <div class="content-wrapper" style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+                <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- Transfer Form Card (Full Width) -->
                     <div class="card">
-                        <h3 style="margin-bottom: 16px; font-size: 16px;">ย้ายสต็อก</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="font-size: 18px; margin: 0; font-weight: 600;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M7 16V4M7 4L3 8M7 4L11 8"/>
+                                    <path d="M17 8v12M17 20l4-4M17 20l-4-4"/>
+                                </svg>
+                                ย้ายสต็อก
+                            </h3>
+                            <span style="font-size: 13px; color: #9ca3af;">เลือก SKU และย้ายจากโกดังหนึ่งไปอีกโกดัง</span>
+                        </div>
                         <form id="stockTransferForm" onsubmit="handleStockTransfer(event)">
-                            <div class="form-group">
-                                <label class="form-label">ค้นหา SKU *</label>
-                                <input type="text" id="transferSkuSearch" class="form-input" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="searchSkuForTransfer(this.value)">
-                                <div id="transferSkuResults" class="sku-search-results" style="display: none;"></div>
-                                <input type="hidden" id="transferSkuId">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 16px; align-items: end;">
+                                <div class="form-group" style="margin-bottom: 0; position: relative;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
+                                    <input type="text" id="transferSkuSearch" class="form-input" style="padding: 12px;" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="searchSkuForTransfer(this.value)">
+                                    <div id="transferSkuResults" class="sku-search-results" style="display: none;"></div>
+                                    <input type="hidden" id="transferSkuId">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดังต้นทาง *</label>
+                                    <select id="transferFromWarehouse" class="form-input" style="padding: 12px;" required onchange="updateTransferStock()">
+                                        <option value="">-- เลือก --</option>
+                                    </select>
+                                    <div id="fromWarehouseStock" class="stock-info" style="display: none;"></div>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดังปลายทาง *</label>
+                                    <select id="transferToWarehouse" class="form-input" style="padding: 12px;" required>
+                                        <option value="">-- เลือก --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวน *</label>
+                                    <input type="number" id="transferQuantity" class="form-input" style="padding: 12px;" min="1" required placeholder="0">
+                                </div>
+                                <button type="submit" class="btn" style="padding: 12px 24px; white-space: nowrap;">ย้ายสต็อก</button>
                             </div>
-                            <div id="transferSkuInfo" class="sku-info-box" style="display: none;">
+                            <div id="transferSkuInfo" class="sku-info-box" style="display: none; margin-top: 16px;">
                                 <div class="sku-info-label">สินค้าที่เลือก:</div>
                                 <div id="transferSkuDetails"></div>
                             </div>
-                            <div class="form-group">
-                                <label class="form-label">โกดังต้นทาง *</label>
-                                <select id="transferFromWarehouse" class="form-input" required onchange="updateTransferStock()">
-                                    <option value="">-- เลือกโกดัง --</option>
-                                </select>
-                                <div id="fromWarehouseStock" class="stock-info" style="display: none;"></div>
+                            <div class="form-group" style="margin-top: 16px; margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">หมายเหตุ (ถ้ามี)</label>
+                                <textarea id="transferNotes" class="form-input" rows="2" placeholder="เหตุผลการย้าย"></textarea>
                             </div>
-                            <div class="form-group">
-                                <label class="form-label">โกดังปลายทาง *</label>
-                                <select id="transferToWarehouse" class="form-input" required>
-                                    <option value="">-- เลือกโกดัง --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">จำนวนที่ย้าย *</label>
-                                <input type="number" id="transferQuantity" class="form-input" min="1" required placeholder="0">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">หมายเหตุ</label>
-                                <textarea id="transferNotes" class="form-input" rows="2" placeholder="เหตุผลการย้าย (ถ้ามี)"></textarea>
-                            </div>
-                            <button type="submit" class="btn" style="width: 100%;">ย้ายสต็อก</button>
                         </form>
                     </div>
                     
+                    <!-- Transfer History Card (Full Width) -->
                     <div class="card" style="padding: 0; overflow: hidden;">
-                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                            <h3 style="font-size: 16px;">ประวัติการย้ายสต็อก</h3>
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <h3 style="font-size: 16px; margin: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M3 3v5h5"/>
+                                    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+                                    <path d="M12 7v5l4 2"/>
+                                </svg>
+                                ประวัติการย้ายสต็อก
+                            </h3>
                             <div style="display: flex; gap: 10px;">
                                 <input type="date" id="transferDateFrom" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadTransferHistory()">
                                 <input type="date" id="transferDateTo" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadTransferHistory()">
@@ -990,16 +1010,16 @@
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>วันที่</th>
-                                        <th>สินค้า / SKU</th>
-                                        <th>จากโกดัง</th>
-                                        <th>ไปโกดัง</th>
-                                        <th>จำนวน</th>
-                                        <th>ผู้ทำรายการ</th>
+                                        <th style="padding: 14px 16px;">วันที่</th>
+                                        <th style="padding: 14px 16px;">สินค้า / SKU</th>
+                                        <th style="padding: 14px 16px;">จากโกดัง</th>
+                                        <th style="padding: 14px 16px;">ไปโกดัง</th>
+                                        <th style="padding: 14px 16px;">จำนวน</th>
+                                        <th style="padding: 14px 16px;">ผู้ทำรายการ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="transferHistoryBody">
-                                    <tr><td colspan="6" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
+                                    <tr><td colspan="6" style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลด...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1193,16 +1213,31 @@
                     <p>ดูประวัติการเปลี่ยนแปลงสต็อกทั้งหมด</p>
                 </div>
 
-                <div class="content-wrapper">
-                    <div class="card" style="padding: 0; overflow: hidden;">
-                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                            <h3 style="font-size: 16px;">บันทึกการเปลี่ยนแปลงสต็อก</h3>
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <input type="text" id="historySearch" class="form-input" style="width: 180px; padding: 6px 10px; font-size: 12px;" placeholder="ค้นหา SKU / สินค้า" oninput="loadStockHistory()">
-                                <select id="historyWarehouse" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- Filter Card (Full Width) -->
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="font-size: 18px; margin: 0; font-weight: 600;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                                </svg>
+                                ตัวกรองข้อมูล
+                            </h3>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU / สินค้า</label>
+                                <input type="text" id="historySearch" class="form-input" style="padding: 12px;" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="loadStockHistory()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดัง</label>
+                                <select id="historyWarehouse" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
                                     <option value="">ทุกโกดัง</option>
                                 </select>
-                                <select id="historyChangeType" class="form-input" style="width: 140px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ประเภท</label>
+                                <select id="historyChangeType" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
                                     <option value="">ทุกประเภท</option>
                                     <option value="transfer_in">ย้ายเข้า</option>
                                     <option value="transfer_out">ย้ายออก</option>
@@ -1217,27 +1252,47 @@
                                     <option value="stock_in">รับเข้าสต็อก</option>
                                     <option value="return">รับคืน</option>
                                 </select>
-                                <input type="date" id="historyDateFrom" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
-                                <input type="date" id="historyDateTo" class="form-input" style="width: 130px; padding: 6px 10px; font-size: 12px;" onchange="loadStockHistory()">
                             </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จากวันที่</label>
+                                <input type="date" id="historyDateFrom" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ถึงวันที่</label>
+                                <input type="date" id="historyDateTo" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- History Table Card (Full Width) -->
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <h3 style="font-size: 16px; margin: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M3 3v5h5"/>
+                                    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+                                    <path d="M12 7v5l4 2"/>
+                                </svg>
+                                บันทึกการเปลี่ยนแปลงสต็อก
+                            </h3>
                         </div>
                         <div class="table-wrapper" style="border: none; border-radius: 0; max-height: 600px; overflow-y: auto;">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>วันที่/เวลา</th>
-                                        <th>สินค้า / SKU</th>
-                                        <th>โกดัง</th>
-                                        <th>ประเภท</th>
-                                        <th>ก่อน</th>
-                                        <th>หลัง</th>
-                                        <th>เปลี่ยน</th>
-                                        <th>ผู้ทำรายการ</th>
-                                        <th>หมายเหตุ</th>
+                                        <th style="padding: 14px 16px;">วันที่/เวลา</th>
+                                        <th style="padding: 14px 16px;">สินค้า / SKU</th>
+                                        <th style="padding: 14px 16px;">โกดัง</th>
+                                        <th style="padding: 14px 16px;">ประเภท</th>
+                                        <th style="padding: 14px 16px;">ก่อน</th>
+                                        <th style="padding: 14px 16px;">หลัง</th>
+                                        <th style="padding: 14px 16px;">เปลี่ยน</th>
+                                        <th style="padding: 14px 16px;">ผู้ทำรายการ</th>
+                                        <th style="padding: 14px 16px;">หมายเหตุ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="stockHistoryBody">
-                                    <tr><td colspan="9" style="text-align: center; padding: 30px; opacity: 0.6;">กำลังโหลด...</td></tr>
+                                    <tr><td colspan="9" style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลด...</td></tr>
                                 </tbody>
                             </table>
                         </div>
