@@ -4254,13 +4254,17 @@ function renderStockMovementChart(movements) {
                     label: 'เข้า',
                     data: stockIn,
                     backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                    borderRadius: 4
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.7
                 },
                 {
                     label: 'ออก',
                     data: stockOut,
                     backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                    borderRadius: 4
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.7
                 }
             ]
         },
@@ -4268,11 +4272,21 @@ function renderStockMovementChart(movements) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#9ca3af' } },
-                x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: 'rgba(255,255,255,0.1)' }, 
+                    ticks: { color: '#9ca3af', stepSize: 5 }
+                },
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#9ca3af' } 
+                }
             },
             plugins: {
-                legend: { labels: { color: '#fff' } }
+                legend: { 
+                    position: 'top',
+                    labels: { color: '#fff', boxWidth: 12, padding: 15 } 
+                }
             }
         }
     });

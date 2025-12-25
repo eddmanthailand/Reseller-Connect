@@ -7340,8 +7340,8 @@ def get_stock_summary():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Total stock value
-        cursor.execute('SELECT COALESCE(SUM(stock), 0) as total_stock FROM skus')
+        # Total stock value (from warehouse stock, not skus table)
+        cursor.execute('SELECT COALESCE(SUM(stock), 0) as total_stock FROM sku_warehouse_stock')
         total_stock = cursor.fetchone()['total_stock']
         
         # Stock by warehouse
