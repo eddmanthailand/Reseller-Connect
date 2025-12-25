@@ -950,53 +950,83 @@
                                 </svg>
                                 ย้ายสต็อก
                             </h3>
-                            <span style="font-size: 13px; color: #9ca3af;">เลือก SKU และย้ายจากโกดังหนึ่งไปอีกโกดัง</span>
+                            <span style="font-size: 13px; color: #9ca3af;">เลือกสินค้าแล้วย้ายสต็อก SKU ทั้งหมดพร้อมกัน</span>
                         </div>
-                        <form id="stockTransferForm" onsubmit="handleStockTransfer(event)">
-                            <!-- SKU Search (Full Width) -->
-                            <div style="position: relative; margin-bottom: 24px;">
-                                <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหา SKU</label>
-                                <input type="text" id="transferSkuSearch" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ SKU Code..." oninput="searchSkuForTransfer(this.value)">
-                                <div id="transferSkuResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 100; margin-top: 4px;"></div>
-                                <input type="hidden" id="transferSkuId">
+                        
+                        <!-- Product Search -->
+                        <div style="position: relative; margin-bottom: 20px;">
+                            <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหาสินค้า</label>
+                            <input type="text" id="transferProductSearch" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ Parent SKU..." oninput="searchProductForTransfer(this.value)">
+                            <div id="transferProductResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 100; margin-top: 4px;"></div>
+                        </div>
+                        
+                        <!-- Selected Product Card -->
+                        <div id="transferSelectedProductCard" style="display: none;">
+                            <div style="background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(236,72,153,0.1)); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <img id="transferSelectedProductImage" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; background: rgba(255,255,255,0.1);">
+                                    <div style="flex: 1;">
+                                        <h4 id="transferSelectedProductName" style="font-size: 18px; font-weight: 600; margin: 0 0 6px 0; color: #fff;"></h4>
+                                        <p id="transferSelectedProductSku" style="font-size: 13px; color: #9ca3af; margin: 0 0 8px 0;"></p>
+                                        <span id="transferSelectedProductSkuCount" class="status-badge" style="background: rgba(139,92,246,0.2); color: #a78bfa;"></span>
+                                    </div>
+                                    <button type="button" class="btn-icon" onclick="clearTransferSelectedProduct()" title="ยกเลิก" style="width: 36px; height: 36px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                             
-                            <!-- Selected SKU Info -->
-                            <div id="transferSkuInfo" class="sku-info-box" style="display: none; margin-bottom: 24px;">
-                                <div class="sku-info-label">สินค้าที่เลือก:</div>
-                                <div id="transferSkuDetails"></div>
-                            </div>
-                            
-                            <!-- Transfer Options (Grid) -->
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <!-- Warehouse Selection -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; margin-bottom: 20px;">
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">โกดังต้นทาง *</label>
-                                    <select id="transferFromWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" required onchange="updateTransferStock()">
+                                    <select id="transferFromWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" onchange="updateTransferSkuTable()">
                                         <option value="">-- เลือกโกดัง --</option>
                                     </select>
-                                    <div id="fromWarehouseStock" class="stock-info" style="display: none; margin-top: 8px; font-size: 13px;"></div>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">โกดังปลายทาง *</label>
-                                    <select id="transferToWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" required>
+                                    <select id="transferToWarehouse" class="form-input" style="padding: 12px; font-size: 14px;">
                                         <option value="">-- เลือกโกดัง --</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">จำนวนที่ย้าย *</label>
-                                    <input type="number" id="transferQuantity" class="form-input" style="padding: 12px; font-size: 14px;" min="1" required placeholder="0">
-                                </div>
-                            </div>
-                            
-                            <!-- Notes and Submit -->
-                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: end;">
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">หมายเหตุ (ถ้ามี)</label>
                                     <input type="text" id="transferNotes" class="form-input" style="padding: 12px; font-size: 14px;" placeholder="เหตุผลการย้าย">
                                 </div>
-                                <button type="submit" class="btn" style="padding: 12px 32px; white-space: nowrap; font-size: 14px;">ย้ายสต็อก</button>
                             </div>
-                        </form>
+                            
+                            <!-- SKU Table -->
+                            <div class="table-wrapper" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style="padding: 12px 16px; color: #fff;">SKU Code</th>
+                                            <th style="padding: 12px 16px; color: #fff;">ตัวเลือก</th>
+                                            <th style="padding: 12px 16px; text-align: center; color: #fff;">สต็อกต้นทาง</th>
+                                            <th style="padding: 12px 16px; text-align: center; width: 150px; color: #fff;">จำนวนย้าย</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="transferSkuTableBody">
+                                        <tr><td colspan="4" style="text-align: center; padding: 30px; color: #9ca3af;">เลือกโกดังต้นทางเพื่อดู SKU</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <div style="text-align: right;">
+                                <button type="button" class="btn" style="padding: 12px 32px; font-size: 14px;" onclick="submitBulkTransfer()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                        <path d="M7 16V4M7 4L3 8M7 4L11 8"/>
+                                        <path d="M17 8v12M17 20l4-4M17 20l-4-4"/>
+                                    </svg>
+                                    ย้ายสต็อก
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Transfer History Card (Full Width) -->

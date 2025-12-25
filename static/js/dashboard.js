@@ -3097,6 +3097,7 @@ function resetWarehouseForm() {
 
 let transferSkuData = null;
 let transferSearchTimeout = null;
+let selectedTransferProductData = null;
 
 async function loadStockTransferPage() {
     await loadWarehouseDropdowns('transfer');
@@ -3148,138 +3149,168 @@ async function loadWarehouseDropdowns(prefix) {
     }
 }
 
-function searchSkuForTransfer(keyword) {
+function searchProductForTransfer(keyword) {
     clearTimeout(transferSearchTimeout);
     if (!keyword || keyword.length < 2) {
-        document.getElementById('transferSkuResults').style.display = 'none';
+        document.getElementById('transferProductResults').style.display = 'none';
         return;
     }
     
     transferSearchTimeout = setTimeout(async () => {
         try {
-            const response = await fetch(`${API_URL}/admin/skus/search?keyword=${encodeURIComponent(keyword)}`);
-            if (!response.ok) throw new Error('Failed to search SKUs');
-            const skus = await response.json();
+            const response = await fetch(`${API_URL}/admin/products?search=${encodeURIComponent(keyword)}&limit=20`);
+            if (!response.ok) throw new Error('Failed to search products');
+            const data = await response.json();
+            const products = data.products || data;
             
-            const resultsDiv = document.getElementById('transferSkuResults');
-            if (skus.length === 0) {
-                resultsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #9ca3af;">ไม่พบ SKU</div>';
+            const resultsDiv = document.getElementById('transferProductResults');
+            if (products.length === 0) {
+                resultsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #9ca3af;">ไม่พบสินค้า</div>';
             } else {
-                resultsDiv.innerHTML = skus.map(s => {
-                    const stockBg = s.total_stock === 0 ? 'rgba(239,68,68,0.2)' : (s.total_stock <= 5 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)');
-                    const stockBorder = s.total_stock === 0 ? '#ef4444' : (s.total_stock <= 5 ? '#f59e0b' : '#10b981');
-                    return `
-                    <div class="sku-result-item" onclick="selectTransferSku(${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}')" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                resultsDiv.innerHTML = products.map(p => `
+                    <div class="sku-result-item" onclick="selectProductForTransfer(${p.id})" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <img src="${p.image_url || '/static/images/placeholder.png'}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.1);">
                             <div>
-                                <strong style="font-size: 14px; color: #fff;">${escapeHtml(s.sku_code)}</strong>
-                                <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">${escapeHtml(s.product_name)}</div>
+                                <strong style="font-size: 14px; color: #fff;">${escapeHtml(p.name)}</strong>
+                                <div style="font-size: 12px; color: #9ca3af;">${escapeHtml(p.parent_sku)} | ${p.sku_count || '-'} SKU</div>
                             </div>
-                            <span style="display: inline-block; padding: 4px 10px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 600; font-size: 12px; color: #fff;">${s.total_stock}</span>
                         </div>
                     </div>
-                `}).join('');
+                `).join('');
             }
             resultsDiv.style.display = 'block';
         } catch (error) {
-            console.error('Error searching SKUs:', error);
+            console.error('Error searching products:', error);
         }
     }, 300);
 }
 
-async function selectTransferSku(skuId, skuCode, productName) {
-    document.getElementById('transferSkuId').value = skuId;
-    document.getElementById('transferSkuSearch').value = skuCode;
-    document.getElementById('transferSkuResults').style.display = 'none';
+async function selectProductForTransfer(productId) {
+    document.getElementById('transferProductResults').style.display = 'none';
+    document.getElementById('transferProductSearch').value = '';
     
     try {
-        const response = await fetch(`${API_URL}/admin/skus/${skuId}/warehouse-stock`);
-        if (!response.ok) throw new Error('Failed to load SKU stock');
-        transferSkuData = await response.json();
+        const response = await fetch(`${API_URL}/admin/products/${productId}/skus-with-stock`);
+        if (!response.ok) throw new Error('Failed to load product SKUs');
+        selectedTransferProductData = await response.json();
         
-        document.getElementById('transferSkuDetails').innerHTML = `
-            <strong>${escapeHtml(transferSkuData.sku_code)}</strong> - ${escapeHtml(transferSkuData.product_name)}<br>
-            <small>สต็อกรวม: ${transferSkuData.total_stock}</small>
-        `;
-        document.getElementById('transferSkuInfo').style.display = 'block';
+        document.getElementById('transferSelectedProductImage').src = selectedTransferProductData.image_url || '/static/images/placeholder.png';
+        document.getElementById('transferSelectedProductName').textContent = selectedTransferProductData.name;
+        document.getElementById('transferSelectedProductSku').textContent = `Parent SKU: ${selectedTransferProductData.parent_sku}`;
+        document.getElementById('transferSelectedProductSkuCount').textContent = `${selectedTransferProductData.skus.length} SKU`;
+        document.getElementById('transferSelectedProductCard').style.display = 'block';
         
-        updateTransferStock();
+        updateTransferSkuTable();
     } catch (error) {
-        console.error('Error loading SKU stock:', error);
+        console.error('Error loading product:', error);
+        showGlobalAlert('ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
     }
 }
 
-function updateTransferStock() {
-    if (!transferSkuData) return;
+function clearTransferSelectedProduct() {
+    selectedTransferProductData = null;
+    document.getElementById('transferSelectedProductCard').style.display = 'none';
+    document.getElementById('transferProductSearch').value = '';
+    document.getElementById('transferSkuTableBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: #9ca3af;">เลือกโกดังต้นทางเพื่อดู SKU</td></tr>';
+}
+
+function updateTransferSkuTable() {
+    if (!selectedTransferProductData) return;
     
     const fromWarehouseId = document.getElementById('transferFromWarehouse').value;
-    const stockInfoDiv = document.getElementById('fromWarehouseStock');
+    const tbody = document.getElementById('transferSkuTableBody');
     
-    if (fromWarehouseId && transferSkuData.warehouses) {
-        const warehouse = transferSkuData.warehouses.find(w => w.warehouse_id == fromWarehouseId);
-        const stock = warehouse ? warehouse.stock : 0;
-        stockInfoDiv.innerHTML = `<span class="stock-available">สต็อกในโกดังนี้: <strong>${stock}</strong></span>`;
-        stockInfoDiv.style.display = 'block';
-    } else {
-        stockInfoDiv.style.display = 'none';
-    }
-}
-
-async function handleStockTransfer(event) {
-    event.preventDefault();
-    
-    const data = {
-        sku_id: parseInt(document.getElementById('transferSkuId').value),
-        from_warehouse_id: parseInt(document.getElementById('transferFromWarehouse').value),
-        to_warehouse_id: parseInt(document.getElementById('transferToWarehouse').value),
-        quantity: parseInt(document.getElementById('transferQuantity').value),
-        notes: document.getElementById('transferNotes').value.trim()
-    };
-    
-    if (!data.sku_id) {
-        showGlobalAlert('กรุณาเลือก SKU', 'error');
+    if (!fromWarehouseId) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: #9ca3af;">เลือกโกดังต้นทางเพื่อดู SKU</td></tr>';
         return;
     }
-    if (!data.from_warehouse_id || !data.to_warehouse_id) {
+    
+    const rows = selectedTransferProductData.skus.map(sku => {
+        const warehouseStock = sku.warehouse_stocks ? sku.warehouse_stocks.find(ws => ws.warehouse_id == fromWarehouseId) : null;
+        const stockInWarehouse = warehouseStock ? warehouseStock.stock : 0;
+        
+        const stockBg = stockInWarehouse === 0 ? 'rgba(239,68,68,0.2)' : (stockInWarehouse <= 5 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)');
+        const stockBorder = stockInWarehouse === 0 ? '#ef4444' : (stockInWarehouse <= 5 ? '#f59e0b' : '#10b981');
+        
+        return `
+            <tr data-sku-id="${sku.id}">
+                <td style="padding: 12px 16px; color: #fff;"><strong>${escapeHtml(sku.sku_code)}</strong></td>
+                <td style="padding: 12px 16px; color: #e5e7eb;">${escapeHtml(sku.option_values || '-')}</td>
+                <td style="padding: 12px 16px; text-align: center;">
+                    <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 700; color: #fff;">${stockInWarehouse}</span>
+                </td>
+                <td style="padding: 12px 16px; text-align: center;">
+                    <input type="number" class="form-input sku-transfer-qty" min="0" max="${stockInWarehouse}" value="0" 
+                           style="width: 100px; text-align: center; padding: 8px; font-size: 14px;" ${stockInWarehouse === 0 ? 'disabled' : ''}>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    tbody.innerHTML = rows || '<tr><td colspan="4" style="text-align: center; padding: 30px; color: #9ca3af;">ไม่มี SKU</td></tr>';
+}
+
+async function submitBulkTransfer() {
+    if (!selectedTransferProductData) {
+        showGlobalAlert('กรุณาเลือกสินค้าก่อน', 'error');
+        return;
+    }
+    
+    const fromWarehouseId = document.getElementById('transferFromWarehouse').value;
+    const toWarehouseId = document.getElementById('transferToWarehouse').value;
+    const notes = document.getElementById('transferNotes').value.trim();
+    
+    if (!fromWarehouseId || !toWarehouseId) {
         showGlobalAlert('กรุณาเลือกโกดังต้นทางและปลายทาง', 'error');
         return;
     }
-    if (data.from_warehouse_id === data.to_warehouse_id) {
+    
+    if (fromWarehouseId === toWarehouseId) {
         showGlobalAlert('โกดังต้นทางและปลายทางต้องไม่ซ้ำกัน', 'error');
         return;
     }
-    if (!data.quantity || data.quantity <= 0) {
-        showGlobalAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'error');
+    
+    const transfers = [];
+    const rows = document.querySelectorAll('#transferSkuTableBody tr');
+    rows.forEach(row => {
+        const skuId = parseInt(row.dataset.skuId);
+        const qtyInput = row.querySelector('.sku-transfer-qty');
+        const qty = parseInt(qtyInput?.value) || 0;
+        if (qty > 0) {
+            transfers.push({
+                sku_id: skuId,
+                from_warehouse_id: parseInt(fromWarehouseId),
+                to_warehouse_id: parseInt(toWarehouseId),
+                quantity: qty,
+                notes: notes
+            });
+        }
+    });
+    
+    if (transfers.length === 0) {
+        showGlobalAlert('กรุณากรอกจำนวนอย่างน้อย 1 รายการ', 'error');
         return;
     }
     
     try {
-        const response = await fetch(`${API_URL}/admin/stock-transfers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Failed to transfer stock');
+        let successCount = 0;
+        for (const transfer of transfers) {
+            const response = await fetch(`${API_URL}/admin/stock-transfers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transfer)
+            });
+            if (response.ok) successCount++;
         }
         
-        showGlobalAlert('ย้ายสต็อกเรียบร้อย', 'success');
-        resetTransferForm();
+        showGlobalAlert(`ย้ายสต็อกสำเร็จ ${successCount} รายการ`, 'success');
+        clearTransferSelectedProduct();
         loadTransferHistory();
     } catch (error) {
         console.error('Error transferring stock:', error);
         showGlobalAlert(error.message || 'ไม่สามารถย้ายสต็อกได้', 'error');
     }
-}
-
-function resetTransferForm() {
-    document.getElementById('stockTransferForm').reset();
-    document.getElementById('transferSkuId').value = '';
-    document.getElementById('transferSkuInfo').style.display = 'none';
-    document.getElementById('fromWarehouseStock').style.display = 'none';
-    transferSkuData = null;
 }
 
 async function loadTransferHistory() {
