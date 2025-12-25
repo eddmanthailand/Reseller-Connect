@@ -2984,6 +2984,334 @@ def generate_promptpay_qr():
         if conn:
             conn.close()
 
+# ==================== SHIPPING SETTINGS API ====================
+
+@app.route('/api/shipping-rates', methods=['GET'])
+@login_required
+def get_shipping_rates():
+    """Get all shipping weight rates"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, min_weight, max_weight, rate, is_active, sort_order
+            FROM shipping_weight_rates
+            WHERE is_active = TRUE
+            ORDER BY sort_order ASC
+        ''')
+        rates = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(rates), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-rates', methods=['POST'])
+@admin_required
+def create_shipping_rate():
+    """Create a new shipping rate"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO shipping_weight_rates (min_weight, max_weight, rate, sort_order)
+            VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM shipping_weight_rates))
+            RETURNING id, min_weight, max_weight, rate, is_active, sort_order
+        ''', (data.get('min_weight', 0), data.get('max_weight'), data.get('rate', 0)))
+        
+        rate = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(rate), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-rates/<int:rate_id>', methods=['PUT'])
+@admin_required
+def update_shipping_rate(rate_id):
+    """Update a shipping rate"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE shipping_weight_rates
+            SET min_weight = %s, max_weight = %s, rate = %s, is_active = %s
+            WHERE id = %s
+            RETURNING id, min_weight, max_weight, rate, is_active, sort_order
+        ''', (data.get('min_weight'), data.get('max_weight'), data.get('rate'), data.get('is_active', True), rate_id))
+        
+        rate = cursor.fetchone()
+        if not rate:
+            return jsonify({'error': 'Rate not found'}), 404
+        
+        conn.commit()
+        return jsonify(dict(rate)), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-rates/<int:rate_id>', methods=['DELETE'])
+@admin_required
+def delete_shipping_rate(rate_id):
+    """Delete a shipping rate"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM shipping_weight_rates WHERE id = %s', (rate_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Rate deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-promotions', methods=['GET'])
+@login_required
+def get_shipping_promotions():
+    """Get all shipping promotions"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, promo_type, min_order_value, discount_amount, is_active, start_date, end_date
+            FROM shipping_promotions
+            ORDER BY min_order_value DESC
+        ''')
+        promos = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(promos), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-promotions', methods=['POST'])
+@admin_required
+def create_shipping_promotion():
+    """Create a new shipping promotion"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO shipping_promotions (name, promo_type, min_order_value, discount_amount, is_active, start_date, end_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, name, promo_type, min_order_value, discount_amount, is_active, start_date, end_date
+        ''', (
+            data.get('name', ''),
+            data.get('promo_type', 'free_shipping'),
+            data.get('min_order_value', 0),
+            data.get('discount_amount', 0),
+            data.get('is_active', True),
+            data.get('start_date'),
+            data.get('end_date')
+        ))
+        
+        promo = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify(promo), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-promotions/<int:promo_id>', methods=['PUT'])
+@admin_required
+def update_shipping_promotion(promo_id):
+    """Update a shipping promotion"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE shipping_promotions
+            SET name = %s, promo_type = %s, min_order_value = %s, discount_amount = %s, 
+                is_active = %s, start_date = %s, end_date = %s
+            WHERE id = %s
+            RETURNING id, name, promo_type, min_order_value, discount_amount, is_active, start_date, end_date
+        ''', (
+            data.get('name'),
+            data.get('promo_type'),
+            data.get('min_order_value'),
+            data.get('discount_amount'),
+            data.get('is_active', True),
+            data.get('start_date'),
+            data.get('end_date'),
+            promo_id
+        ))
+        
+        promo = cursor.fetchone()
+        if not promo:
+            return jsonify({'error': 'Promotion not found'}), 404
+        
+        conn.commit()
+        return jsonify(dict(promo)), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-promotions/<int:promo_id>', methods=['DELETE'])
+@admin_required
+def delete_shipping_promotion(promo_id):
+    """Delete a shipping promotion"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM shipping_promotions WHERE id = %s', (promo_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Promotion deleted successfully'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/calculate-shipping', methods=['POST'])
+@login_required
+def calculate_shipping():
+    """Calculate shipping cost based on weight and apply promotions"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        total_weight = data.get('total_weight', 0)
+        order_total = data.get('order_total', 0)
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT rate FROM shipping_weight_rates
+            WHERE is_active = TRUE
+              AND min_weight <= %s
+              AND (max_weight IS NULL OR max_weight >= %s)
+            ORDER BY min_weight DESC
+            LIMIT 1
+        ''', (total_weight, total_weight))
+        
+        rate_row = cursor.fetchone()
+        shipping_cost = float(rate_row['rate']) if rate_row else 0
+        original_shipping = shipping_cost
+        
+        cursor.execute('''
+            SELECT promo_type, min_order_value, discount_amount, name
+            FROM shipping_promotions
+            WHERE is_active = TRUE
+              AND min_order_value <= %s
+              AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP)
+              AND (end_date IS NULL OR end_date >= CURRENT_TIMESTAMP)
+            ORDER BY min_order_value DESC
+            LIMIT 1
+        ''', (order_total,))
+        
+        promo = cursor.fetchone()
+        promo_applied = None
+        
+        if promo:
+            if promo['promo_type'] == 'free_shipping':
+                shipping_cost = 0
+                promo_applied = promo['name']
+            elif promo['promo_type'] == 'discount':
+                discount = float(promo['discount_amount'])
+                shipping_cost = max(0, shipping_cost - discount)
+                promo_applied = promo['name']
+        
+        return jsonify({
+            'shipping_cost': shipping_cost,
+            'original_shipping': original_shipping,
+            'promo_applied': promo_applied,
+            'total_weight': total_weight
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== ORDER NUMBER SETTINGS API ====================
 
 @app.route('/api/order-number-settings', methods=['GET'])

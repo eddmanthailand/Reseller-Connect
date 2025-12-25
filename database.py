@@ -653,6 +653,57 @@ def init_db():
             )
         ''')
         
+        # Create shipping_weight_rates table (shipping rates by weight range)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS shipping_weight_rates (
+                id SERIAL PRIMARY KEY,
+                min_weight INTEGER NOT NULL DEFAULT 0,
+                max_weight INTEGER,
+                rate DECIMAL(10,2) NOT NULL DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create shipping_promotions table (free shipping / discount promotions)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS shipping_promotions (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                promo_type VARCHAR(20) NOT NULL DEFAULT 'free_shipping',
+                min_order_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+                discount_amount DECIMAL(10,2) DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                start_date TIMESTAMP,
+                end_date TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Insert default shipping weight rates if none exist
+        cursor.execute('SELECT COUNT(*) FROM shipping_weight_rates')
+        if cursor.fetchone()[0] == 0:
+            default_rates = [
+                (0, 500, 35, 1),
+                (501, 1000, 50, 2),
+                (1001, 2000, 70, 3),
+                (2001, None, 90, 4)
+            ]
+            for min_w, max_w, rate, sort in default_rates:
+                cursor.execute('''
+                    INSERT INTO shipping_weight_rates (min_weight, max_weight, rate, sort_order)
+                    VALUES (%s, %s, %s, %s)
+                ''', (min_w, max_w, rate, sort))
+        
+        # Insert default shipping promotion if none exist
+        cursor.execute('SELECT COUNT(*) FROM shipping_promotions')
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('''
+                INSERT INTO shipping_promotions (name, promo_type, min_order_value, is_active)
+                VALUES ('ส่งฟรีเมื่อซื้อครบ 800 บาท', 'free_shipping', 800, TRUE)
+            ''')
+        
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

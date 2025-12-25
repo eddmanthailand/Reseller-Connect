@@ -930,7 +930,6 @@ function renderCheckout() {
     renderCheckoutItems();
     updateCheckoutSummary();
     validateCheckout();
-    loadPromptPayQR();
 }
 
 function renderCheckoutItems() {
@@ -968,7 +967,65 @@ function renderCheckoutItems() {
 
 function updateCheckoutSummary() {
     document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
-    document.getElementById('summaryTotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
+    calculateShippingCost();
+}
+
+async function calculateShippingCost() {
+    const shippingEl = document.getElementById('summaryShipping');
+    const totalEl = document.getElementById('summaryTotal');
+    const promoRow = document.getElementById('shippingPromoRow');
+    const promoName = document.getElementById('shippingPromoName');
+    const promoSaved = document.getElementById('shippingPromoSaved');
+    
+    let totalWeight = 0;
+    checkoutData.items.forEach(item => {
+        const weight = item.weight || 100;
+        totalWeight += weight * item.quantity;
+    });
+    
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/calculate-shipping`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                total_weight: totalWeight,
+                order_total: checkoutData.total
+            })
+        });
+        
+        if (!res.ok) throw new Error('Failed to calculate shipping');
+        
+        const data = await res.json();
+        checkoutData.shippingCost = data.shipping_cost;
+        checkoutData.originalShipping = data.original_shipping;
+        checkoutData.promoApplied = data.promo_applied;
+        
+        if (data.shipping_cost === 0 && data.promo_applied) {
+            shippingEl.innerHTML = '<span style="text-decoration: line-through; opacity: 0.5;">฿' + data.original_shipping.toLocaleString() + '</span> <span style="color: #22c55e;">ฟรี!</span>';
+        } else {
+            shippingEl.textContent = `฿${data.shipping_cost.toLocaleString()}`;
+        }
+        
+        if (data.promo_applied && data.original_shipping > data.shipping_cost) {
+            promoName.textContent = data.promo_applied;
+            promoSaved.textContent = `-฿${(data.original_shipping - data.shipping_cost).toLocaleString()}`;
+            promoRow.style.display = 'flex';
+        } else {
+            promoRow.style.display = 'none';
+        }
+        
+        const grandTotal = checkoutData.total + data.shipping_cost;
+        totalEl.textContent = `฿${grandTotal.toLocaleString()}`;
+        
+        loadPromptPayQR();
+        
+    } catch (error) {
+        console.error('Error calculating shipping:', error);
+        shippingEl.textContent = '฿0';
+        totalEl.textContent = `฿${checkoutData.total.toLocaleString()}`;
+        checkoutData.shippingCost = 0;
+        loadPromptPayQR();
+    }
 }
 
 async function loadPromptPayQR() {
@@ -983,7 +1040,8 @@ async function loadPromptPayQR() {
     errorDiv.style.display = 'none';
     
     try {
-        const amount = checkoutData.total || 0;
+        const shippingCost = checkoutData.shippingCost || 0;
+        const amount = (checkoutData.total || 0) + shippingCost;
         const res = await fetch(`${RESELLER_API_URL}/promptpay-qr?amount=${amount}`);
         
         if (!res.ok) {
