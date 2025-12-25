@@ -96,11 +96,13 @@ async function init() {
 
 // Handle hash navigation to switch pages
 function handleHashNavigation() {
-    const hash = window.location.hash.substring(1); // Remove the '#'
-    if (hash) {
+    const fullHash = window.location.hash.substring(1); // Remove the '#'
+    if (fullHash) {
+        // Extract page name before any query parameters
+        const [pageName] = fullHash.split('?');
         const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-transfer', 'stock-adjustment', 'stock-history', 'orders', 'tier-settings', 'settings'];
-        if (validPages.includes(hash)) {
-            switchPage(hash);
+        if (validPages.includes(pageName)) {
+            switchPage(pageName);
         }
     }
 }
