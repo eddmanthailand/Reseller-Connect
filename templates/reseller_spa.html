@@ -1231,8 +1231,12 @@
                                 
                                 <div id="customerShippingSection">
                                     <div class="customer-select-wrapper">
-                                        <label>เลือกลูกค้า</label>
-                                        <select id="checkoutCustomer" class="form-select" onchange="selectCheckoutCustomer()">
+                                        <label>ค้นหาลูกค้า</label>
+                                        <div style="position: relative;">
+                                            <input type="text" id="customerSearchInput" class="form-input" placeholder="พิมพ์ชื่อหรือเบอร์โทร..." oninput="searchCustomersForCheckout(this.value)">
+                                            <div id="customerSearchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 100;"></div>
+                                        </div>
+                                        <select id="checkoutCustomer" class="form-select" onchange="selectCheckoutCustomer()" style="display: none;">
                                             <option value="">-- เลือกลูกค้า --</option>
                                         </select>
                                         <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()">+ เพิ่มลูกค้าใหม่</button>
@@ -1265,6 +1269,20 @@
                                 <select id="checkoutSalesChannel" class="form-select" style="margin-top: 12px;">
                                     <option value="">-- เลือกช่องทางขาย --</option>
                                 </select>
+                            </div>
+                            
+                            <div class="checkout-section">
+                                <h3 class="section-title">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                    แนบสลิปการชำระเงิน (ถ้าชำระแล้ว)
+                                </h3>
+                                <div class="slip-upload-wrapper" style="margin-top: 12px;">
+                                    <input type="file" id="paymentSlipInput" accept="image/*" onchange="previewPaymentSlip(this)" style="display: none;">
+                                    <div id="slipPreviewArea" onclick="document.getElementById('paymentSlipInput').click()" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px; opacity: 0.5; margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                        <p style="opacity: 0.6; font-size: 13px;">คลิกเพื่ออัปโหลดสลิป หรือลากไฟล์มาวาง</p>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="checkout-section">

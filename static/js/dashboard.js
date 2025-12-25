@@ -1615,16 +1615,25 @@ function renderOrders() {
         'cancelled': 'ยกเลิก'
     };
     
+    const statusColors = {
+        'pending_payment': '#f59e0b',
+        'under_review': '#3b82f6',
+        'paid': '#22c55e',
+        'rejected': '#ef4444',
+        'cancelled': '#6b7280'
+    };
+    
     let html = `
         <table class="orders-table">
             <thead>
                 <tr>
                     <th>เลขที่คำสั่งซื้อ</th>
                     <th>ลูกค้า</th>
+                    <th>ช่องทาง</th>
                     <th>ยอดรวม</th>
                     <th>สถานะ</th>
                     <th>วันที่</th>
-                    <th>Actions</th>
+                    <th style="text-align: center;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -1632,18 +1641,38 @@ function renderOrders() {
     
     allOrders.forEach(order => {
         const statusLabel = statusLabels[order.status] || order.status;
+        const statusColor = statusColors[order.status] || '#6b7280';
         const orderDate = new Date(order.created_at).toLocaleDateString('th-TH');
+        const orderNumber = order.order_number || `#${order.id}`;
+        const channelName = order.channel_name || '-';
+        
+        let actionButtons = `<button class="action-btn btn-review" onclick="viewOrderDetails(${order.id})" style="padding: 6px 12px; font-size: 12px;">ดูรายละเอียด</button>`;
+        
+        if (order.status === 'under_review') {
+            actionButtons = `
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button class="action-btn" onclick="updateOrderStatus(${order.id}, 'paid')" style="padding: 6px 10px; font-size: 11px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer;">อนุมัติ</button>
+                    <button class="action-btn" onclick="updateOrderStatus(${order.id}, 'rejected')" style="padding: 6px 10px; font-size: 11px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">ปฏิเสธ</button>
+                    <button class="action-btn" onclick="viewOrderDetails(${order.id})" style="padding: 6px 10px; font-size: 11px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; cursor: pointer;">ดู</button>
+                </div>
+            `;
+        } else if (order.status === 'pending_payment') {
+            actionButtons = `
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button class="action-btn" onclick="viewOrderDetails(${order.id})" style="padding: 6px 12px; font-size: 11px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; cursor: pointer;">ดูรายละเอียด</button>
+                </div>
+            `;
+        }
         
         html += `
             <tr>
-                <td>#${order.id}</td>
-                <td>${order.customer_name || 'N/A'}</td>
-                <td>${parseFloat(order.total_amount || 0).toLocaleString('th-TH')} บาท</td>
-                <td><span class="order-status ${order.status}">${statusLabel}</span></td>
-                <td>${orderDate}</td>
-                <td>
-                    <button class="action-btn btn-review" onclick="viewOrderDetails(${order.id})">ดูรายละเอียด</button>
-                </td>
+                <td style="font-weight: 600; color: #a855f7;">${orderNumber}</td>
+                <td>${escapeHtml(order.customer_name || 'N/A')}</td>
+                <td><span style="font-size: 11px; padding: 2px 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">${escapeHtml(channelName)}</span></td>
+                <td style="font-weight: 600;">฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</td>
+                <td><span style="background: ${statusColor}; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">${statusLabel}</span></td>
+                <td style="font-size: 12px; opacity: 0.8;">${orderDate}</td>
+                <td>${actionButtons}</td>
             </tr>
         `;
     });

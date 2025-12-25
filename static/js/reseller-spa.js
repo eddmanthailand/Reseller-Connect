@@ -1,5 +1,12 @@
 const RESELLER_API_URL = '/api';
 
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 let currentUser = null;
 let customers = [];
 let products = [];
@@ -498,9 +505,12 @@ function openProductModal(product) {
                 <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">SKU: ${product.parent_sku || '-'}</div>
                 
                 <div style="margin-bottom: 20px;">
+                    ${discount > 0 ? `
+                        <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคาปกติ</div>
+                        <div style="text-decoration: line-through; color: rgba(255,255,255,0.4); font-size: 18px; margin-bottom: 4px;">฿${originalPrice.toLocaleString()}</div>
+                        <div style="font-size: 12px; color: #22c55e; margin-bottom: 4px;">ราคาสำหรับคุณ <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px;">-${discount}%</span></div>
+                    ` : '<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคา</div>'}
                     <span id="modalPrice" style="font-size: 28px; font-weight: 700; color: #22c55e;">฿${price.toLocaleString()}</span>
-                    ${discount > 0 ? `<span style="text-decoration: line-through; color: rgba(255,255,255,0.5); margin-left: 12px;">฿${originalPrice.toLocaleString()}</span>
-                    <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">-${discount}%</span>` : ''}
                 </div>
                 
                 ${optionsHtml}
@@ -652,6 +662,20 @@ async function addToCartFromModal() {
     }
     
     const quantity = parseInt(document.getElementById('modalQty').value) || 1;
+    
+    // Real-time stock check before adding to cart
+    const selectedSku = currentProductSkus.find(s => s.id === selectedSkuId);
+    if (selectedSku) {
+        const availableStock = selectedSku.stock || 0;
+        if (availableStock <= 0) {
+            showAlert('สินค้าหมด ไม่สามารถเพิ่มลงตะกร้าได้', 'error');
+            return;
+        }
+        if (quantity > availableStock) {
+            showAlert(`สต็อกไม่พอ เหลือเพียง ${availableStock} ชิ้น`, 'error');
+            return;
+        }
+    }
     
     // Build customization data
     const customizationData = Object.keys(selectedCustomizations).length > 0 
@@ -983,6 +1007,93 @@ function openAddCustomerFromCheckout() {
     openAddCustomerModal();
 }
 
+let customerSearchTimeout = null;
+let selectedPaymentSlip = null;
+
+function searchCustomersForCheckout(keyword) {
+    clearTimeout(customerSearchTimeout);
+    const resultsDiv = document.getElementById('customerSearchResults');
+    
+    if (!keyword || keyword.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    customerSearchTimeout = setTimeout(() => {
+        const filtered = checkoutData.customers.filter(c => 
+            (c.full_name && c.full_name.toLowerCase().includes(keyword.toLowerCase())) ||
+            (c.phone && c.phone.includes(keyword))
+        );
+        
+        if (filtered.length === 0) {
+            resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; opacity: 0.6;">ไม่พบลูกค้า</div>';
+        } else {
+            resultsDiv.innerHTML = filtered.slice(0, 10).map(c => `
+                <div onclick="selectCustomerFromSearch(${c.id})" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.1)'" onmouseout="this.style.background='transparent'">
+                    <div style="font-weight: 500;">${escapeHtml(c.full_name)}</div>
+                    <div style="font-size: 12px; opacity: 0.6;">${c.phone || '-'} | ${c.province || '-'}</div>
+                </div>
+            `).join('');
+        }
+        resultsDiv.style.display = 'block';
+    }, 200);
+}
+
+function selectCustomerFromSearch(customerId) {
+    document.getElementById('customerSearchResults').style.display = 'none';
+    
+    const customerSelect = document.getElementById('checkoutCustomer');
+    if (!customerSelect.querySelector(`option[value="${customerId}"]`)) {
+        const customer = checkoutData.customers.find(c => c.id == customerId);
+        if (customer) {
+            const option = document.createElement('option');
+            option.value = customer.id;
+            option.textContent = `${customer.full_name} - ${customer.phone || 'ไม่มีเบอร์'}`;
+            customerSelect.appendChild(option);
+        }
+    }
+    customerSelect.value = customerId;
+    
+    const customer = checkoutData.customers.find(c => c.id == customerId);
+    if (customer) {
+        document.getElementById('customerSearchInput').value = customer.full_name;
+    }
+    
+    selectCheckoutCustomer();
+}
+
+function clearSelectedCustomer() {
+    document.getElementById('checkoutCustomer').value = '';
+    document.getElementById('customerSearchInput').value = '';
+    document.getElementById('selectedCustomerInfo').style.display = 'none';
+    validateCheckout();
+}
+
+function previewPaymentSlip(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    selectedPaymentSlip = file;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('slipPreviewArea').innerHTML = `
+            <img src="${e.target.result}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px; margin-bottom: 8px;">
+            <p style="font-size: 12px; opacity: 0.7;">${escapeHtml(file.name)}</p>
+            <button type="button" onclick="removePaymentSlip()" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; margin-top: 8px;">ลบสลิป</button>
+        `;
+    };
+    reader.readAsDataURL(file);
+}
+
+function removePaymentSlip() {
+    selectedPaymentSlip = null;
+    document.getElementById('paymentSlipInput').value = '';
+    document.getElementById('slipPreviewArea').innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px; opacity: 0.5; margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <p style="opacity: 0.6; font-size: 13px;">คลิกเพื่ออัปโหลดสลิป หรือลากไฟล์มาวาง</p>
+    `;
+}
+
 function validateCheckout() {
     const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
     let isValid = false;
@@ -1073,10 +1184,11 @@ async function loadCartBadge() {
         const response = await fetch(`${RESELLER_API_URL}/reseller/cart`);
         if (response.ok) {
             const data = await response.json();
-            const count = (data.items || []).length;
+            const items = data.items || [];
+            const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
             const badge = document.getElementById('cartBadge');
-            if (count > 0) {
-                badge.textContent = count;
+            if (totalQty > 0) {
+                badge.textContent = totalQty > 99 ? '99+' : totalQty;
                 badge.style.display = 'block';
             } else {
                 badge.style.display = 'none';
