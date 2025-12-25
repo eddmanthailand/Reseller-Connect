@@ -220,8 +220,20 @@
                         </svg>
                     </span>
                     <span class="sidebar-text">จัดการสต็อก</span>
+                    <span id="lowStockBadge" class="nav-badge" style="display: none; background: #ef4444; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 10px; margin-left: auto;">0</span>
                 </a>
                 <div class="submenu" id="stock-management-submenu" data-role="Super Admin">
+                    <a href="#" class="submenu-item" data-page="stock-summary">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 3v18h18"/>
+                                <path d="M18 17V9"/>
+                                <path d="M13 17V5"/>
+                                <path d="M8 17v-3"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ภาพรวมสต็อก</span>
+                    </a>
                     <a href="#" class="submenu-item" data-page="stock-adjustment">
                         <span class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -239,6 +251,16 @@
                             </svg>
                         </span>
                         <span class="sidebar-text">ย้ายสต็อก</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="stock-import">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" x2="12" y1="3" y2="15"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">นำเข้าสต็อก (CSV)</span>
                     </a>
                     <a href="#" class="submenu-item" data-page="stock-history">
                         <span class="icon">
@@ -926,6 +948,174 @@
                 </div>
             </div>
 
+            <!-- Stock Summary Page -->
+            <div id="page-stock-summary" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M3 3v18h18"/>
+                            <path d="M18 17V9"/>
+                            <path d="M13 17V5"/>
+                            <path d="M8 17v-3"/>
+                        </svg>
+                        ภาพรวมสต็อก
+                    </h1>
+                    <p>ดูสถานะสต็อกทั้งหมดและการเคลื่อนไหว</p>
+                </div>
+
+                <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- Summary Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                        <div class="card" style="text-align: center; padding: 24px;">
+                            <div style="font-size: 36px; font-weight: 700; color: #8b5cf6;" id="summaryTotalStock">0</div>
+                            <div style="font-size: 14px; color: #9ca3af; margin-top: 8px;">สต็อกรวมทั้งหมด</div>
+                        </div>
+                        <div class="card" style="text-align: center; padding: 24px;">
+                            <div style="font-size: 36px; font-weight: 700; color: #10b981;" id="summaryNormalStock">0</div>
+                            <div style="font-size: 14px; color: #9ca3af; margin-top: 8px;">สต็อกปกติ</div>
+                        </div>
+                        <div class="card" style="text-align: center; padding: 24px;">
+                            <div style="font-size: 36px; font-weight: 700; color: #f59e0b;" id="summaryLowStock">0</div>
+                            <div style="font-size: 14px; color: #9ca3af; margin-top: 8px;">สต็อกต่ำ</div>
+                        </div>
+                        <div class="card" style="text-align: center; padding: 24px;">
+                            <div style="font-size: 36px; font-weight: 700; color: #ef4444;" id="summaryOutOfStock">0</div>
+                            <div style="font-size: 14px; color: #9ca3af; margin-top: 8px;">หมดสต็อก</div>
+                        </div>
+                    </div>
+
+                    <!-- Stock by Warehouse & Movement Chart -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <div class="card">
+                            <h3 style="font-size: 16px; margin-bottom: 20px; font-weight: 600;">สต็อกแยกตามโกดัง</h3>
+                            <div id="warehouseStockList" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div style="text-align: center; padding: 20px; color: #9ca3af;">กำลังโหลด...</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3 style="font-size: 16px; margin-bottom: 20px; font-weight: 600;">การเคลื่อนไหวสต็อก (7 วันล่าสุด)</h3>
+                            <canvas id="stockMovementChart" height="200"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Low Stock Items -->
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="font-size: 16px; margin: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                    <line x1="12" y1="9" x2="12" y2="13"/>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                                รายการสต็อกต่ำ / หมด
+                            </h3>
+                            <select id="lowStockFilter" class="form-input" style="width: 150px; padding: 8px 12px; font-size: 13px;" onchange="loadLowStockItems()">
+                                <option value="all">ทั้งหมด</option>
+                                <option value="low">สต็อกต่ำ</option>
+                                <option value="out">หมดสต็อก</option>
+                            </select>
+                        </div>
+                        <div class="table-wrapper" style="border: none; border-radius: 0; max-height: 400px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="padding: 12px 16px; color: #fff;">สินค้า</th>
+                                        <th style="padding: 12px 16px; color: #fff;">SKU Code</th>
+                                        <th style="padding: 12px 16px; text-align: center; color: #fff;">สต็อกคงเหลือ</th>
+                                        <th style="padding: 12px 16px; text-align: center; color: #fff;">Threshold</th>
+                                        <th style="padding: 12px 16px; text-align: center; color: #fff;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lowStockItemsBody">
+                                    <tr><td colspan="5" style="text-align: center; padding: 30px; color: #9ca3af;">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Import Page -->
+            <div id="page-stock-import" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" x2="12" y1="3" y2="15"/>
+                        </svg>
+                        นำเข้าสต็อก (CSV)
+                    </h1>
+                    <p>นำเข้าสต็อกหลายรายการพร้อมกันจากไฟล์ CSV</p>
+                </div>
+
+                <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- Instructions -->
+                    <div class="card" style="background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(236,72,153,0.1)); border: 1px solid rgba(139,92,246,0.3);">
+                        <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 16v-4"/>
+                                <path d="M12 8h.01"/>
+                            </svg>
+                            รูปแบบไฟล์ CSV
+                        </h3>
+                        <p style="color: #e5e7eb; margin-bottom: 12px;">ไฟล์ CSV ต้องมีคอลัมน์ดังนี้:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 13px; color: #a78bfa;">
+                            sku_code,warehouse,quantity<br>
+                            NRBL-001-WHITE-XS,โกดังหลัก,100<br>
+                            NRBL-001-WHITE-S,โกดังหลัก,50
+                        </div>
+                        <p style="color: #9ca3af; margin-top: 12px; font-size: 13px;">* sku_code = รหัส SKU ที่มีในระบบ, warehouse = ชื่อโกดังตรงตามในระบบ, quantity = จำนวนที่ต้องการเพิ่ม/ลด</p>
+                    </div>
+
+                    <!-- Upload Form -->
+                    <div class="card">
+                        <h3 style="font-size: 18px; margin-bottom: 24px; font-weight: 600;">อัปโหลดไฟล์</h3>
+                        <form id="stockImportForm" onsubmit="handleStockImport(event)">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">ประเภทการปรับ *</label>
+                                    <select id="importAdjustType" class="form-input" style="padding: 12px; font-size: 14px;" required>
+                                        <option value="stock_in">รับเข้าสต็อก</option>
+                                        <option value="return">รับคืนสินค้า</option>
+                                        <option value="miscount_increase">นับผิด (เพิ่ม)</option>
+                                        <option value="shopee_sale">ขาย Shopee</option>
+                                        <option value="lazada_sale">ขาย Lazada</option>
+                                        <option value="tiktok_sale">ขาย TikTok</option>
+                                        <option value="offline_sale">ขายหน้าร้าน</option>
+                                        <option value="damaged">ชำรุด/เสียหาย</option>
+                                        <option value="lost">สูญหาย</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">หมายเหตุ</label>
+                                    <input type="text" id="importNotes" class="form-input" style="padding: 12px; font-size: 14px;" placeholder="เช่น ใบส่งสินค้าเลขที่ XXX">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">เลือกไฟล์ CSV *</label>
+                                <input type="file" id="importFile" class="form-input" accept=".csv" required style="padding: 12px;">
+                            </div>
+                            <button type="submit" class="btn" style="padding: 14px 32px; font-size: 15px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" x2="12" y1="3" y2="15"/>
+                                </svg>
+                                นำเข้าสต็อก
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Import Result -->
+                    <div id="importResultCard" class="card" style="display: none;">
+                        <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">ผลการนำเข้า</h3>
+                        <div id="importResultContent"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Stock Transfer Page -->
             <div id="page-stock-transfer" class="page-content">
                 <div class="page-header">
@@ -1262,7 +1452,14 @@
                                 </svg>
                                 ตัวกรองข้อมูล
                             </h3>
-                            <span style="font-size: 13px; color: #9ca3af;">กรองประวัติการเปลี่ยนแปลงสต็อก</span>
+                            <button type="button" class="btn" style="padding: 8px 16px; font-size: 13px;" onclick="exportStockHistory()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" x2="12" y1="15" y2="3"/>
+                                </svg>
+                                Export CSV
+                            </button>
                         </div>
                         
                         <!-- Search Field (Full Width) -->

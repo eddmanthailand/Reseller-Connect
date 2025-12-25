@@ -7291,5 +7291,390 @@ def get_sku_warehouse_stock(sku_id):
         if conn:
             conn.close()
 
+# ==================== STOCK ALERTS & SUMMARY ====================
+
+@app.route('/api/admin/stock/low-stock-count', methods=['GET'])
+@admin_required
+def get_low_stock_count():
+    """Get count of SKUs with low stock for sidebar badge"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM (
+                SELECT s.id 
+                FROM skus s
+                JOIN products p ON p.id = s.product_id
+                WHERE s.stock > 0 AND s.stock <= COALESCE(p.low_stock_threshold, 5)
+            ) as low_stock_skus
+        ''')
+        low_stock = cursor.fetchone()['count']
+        
+        cursor.execute('SELECT COUNT(*) as count FROM skus WHERE stock = 0')
+        out_of_stock = cursor.fetchone()['count']
+        
+        return jsonify({
+            'low_stock': low_stock,
+            'out_of_stock': out_of_stock,
+            'total_alerts': low_stock + out_of_stock
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock/summary', methods=['GET'])
+@admin_required
+def get_stock_summary():
+    """Get stock summary for dashboard"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Total stock value
+        cursor.execute('SELECT COALESCE(SUM(stock), 0) as total_stock FROM skus')
+        total_stock = cursor.fetchone()['total_stock']
+        
+        # Stock by warehouse
+        cursor.execute('''
+            SELECT w.id, w.name, COALESCE(SUM(sws.stock), 0) as stock,
+                   COUNT(DISTINCT sws.sku_id) as sku_count
+            FROM warehouses w
+            LEFT JOIN sku_warehouse_stock sws ON sws.warehouse_id = w.id
+            WHERE w.is_active = TRUE
+            GROUP BY w.id, w.name
+            ORDER BY w.name
+        ''')
+        by_warehouse = [dict(row) for row in cursor.fetchall()]
+        
+        # Low stock and out of stock counts
+        cursor.execute('''
+            SELECT 
+                COUNT(*) FILTER (WHERE s.stock = 0) as out_of_stock,
+                COUNT(*) FILTER (WHERE s.stock > 0 AND s.stock <= COALESCE(p.low_stock_threshold, 5)) as low_stock,
+                COUNT(*) FILTER (WHERE s.stock > COALESCE(p.low_stock_threshold, 5)) as normal_stock
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+        ''')
+        stock_status = cursor.fetchone()
+        
+        # Recent stock movements (last 7 days)
+        cursor.execute('''
+            SELECT DATE(created_at) as date,
+                   SUM(CASE WHEN quantity_after > quantity_before THEN quantity_after - quantity_before ELSE 0 END) as stock_in,
+                   SUM(CASE WHEN quantity_after < quantity_before THEN quantity_before - quantity_after ELSE 0 END) as stock_out
+            FROM stock_audit_log
+            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        ''')
+        movements = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'total_stock': int(total_stock),
+            'by_warehouse': by_warehouse,
+            'stock_status': dict(stock_status) if stock_status else {},
+            'movements': movements
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock/export', methods=['GET'])
+@admin_required
+def export_stock():
+    """Export stock data as CSV"""
+    import io
+    import csv
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        export_type = request.args.get('type', 'current')  # current, history
+        warehouse_id = request.args.get('warehouse_id')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        if export_type == 'current':
+            # Export current stock
+            query = '''
+                SELECT p.name as product_name, p.parent_sku, s.sku_code, 
+                       s.stock as total_stock, s.price,
+                       w.name as warehouse_name, COALESCE(sws.stock, 0) as warehouse_stock
+                FROM skus s
+                JOIN products p ON p.id = s.product_id
+                CROSS JOIN warehouses w
+                LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = s.id AND sws.warehouse_id = w.id
+                WHERE w.is_active = TRUE
+            '''
+            params = []
+            if warehouse_id:
+                query += ' AND w.id = %s'
+                params.append(warehouse_id)
+            query += ' ORDER BY p.name, s.sku_code, w.name'
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            writer.writerow(['ชื่อสินค้า', 'Parent SKU', 'SKU Code', 'สต็อกรวม', 'ราคา', 'โกดัง', 'สต็อกในโกดัง'])
+            for row in rows:
+                writer.writerow([
+                    row['product_name'], row['parent_sku'], row['sku_code'],
+                    row['total_stock'], row['price'], row['warehouse_name'], row['warehouse_stock']
+                ])
+        else:
+            # Export stock history
+            query = '''
+                SELECT sal.created_at, p.name as product_name, s.sku_code,
+                       w.name as warehouse_name, sal.change_type,
+                       sal.quantity_before, sal.quantity_after,
+                       sal.quantity_after - sal.quantity_before as change,
+                       u.username as created_by, sal.notes
+                FROM stock_audit_log sal
+                JOIN skus s ON s.id = sal.sku_id
+                JOIN products p ON p.id = s.product_id
+                LEFT JOIN warehouses w ON w.id = sal.warehouse_id
+                LEFT JOIN users u ON u.id = sal.created_by
+                WHERE 1=1
+            '''
+            params = []
+            if warehouse_id:
+                query += ' AND sal.warehouse_id = %s'
+                params.append(warehouse_id)
+            if date_from:
+                query += ' AND sal.created_at >= %s'
+                params.append(date_from)
+            if date_to:
+                query += ' AND sal.created_at <= %s'
+                params.append(date_to + ' 23:59:59')
+            query += ' ORDER BY sal.created_at DESC LIMIT 10000'
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            writer.writerow(['วันที่', 'ชื่อสินค้า', 'SKU Code', 'โกดัง', 'ประเภท', 'ก่อน', 'หลัง', 'เปลี่ยนแปลง', 'ผู้ทำรายการ', 'หมายเหตุ'])
+            for row in rows:
+                writer.writerow([
+                    row['created_at'].strftime('%Y-%m-%d %H:%M') if row['created_at'] else '',
+                    row['product_name'], row['sku_code'], row['warehouse_name'] or '',
+                    row['change_type'], row['quantity_before'], row['quantity_after'],
+                    row['change'], row['created_by'] or '', row['notes'] or ''
+                ])
+        
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=stock_export_{export_type}.csv'}
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock/import', methods=['POST'])
+@admin_required
+def import_stock():
+    """Import stock from CSV"""
+    import io
+    import csv
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': 'Only CSV files are supported'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        stream = io.StringIO(file.stream.read().decode('utf-8-sig'))
+        reader = csv.DictReader(stream)
+        
+        adjustment_type = request.form.get('adjustment_type', 'stock_in')
+        notes = request.form.get('notes', 'Bulk import from CSV')
+        user_id = session.get('user_id')
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(reader, start=2):
+            try:
+                sku_code = row.get('sku_code', '').strip()
+                warehouse_name = row.get('warehouse', '').strip()
+                quantity = int(row.get('quantity', 0))
+                
+                if not sku_code or not warehouse_name or quantity <= 0:
+                    errors.append(f"Row {row_num}: Missing required fields")
+                    error_count += 1
+                    continue
+                
+                # Find SKU
+                cursor.execute('SELECT id FROM skus WHERE sku_code = %s', (sku_code,))
+                sku = cursor.fetchone()
+                if not sku:
+                    errors.append(f"Row {row_num}: SKU '{sku_code}' not found")
+                    error_count += 1
+                    continue
+                
+                # Find warehouse
+                cursor.execute('SELECT id FROM warehouses WHERE name = %s AND is_active = TRUE', (warehouse_name,))
+                warehouse = cursor.fetchone()
+                if not warehouse:
+                    errors.append(f"Row {row_num}: Warehouse '{warehouse_name}' not found")
+                    error_count += 1
+                    continue
+                
+                sku_id = sku['id']
+                warehouse_id = warehouse['id']
+                
+                # Get current stock
+                cursor.execute('''
+                    SELECT COALESCE(stock, 0) as stock FROM sku_warehouse_stock
+                    WHERE sku_id = %s AND warehouse_id = %s
+                ''', (sku_id, warehouse_id))
+                stock_row = cursor.fetchone()
+                current_stock = stock_row['stock'] if stock_row else 0
+                
+                # Determine direction
+                direction = ADJUSTMENT_TYPES.get(adjustment_type, {}).get('direction', 'increase')
+                if direction == 'decrease':
+                    new_stock = max(0, current_stock - quantity)
+                    stock_change = -(current_stock - new_stock)
+                else:
+                    new_stock = current_stock + quantity
+                    stock_change = quantity
+                
+                # Update warehouse stock
+                cursor.execute('''
+                    INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = %s
+                ''', (sku_id, warehouse_id, new_stock, new_stock))
+                
+                # Update total SKU stock
+                cursor.execute('''
+                    UPDATE skus SET stock = (
+                        SELECT COALESCE(SUM(stock), 0) FROM sku_warehouse_stock WHERE sku_id = %s
+                    ) WHERE id = %s
+                ''', (sku_id, sku_id))
+                
+                # Create audit log
+                cursor.execute('''
+                    INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after,
+                                                 change_type, reference_type, notes, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (sku_id, warehouse_id, current_stock, new_stock, adjustment_type, 
+                      'csv_import', notes, user_id))
+                
+                # Create adjustment record
+                cursor.execute('''
+                    INSERT INTO stock_adjustments (sku_id, warehouse_id, quantity_change, adjustment_type, notes, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (sku_id, warehouse_id, stock_change, adjustment_type, notes, user_id))
+                
+                success_count += 1
+                
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+                error_count += 1
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': f'Import completed: {success_count} success, {error_count} errors',
+            'success_count': success_count,
+            'error_count': error_count,
+            'errors': errors[:20]  # Return first 20 errors
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/stock/low-stock-items', methods=['GET'])
+@admin_required
+def get_low_stock_items():
+    """Get list of low stock and out of stock items"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        filter_type = request.args.get('filter', 'all')  # all, low, out
+        warehouse_id = request.args.get('warehouse_id')
+        
+        query = '''
+            SELECT s.id, s.sku_code, s.stock as total_stock,
+                   p.name as product_name, p.parent_sku,
+                   COALESCE(p.low_stock_threshold, 5) as threshold,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            WHERE 1=1
+        '''
+        params = []
+        
+        if filter_type == 'out':
+            query += ' AND s.stock = 0'
+        elif filter_type == 'low':
+            query += ' AND s.stock > 0 AND s.stock <= COALESCE(p.low_stock_threshold, 5)'
+        else:
+            query += ' AND s.stock <= COALESCE(p.low_stock_threshold, 5)'
+        
+        query += ' ORDER BY s.stock ASC, p.name LIMIT 100'
+        
+        cursor.execute(query, params)
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(items), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

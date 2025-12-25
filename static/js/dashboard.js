@@ -83,6 +83,9 @@ async function init() {
         // Load dashboard stats on init
         loadDashboardStats();
         
+        // Load low stock badge
+        loadLowStockBadge();
+        
         // Handle hash navigation (e.g., /admin#products)
         handleHashNavigation();
         
@@ -100,7 +103,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName] = fullHash.split('?');
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-transfer', 'stock-adjustment', 'stock-history', 'orders', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'tier-settings', 'settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
         }
@@ -446,6 +449,12 @@ function setupEventListeners() {
     }
 }
 
+// Navigate to a specific page
+function navigateTo(pageName) {
+    window.location.hash = pageName;
+    switchPage(pageName);
+}
+
 // Switch between pages
 function switchPage(pageName) {
     // Update navigation
@@ -484,10 +493,14 @@ function switchPage(pageName) {
         loadCategoriesPage();
     } else if (pageName === 'warehouses') {
         loadWarehousesPage();
+    } else if (pageName === 'stock-summary') {
+        loadStockSummaryPage();
     } else if (pageName === 'stock-transfer') {
         loadStockTransferPage();
     } else if (pageName === 'stock-adjustment') {
         loadStockAdjustmentPage();
+    } else if (pageName === 'stock-import') {
+        // Stock import page doesn't need initial data load
     } else if (pageName === 'stock-history') {
         loadStockHistoryPage();
     }
@@ -4157,6 +4170,241 @@ function formatDateTime(dateStr) {
         hour: '2-digit',
         minute: '2-digit'
     });
+}
+
+// ==================== STOCK SUMMARY & ALERTS ====================
+
+let stockMovementChart = null;
+
+async function loadLowStockBadge() {
+    try {
+        const response = await fetch(`${API_URL}/admin/stock/low-stock-count`);
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        const badge = document.getElementById('lowStockBadge');
+        if (badge) {
+            if (data.total_alerts > 0) {
+                badge.textContent = data.total_alerts;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading low stock badge:', error);
+    }
+}
+
+async function loadStockSummaryPage() {
+    try {
+        const response = await fetch(`${API_URL}/admin/stock/summary`);
+        if (!response.ok) throw new Error('Failed to load summary');
+        const data = await response.json();
+        
+        document.getElementById('summaryTotalStock').textContent = data.total_stock.toLocaleString();
+        document.getElementById('summaryNormalStock').textContent = (data.stock_status.normal_stock || 0).toLocaleString();
+        document.getElementById('summaryLowStock').textContent = (data.stock_status.low_stock || 0).toLocaleString();
+        document.getElementById('summaryOutOfStock').textContent = (data.stock_status.out_of_stock || 0).toLocaleString();
+        
+        const warehouseList = document.getElementById('warehouseStockList');
+        if (data.by_warehouse.length === 0) {
+            warehouseList.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">ไม่มีโกดัง</div>';
+        } else {
+            warehouseList.innerHTML = data.by_warehouse.map(w => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <div>
+                        <div style="font-weight: 600; color: #fff;">${escapeHtml(w.name)}</div>
+                        <div style="font-size: 12px; color: #9ca3af;">${w.sku_count} SKU</div>
+                    </div>
+                    <div style="font-size: 24px; font-weight: 700; color: #8b5cf6;">${parseInt(w.stock).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+        
+        renderStockMovementChart(data.movements);
+        loadLowStockItems();
+        
+    } catch (error) {
+        console.error('Error loading stock summary:', error);
+    }
+}
+
+function renderStockMovementChart(movements) {
+    const ctx = document.getElementById('stockMovementChart');
+    if (!ctx) return;
+    
+    if (stockMovementChart) {
+        stockMovementChart.destroy();
+    }
+    
+    const labels = movements.map(m => {
+        const d = new Date(m.date);
+        return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    });
+    const stockIn = movements.map(m => parseInt(m.stock_in) || 0);
+    const stockOut = movements.map(m => parseInt(m.stock_out) || 0);
+    
+    stockMovementChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'เข้า',
+                    data: stockIn,
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                    borderRadius: 4
+                },
+                {
+                    label: 'ออก',
+                    data: stockOut,
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#9ca3af' } },
+                x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+            },
+            plugins: {
+                legend: { labels: { color: '#fff' } }
+            }
+        }
+    });
+}
+
+async function loadLowStockItems() {
+    const filter = document.getElementById('lowStockFilter')?.value || 'all';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock/low-stock-items?filter=${filter}`);
+        if (!response.ok) throw new Error('Failed to load low stock items');
+        const items = await response.json();
+        
+        const tbody = document.getElementById('lowStockItemsBody');
+        if (!tbody) return;
+        
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #9ca3af;">ไม่มีรายการสต็อกต่ำ</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = items.map(item => {
+            const stockBg = item.total_stock === 0 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)';
+            const stockBorder = item.total_stock === 0 ? '#ef4444' : '#f59e0b';
+            return `
+                <tr>
+                    <td style="padding: 12px 16px; color: #fff;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${item.image_url || '/static/images/placeholder.png'}" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover;">
+                            <span>${escapeHtml(item.product_name)}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 12px 16px; color: #e5e7eb;"><strong>${escapeHtml(item.sku_code)}</strong></td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 700; color: #fff;">${item.total_stock}</span>
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center; color: #9ca3af;">${item.threshold}</td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="goToAdjustStock(${item.id})">เพิ่มสต็อก</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading low stock items:', error);
+    }
+}
+
+function goToAdjustStock(skuId) {
+    navigateTo('stock-adjustment');
+}
+
+// ==================== STOCK IMPORT ====================
+
+async function handleStockImport(event) {
+    event.preventDefault();
+    
+    const fileInput = document.getElementById('importFile');
+    const adjustType = document.getElementById('importAdjustType').value;
+    const notes = document.getElementById('importNotes').value;
+    
+    if (!fileInput.files[0]) {
+        showGlobalAlert('กรุณาเลือกไฟล์ CSV', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('adjustment_type', adjustType);
+    formData.append('notes', notes);
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/stock/import`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        const resultCard = document.getElementById('importResultCard');
+        const resultContent = document.getElementById('importResultContent');
+        
+        if (response.ok) {
+            showGlobalAlert(result.message, 'success');
+            resultContent.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <div style="background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 28px; font-weight: 700; color: #10b981;">${result.success_count}</div>
+                        <div style="font-size: 13px; color: #9ca3af;">สำเร็จ</div>
+                    </div>
+                    <div style="background: rgba(239,68,68,0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 28px; font-weight: 700; color: #ef4444;">${result.error_count}</div>
+                        <div style="font-size: 13px; color: #9ca3af;">ล้มเหลว</div>
+                    </div>
+                </div>
+                ${result.errors && result.errors.length > 0 ? `
+                    <div style="background: rgba(239,68,68,0.1); border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto;">
+                        <div style="font-weight: 600; color: #ef4444; margin-bottom: 8px;">รายการที่ผิดพลาด:</div>
+                        ${result.errors.map(e => `<div style="font-size: 12px; color: #fca5a5; margin-bottom: 4px;">${escapeHtml(e)}</div>`).join('')}
+                    </div>
+                ` : ''}
+            `;
+            resultCard.style.display = 'block';
+            document.getElementById('stockImportForm').reset();
+            loadLowStockBadge();
+        } else {
+            showGlobalAlert(result.error || 'นำเข้าล้มเหลว', 'error');
+            resultCard.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error importing stock:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการนำเข้า', 'error');
+    }
+}
+
+// ==================== EXPORT FUNCTIONS ====================
+
+function exportStockHistory() {
+    const warehouseId = document.getElementById('historyWarehouse')?.value || '';
+    const dateFrom = document.getElementById('historyDateFrom')?.value || '';
+    const dateTo = document.getElementById('historyDateTo')?.value || '';
+    
+    let url = `${API_URL}/admin/stock/export?type=history`;
+    if (warehouseId) url += `&warehouse_id=${warehouseId}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    
+    window.location.href = url;
+}
+
+function exportCurrentStock() {
+    window.location.href = `${API_URL}/admin/stock/export?type=current`;
 }
 
 // Initialize on page load
