@@ -1,0 +1,56 @@
+ระบบใบเสนอราคายังไม่ต้องมี
+ระบบใระบบการชำระเงิน ยังใช้QR codeในการโอนเพียงอย่างเดียวก่อน
+
+นี่คือคำแนะนำเพิ่มเติมจาก gemini
+ก่อนที่เราจะเริ่ม ผมได้ตรวจสอบไฟล์ database.py ล่าสุดที่คุณส่งมา (ซึ่งมีตาราง brands, users, products, options, option_values, skus, sku_values_map, product_images และการ migration low_stock_threshold) พบว่า ยังขาดตารางสำคัญสำหรับการขาย ดังนี้:
+
+carts & cart_items: สำหรับเก็บสินค้าที่ลูกค้ารอกดซื้อ (Persistent Cart)
+
+orders & order_items: สำหรับเก็บประวัติการสั่งซื้อเมื่อยืนยันแล้ว
+
+customers (Optional but Recommended): สำหรับเก็บข้อมูลลูกค้าปลายทาง (ชื่อ, ที่อยู่จัดส่ง) ที่ Reseller กรอกเข้ามา
+
+🗺️ แผนการพัฒนา: ระบบตะกร้าและการขาย (Cart & Sales Module)
+ผมขอเสนอแผนการพัฒนาเป็น 3 ขั้นตอนหลัก เพื่อให้ Replit (Engineer) ทำงานต่อได้ชัดเจนครับ:
+
+ขั้นตอนที่ 1: อัปเกรดฐานข้อมูล (Database Enhancement)
+เราต้องเพิ่มตารางที่จำเป็นลงใน database.py
+
+Table carts:
+
+id (PK), user_id (FK - Reseller), created_at, updated_at
+
+Table cart_items:
+
+id (PK), cart_id (FK), sku_id (FK), quantity
+
+Table orders:
+
+id (PK), order_number (Unique String), user_id (FK - Reseller), total_amount, status (pending, paid, shipped, cancelled), shipping_address (Text/JSON), created_at
+
+Table order_items:
+
+id (PK), order_id (FK), sku_id (FK), quantity, price_at_time (ราคาตอนซื้อ), subtotal
+
+ขั้นตอนที่ 2: สร้าง Backend API (app.py)
+เราต้องการ API สำหรับจัดการ Flow การซื้อขาย:
+
+Cart API:
+
+POST /api/cart/add: เพิ่มสินค้า (รับ sku_id, qty) -> ต้องเช็คสต็อกก่อน
+
+GET /api/cart: ดึงรายการในตะกร้า (พร้อมคำนวณราคาสุทธิ)
+
+DELETE /api/cart/item/<id>: ลบสินค้า
+
+POST /api/cart/clear: ล้างตะกร้า
+
+Order API:
+
+POST /api/orders/checkout: เปลี่ยนตะกร้าเป็นออเดอร์ -> จุดสำคัญ: ต้องทำ Transaction (ตัดสต็อก + สร้างออเดอร์ + ล้างตะกร้า) ให้เสร็จพร้อมกัน
+
+GET /api/orders: ดูประวัติการสั่งซื้อ
+ขั้นตอนที่ 3: พัฒนา Frontend (Cart & Checkout UI)
+หน้า Catalog: มีปุ่ม "เพิ่มลงตะกร้า" ที่เช็คสต็อก Real-time
+หน้า Cart: แสดงรายการ, ปรับจำนวน, แสดงยอดรวม
+หน้า Checkout: กรอกที่อยู่ลูกค้า, เลือกขนส่ง, ยืนยันการสั่งซื้อ
