@@ -942,7 +942,7 @@
                 <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
                     <!-- Transfer Form Card (Full Width) -->
                     <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                             <h3 style="font-size: 18px; margin: 0; font-weight: 600;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
                                     <path d="M7 16V4M7 4L3 8M7 4L11 8"/>
@@ -953,39 +953,48 @@
                             <span style="font-size: 13px; color: #9ca3af;">เลือก SKU และย้ายจากโกดังหนึ่งไปอีกโกดัง</span>
                         </div>
                         <form id="stockTransferForm" onsubmit="handleStockTransfer(event)">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 16px; align-items: end;">
-                                <div class="form-group" style="margin-bottom: 0; position: relative;">
-                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU *</label>
-                                    <input type="text" id="transferSkuSearch" class="form-input" style="padding: 12px;" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="searchSkuForTransfer(this.value)">
-                                    <div id="transferSkuResults" class="sku-search-results" style="display: none;"></div>
-                                    <input type="hidden" id="transferSkuId">
-                                </div>
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดังต้นทาง *</label>
-                                    <select id="transferFromWarehouse" class="form-input" style="padding: 12px;" required onchange="updateTransferStock()">
-                                        <option value="">-- เลือก --</option>
-                                    </select>
-                                    <div id="fromWarehouseStock" class="stock-info" style="display: none;"></div>
-                                </div>
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดังปลายทาง *</label>
-                                    <select id="transferToWarehouse" class="form-input" style="padding: 12px;" required>
-                                        <option value="">-- เลือก --</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จำนวน *</label>
-                                    <input type="number" id="transferQuantity" class="form-input" style="padding: 12px;" min="1" required placeholder="0">
-                                </div>
-                                <button type="submit" class="btn" style="padding: 12px 24px; white-space: nowrap;">ย้ายสต็อก</button>
+                            <!-- SKU Search (Full Width) -->
+                            <div style="position: relative; margin-bottom: 24px;">
+                                <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหา SKU</label>
+                                <input type="text" id="transferSkuSearch" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ SKU Code..." oninput="searchSkuForTransfer(this.value)">
+                                <div id="transferSkuResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 100; margin-top: 4px;"></div>
+                                <input type="hidden" id="transferSkuId">
                             </div>
-                            <div id="transferSkuInfo" class="sku-info-box" style="display: none; margin-top: 16px;">
+                            
+                            <!-- Selected SKU Info -->
+                            <div id="transferSkuInfo" class="sku-info-box" style="display: none; margin-bottom: 24px;">
                                 <div class="sku-info-label">สินค้าที่เลือก:</div>
                                 <div id="transferSkuDetails"></div>
                             </div>
-                            <div class="form-group" style="margin-top: 16px; margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">หมายเหตุ (ถ้ามี)</label>
-                                <textarea id="transferNotes" class="form-input" rows="2" placeholder="เหตุผลการย้าย"></textarea>
+                            
+                            <!-- Transfer Options (Grid) -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">โกดังต้นทาง *</label>
+                                    <select id="transferFromWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" required onchange="updateTransferStock()">
+                                        <option value="">-- เลือกโกดัง --</option>
+                                    </select>
+                                    <div id="fromWarehouseStock" class="stock-info" style="display: none; margin-top: 8px; font-size: 13px;"></div>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">โกดังปลายทาง *</label>
+                                    <select id="transferToWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" required>
+                                        <option value="">-- เลือกโกดัง --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">จำนวนที่ย้าย *</label>
+                                    <input type="number" id="transferQuantity" class="form-input" style="padding: 12px; font-size: 14px;" min="1" required placeholder="0">
+                                </div>
+                            </div>
+                            
+                            <!-- Notes and Submit -->
+                            <div style="display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: end;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">หมายเหตุ (ถ้ามี)</label>
+                                    <input type="text" id="transferNotes" class="form-input" style="padding: 12px; font-size: 14px;" placeholder="เหตุผลการย้าย">
+                                </div>
+                                <button type="submit" class="btn" style="padding: 12px 32px; white-space: nowrap; font-size: 14px;">ย้ายสต็อก</button>
                             </div>
                         </form>
                     </div>
@@ -1216,28 +1225,33 @@
                 <div class="content-wrapper" style="display: flex; flex-direction: column; gap: 24px;">
                     <!-- Filter Card (Full Width) -->
                     <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                             <h3 style="font-size: 18px; margin: 0; font-weight: 600;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
                                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
                                 </svg>
                                 ตัวกรองข้อมูล
                             </h3>
+                            <span style="font-size: 13px; color: #9ca3af;">กรองประวัติการเปลี่ยนแปลงสต็อก</span>
                         </div>
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 16px; align-items: end;">
+                        
+                        <!-- Search Field (Full Width) -->
+                        <div style="margin-bottom: 20px;">
+                            <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหา SKU / สินค้า</label>
+                            <input type="text" id="historySearch" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ SKU Code..." oninput="loadStockHistory()">
+                        </div>
+                        
+                        <!-- Filter Options (Grid) -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px;">
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ค้นหา SKU / สินค้า</label>
-                                <input type="text" id="historySearch" class="form-input" style="padding: 12px;" placeholder="พิมพ์ชื่อสินค้า / SKU Code" oninput="loadStockHistory()">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">โกดัง</label>
-                                <select id="historyWarehouse" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">โกดัง</label>
+                                <select id="historyWarehouse" class="form-input" style="padding: 12px; font-size: 14px;" onchange="loadStockHistory()">
                                     <option value="">ทุกโกดัง</option>
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ประเภท</label>
-                                <select id="historyChangeType" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">ประเภท</label>
+                                <select id="historyChangeType" class="form-input" style="padding: 12px; font-size: 14px;" onchange="loadStockHistory()">
                                     <option value="">ทุกประเภท</option>
                                     <option value="transfer_in">ย้ายเข้า</option>
                                     <option value="transfer_out">ย้ายออก</option>
@@ -1254,12 +1268,12 @@
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">จากวันที่</label>
-                                <input type="date" id="historyDateFrom" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">จากวันที่</label>
+                                <input type="date" id="historyDateFrom" class="form-input" style="padding: 12px; font-size: 14px;" onchange="loadStockHistory()">
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label" style="font-size: 13px; margin-bottom: 6px;">ถึงวันที่</label>
-                                <input type="date" id="historyDateTo" class="form-input" style="padding: 12px;" onchange="loadStockHistory()">
+                                <label class="form-label" style="font-size: 13px; margin-bottom: 8px;">ถึงวันที่</label>
+                                <input type="date" id="historyDateTo" class="form-input" style="padding: 12px; font-size: 14px;" onchange="loadStockHistory()">
                             </div>
                         </div>
                     </div>

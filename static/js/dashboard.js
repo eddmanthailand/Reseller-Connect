@@ -3163,14 +3163,22 @@ function searchSkuForTransfer(keyword) {
             
             const resultsDiv = document.getElementById('transferSkuResults');
             if (skus.length === 0) {
-                resultsDiv.innerHTML = '<div class="sku-result-item" style="opacity: 0.6;">ไม่พบ SKU</div>';
+                resultsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #9ca3af;">ไม่พบ SKU</div>';
             } else {
-                resultsDiv.innerHTML = skus.map(s => `
-                    <div class="sku-result-item" onclick="selectTransferSku(${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}')">
-                        <strong>${escapeHtml(s.sku_code)}</strong> - ${escapeHtml(s.product_name)}
-                        <span class="stock-badge">สต็อก: ${s.total_stock}</span>
+                resultsDiv.innerHTML = skus.map(s => {
+                    const stockBg = s.total_stock === 0 ? 'rgba(239,68,68,0.2)' : (s.total_stock <= 5 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)');
+                    const stockBorder = s.total_stock === 0 ? '#ef4444' : (s.total_stock <= 5 ? '#f59e0b' : '#10b981');
+                    return `
+                    <div class="sku-result-item" onclick="selectTransferSku(${s.id}, '${escapeHtml(s.sku_code)}', '${escapeHtml(s.product_name)}')" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="font-size: 14px; color: #fff;">${escapeHtml(s.sku_code)}</strong>
+                                <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">${escapeHtml(s.product_name)}</div>
+                            </div>
+                            <span style="display: inline-block; padding: 4px 10px; background: ${stockBg}; border: 1px solid ${stockBorder}; border-radius: 6px; font-weight: 600; font-size: 12px; color: #fff;">${s.total_stock}</span>
+                        </div>
                     </div>
-                `).join('');
+                `}).join('');
             }
             resultsDiv.style.display = 'block';
         } catch (error) {
