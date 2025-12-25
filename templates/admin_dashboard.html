@@ -169,6 +169,15 @@
                     <span class="pending-badge" id="pendingOrderCount" style="display: none;">0</span>
                 </a>
                 
+                <a href="#" class="nav-item" data-page="quick-order">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">ขายด่วน</span>
+                </a>
+                
                 <a href="#" class="nav-item has-submenu" data-page="products">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1697,6 +1706,96 @@
 
                 <div id="ordersContainer">
                     <div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>
+                </div>
+            </div>
+
+            <!-- Quick Order Page -->
+            <div id="page-quick-order" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                        ขายด่วน (Quick Order)
+                    </h1>
+                    <p>สร้างคำสั่งซื้อด่วนสำหรับช่องทางขาย เช่น LINE, Facebook, หน้าร้าน</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 380px; gap: 24px;">
+                    <div class="card">
+                        <h3 style="font-size: 16px; margin-bottom: 20px; font-weight: 600;">เลือกสินค้า</h3>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <input type="text" id="quickOrderProductSearch" class="form-input" placeholder="ค้นหาสินค้าด้วยชื่อหรือ SKU..." oninput="searchQuickOrderProducts(this.value)">
+                        </div>
+                        
+                        <div id="quickOrderProductResults" style="display: none; max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 16px;">
+                        </div>
+                        
+                        <div id="quickOrderItems" style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="text-align: center; padding: 40px; opacity: 0.6; border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 8px;">
+                                    <circle cx="9" cy="21" r="1"></circle>
+                                    <circle cx="20" cy="21" r="1"></circle>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                </svg>
+                                <p>ค้นหาและเลือกสินค้าเพื่อเพิ่มลงรายการ</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="card" style="margin-bottom: 16px;">
+                            <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">ข้อมูลคำสั่งซื้อ</h3>
+                            
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">ช่องทางขาย *</label>
+                                <select id="quickOrderChannel" class="form-select">
+                                    <option value="">-- เลือกช่องทาง --</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">ชื่อลูกค้า</label>
+                                <input type="text" id="quickOrderCustomerName" class="form-input" placeholder="ชื่อลูกค้า">
+                            </div>
+                            
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">เบอร์โทร</label>
+                                <input type="text" id="quickOrderCustomerPhone" class="form-input" placeholder="0xx-xxx-xxxx">
+                            </div>
+                            
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">หมายเหตุ</label>
+                                <textarea id="quickOrderNotes" class="form-input" rows="2" placeholder="หมายเหตุเพิ่มเติม"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="card" style="background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(236,72,153,0.2)); border: 1px solid rgba(168,85,247,0.3);">
+                            <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">สรุปยอด</h3>
+                            
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+                                <span style="opacity: 0.8;">จำนวนรายการ</span>
+                                <span id="quickOrderItemCount">0 รายการ</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px;">
+                                <span style="opacity: 0.8;">จำนวนชิ้น</span>
+                                <span id="quickOrderTotalQty">0 ชิ้น</span>
+                            </div>
+                            <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 12px; display: flex; justify-content: space-between; font-size: 18px; font-weight: 700;">
+                                <span>ยอดรวม</span>
+                                <span id="quickOrderTotal" style="color: #a855f7;">฿0</span>
+                            </div>
+                            
+                            <button type="button" class="btn" id="btnCreateQuickOrder" onclick="createQuickOrder()" disabled style="width: 100%; margin-top: 16px; padding: 14px; font-size: 15px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                                    <path d="M9 11l3 3L22 4"/>
+                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                                </svg>
+                                สร้างคำสั่งซื้อ
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

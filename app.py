@@ -5855,6 +5855,184 @@ def get_brand_sales():
 
 # ==================== ADMIN ORDER MANAGEMENT ====================
 
+@app.route('/api/admin/quick-order', methods=['POST'])
+@admin_required
+def create_quick_order():
+    """Create a quick order from admin dashboard"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        sales_channel_id = data.get('sales_channel_id')
+        customer_name = data.get('customer_name')
+        customer_phone = data.get('customer_phone')
+        notes = data.get('notes')
+        items = data.get('items', [])
+        
+        if not sales_channel_id:
+            return jsonify({'error': 'กรุณาเลือกช่องทางขาย'}), 400
+        
+        if not items:
+            return jsonify({'error': 'กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Validate sales channel
+        cursor.execute('SELECT id FROM sales_channels WHERE id = %s AND is_active = TRUE', (sales_channel_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ช่องทางขายไม่ถูกต้อง'}), 400
+        
+        # Validate and get server-side SKU prices
+        sku_ids = [item['sku_id'] for item in items]
+        cursor.execute('SELECT id, sku_code, price FROM skus WHERE id = ANY(%s)', (sku_ids,))
+        sku_prices = {row['id']: {'price': float(row['price']), 'sku_code': row['sku_code']} for row in cursor.fetchall()}
+        
+        # Update items with server-side prices
+        for item in items:
+            if item['sku_id'] not in sku_prices:
+                return jsonify({'error': f"SKU #{item['sku_id']} ไม่พบในระบบ"}), 400
+            item['price'] = sku_prices[item['sku_id']]['price']
+        cursor.execute('''
+            SELECT sws.sku_id, sws.warehouse_id, sws.stock, w.name as warehouse_name, w.is_active
+            FROM sku_warehouse_stock sws
+            JOIN warehouses w ON w.id = sws.warehouse_id
+            WHERE sws.sku_id = ANY(%s) AND sws.stock > 0 AND w.is_active = TRUE
+            ORDER BY sws.warehouse_id, sws.sku_id
+        ''', (sku_ids,))
+        warehouse_stocks = cursor.fetchall()
+        
+        # Build a lookup: {sku_id: [{warehouse_id, stock, warehouse_name}, ...]}
+        sku_warehouse_map = {}
+        for ws in warehouse_stocks:
+            sku_id = ws['sku_id']
+            if sku_id not in sku_warehouse_map:
+                sku_warehouse_map[sku_id] = []
+            sku_warehouse_map[sku_id].append({
+                'warehouse_id': ws['warehouse_id'],
+                'stock': ws['stock'],
+                'warehouse_name': ws['warehouse_name']
+            })
+        
+        # Check stock availability
+        for item in items:
+            total_available = sum(ws['stock'] for ws in sku_warehouse_map.get(item['sku_id'], []))
+            if total_available < item['quantity']:
+                cursor.execute('SELECT sku_code FROM skus WHERE id = %s', (item['sku_id'],))
+                sku = cursor.fetchone()
+                sku_code = sku['sku_code'] if sku else f"SKU#{item['sku_id']}"
+                return jsonify({'error': f'สินค้า {sku_code} สต็อกไม่พอ เหลือ {total_available} ชิ้น'}), 400
+        
+        # Calculate totals
+        total_amount = sum(float(item['price']) * item['quantity'] for item in items)
+        
+        # Build customer notes
+        order_notes = []
+        if customer_name:
+            order_notes.append(f"ลูกค้า: {customer_name}")
+        if customer_phone:
+            order_notes.append(f"โทร: {customer_phone}")
+        if notes:
+            order_notes.append(notes)
+        final_notes = ' | '.join(order_notes) if order_notes else None
+        
+        # Generate order number
+        order_number = generate_order_number(cursor)
+        
+        # Create order
+        cursor.execute('''
+            INSERT INTO orders (order_number, user_id, sales_channel_id, status, total_amount, discount_amount, final_amount, notes)
+            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s)
+            RETURNING id, order_number, status, final_amount, created_at
+        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes))
+        order = dict(cursor.fetchone())
+        
+        # Create order items and track their IDs
+        order_item_map = {}
+        for idx, item in enumerate(items):
+            cursor.execute('''
+                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
+                VALUES (%s, %s, %s, %s, 0, %s, NULL)
+                RETURNING id
+            ''', (order['id'], item['sku_id'], item['quantity'], item['price'], item['price']))
+            order_item_id = cursor.fetchone()['id']
+            order_item_map[idx] = order_item_id
+        
+        # Allocate items to warehouses
+        warehouse_shipments = {}
+        stock_deductions = []
+        
+        for idx, item in enumerate(items):
+            remaining_qty = item['quantity']
+            warehouses_for_sku = sku_warehouse_map.get(item['sku_id'], [])
+            order_item_id = order_item_map[idx]
+            
+            for wh in warehouses_for_sku:
+                if remaining_qty <= 0:
+                    break
+                
+                allocate_qty = min(remaining_qty, wh['stock'])
+                if allocate_qty > 0:
+                    wh_id = wh['warehouse_id']
+                    if wh_id not in warehouse_shipments:
+                        warehouse_shipments[wh_id] = []
+                    
+                    warehouse_shipments[wh_id].append({
+                        'order_item_id': order_item_id,
+                        'quantity': allocate_qty
+                    })
+                    
+                    stock_deductions.append((item['sku_id'], wh_id, allocate_qty))
+                    wh['stock'] -= allocate_qty
+                    remaining_qty -= allocate_qty
+        
+        # Create shipments per warehouse
+        for wh_id, shipment_items in warehouse_shipments.items():
+            cursor.execute('''
+                INSERT INTO order_shipments (order_id, warehouse_id, status)
+                VALUES (%s, %s, 'pending')
+                RETURNING id
+            ''', (order['id'], wh_id))
+            shipment_id = cursor.fetchone()['id']
+            
+            for ship_item in shipment_items:
+                cursor.execute('''
+                    INSERT INTO order_shipment_items (shipment_id, order_item_id, quantity)
+                    VALUES (%s, %s, %s)
+                ''', (shipment_id, ship_item['order_item_id'], ship_item['quantity']))
+        
+        # Deduct stock from warehouses
+        for sku_id, wh_id, qty in stock_deductions:
+            cursor.execute('''
+                UPDATE sku_warehouse_stock
+                SET stock = stock - %s
+                WHERE sku_id = %s AND warehouse_id = %s
+            ''', (qty, sku_id, wh_id))
+        
+        # Update main SKU stock
+        for item in items:
+            cursor.execute('''
+                UPDATE skus SET stock = stock - %s WHERE id = %s
+            ''', (item['quantity'], item['sku_id']))
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': 'สร้างคำสั่งซื้อสำเร็จ',
+            'order_number': order['order_number'],
+            'order_id': order['id']
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/admin/orders', methods=['GET'])
 @admin_required
 def get_all_orders():

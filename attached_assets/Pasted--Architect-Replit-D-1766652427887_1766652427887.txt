@@ -1,0 +1,59 @@
+ในฐานะ Architect, ผมเห็นด้วยกับแผนพัฒนาที่ Replit เสนอมาเป็นอย่างมากครับ มันเป็นการต่อยอดจากรากฐาน Database และ API ที่เราวางไว้ (ซึ่งผมตรวจสอบจากไฟล์ database.py ล่าสุดแล้วว่าตาราง carts, cart_items, orders และ order_items พร้อมใช้งาน ตามที่ Replit แจ้งครับ)
+
+เพื่อให้การพัฒนาราบรื่นที่สุด ผมขอ อนุมัติ (Approve) แผนนี้ และขอเสริมรายละเอียดเชิงเทคนิค (Technical Specification) ในแต่ละขั้นตอน เพื่อให้ Replit ทำงานได้ง่ายขึ้นครับ:
+
+Architectural Blueprint: Reseller Sales System (Phase 2)
+1. UI ตะกร้าสินค้า (Reseller Cart) - 🛒
+Current State: ไฟล์ templates/reseller_cart.html มีโครงสร้างพื้นฐานแล้ว
+
+Enhancement:
+
+Real-time Stock Check: ปุ่มเพิ่มลงตะกร้าใน reseller_catalog.html ต้องเช็ค API /api/products/{id} เพื่อดู skus[].stock ก่อนยอมให้กด
+
+Dynamic Pricing: แสดงราคาตาม reseller_tier_id ของ User (Logic นี้ backend app.py น่าจะคำนวณให้แล้ว แต่ frontend ต้องแสดงผลให้ชัดเจนว่า "ราคาปกติ -> ราคาของคุณ")
+
+Cart Badge: ที่มุมขวาบนของทุกหน้า (reseller_spa.html) ต้องมีไอคอนตะกร้าที่แสดงจำนวนชิ้น (cart_items.count) อัปเดตตลอดเวลา
+
+2. หน้า Checkout & Payment - 💳
+Current State: ไฟล์ templates/reseller_checkout.html มีอยู่แล้ว
+
+Enhancement:
+
+Customer Selection: ใช้ Select2 หรือ Searchable Dropdown เพื่อค้นหาลูกค้าจากตาราง reseller_customers (หรือปุ่ม "ลูกค้าใหม่" ที่เปิด Modal ฟอร์ม)
+
+Payment Proof: ต้องมี input type="file" สำหรับอัปโหลดสลิป และเมื่ออัปโหลดเสร็จ ให้แสดง Preview รูปทันที
+
+QR Code: สร้าง Placeholder หรือใช้ Library (เช่น qrcode.js) เพื่อเจน QR Code ตามยอดเงินสุทธิ (ถ้ามี PromptPay ID)
+
+3. ระบบ Quick Order (Admin) - ⚡
+Concept: นี่คือฟีเจอร์ใหม่ที่น่าสนใจมากสำหรับ Admin ที่รับออเดอร์ผ่านแชท
+
+Implementation:
+
+สร้างหน้า admin_quick_order.html (ใหม่)
+
+ใช้ Layout คล้าย POS (Point of Sale): ด้านซ้ายเลือกสินค้า, ด้านขวาสรุปบิล
+
+API: ใช้ POST /api/orders ตัวเดิม แต่ส่ง status: 'paid' ได้เลยถ้ารับเงินสดมาแล้ว
+
+4. ปรับปรุงหน้า Orders (Status Flow) - 📦
+Current State: templates/reseller_orders.html และ templates/admin_orders.html
+
+Enhancement:
+
+Status Badge: ใช้สีที่สื่อความหมาย (เหลือง=รอชำระ, ฟ้า=รอตรวจสอบ, เขียว=สำเร็จ, แดง=ยกเลิก)
+
+Action Buttons: Admin ต้องมีปุ่ม Approve (Confirm Payment) และ Reject
+
+Slip Preview: Admin ต้องกดดูรูปสลิปขยายใหญ่ได้
+
+Action Items for Replit (Engineer)
+System Analyst ครับ คุณสามารถส่งคำสั่งต่อไปนี้ให้ Replit ได้เลยครับ:
+
+"Replit, ลุยตามแผน 4 ขั้นตอนนี้ได้เลยครับ เริ่มจากขั้นตอนที่ 1 และ 2 ก่อน:
+
+Cart & Catalog: ปรับปรุง static/js/reseller-spa.js ให้ปุ่ม 'เพิ่มลงตะกร้า' เช็คสต็อกจริง และอัปเดต Cart Badge ทันที
+
+Checkout Flow: เชื่อมต่อหน้า Checkout กับ API POST /api/orders โดยให้รองรับการแนบไฟล์สลิป (ใช้ FormData) และการเลือก/สร้างลูกค้าใหม่"
+
+หาก Replit ต้องการรายละเอียดของ API Endpoint ไหนเพิ่มเติม (เช่น JSON structure) แจ้งผมได้ทันทีครับ ผมพร้อมร่าง Spec ให้!

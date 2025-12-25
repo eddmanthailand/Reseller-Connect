@@ -835,10 +835,11 @@ let checkoutData = { items: [], total: 0, customers: [], selfAddress: null };
 
 async function loadCheckout() {
     try {
-        const [cartRes, customersRes, profileRes] = await Promise.all([
+        const [cartRes, customersRes, profileRes, channelsRes] = await Promise.all([
             fetch(`${RESELLER_API_URL}/reseller/cart`),
             fetch(`${RESELLER_API_URL}/reseller/customers`),
-            fetch(`${RESELLER_API_URL}/reseller/profile`)
+            fetch(`${RESELLER_API_URL}/reseller/profile`),
+            fetch(`${RESELLER_API_URL}/sales-channels`)
         ]);
         
         if (!cartRes.ok) throw new Error('Failed to load cart');
@@ -862,6 +863,10 @@ async function loadCheckout() {
             checkoutData.selfAddress = await profileRes.json();
         }
         
+        if (channelsRes.ok) {
+            checkoutData.salesChannels = await channelsRes.json();
+        }
+        
         renderCheckout();
     } catch (error) {
         console.error('Error loading checkout:', error);
@@ -877,6 +882,14 @@ function renderCheckout() {
         checkoutData.customers.map(c => 
             `<option value="${c.id}">${c.full_name} - ${c.phone || 'ไม่มีเบอร์'}</option>`
         ).join('');
+    
+    const channelSelect = document.getElementById('checkoutSalesChannel');
+    if (channelSelect && checkoutData.salesChannels) {
+        channelSelect.innerHTML = '<option value="">-- เลือกช่องทางขาย --</option>' +
+            checkoutData.salesChannels.map(ch => 
+                `<option value="${ch.id}">${ch.name}</option>`
+            ).join('');
+    }
     
     const selfCard = document.getElementById('selfAddressCard');
     if (checkoutData.selfAddress) {
@@ -988,6 +1001,7 @@ async function placeOrder() {
     const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
     const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
     const notes = document.getElementById('orderNotes').value;
+    const salesChannelId = document.getElementById('checkoutSalesChannel')?.value || null;
     
     let shippingData = {};
     if (shippingType === 'customer') {
@@ -1028,6 +1042,7 @@ async function placeOrder() {
             body: JSON.stringify({
                 payment_method: paymentMethod,
                 notes: notes,
+                sales_channel_id: salesChannelId ? parseInt(salesChannelId) : null,
                 ...shippingData
             })
         });

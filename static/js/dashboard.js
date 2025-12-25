@@ -103,7 +103,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName] = fullHash.split('?');
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'quick-order', 'tier-settings', 'settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
         }
@@ -503,6 +503,8 @@ function switchPage(pageName) {
         // Stock import page doesn't need initial data load
     } else if (pageName === 'stock-history') {
         loadStockHistoryPage();
+    } else if (pageName === 'quick-order') {
+        loadQuickOrderPage();
     }
 }
 
@@ -4420,6 +4422,283 @@ function exportStockHistory() {
 function exportCurrentStock() {
     window.location.href = `${API_URL}/admin/stock/export?type=current`;
 }
+
+// ==================== QUICK ORDER SECTION ====================
+
+let quickOrderItems = [];
+let quickOrderSearchTimeout = null;
+let quickOrderSalesChannels = [];
+
+async function loadQuickOrderPage() {
+    quickOrderItems = [];
+    renderQuickOrderItems();
+    updateQuickOrderSummary();
+    
+    try {
+        const response = await fetch(`${API_URL}/sales-channels`);
+        if (response.ok) {
+            quickOrderSalesChannels = await response.json();
+            const channelSelect = document.getElementById('quickOrderChannel');
+            channelSelect.innerHTML = '<option value="">-- เลือกช่องทาง --</option>' +
+                quickOrderSalesChannels.map(ch => `<option value="${ch.id}">${ch.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Error loading sales channels:', error);
+    }
+}
+
+function searchQuickOrderProducts(keyword) {
+    clearTimeout(quickOrderSearchTimeout);
+    const resultsDiv = document.getElementById('quickOrderProductResults');
+    
+    if (!keyword || keyword.length < 2) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    quickOrderSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/products?search=${encodeURIComponent(keyword)}&limit=15`);
+            if (!response.ok) throw new Error('Failed to search products');
+            const data = await response.json();
+            const products = data.products || data;
+            
+            if (products.length === 0) {
+                resultsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #9ca3af;">ไม่พบสินค้า</div>';
+            } else {
+                resultsDiv.innerHTML = products.map(p => `
+                    <div onclick="selectQuickOrderProduct(${p.id})" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.1)'" onmouseout="this.style.background='transparent'">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <img src="${p.image_url || '/static/images/placeholder.png'}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.1);">
+                            <div style="flex: 1; min-width: 0;">
+                                <strong style="font-size: 14px; color: #fff; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.name)}</strong>
+                                <div style="font-size: 12px; color: #9ca3af;">${escapeHtml(p.parent_sku)} | ${p.sku_count || '-'} SKU</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching products:', error);
+        }
+    }, 300);
+}
+
+async function selectQuickOrderProduct(productId) {
+    document.getElementById('quickOrderProductResults').style.display = 'none';
+    document.getElementById('quickOrderProductSearch').value = '';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/products/${productId}/skus-with-stock`);
+        if (!response.ok) throw new Error('Failed to load product SKUs');
+        const data = await response.json();
+        
+        if (data.skus && data.skus.length > 0) {
+            if (data.skus.length === 1) {
+                addQuickOrderItem(data.product, data.skus[0]);
+            } else {
+                showQuickOrderSkuSelector(data.product, data.skus);
+            }
+        } else {
+            showGlobalAlert('สินค้านี้ยังไม่มี SKU', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading product:', error);
+        showGlobalAlert('ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
+    }
+}
+
+function showQuickOrderSkuSelector(product, skus) {
+    const resultsDiv = document.getElementById('quickOrderProductResults');
+    resultsDiv.innerHTML = `
+        <div style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <strong style="font-size: 14px;">${escapeHtml(product.name)}</strong>
+            <div style="font-size: 12px; color: #9ca3af;">เลือก SKU:</div>
+        </div>
+        ${skus.map(sku => `
+            <div onclick="addQuickOrderItemFromSku(${product.id}, ${sku.id}, '${escapeHtml(sku.sku_code)}', '${escapeHtml(sku.variant_name || '')}', ${sku.price}, '${escapeHtml(product.name)}', '${product.image_url || ''}')" style="padding: 10px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.1)'" onmouseout="this.style.background='transparent'">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 13px; color: #fff;">${escapeHtml(sku.sku_code)}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">${escapeHtml(sku.variant_name || '-')}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 13px; color: #a855f7; font-weight: 600;">฿${formatNumber(sku.price)}</div>
+                        <div style="font-size: 11px; color: ${sku.total_stock > 0 ? '#10b981' : '#ef4444'};">คงเหลือ: ${sku.total_stock || 0}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('')}
+    `;
+    resultsDiv.style.display = 'block';
+}
+
+function addQuickOrderItemFromSku(productId, skuId, skuCode, variantName, price, productName, imageUrl) {
+    document.getElementById('quickOrderProductResults').style.display = 'none';
+    
+    const existingIndex = quickOrderItems.findIndex(item => item.sku_id === skuId);
+    if (existingIndex >= 0) {
+        quickOrderItems[existingIndex].quantity += 1;
+    } else {
+        quickOrderItems.push({
+            product_id: productId,
+            sku_id: skuId,
+            sku_code: skuCode,
+            variant_name: variantName,
+            product_name: productName,
+            image_url: imageUrl,
+            price: price,
+            quantity: 1
+        });
+    }
+    
+    renderQuickOrderItems();
+    updateQuickOrderSummary();
+}
+
+function addQuickOrderItem(product, sku) {
+    addQuickOrderItemFromSku(product.id, sku.id, sku.sku_code, sku.variant_name || '', sku.price, product.name, product.image_url);
+}
+
+function updateQuickOrderItemQty(skuId, delta) {
+    const itemIndex = quickOrderItems.findIndex(item => item.sku_id === skuId);
+    if (itemIndex >= 0) {
+        quickOrderItems[itemIndex].quantity += delta;
+        if (quickOrderItems[itemIndex].quantity <= 0) {
+            quickOrderItems.splice(itemIndex, 1);
+        }
+        renderQuickOrderItems();
+        updateQuickOrderSummary();
+    }
+}
+
+function removeQuickOrderItem(skuId) {
+    quickOrderItems = quickOrderItems.filter(item => item.sku_id !== skuId);
+    renderQuickOrderItems();
+    updateQuickOrderSummary();
+}
+
+function renderQuickOrderItems() {
+    const container = document.getElementById('quickOrderItems');
+    
+    if (quickOrderItems.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; opacity: 0.6; border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 8px;">
+                    <circle cx="9" cy="21" r="1"></circle>
+                    <circle cx="20" cy="21" r="1"></circle>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+                <p>ค้นหาและเลือกสินค้าเพื่อเพิ่มลงรายการ</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = quickOrderItems.map(item => `
+        <div style="display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+            <img src="${item.image_url || '/static/images/placeholder.png'}" alt="" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; background: rgba(255,255,255,0.1);">
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.product_name)}</div>
+                <div style="font-size: 12px; color: #9ca3af;">${escapeHtml(item.sku_code)} ${item.variant_name ? '| ' + escapeHtml(item.variant_name) : ''}</div>
+                <div style="font-size: 13px; color: #a855f7; font-weight: 600; margin-top: 4px;">฿${formatNumber(item.price)} x ${item.quantity} = ฿${formatNumber(item.price * item.quantity)}</div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" onclick="updateQuickOrderItemQty(${item.sku_id}, -1)" style="width: 28px; height: 28px; border: none; border-radius: 6px; background: rgba(239,68,68,0.2); color: #ef4444; cursor: pointer; font-size: 16px; font-weight: 700;">-</button>
+                    <span style="min-width: 24px; text-align: center; font-weight: 600;">${item.quantity}</span>
+                    <button type="button" onclick="updateQuickOrderItemQty(${item.sku_id}, 1)" style="width: 28px; height: 28px; border: none; border-radius: 6px; background: rgba(16,185,129,0.2); color: #10b981; cursor: pointer; font-size: 16px; font-weight: 700;">+</button>
+                </div>
+                <button type="button" onclick="removeQuickOrderItem(${item.sku_id})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 11px; opacity: 0.8;">ลบ</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateQuickOrderSummary() {
+    const itemCount = quickOrderItems.length;
+    const totalQty = quickOrderItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = quickOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    document.getElementById('quickOrderItemCount').textContent = `${itemCount} รายการ`;
+    document.getElementById('quickOrderTotalQty').textContent = `${totalQty} ชิ้น`;
+    document.getElementById('quickOrderTotal').textContent = `฿${formatNumber(totalAmount)}`;
+    
+    const channelSelected = document.getElementById('quickOrderChannel').value;
+    document.getElementById('btnCreateQuickOrder').disabled = quickOrderItems.length === 0 || !channelSelected;
+}
+
+async function createQuickOrder() {
+    const channelId = document.getElementById('quickOrderChannel').value;
+    const customerName = document.getElementById('quickOrderCustomerName').value.trim();
+    const customerPhone = document.getElementById('quickOrderCustomerPhone').value.trim();
+    const notes = document.getElementById('quickOrderNotes').value.trim();
+    
+    if (!channelId) {
+        showGlobalAlert('กรุณาเลือกช่องทางขาย', 'error');
+        return;
+    }
+    
+    if (quickOrderItems.length === 0) {
+        showGlobalAlert('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ', 'error');
+        return;
+    }
+    
+    const btn = document.getElementById('btnCreateQuickOrder');
+    btn.disabled = true;
+    btn.innerHTML = '<span>กำลังสร้างคำสั่งซื้อ...</span>';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/quick-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sales_channel_id: parseInt(channelId),
+                customer_name: customerName || null,
+                customer_phone: customerPhone || null,
+                notes: notes || null,
+                items: quickOrderItems.map(item => ({
+                    sku_id: item.sku_id,
+                    quantity: item.quantity,
+                    price: item.price
+                }))
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showGlobalAlert(`สร้างคำสั่งซื้อสำเร็จ! เลขที่: ${result.order_number}`, 'success');
+            quickOrderItems = [];
+            document.getElementById('quickOrderCustomerName').value = '';
+            document.getElementById('quickOrderCustomerPhone').value = '';
+            document.getElementById('quickOrderNotes').value = '';
+            document.getElementById('quickOrderChannel').value = '';
+            renderQuickOrderItems();
+            updateQuickOrderSummary();
+        } else {
+            showGlobalAlert(result.error || 'ไม่สามารถสร้างคำสั่งซื้อได้', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating quick order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>สร้างคำสั่งซื้อ`;
+        updateQuickOrderSummary();
+    }
+}
+
+// Event listener for channel selection
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.id === 'quickOrderChannel') {
+        updateQuickOrderSummary();
+    }
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
