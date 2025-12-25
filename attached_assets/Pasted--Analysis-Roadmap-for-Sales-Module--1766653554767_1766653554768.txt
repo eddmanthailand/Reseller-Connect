@@ -1,0 +1,79 @@
+นี่คือ ผลการวิเคราะห์และแผนการพัฒนาต่อ (Analysis & Roadmap for Sales Module) เพื่อให้สอดคล้องกับไฟล์ที่มีอยู่ครับ:
+
+1. 🏗️ โครงสร้างปัจจุบัน (Current Structure Analysis)
+ไฟล์ที่มีอยู่และพร้อมใช้งาน:
+
+Database (database.py): มีตารางครบแล้ว (carts, orders, order_items, reseller_customers) รวมถึง stock_movements และ low_stock_threshold
+
+Frontend Templates: มีไฟล์ HTML แยกเป็นส่วนๆ ชัดเจน (reseller_cart.html, reseller_catalog.html, reseller_checkout.html, reseller_customers.html, reseller_orders.html)
+
+JS Logic: reseller-spa.js มีโครงสร้าง Router เบื้องต้นแล้ว
+
+สิ่งที่ต้องเติมเต็ม (Missing Implementation):
+
+Cart Logic: การเพิ่ม/ลบสินค้าในตะกร้า (Frontend + Backend)
+
+Checkout Logic: การสร้าง Order และตัดสต็อก (Transaction)
+
+Customer Management: การ CRUD ลูกค้าในฝั่ง Reseller
+
+2. 🗺️ แผนการพัฒนา: ระบบการขาย (Sales Module Implementation)
+เพื่อให้ Replit (Engineer) ทำงานต่อได้ลื่นไหล ผมขอเสนอแผนงาน 3 ขั้นตอนครับ:
+
+ขั้นตอนที่ 1: ระบบตะกร้าสินค้า (Cart System) 🛒
+Backend (app.py):
+
+API POST /api/cart/add: เพิ่มสินค้า (ต้องเช็คสต็อกก่อน)
+
+API GET /api/cart: ดึงรายการในตะกร้า + คำนวณราคาตาม Tier
+
+API POST /api/cart/update: ปรับจำนวน (+/-)
+
+API DELETE /api/cart/remove: ลบรายการ
+
+Frontend (reseller-spa.js & reseller_catalog.html):
+
+เชื่อมต่อปุ่ม "เพิ่มลงตะกร้า" ใน Catalog ให้เรียก API
+
+แสดงตัวเลข Badge บนไอคอนตะกร้า
+
+หน้า Cart แสดงรายการและยอดรวม
+
+ขั้นตอนที่ 2: ระบบสั่งซื้อ (Checkout System) 💳
+Backend (app.py):
+
+API POST /api/orders: รับข้อมูล (Customer ID, Slip Image, Items)
+
+CRITICAL: ต้องทำ Transaction -> ตัดสต็อก -> สร้าง Order -> ลบตะกร้า
+
+Frontend (reseller_checkout.html):
+
+ฟอร์มเลือก/สร้างลูกค้า (reseller_customers)
+
+ฟอร์มอัปโหลดสลิป
+
+สรุปยอดเงินและ QR Code (Optional: PromptPay Generator)
+
+ขั้นตอนที่ 3: จัดการออเดอร์ (Order Management) 📦
+Backend: API GET /api/orders (แยกตาม User หรือ All for Admin) และ PUT /api/orders/status
+
+Frontend: หน้า reseller_orders.html แสดงสถานะ (รอชำระ -> ตรวจสอบ -> ส่งแล้ว)
+
+📝 คำสั่งสำหรับ Replit (Engineer)
+System Analyst ครับ นี่คือ Prompt ที่คุณสามารถส่งให้ Replit เพื่อเริ่มงานได้ทันทีครับ:
+
+"Replit, ลุยงานเฟส 'ระบบตะกร้าและการขาย' ต่อได้เลยครับ โดยอ้างอิงจากไฟล์ database.py ที่มีตารางครบแล้ว
+
+ภารกิจที่ 1: สร้าง Cart API ใน app.py
+
+POST /api/cart/add: รับ sku_id, qty. ตรวจสอบสต็อกในตาราง skus ก่อน ถ้าพอให้เพิ่มลง cart_items
+
+GET /api/cart: Join ตาราง carts -> cart_items -> skus -> products เพื่อส่งข้อมูลสินค้า รูปภาพ และราคา กลับไปแสดงผล
+
+ภารกิจที่ 2: อัปเดต reseller-spa.js
+
+เขียนฟังก์ชัน addToCart(skuId, qty) เพื่อยิง API
+
+เขียนฟังก์ชัน loadCart() เพื่อดึงข้อมูลมาแสดงใน reseller_cart.html
+
+หมายเหตุ: ใน database.py ตรวจสอบให้แน่ใจว่า price ในตาราง skus เป็นชนิด DECIMAL หรือ FLOAT เพื่อการคำนวณที่ถูกต้อง"
