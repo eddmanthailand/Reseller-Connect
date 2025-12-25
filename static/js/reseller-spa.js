@@ -930,6 +930,7 @@ function renderCheckout() {
     renderCheckoutItems();
     updateCheckoutSummary();
     validateCheckout();
+    loadPromptPayQR();
 }
 
 function renderCheckoutItems() {
@@ -968,6 +969,40 @@ function renderCheckoutItems() {
 function updateCheckoutSummary() {
     document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
     document.getElementById('summaryTotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
+}
+
+async function loadPromptPayQR() {
+    const loadingDiv = document.getElementById('promptpayQRLoading');
+    const contentDiv = document.getElementById('promptpayQRContent');
+    const errorDiv = document.getElementById('promptpayQRError');
+    
+    if (!loadingDiv) return;
+    
+    loadingDiv.style.display = 'block';
+    contentDiv.style.display = 'none';
+    errorDiv.style.display = 'none';
+    
+    try {
+        const amount = checkoutData.total || 0;
+        const res = await fetch(`${RESELLER_API_URL}/promptpay-qr?amount=${amount}`);
+        
+        if (!res.ok) {
+            throw new Error('Failed to generate QR');
+        }
+        
+        const data = await res.json();
+        
+        document.getElementById('promptpayQRImage').src = data.qr_image;
+        document.getElementById('promptpayAccountName').textContent = data.account_name || 'PromptPay';
+        document.getElementById('promptpayAmount').textContent = `฿${amount.toLocaleString()}`;
+        
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+    } catch (error) {
+        console.error('Error loading PromptPay QR:', error);
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+    }
 }
 
 function toggleShippingType() {

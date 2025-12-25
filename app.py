@@ -2888,6 +2888,102 @@ def save_promptpay_settings():
         if conn:
             conn.close()
 
+@app.route('/api/promptpay-qr', methods=['GET'])
+@login_required
+def generate_promptpay_qr():
+    """Generate PromptPay QR Code with amount"""
+    import qrcode
+    import io
+    import base64
+    
+    amount = request.args.get('amount', type=float)
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT account_number, account_name
+            FROM promptpay_settings
+            WHERE is_active = TRUE
+            LIMIT 1
+        ''')
+        settings = cursor.fetchone()
+        
+        if not settings or not settings['account_number']:
+            return jsonify({'error': 'PromptPay settings not configured'}), 400
+        
+        phone_or_id = settings['account_number'].replace('-', '').replace(' ', '')
+        
+        if len(phone_or_id) == 10 and phone_or_id.startswith('0'):
+            formatted_id = '0066' + phone_or_id[1:]
+            aid = '01'
+        elif len(phone_or_id) == 13:
+            formatted_id = phone_or_id
+            aid = '02'
+        else:
+            return jsonify({'error': 'Invalid PromptPay number format'}), 400
+        
+        def crc16(data):
+            crc = 0xFFFF
+            for byte in data.encode('ascii'):
+                crc ^= byte << 8
+                for _ in range(8):
+                    if crc & 0x8000:
+                        crc = (crc << 1) ^ 0x1021
+                    else:
+                        crc <<= 1
+                    crc &= 0xFFFF
+            return format(crc, '04X')
+        
+        aid_field = f'00{len("A000000677010111"):02d}A000000677010111{aid}{len(formatted_id):02d}{formatted_id}'
+        merchant_field = f'29{len(aid_field):02d}{aid_field}'
+        
+        payload_parts = [
+            '000201',
+            '010212',
+            merchant_field,
+            '52040000',
+            '5303764',
+        ]
+        
+        if amount and amount > 0:
+            amount_str = f'{amount:.2f}'
+            payload_parts.append(f'54{len(amount_str):02d}{amount_str}')
+        
+        payload_parts.append('5802TH')
+        
+        payload_parts.append('6304')
+        payload = ''.join(payload_parts)
+        payload += crc16(payload)
+        
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        return jsonify({
+            'qr_image': f'data:image/png;base64,{img_base64}',
+            'account_name': settings['account_name'],
+            'amount': amount
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== ORDER NUMBER SETTINGS API ====================
 
 @app.route('/api/order-number-settings', methods=['GET'])
