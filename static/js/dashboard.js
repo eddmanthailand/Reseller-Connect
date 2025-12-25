@@ -4008,16 +4008,20 @@ async function loadAdjustmentHistory() {
         
         tbody.innerHTML = adjustments.map(a => {
             const typeLabel = ADJUSTMENT_TYPE_LABELS[a.adjustment_type] || a.adjustment_type;
-            const qtyClass = a.quantity_change < 0 ? 'qty-decrease' : 'qty-increase';
+            const isDecrease = a.quantity_change < 0;
+            const qtyBg = isDecrease ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)';
+            const qtyBorder = isDecrease ? '#ef4444' : '#10b981';
             const qtySign = a.quantity_change > 0 ? '+' : '';
             return `
                 <tr>
-                    <td>${formatDateTime(a.created_at)}</td>
-                    <td><strong>${escapeHtml(a.sku_code)}</strong><br><small>${escapeHtml(a.product_name)}</small></td>
-                    <td>${escapeHtml(a.warehouse_name)}</td>
-                    <td><span class="type-badge">${typeLabel}</span></td>
-                    <td class="${qtyClass}"><strong>${qtySign}${a.quantity_change}</strong></td>
-                    <td>${a.created_by_name || '-'}</td>
+                    <td style="color: #fff;">${formatDateTime(a.created_at)}</td>
+                    <td style="color: #fff;"><strong>${escapeHtml(a.sku_code)}</strong><br><small style="color: #e5e7eb;">${escapeHtml(a.product_name)}</small></td>
+                    <td style="color: #fff;">${escapeHtml(a.warehouse_name)}</td>
+                    <td><span class="type-badge" style="color: #fff;">${typeLabel}</span></td>
+                    <td style="text-align: center;">
+                        <span style="display: inline-block; min-width: 50px; padding: 4px 10px; background: ${qtyBg}; border: 1px solid ${qtyBorder}; border-radius: 6px; font-weight: 700; color: #fff;">${qtySign}${a.quantity_change}</span>
+                    </td>
+                    <td style="color: #fff;">${a.created_by_name || '-'}</td>
                 </tr>
             `;
         }).join('');
