@@ -5207,7 +5207,7 @@ def create_order():
         # Create order with new order number format (ORD-YYMM-XXXX)
         order_number = generate_order_number(cursor)
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, sales_channel_id, status, total_amount, discount_amount, final_amount, notes)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes)
             VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
         ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes))
@@ -6365,7 +6365,7 @@ def create_quick_order():
         
         # Create order
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, sales_channel_id, status, total_amount, discount_amount, final_amount, notes)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes)
             VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
         ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes))

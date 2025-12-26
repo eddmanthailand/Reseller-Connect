@@ -1350,33 +1350,49 @@ async function placeOrder() {
     const notes = document.getElementById('orderNotes').value;
     const salesChannelId = document.getElementById('checkoutSalesChannel')?.value || null;
     
+    // Validation with clear error messages
+    const missingFields = [];
+    
     let shippingData = {};
     if (shippingType === 'customer') {
         const customerId = document.getElementById('checkoutCustomer').value;
-        const customer = checkoutData.customers.find(c => c.id == customerId);
-        if (customer) {
-            shippingData = {
-                customer_id: customer.id,
-                shipping_name: customer.full_name,
-                shipping_phone: customer.phone,
-                shipping_address: customer.address,
-                shipping_province: customer.province,
-                shipping_district: customer.district,
-                shipping_subdistrict: customer.subdistrict,
-                shipping_postal_code: customer.postal_code
-            };
+        if (!customerId) {
+            missingFields.push('เลือกลูกค้าที่จะจัดส่ง');
+        } else {
+            const customer = checkoutData.customers.find(c => c.id == customerId);
+            if (customer) {
+                shippingData = {
+                    customer_id: customer.id,
+                    shipping_name: customer.full_name,
+                    shipping_phone: customer.phone,
+                    shipping_address: customer.address,
+                    shipping_province: customer.province,
+                    shipping_district: customer.district,
+                    shipping_subdistrict: customer.subdistrict,
+                    shipping_postal_code: customer.postal_code
+                };
+            }
         }
     } else {
         const addr = checkoutData.selfAddress;
-        shippingData = {
-            shipping_name: addr.brand_name || addr.full_name,
-            shipping_phone: addr.phone,
-            shipping_address: addr.address,
-            shipping_province: addr.province,
-            shipping_district: addr.district,
-            shipping_subdistrict: addr.subdistrict,
-            shipping_postal_code: addr.postal_code
-        };
+        if (!addr || (!addr.address && !addr.province)) {
+            missingFields.push('กรุณาตั้งค่าที่อยู่ร้านค้าของคุณในหน้าโปรไฟล์ก่อน');
+        } else {
+            shippingData = {
+                shipping_name: addr.brand_name || addr.full_name,
+                shipping_phone: addr.phone,
+                shipping_address: addr.address,
+                shipping_province: addr.province,
+                shipping_district: addr.district,
+                shipping_subdistrict: addr.subdistrict,
+                shipping_postal_code: addr.postal_code
+            };
+        }
+    }
+    
+    if (missingFields.length > 0) {
+        showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
+        return;
     }
     
     try {
