@@ -1331,17 +1331,35 @@ function removePaymentSlip() {
 }
 
 function validateCheckout() {
-    const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
+    const shippingType = document.querySelector('input[name="shippingType"]:checked')?.value;
+    const btn = document.getElementById('btnPlaceOrder');
+    if (!btn) return;
+    
     let isValid = false;
+    let reason = '';
     
     if (shippingType === 'customer') {
-        isValid = !!document.getElementById('checkoutCustomer').value;
-    } else {
+        const customerId = document.getElementById('checkoutCustomer').value;
+        isValid = !!customerId;
+        if (!isValid) reason = 'กรุณาเลือกลูกค้าที่จะจัดส่ง';
+    } else if (shippingType === 'self') {
         isValid = checkoutData.selfAddress && 
             (checkoutData.selfAddress.address || checkoutData.selfAddress.province);
+        if (!isValid) reason = 'กรุณาตั้งค่าที่อยู่ร้านก่อน';
     }
     
-    document.getElementById('btnPlaceOrder').disabled = !isValid;
+    btn.disabled = !isValid;
+    
+    // Show/hide helper text
+    let helper = document.getElementById('checkoutValidationHelper');
+    if (!helper) {
+        helper = document.createElement('div');
+        helper.id = 'checkoutValidationHelper';
+        helper.style.cssText = 'font-size: 12px; color: #fbbf24; margin-top: 8px; text-align: center;';
+        btn.parentNode.insertBefore(helper, btn.nextSibling);
+    }
+    helper.textContent = isValid ? '' : reason;
+    helper.style.display = isValid ? 'none' : 'block';
 }
 
 async function placeOrder() {
