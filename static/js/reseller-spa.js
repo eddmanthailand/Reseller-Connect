@@ -1232,6 +1232,49 @@ function searchCustomersForCheckout(keyword) {
     }, 200);
 }
 
+function showAllCustomers() {
+    const resultsDiv = document.getElementById('customerSearchResults');
+    const customers = checkoutData.customers || [];
+    
+    if (customers.length === 0) {
+        resultsDiv.innerHTML = `
+            <div style="padding: 24px; text-align: center;">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; opacity: 0.5;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                </div>
+                <div style="opacity: 0.6; font-size: 13px;">ยังไม่มีลูกค้าในระบบ</div>
+                <button type="button" class="btn-primary" onclick="openAddCustomerFromCheckout(); document.getElementById('customerSearchResults').style.display='none';" style="margin-top: 12px; padding: 8px 16px; font-size: 12px;">+ เพิ่มลูกค้าใหม่</button>
+            </div>
+        `;
+    } else {
+        resultsDiv.innerHTML = `
+            <div style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 12px; opacity: 0.6;">
+                รายชื่อลูกค้าทั้งหมด (${customers.length} คน)
+            </div>
+        ` + customers.map(c => {
+            const shortAddress = [c.district, c.province].filter(Boolean).join(', ') || 'ไม่มีที่อยู่';
+            return `
+            <div onclick="selectCustomerFromSearch(${c.id})" 
+                 style="padding: 14px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.08); transition: all 0.2s; display: flex; align-items: center; gap: 12px;" 
+                 onmouseover="this.style.background='rgba(168,85,247,0.15)'" 
+                 onmouseout="this.style.background='transparent'">
+                <div style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3)); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 18px; height: 18px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(c.full_name)}</div>
+                    <div style="font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <span>📱 ${c.phone || '-'}</span>
+                        <span>📍 ${shortAddress}</span>
+                    </div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; opacity: 0.4; flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+        `}).join('');
+    }
+    resultsDiv.style.display = 'block';
+}
+
 function selectCustomerFromSearch(customerId) {
     document.getElementById('customerSearchResults').style.display = 'none';
     
@@ -1340,7 +1383,7 @@ async function placeOrder() {
         document.getElementById('btnPlaceOrder').disabled = true;
         document.getElementById('btnPlaceOrder').innerHTML = '<span>กำลังสร้างคำสั่งซื้อ...</span>';
         
-        const response = await fetch(`${RESELLER_API_URL}/reseller/orders`, {
+        const response = await fetch(`${RESELLER_API_URL}/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

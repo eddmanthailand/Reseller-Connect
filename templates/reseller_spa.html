@@ -1247,7 +1247,13 @@
                                         <select id="checkoutCustomer" class="form-select" onchange="selectCheckoutCustomer()" style="display: none;">
                                             <option value="">-- เลือกลูกค้า --</option>
                                         </select>
-                                        <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()" style="margin-top: 12px; color: var(--primary); font-size: 13px;">+ เพิ่มลูกค้าใหม่</button>
+                                        <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                                            <button type="button" class="btn-secondary" onclick="showAllCustomers()" style="padding: 8px 14px; font-size: 12px; border-radius: 8px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; margin-right: 4px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                                ดูรายชื่อทั้งหมด
+                                            </button>
+                                            <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()" style="color: var(--primary); font-size: 12px;">+ เพิ่มลูกค้าใหม่</button>
+                                        </div>
                                     </div>
                                     <div id="selectedCustomerInfo" class="selected-address-card" style="display:none;">
                                     </div>
