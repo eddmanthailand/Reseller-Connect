@@ -5220,11 +5220,16 @@ def create_order():
             discount_pct = float(item['tier_discount_percent'] or 0)
             discounted_price = round(unit_price * (1 - discount_pct / 100), 2)
             
+            # Convert customization_data to JSON string if it's a dict
+            cust_data = item['customization_data']
+            if isinstance(cust_data, dict):
+                cust_data = json.dumps(cust_data)
+            
             cursor.execute('''
                 INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discounted_price, item['customization_data']))
+            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discounted_price, cust_data))
             order_item_id = cursor.fetchone()['id']
             
             # Use cart item id as unique key (guaranteed unique per cart item)
