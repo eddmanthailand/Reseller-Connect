@@ -439,20 +439,28 @@ function openProductModal(product) {
     let customizationsHtml = '';
     if (product.customizations && product.customizations.length > 0) {
         customizationsHtml = product.customizations.map(c => `
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 10px; font-weight: 500;">
                     ${c.name} ${c.is_required ? '<span style="color:#ef4444;">*</span>' : ''}
                 </label>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    ${(c.choices || []).map((ch, idx) => `
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    ${(c.choices || []).map((ch, idx) => {
+                        const hasExtraPrice = ch.extra_price && ch.extra_price > 0;
+                        return `
                         <button type="button" class="customization-btn" 
                                 data-customization="${c.id}" data-choice="${ch.id}"
                                 onclick="toggleCustomization(this, ${c.id}, ${ch.id}, ${c.allow_multiple})"
-                                style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); 
-                                       background: transparent; color: white; cursor: pointer; font-size: 12px;">
-                            ${ch.label}${ch.extra_price ? ` (+฿${ch.extra_price})` : ''}
+                                style="padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); 
+                                       background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 13px;
+                                       transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
+                                       backdrop-filter: blur(5px);">
+                            <span class="customization-check" style="display: none; color: #22c55e; font-weight: bold;">✓</span>
+                            <span>${ch.label}</span>
+                            ${hasExtraPrice ? `<span style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; 
+                                               padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                                               +฿${ch.extra_price.toLocaleString()}</span>` : ''}
                         </button>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
         `).join('');
@@ -633,15 +641,29 @@ function toggleCustomization(btn, customizationId, choiceId, allowMultiple) {
         const idx = selectedCustomizations[customizationId].indexOf(choiceId);
         if (idx > -1) {
             selectedCustomizations[customizationId].splice(idx, 1);
-            btn.style.background = 'transparent';
+            btn.style.background = 'rgba(255,255,255,0.05)';
+            btn.style.borderColor = 'rgba(255,255,255,0.25)';
+            const check = btn.querySelector('.customization-check');
+            if (check) check.style.display = 'none';
         } else {
             selectedCustomizations[customizationId].push(choiceId);
-            btn.style.background = 'var(--primary)';
+            btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3))';
+            btn.style.borderColor = 'var(--primary)';
+            const check = btn.querySelector('.customization-check');
+            if (check) check.style.display = 'inline';
         }
     } else {
-        btns.forEach(b => b.style.background = 'transparent');
+        btns.forEach(b => {
+            b.style.background = 'rgba(255,255,255,0.05)';
+            b.style.borderColor = 'rgba(255,255,255,0.25)';
+            const check = b.querySelector('.customization-check');
+            if (check) check.style.display = 'none';
+        });
         selectedCustomizations[customizationId] = [choiceId];
-        btn.style.background = 'var(--primary)';
+        btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3))';
+        btn.style.borderColor = 'var(--primary)';
+        const check = btn.querySelector('.customization-check');
+        if (check) check.style.display = 'inline';
     }
 }
 
