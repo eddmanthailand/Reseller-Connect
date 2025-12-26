@@ -1231,15 +1231,18 @@
                                 
                                 <div id="customerShippingSection">
                                     <div class="customer-select-wrapper">
-                                        <label>ค้นหาลูกค้า</label>
+                                        <label style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px; display: block;">ค้นหาลูกค้า</label>
                                         <div style="position: relative;">
-                                            <input type="text" id="customerSearchInput" class="form-input" placeholder="พิมพ์ชื่อหรือเบอร์โทร..." oninput="searchCustomersForCheckout(this.value)">
-                                            <div id="customerSearchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 100;"></div>
+                                            <div style="position: relative;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; opacity: 0.5; pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                                                <input type="text" id="customerSearchInput" class="form-input" placeholder="พิมพ์ชื่อหรือเบอร์โทร..." oninput="searchCustomersForCheckout(this.value)" style="padding-left: 42px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; height: 48px; font-size: 14px; transition: all 0.3s;">
+                                            </div>
+                                            <div id="customerSearchResults" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: rgba(30,20,50,0.98); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; max-height: 280px; overflow-y: auto; z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.4);"></div>
                                         </div>
                                         <select id="checkoutCustomer" class="form-select" onchange="selectCheckoutCustomer()" style="display: none;">
                                             <option value="">-- เลือกลูกค้า --</option>
                                         </select>
-                                        <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()">+ เพิ่มลูกค้าใหม่</button>
+                                        <button type="button" class="btn-link" onclick="openAddCustomerFromCheckout()" style="margin-top: 12px; color: var(--primary); font-size: 13px;">+ เพิ่มลูกค้าใหม่</button>
                                     </div>
                                     <div id="selectedCustomerInfo" class="selected-address-card" style="display:none;">
                                     </div>
@@ -1266,9 +1269,8 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M3 3h18v18H3zM21 9H3M9 21V9"/></svg>
                                     ช่องทางขาย
                                 </h3>
-                                <select id="checkoutSalesChannel" class="form-select" style="margin-top: 12px;">
-                                    <option value="">-- เลือกช่องทางขาย --</option>
-                                </select>
+                                <div id="salesChannelButtons" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;"></div>
+                                <input type="hidden" id="checkoutSalesChannel" value="">
                             </div>
                             
                             <div class="checkout-section" id="promptpayQRSection">

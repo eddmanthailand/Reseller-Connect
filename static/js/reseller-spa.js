@@ -929,29 +929,71 @@ function renderCheckout() {
             `<option value="${c.id}">${c.full_name} - ${c.phone || 'ไม่มีเบอร์'}</option>`
         ).join('');
     
-    const channelSelect = document.getElementById('checkoutSalesChannel');
-    if (channelSelect && checkoutData.salesChannels) {
-        channelSelect.innerHTML = '<option value="">-- เลือกช่องทางขาย --</option>' +
-            checkoutData.salesChannels.map(ch => 
-                `<option value="${ch.id}">${ch.name}</option>`
-            ).join('');
+    // Render sales channel buttons
+    const channelContainer = document.getElementById('salesChannelButtons');
+    const channelInput = document.getElementById('checkoutSalesChannel');
+    if (channelContainer && checkoutData.salesChannels) {
+        channelContainer.innerHTML = checkoutData.salesChannels.map(ch => `
+            <button type="button" class="sales-channel-btn" data-channel="${ch.id}" onclick="selectSalesChannel(${ch.id})"
+                    style="padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); 
+                           background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 13px;
+                           transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
+                           backdrop-filter: blur(5px);">
+                <span>${ch.name}</span>
+            </button>
+        `).join('');
     }
     
     const selfCard = document.getElementById('selfAddressCard');
-    if (checkoutData.selfAddress) {
-        const addr = checkoutData.selfAddress;
+    const addr = checkoutData.selfAddress;
+    const hasAddress = addr && (addr.address || addr.province);
+    
+    if (hasAddress) {
         const fullAddress = [addr.address, addr.subdistrict, addr.district, addr.province, addr.postal_code]
             .filter(Boolean).join(' ');
         selfCard.innerHTML = `
-            <div class="address-name">${addr.brand_name || addr.full_name || 'ที่อยู่ร้าน'}</div>
-            <div class="address-phone">${addr.phone || '-'}</div>
-            <div class="address-detail">${fullAddress || 'ยังไม่ได้ตั้งค่าที่อยู่'}</div>
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), #ec4899); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 20px; height: 20px;"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">${addr.brand_name || addr.full_name || 'ที่อยู่ร้าน'}</div>
+                    <div style="font-size: 13px; opacity: 0.8; margin-bottom: 2px;">📱 ${addr.phone || '-'}</div>
+                    <div style="font-size: 13px; opacity: 0.7;">${fullAddress}</div>
+                </div>
+            </div>
+        `;
+    } else {
+        selfCard.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(251,191,36,0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                </div>
+                <div style="font-weight: 500; margin-bottom: 4px; color: #fbbf24;">ยังไม่ได้ตั้งค่าที่อยู่ร้าน</div>
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 16px;">กรุณาไปตั้งค่าที่อยู่ร้านก่อนใช้งาน</div>
+                <button onclick="window.location.hash='profile'" class="btn-primary" style="padding: 10px 20px; font-size: 13px;">
+                    🔧 ไปตั้งค่าโปรไฟล์
+                </button>
+            </div>
         `;
     }
     
     renderCheckoutItems();
     updateCheckoutSummary();
     validateCheckout();
+}
+
+function selectSalesChannel(channelId) {
+    document.getElementById('checkoutSalesChannel').value = channelId;
+    document.querySelectorAll('.sales-channel-btn').forEach(btn => {
+        if (btn.dataset.channel == channelId) {
+            btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(236,72,153,0.4))';
+            btn.style.borderColor = 'var(--primary)';
+        } else {
+            btn.style.background = 'rgba(255,255,255,0.05)';
+            btn.style.borderColor = 'rgba(255,255,255,0.2)';
+        }
+    });
 }
 
 function renderCheckoutItems() {
@@ -1141,14 +1183,35 @@ function searchCustomersForCheckout(keyword) {
         );
         
         if (filtered.length === 0) {
-            resultsDiv.innerHTML = '<div style="padding: 12px; text-align: center; opacity: 0.6;">ไม่พบลูกค้า</div>';
-        } else {
-            resultsDiv.innerHTML = filtered.slice(0, 10).map(c => `
-                <div onclick="selectCustomerFromSearch(${c.id})" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(168,85,247,0.1)'" onmouseout="this.style.background='transparent'">
-                    <div style="font-weight: 500;">${escapeHtml(c.full_name)}</div>
-                    <div style="font-size: 12px; opacity: 0.6;">${c.phone || '-'} | ${c.province || '-'}</div>
+            resultsDiv.innerHTML = `
+                <div style="padding: 24px; text-align: center;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                    </div>
+                    <div style="opacity: 0.6; font-size: 13px;">ไม่พบลูกค้าที่ตรงกับ "${escapeHtml(keyword)}"</div>
                 </div>
-            `).join('');
+            `;
+        } else {
+            resultsDiv.innerHTML = filtered.slice(0, 10).map(c => {
+                const shortAddress = [c.district, c.province].filter(Boolean).join(', ') || 'ไม่มีที่อยู่';
+                return `
+                <div onclick="selectCustomerFromSearch(${c.id})" 
+                     style="padding: 14px 16px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.08); transition: all 0.2s; display: flex; align-items: center; gap: 12px;" 
+                     onmouseover="this.style.background='rgba(168,85,247,0.15)'" 
+                     onmouseout="this.style.background='transparent'">
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3)); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 18px; height: 18px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600; font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(c.full_name)}</div>
+                        <div style="font-size: 12px; opacity: 0.7; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span>📱 ${c.phone || '-'}</span>
+                            <span>📍 ${shortAddress}</span>
+                        </div>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; opacity: 0.4; flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            `}).join('');
         }
         resultsDiv.style.display = 'block';
     }, 200);
