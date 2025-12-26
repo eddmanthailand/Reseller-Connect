@@ -4817,22 +4817,18 @@ function renderShippingPromos() {
     }
     
     tbody.innerHTML = shippingPromos.map(promo => {
-        let conditionText = '';
-        if (promo.promo_type === 'free_shipping') {
-            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
-        } else if (promo.promo_type === 'discount_amount') {
-            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
-        } else if (promo.promo_type === 'discount_percent') {
-            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
-        }
+        const minOrderValue = promo.min_order_value || 0;
+        const discountAmount = promo.discount_amount || 0;
+        
+        let conditionText = `ซื้อขั้นต่ำ ฿${minOrderValue.toLocaleString()}`;
         
         let discountText = '';
         if (promo.promo_type === 'free_shipping') {
             discountText = '<span style="color: #22c55e;">ส่งฟรี</span>';
         } else if (promo.promo_type === 'discount_amount') {
-            discountText = `ลด ฿${promo.discount_value.toLocaleString()}`;
+            discountText = `ลด ฿${discountAmount.toLocaleString()}`;
         } else if (promo.promo_type === 'discount_percent') {
-            discountText = `ลด ${promo.discount_value}%`;
+            discountText = `ลด ${discountAmount}%`;
         }
         
         const statusClass = promo.is_active ? 'status-active' : 'status-inactive';
@@ -5087,11 +5083,11 @@ function editShippingPromo(id) {
                     </div>
                     <div class="form-group">
                         <label class="form-label">ยอดซื้อขั้นต่ำ (บาท)</label>
-                        <input type="number" id="promoMinAmount" class="form-input" min="0" step="0.01" value="${promo.min_order_amount}">
+                        <input type="number" id="promoMinAmount" class="form-input" min="0" step="0.01" value="${promo.min_order_value || 0}">
                     </div>
                     <div class="form-group" id="promoDiscountGroup" style="display: ${showDiscount ? 'block' : 'none'};">
                         <label class="form-label" id="promoDiscountLabel">${promo.promo_type === 'discount_percent' ? 'ส่วนลด (%)' : 'ส่วนลด (บาท)'}</label>
-                        <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="${promo.discount_value || 0}">
+                        <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="${promo.discount_amount || 0}">
                     </div>
                     <div class="form-group">
                         <label class="form-label" style="display: flex; align-items: center; gap: 10px;">
@@ -5131,8 +5127,8 @@ async function saveShippingPromo() {
     const data = {
         name: name,
         promo_type: promoType,
-        min_order_amount: minAmount,
-        discount_value: promoType === 'free_shipping' ? 100 : discountValue,
+        min_order_value: minAmount,
+        discount_amount: promoType === 'free_shipping' ? 100 : discountValue,
         is_active: isActive
     };
     
