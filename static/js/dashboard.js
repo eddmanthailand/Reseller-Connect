@@ -505,6 +505,8 @@ function switchPage(pageName) {
         loadStockHistoryPage();
     } else if (pageName === 'quick-order') {
         loadQuickOrderPage();
+    } else if (pageName === 'shipping-settings') {
+        loadShippingSettingsPage();
     }
 }
 
@@ -4728,6 +4730,458 @@ document.addEventListener('change', function(e) {
         updateQuickOrderSummary();
     }
 });
+
+// =====================================================
+// SHIPPING SETTINGS FUNCTIONS
+// =====================================================
+
+let shippingRates = [];
+let shippingPromos = [];
+let editingRateId = null;
+let editingPromoId = null;
+
+async function loadShippingSettingsPage() {
+    await Promise.all([loadShippingRates(), loadShippingPromos()]);
+}
+
+async function loadShippingRates() {
+    try {
+        const response = await fetch(`${API_URL}/shipping-rates`);
+        if (!response.ok) throw new Error('Failed to load shipping rates');
+        shippingRates = await response.json();
+        renderShippingRates();
+    } catch (error) {
+        console.error('Error loading shipping rates:', error);
+        document.getElementById('shippingRatesTableBody').innerHTML = 
+            '<tr><td colspan="3" style="text-align: center; color: #ef4444;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+function renderShippingRates() {
+    const tbody = document.getElementById('shippingRatesTableBody');
+    if (!tbody) return;
+    
+    if (shippingRates.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: rgba(255,255,255,0.5);">ยังไม่มีอัตราค่าส่ง</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = shippingRates.map(rate => {
+        const minWeight = rate.min_weight >= 1000 ? `${(rate.min_weight/1000).toFixed(1)} กก.` : `${rate.min_weight} ก.`;
+        const maxWeight = rate.max_weight === null ? 'ขึ้นไป' : 
+            (rate.max_weight >= 1000 ? `${(rate.max_weight/1000).toFixed(1)} กก.` : `${rate.max_weight} ก.`);
+        
+        return `
+            <tr>
+                <td>${minWeight} - ${maxWeight}</td>
+                <td>฿${rate.rate.toLocaleString()}</td>
+                <td>
+                    <button class="action-btn btn-edit" onclick="editShippingRate(${rate.id})" title="แก้ไข">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                    <button class="action-btn btn-delete" onclick="deleteShippingRate(${rate.id})" title="ลบ">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadShippingPromos() {
+    try {
+        const response = await fetch(`${API_URL}/shipping-promotions`);
+        if (!response.ok) throw new Error('Failed to load shipping promotions');
+        shippingPromos = await response.json();
+        renderShippingPromos();
+    } catch (error) {
+        console.error('Error loading shipping promotions:', error);
+        document.getElementById('shippingPromosTableBody').innerHTML = 
+            '<tr><td colspan="5" style="text-align: center; color: #ef4444;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+function renderShippingPromos() {
+    const tbody = document.getElementById('shippingPromosTableBody');
+    if (!tbody) return;
+    
+    if (shippingPromos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: rgba(255,255,255,0.5);">ยังไม่มีโปรโมชั่น</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = shippingPromos.map(promo => {
+        let conditionText = '';
+        if (promo.promo_type === 'free_shipping') {
+            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
+        } else if (promo.promo_type === 'discount_amount') {
+            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
+        } else if (promo.promo_type === 'discount_percent') {
+            conditionText = `ซื้อขั้นต่ำ ฿${promo.min_order_amount.toLocaleString()}`;
+        }
+        
+        let discountText = '';
+        if (promo.promo_type === 'free_shipping') {
+            discountText = '<span style="color: #22c55e;">ส่งฟรี</span>';
+        } else if (promo.promo_type === 'discount_amount') {
+            discountText = `ลด ฿${promo.discount_value.toLocaleString()}`;
+        } else if (promo.promo_type === 'discount_percent') {
+            discountText = `ลด ${promo.discount_value}%`;
+        }
+        
+        const statusClass = promo.is_active ? 'status-active' : 'status-inactive';
+        const statusText = promo.is_active ? 'ใช้งาน' : 'ปิดใช้งาน';
+        
+        return `
+            <tr>
+                <td>${escapeHtml(promo.name)}</td>
+                <td>${conditionText}</td>
+                <td>${discountText}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>
+                    <button class="action-btn btn-edit" onclick="editShippingPromo(${promo.id})" title="แก้ไข">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </button>
+                    <button class="action-btn btn-delete" onclick="deleteShippingPromo(${promo.id})" title="ลบ">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function showAddShippingRateModal() {
+    editingRateId = null;
+    const modalHtml = `
+        <div class="modal-overlay" id="shippingRateModal" onclick="closeShippingRateModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>เพิ่มช่วงน้ำหนัก</h3>
+                    <button class="modal-close" onclick="closeShippingRateModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">น้ำหนักต่ำสุด (กรัม)</label>
+                        <input type="number" id="rateMinWeight" class="form-input" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">น้ำหนักสูงสุด (กรัม)</label>
+                        <input type="number" id="rateMaxWeight" class="form-input" min="1" placeholder="เว้นว่างสำหรับไม่จำกัด">
+                        <small style="opacity: 0.6;">เว้นว่างสำหรับน้ำหนักมากกว่าที่กำหนด</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ราคา (บาท)</label>
+                        <input type="number" id="ratePrice" class="form-input" min="0" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeShippingRateModal()">ยกเลิก</button>
+                    <button class="btn-primary btn-success" onclick="saveShippingRate()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function editShippingRate(id) {
+    const rate = shippingRates.find(r => r.id === id);
+    if (!rate) return;
+    
+    editingRateId = id;
+    const modalHtml = `
+        <div class="modal-overlay" id="shippingRateModal" onclick="closeShippingRateModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>แก้ไขช่วงน้ำหนัก</h3>
+                    <button class="modal-close" onclick="closeShippingRateModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">น้ำหนักต่ำสุด (กรัม)</label>
+                        <input type="number" id="rateMinWeight" class="form-input" min="0" value="${rate.min_weight}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">น้ำหนักสูงสุด (กรัม)</label>
+                        <input type="number" id="rateMaxWeight" class="form-input" min="1" value="${rate.max_weight || ''}" placeholder="เว้นว่างสำหรับไม่จำกัด">
+                        <small style="opacity: 0.6;">เว้นว่างสำหรับน้ำหนักมากกว่าที่กำหนด</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ราคา (บาท)</label>
+                        <input type="number" id="ratePrice" class="form-input" min="0" step="0.01" value="${rate.rate}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeShippingRateModal()">ยกเลิก</button>
+                    <button class="btn-primary btn-success" onclick="saveShippingRate()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeShippingRateModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('shippingRateModal');
+    if (modal) modal.remove();
+}
+
+async function saveShippingRate() {
+    const minWeight = parseInt(document.getElementById('rateMinWeight').value) || 0;
+    const maxWeightVal = document.getElementById('rateMaxWeight').value;
+    const maxWeight = maxWeightVal ? parseInt(maxWeightVal) : null;
+    const rate = parseFloat(document.getElementById('ratePrice').value) || 0;
+    
+    const data = { min_weight: minWeight, max_weight: maxWeight, rate: rate };
+    
+    try {
+        let response;
+        if (editingRateId) {
+            response = await fetch(`${API_URL}/shipping-rates/${editingRateId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        } else {
+            response = await fetch(`${API_URL}/shipping-rates`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+        
+        if (response.ok) {
+            closeShippingRateModal();
+            showGlobalAlert(editingRateId ? 'อัปเดตอัตราค่าส่งสำเร็จ' : 'เพิ่มอัตราค่าส่งสำเร็จ', 'success');
+            await loadShippingRates();
+        } else {
+            const result = await response.json();
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving shipping rate:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+async function deleteShippingRate(id) {
+    if (!confirm('ต้องการลบอัตราค่าส่งนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/shipping-rates/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            showGlobalAlert('ลบอัตราค่าส่งสำเร็จ', 'success');
+            await loadShippingRates();
+        } else {
+            showGlobalAlert('ไม่สามารถลบได้', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting shipping rate:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function showAddShippingPromoModal() {
+    editingPromoId = null;
+    const modalHtml = `
+        <div class="modal-overlay" id="shippingPromoModal" onclick="closeShippingPromoModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>เพิ่มโปรโมชั่น</h3>
+                    <button class="modal-close" onclick="closeShippingPromoModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">ชื่อโปรโมชั่น</label>
+                        <input type="text" id="promoName" class="form-input" placeholder="เช่น ส่งฟรีเมื่อซื้อครบ 800 บาท">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ประเภทโปรโมชั่น</label>
+                        <select id="promoType" class="form-input" onchange="updatePromoFields()">
+                            <option value="free_shipping">ส่งฟรี</option>
+                            <option value="discount_amount">ลดราคาค่าส่ง (บาท)</option>
+                            <option value="discount_percent">ลดราคาค่าส่ง (%)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ยอดซื้อขั้นต่ำ (บาท)</label>
+                        <input type="number" id="promoMinAmount" class="form-input" min="0" step="0.01" value="0">
+                    </div>
+                    <div class="form-group" id="promoDiscountGroup" style="display: none;">
+                        <label class="form-label" id="promoDiscountLabel">ส่วนลด</label>
+                        <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="promoIsActive" checked>
+                            เปิดใช้งานโปรโมชั่น
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeShippingPromoModal()">ยกเลิก</button>
+                    <button class="btn-primary btn-success" onclick="saveShippingPromo()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function updatePromoFields() {
+    const promoType = document.getElementById('promoType').value;
+    const discountGroup = document.getElementById('promoDiscountGroup');
+    const discountLabel = document.getElementById('promoDiscountLabel');
+    
+    if (promoType === 'free_shipping') {
+        discountGroup.style.display = 'none';
+    } else if (promoType === 'discount_amount') {
+        discountGroup.style.display = 'block';
+        discountLabel.textContent = 'ส่วนลด (บาท)';
+    } else if (promoType === 'discount_percent') {
+        discountGroup.style.display = 'block';
+        discountLabel.textContent = 'ส่วนลด (%)';
+    }
+}
+
+function editShippingPromo(id) {
+    const promo = shippingPromos.find(p => p.id === id);
+    if (!promo) return;
+    
+    editingPromoId = id;
+    const showDiscount = promo.promo_type !== 'free_shipping';
+    
+    const modalHtml = `
+        <div class="modal-overlay" id="shippingPromoModal" onclick="closeShippingPromoModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>แก้ไขโปรโมชั่น</h3>
+                    <button class="modal-close" onclick="closeShippingPromoModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">ชื่อโปรโมชั่น</label>
+                        <input type="text" id="promoName" class="form-input" value="${escapeHtml(promo.name)}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ประเภทโปรโมชั่น</label>
+                        <select id="promoType" class="form-input" onchange="updatePromoFields()">
+                            <option value="free_shipping" ${promo.promo_type === 'free_shipping' ? 'selected' : ''}>ส่งฟรี</option>
+                            <option value="discount_amount" ${promo.promo_type === 'discount_amount' ? 'selected' : ''}>ลดราคาค่าส่ง (บาท)</option>
+                            <option value="discount_percent" ${promo.promo_type === 'discount_percent' ? 'selected' : ''}>ลดราคาค่าส่ง (%)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ยอดซื้อขั้นต่ำ (บาท)</label>
+                        <input type="number" id="promoMinAmount" class="form-input" min="0" step="0.01" value="${promo.min_order_amount}">
+                    </div>
+                    <div class="form-group" id="promoDiscountGroup" style="display: ${showDiscount ? 'block' : 'none'};">
+                        <label class="form-label" id="promoDiscountLabel">${promo.promo_type === 'discount_percent' ? 'ส่วนลด (%)' : 'ส่วนลด (บาท)'}</label>
+                        <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="${promo.discount_value || 0}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="promoIsActive" ${promo.is_active ? 'checked' : ''}>
+                            เปิดใช้งานโปรโมชั่น
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeShippingPromoModal()">ยกเลิก</button>
+                    <button class="btn-primary btn-success" onclick="saveShippingPromo()">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeShippingPromoModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('shippingPromoModal');
+    if (modal) modal.remove();
+}
+
+async function saveShippingPromo() {
+    const name = document.getElementById('promoName').value.trim();
+    const promoType = document.getElementById('promoType').value;
+    const minAmount = parseFloat(document.getElementById('promoMinAmount').value) || 0;
+    const discountValue = parseFloat(document.getElementById('promoDiscountValue').value) || 0;
+    const isActive = document.getElementById('promoIsActive').checked;
+    
+    if (!name) {
+        showGlobalAlert('กรุณากรอกชื่อโปรโมชั่น', 'error');
+        return;
+    }
+    
+    const data = {
+        name: name,
+        promo_type: promoType,
+        min_order_amount: minAmount,
+        discount_value: promoType === 'free_shipping' ? 100 : discountValue,
+        is_active: isActive
+    };
+    
+    try {
+        let response;
+        if (editingPromoId) {
+            response = await fetch(`${API_URL}/shipping-promotions/${editingPromoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        } else {
+            response = await fetch(`${API_URL}/shipping-promotions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+        
+        if (response.ok) {
+            closeShippingPromoModal();
+            showGlobalAlert(editingPromoId ? 'อัปเดตโปรโมชั่นสำเร็จ' : 'เพิ่มโปรโมชั่นสำเร็จ', 'success');
+            await loadShippingPromos();
+        } else {
+            const result = await response.json();
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving shipping promo:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+async function deleteShippingPromo(id) {
+    if (!confirm('ต้องการลบโปรโมชั่นนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/shipping-promotions/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            showGlobalAlert('ลบโปรโมชั่นสำเร็จ', 'success');
+            await loadShippingPromos();
+        } else {
+            showGlobalAlert('ไม่สามารถลบได้', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting shipping promo:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
