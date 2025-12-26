@@ -740,6 +740,14 @@ document.getElementById('productSearch')?.addEventListener('input', function() {
 });
 
 async function loadCart() {
+    const container = document.getElementById('cartContent');
+    container.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+            <div style="width: 40px; height: 40px; border: 3px solid rgba(168,85,247,0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+            <p style="opacity: 0.6;">กำลังโหลดตะกร้า...</p>
+        </div>
+    `;
+    
     try {
         const response = await fetch(`${RESELLER_API_URL}/reseller/cart`);
         if (!response.ok) throw new Error('Failed to load cart');
@@ -749,6 +757,12 @@ async function loadCart() {
         renderCart();
     } catch (error) {
         console.error('Error loading cart:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #f87171;">
+                <p>เกิดข้อผิดพลาดในการโหลดตะกร้า</p>
+                <button class="btn-secondary" style="margin-top: 12px;" onclick="loadCart()">ลองใหม่</button>
+            </div>
+        `;
     }
 }
 
@@ -906,7 +920,8 @@ async function loadCheckout() {
         }
         
         if (profileRes.ok) {
-            checkoutData.selfAddress = await profileRes.json();
+            const profileData = await profileRes.json();
+            checkoutData.selfAddress = profileData.profile || profileData;
         }
         
         if (channelsRes.ok) {
