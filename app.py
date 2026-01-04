@@ -5229,10 +5229,10 @@ def create_order():
             subtotal = round(discounted_price * item['quantity'], 2)
             
             cursor.execute('''
-                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO order_items (order_id, sku_id, product_name, sku_code, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discount_amount, subtotal, cust_data))
+            ''', (order['id'], item['sku_id'], item['product_name'], item['sku_code'], item['quantity'], unit_price, discount_pct, discount_amount, subtotal, cust_data))
             order_item_id = cursor.fetchone()['id']
             
             # Use cart item id as unique key (guaranteed unique per cart item)
@@ -6315,16 +6315,23 @@ def create_quick_order():
         if not cursor.fetchone():
             return jsonify({'error': 'ช่องทางขายไม่ถูกต้อง'}), 400
         
-        # Validate and get server-side SKU prices
+        # Validate and get server-side SKU prices with product info
         sku_ids = [item['sku_id'] for item in items]
-        cursor.execute('SELECT id, sku_code, price FROM skus WHERE id = ANY(%s)', (sku_ids,))
-        sku_prices = {row['id']: {'price': float(row['price']), 'sku_code': row['sku_code']} for row in cursor.fetchall()}
+        cursor.execute('''
+            SELECT s.id, s.sku_code, s.price, p.name as product_name
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            WHERE s.id = ANY(%s)
+        ''', (sku_ids,))
+        sku_info = {row['id']: {'price': float(row['price']), 'sku_code': row['sku_code'], 'product_name': row['product_name']} for row in cursor.fetchall()}
         
-        # Update items with server-side prices
+        # Update items with server-side prices and product info
         for item in items:
-            if item['sku_id'] not in sku_prices:
+            if item['sku_id'] not in sku_info:
                 return jsonify({'error': f"SKU #{item['sku_id']} ไม่พบในระบบ"}), 400
-            item['price'] = sku_prices[item['sku_id']]['price']
+            item['price'] = sku_info[item['sku_id']]['price']
+            item['sku_code'] = sku_info[item['sku_id']]['sku_code']
+            item['product_name'] = sku_info[item['sku_id']]['product_name']
         cursor.execute('''
             SELECT sws.sku_id, sws.warehouse_id, sws.stock, w.name as warehouse_name, w.is_active
             FROM sku_warehouse_stock sws
@@ -6384,10 +6391,10 @@ def create_quick_order():
         for idx, item in enumerate(items):
             item_subtotal = float(item['price']) * item['quantity']
             cursor.execute('''
-                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
-                VALUES (%s, %s, %s, %s, 0, 0, %s, NULL)
+                INSERT INTO order_items (order_id, sku_id, product_name, sku_code, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, 0, %s, NULL)
                 RETURNING id
-            ''', (order['id'], item['sku_id'], item['quantity'], item['price'], item_subtotal))
+            ''', (order['id'], item['sku_id'], item['product_name'], item['sku_code'], item['quantity'], item['price'], item_subtotal))
             order_item_id = cursor.fetchone()['id']
             order_item_map[idx] = order_item_id
         
