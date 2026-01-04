@@ -7,6 +7,11 @@ This full-stack reseller/distributor application, built with Flask and Neon Post
 - **Communication Style:** Simple, everyday language (Thai/English)
 - **Database:** Neon PostgreSQL (via Replit built-in integration)
 - **Development Approach:** Production-ready code with proper error handling
+- **Font Color Rules:** 
+  - ห้ามใช้ตัวอักษรสีม่วง (#a855f7, #8b5cf6) หรือสีฟ้า (#3b82f6) บนพื้นหลังสีเดียวกัน
+  - ห้ามใช้ตัวอักษรสีที่กลืนกับพื้นหลัง gradient ม่วง-ชมพู
+  - ให้ใช้สีขาว (#ffffff) หรือสีอ่อน (rgba(255,255,255,0.9)) สำหรับข้อความหลักเพื่อให้อ่านชัดเจน
+  - ถ้าพบข้อความที่อ่านยากให้เปลี่ยนเป็นสีขาวทันที
 
 ## System Architecture
 
