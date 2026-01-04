@@ -5225,11 +5225,14 @@ def create_order():
             if isinstance(cust_data, dict):
                 cust_data = json.dumps(cust_data)
             
+            discount_amount = round(unit_price * discount_pct / 100, 2)
+            subtotal = round(discounted_price * item['quantity'], 2)
+            
             cursor.execute('''
-                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discounted_price, cust_data))
+            ''', (order['id'], item['sku_id'], item['quantity'], unit_price, discount_pct, discount_amount, subtotal, cust_data))
             order_item_id = cursor.fetchone()['id']
             
             # Use cart item id as unique key (guaranteed unique per cart item)
@@ -6379,11 +6382,12 @@ def create_quick_order():
         # Create order items and track their IDs
         order_item_map = {}
         for idx, item in enumerate(items):
+            item_subtotal = float(item['price']) * item['quantity']
             cursor.execute('''
-                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, discount_percent, final_price, customization_data)
-                VALUES (%s, %s, %s, %s, 0, %s, NULL)
+                INSERT INTO order_items (order_id, sku_id, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
+                VALUES (%s, %s, %s, %s, 0, 0, %s, NULL)
                 RETURNING id
-            ''', (order['id'], item['sku_id'], item['quantity'], item['price'], item['price']))
+            ''', (order['id'], item['sku_id'], item['quantity'], item['price'], item_subtotal))
             order_item_id = cursor.fetchone()['id']
             order_item_map[idx] = order_item_id
         
