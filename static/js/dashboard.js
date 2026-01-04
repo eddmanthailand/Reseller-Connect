@@ -1761,11 +1761,15 @@ async function viewOrderDetails(orderId) {
         if (order.items && order.items.length > 0) {
             itemsHtml = order.items.map(item => {
                 const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
+                const customizationDisplay = item.customization_labels && item.customization_labels.length > 0 
+                    ? `<div style="color: #a5f3fc; font-size: 11px; margin-top: 4px;">ตัวเลือกเสริม: ${item.customization_labels.map(l => escapeHtml(l)).join(', ')}</div>` 
+                    : '';
                 return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);">
                     <div style="flex: 1;">
                         <div style="color: #fff; font-weight: 500;">${escapeHtml(item.product_name || 'Product')}${escapeHtml(variantDisplay)}</div>
                         <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 2px;">SKU: ${escapeHtml(item.sku_code || '-')} | จำนวน: ${item.quantity}</div>
+                        ${customizationDisplay}
                     </div>
                     <div style="color: #fff; font-weight: 600; font-size: 15px;">฿${parseFloat(item.subtotal || item.unit_price * item.quantity).toLocaleString('th-TH')}</div>
                 </div>
@@ -2133,14 +2137,17 @@ function printShippingLabel(shipmentIndex) {
     const totalQty = shipment.items.reduce((sum, i) => sum + i.quantity, 0);
     const itemsHtml = shipment.items.map((item, idx) => {
         const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
+        const customizationDisplay = item.customization_labels && item.customization_labels.length > 0 
+            ? `<div style="font-size: 11px; color: #6b21a8; margin-top: 3px;">ตัวเลือกเสริม: ${item.customization_labels.join(', ')}</div>` 
+            : '';
         return `
         <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: top;">
                 <span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #333; border-radius: 3px; vertical-align: middle;"></span>
             </td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}. ${item.product_name || 'สินค้า'}${variantDisplay}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-size: 11px; color: #666;">${item.sku_code || ''}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold;">x ${item.quantity}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; vertical-align: top;">${idx + 1}. ${item.product_name || 'สินค้า'}${variantDisplay}${customizationDisplay}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-size: 11px; color: #666; vertical-align: top;">${item.sku_code || ''}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold; vertical-align: top;">x ${item.quantity}</td>
         </tr>
     `;
     }).join('');

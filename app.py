@@ -5582,6 +5582,29 @@ def get_order_detail(order_id):
             ''', (item_dict['sku_id'],))
             option_values = cursor.fetchall()
             item_dict['variant_name'] = ' - '.join([ov['option_value'] for ov in option_values]) if option_values else ''
+            
+            # Get customization labels if customization_data exists
+            customization_labels = []
+            if item_dict.get('customization_data'):
+                cust_data = item_dict['customization_data']
+                if isinstance(cust_data, str):
+                    import json
+                    cust_data = json.loads(cust_data)
+                if isinstance(cust_data, dict):
+                    choice_ids = []
+                    for cust_id, choices in cust_data.items():
+                        if isinstance(choices, list):
+                            choice_ids.extend(choices)
+                    if choice_ids:
+                        cursor.execute('''
+                            SELECT pc.name as customization_name, cc.label as choice_label
+                            FROM customization_choices cc
+                            JOIN product_customizations pc ON pc.id = cc.customization_id
+                            WHERE cc.id = ANY(%s)
+                        ''', (choice_ids,))
+                        for row in cursor.fetchall():
+                            customization_labels.append(f"{row['customization_name']}: {row['choice_label']}")
+            item_dict['customization_labels'] = customization_labels
             items.append(item_dict)
         
         order['items'] = items
@@ -5641,6 +5664,30 @@ def get_order_detail(order_id):
                 ''', (item_dict['sku_id'],))
                 option_values = cursor.fetchall()
                 item_dict['variant_name'] = ' - '.join([ov['option_value'] for ov in option_values]) if option_values else ''
+                
+                # Get customization labels from order_items
+                cursor.execute('SELECT customization_data FROM order_items WHERE id = %s', (item_dict['order_item_id'],))
+                oi_row = cursor.fetchone()
+                customization_labels = []
+                if oi_row and oi_row.get('customization_data'):
+                    cust_data = oi_row['customization_data']
+                    if isinstance(cust_data, str):
+                        cust_data = json.loads(cust_data)
+                    if isinstance(cust_data, dict):
+                        choice_ids = []
+                        for cust_id, choices in cust_data.items():
+                            if isinstance(choices, list):
+                                choice_ids.extend(choices)
+                        if choice_ids:
+                            cursor.execute('''
+                                SELECT pc.name as customization_name, cc.label as choice_label
+                                FROM customization_choices cc
+                                JOIN product_customizations pc ON pc.id = cc.customization_id
+                                WHERE cc.id = ANY(%s)
+                            ''', (choice_ids,))
+                            for row in cursor.fetchall():
+                                customization_labels.append(f"{row['customization_name']}: {row['choice_label']}")
+                item_dict['customization_labels'] = customization_labels
                 shipment_items.append(item_dict)
             shipment_dict['items'] = shipment_items
             shipments.append(shipment_dict)
