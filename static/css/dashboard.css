@@ -92,6 +92,8 @@ body::after {
     justify-content: center;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .sidebar-toggle:hover {
@@ -242,6 +244,8 @@ body.sidebar-collapsed .sidebar-toggle {
     font-size: var(--font-base);
     position: relative;
     overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .nav-item::before {
