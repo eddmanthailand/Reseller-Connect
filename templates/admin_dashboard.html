@@ -329,6 +329,19 @@
                     <span class="sidebar-text">ค่าส่งและโปรโมชั่น</span>
                 </a>
                 
+                <a href="#" class="nav-item" data-page="activity-logs" data-role="Super Admin">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">Activity Log</span>
+                </a>
+                
                 <a href="#" class="nav-item" data-page="settings" data-role="Super Admin">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -750,6 +763,83 @@
                     <div class="modal-footer">
                         <button class="btn btn-secondary" onclick="closeRejectModal()">ยกเลิก</button>
                         <button class="btn btn-danger" onclick="confirmReject()">ปฏิเสธใบสมัคร</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Logs Page -->
+            <div id="page-activity-logs" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 10px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        Activity Log
+                    </h1>
+                    <p>บันทึกกิจกรรมทั้งหมดในระบบ</p>
+                </div>
+
+                <div class="content-wrapper">
+                    <div class="card">
+                        <div class="filter-toolbar" style="margin-bottom: 20px;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+                                <div class="form-group" style="margin-bottom: 0; min-width: 150px;">
+                                    <label style="font-size: 12px; margin-bottom: 4px;">ประเภท</label>
+                                    <select id="logCategoryFilter" onchange="loadActivityLogs()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 13px;">
+                                        <option value="">ทั้งหมด</option>
+                                        <option value="auth">เข้าสู่ระบบ</option>
+                                        <option value="user">จัดการผู้ใช้</option>
+                                        <option value="application">ใบสมัคร</option>
+                                        <option value="product">สินค้า</option>
+                                        <option value="stock">สต็อก</option>
+                                        <option value="order">คำสั่งซื้อ</option>
+                                        <option value="settings">การตั้งค่า</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0; min-width: 120px;">
+                                    <label style="font-size: 12px; margin-bottom: 4px;">จากวันที่</label>
+                                    <input type="date" id="logDateFrom" onchange="loadActivityLogs()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 13px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0; min-width: 120px;">
+                                    <label style="font-size: 12px; margin-bottom: 4px;">ถึงวันที่</label>
+                                    <input type="date" id="logDateTo" onchange="loadActivityLogs()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 13px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                                    <label style="font-size: 12px; margin-bottom: 4px;">ค้นหา</label>
+                                    <input type="text" id="logSearchInput" placeholder="ค้นหาชื่อผู้ใช้, รายละเอียด..." onkeyup="debounceLogSearch()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white; font-size: 13px; width: 100%;">
+                                </div>
+                                <button class="btn btn-secondary" onclick="clearLogFilters()" style="padding: 8px 16px;">ล้างตัวกรอง</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table" id="activityLogsTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 140px;">วันเวลา</th>
+                                        <th style="width: 120px;">ผู้ใช้</th>
+                                        <th style="width: 100px;">ประเภท</th>
+                                        <th style="width: 100px;">การกระทำ</th>
+                                        <th>รายละเอียด</th>
+                                        <th style="width: 120px;">เป้าหมาย</th>
+                                        <th style="width: 100px;">IP</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityLogsTableBody">
+                                    <tr>
+                                        <td colspan="7" style="text-align: center;">กำลังโหลด...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="pagination-wrapper" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                            <div id="logPaginationInfo" style="font-size: 13px; color: rgba(255,255,255,0.7);">แสดง 0-0 จาก 0 รายการ</div>
+                            <div id="logPagination" style="display: flex; gap: 8px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>

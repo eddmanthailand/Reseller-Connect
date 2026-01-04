@@ -770,6 +770,36 @@ def init_db():
             END $$;
         ''')
         
+        # Create activity_logs table for system-wide activity tracking
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                user_name VARCHAR(255),
+                action_type VARCHAR(50) NOT NULL,
+                action_category VARCHAR(50) NOT NULL,
+                description TEXT NOT NULL,
+                target_type VARCHAR(50),
+                target_id INTEGER,
+                target_name VARCHAR(255),
+                ip_address VARCHAR(50),
+                user_agent TEXT,
+                extra_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create index for faster log queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_action_category ON activity_logs(action_category)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)
+        ''')
+        
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

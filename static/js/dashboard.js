@@ -514,6 +514,8 @@ function switchPage(pageName) {
         loadSlipReviewPage();
     } else if (pageName === 'applications') {
         loadApplicationsPage();
+    } else if (pageName === 'activity-logs') {
+        loadActivityLogs();
     }
 }
 
@@ -6579,6 +6581,151 @@ async function confirmReject() {
         console.error('Error rejecting application:', error);
         showGlobalAlert('เกิดข้อผิดพลาดในการปฏิเสธ', 'error');
     }
+}
+
+// ==================== ACTIVITY LOGS FUNCTIONS ====================
+
+let activityLogPage = 1;
+let activityLogSearchTimeout = null;
+
+async function loadActivityLogs(page = 1) {
+    activityLogPage = page;
+    const container = document.getElementById('activityLogsTableBody');
+    if (!container) return;
+    
+    container.innerHTML = '<tr><td colspan="7" style="text-align: center;">กำลังโหลด...</td></tr>';
+    
+    const category = document.getElementById('logCategoryFilter')?.value || '';
+    const dateFrom = document.getElementById('logDateFrom')?.value || '';
+    const dateTo = document.getElementById('logDateTo')?.value || '';
+    const search = document.getElementById('logSearchInput')?.value || '';
+    
+    let url = `${API_URL}/activity-logs?page=${page}&per_page=50`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
+    if (dateFrom) url += `&date_from=${encodeURIComponent(dateFrom)}`;
+    if (dateTo) url += `&date_to=${encodeURIComponent(dateTo)}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch logs');
+        
+        const data = await response.json();
+        renderActivityLogs(data.logs);
+        renderLogPagination(data);
+    } catch (error) {
+        console.error('Error loading activity logs:', error);
+        container.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ff6b6b;">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>';
+    }
+}
+
+function renderActivityLogs(logs) {
+    const container = document.getElementById('activityLogsTableBody');
+    if (!container) return;
+    
+    if (!logs || logs.length === 0) {
+        container.innerHTML = '<tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.6);">ไม่พบข้อมูล</td></tr>';
+        return;
+    }
+    
+    const categoryLabels = {
+        'auth': { label: 'เข้าสู่ระบบ', color: '#4CAF50' },
+        'user': { label: 'จัดการผู้ใช้', color: '#2196F3' },
+        'application': { label: 'ใบสมัคร', color: '#9C27B0' },
+        'product': { label: 'สินค้า', color: '#FF9800' },
+        'stock': { label: 'สต็อก', color: '#00BCD4' },
+        'order': { label: 'คำสั่งซื้อ', color: '#E91E63' },
+        'settings': { label: 'การตั้งค่า', color: '#607D8B' }
+    };
+    
+    const actionLabels = {
+        'login': 'เข้าสู่ระบบ',
+        'logout': 'ออกจากระบบ',
+        'create': 'สร้าง',
+        'update': 'แก้ไข',
+        'delete': 'ลบ',
+        'approve': 'อนุมัติ',
+        'reject': 'ปฏิเสธ',
+        'view': 'ดู',
+        'export': 'ส่งออก',
+        'import': 'นำเข้า',
+        'transfer': 'โอน',
+        'adjust': 'ปรับ'
+    };
+    
+    container.innerHTML = logs.map(log => {
+        const categoryInfo = categoryLabels[log.action_category] || { label: log.action_category, color: '#888' };
+        const actionLabel = actionLabels[log.action_type] || log.action_type;
+        const datetime = log.created_at ? new Date(log.created_at).toLocaleString('th-TH') : '-';
+        
+        return `
+            <tr>
+                <td style="font-size: 12px; white-space: nowrap;">${datetime}</td>
+                <td style="font-size: 13px;">${log.user_name || 'ระบบ'}</td>
+                <td><span style="padding: 3px 8px; border-radius: 12px; background: ${categoryInfo.color}20; color: ${categoryInfo.color}; font-size: 11px;">${categoryInfo.label}</span></td>
+                <td style="font-size: 13px;">${actionLabel}</td>
+                <td style="font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${log.description || ''}">${log.description || '-'}</td>
+                <td style="font-size: 12px;">${log.target_name || '-'}</td>
+                <td style="font-size: 11px; color: rgba(255,255,255,0.5);">${log.ip_address || '-'}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderLogPagination(data) {
+    const infoEl = document.getElementById('logPaginationInfo');
+    const paginationEl = document.getElementById('logPagination');
+    
+    if (infoEl) {
+        const start = (data.page - 1) * data.per_page + 1;
+        const end = Math.min(data.page * data.per_page, data.total);
+        infoEl.textContent = `แสดง ${data.total > 0 ? start : 0}-${end} จาก ${data.total} รายการ`;
+    }
+    
+    if (paginationEl) {
+        let html = '';
+        
+        if (data.page > 1) {
+            html += `<button class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="loadActivityLogs(${data.page - 1})">ก่อนหน้า</button>`;
+        }
+        
+        const startPage = Math.max(1, data.page - 2);
+        const endPage = Math.min(data.total_pages, data.page + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const active = i === data.page ? 'background: rgba(255,255,255,0.3);' : '';
+            html += `<button class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px; ${active}" onclick="loadActivityLogs(${i})">${i}</button>`;
+        }
+        
+        if (data.page < data.total_pages) {
+            html += `<button class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;" onclick="loadActivityLogs(${data.page + 1})">ถัดไป</button>`;
+        }
+        
+        paginationEl.innerHTML = html;
+    }
+}
+
+function debounceLogSearch() {
+    if (activityLogSearchTimeout) {
+        clearTimeout(activityLogSearchTimeout);
+    }
+    activityLogSearchTimeout = setTimeout(() => {
+        loadActivityLogs(1);
+    }, 500);
+}
+
+function clearLogFilters() {
+    const categoryFilter = document.getElementById('logCategoryFilter');
+    const dateFrom = document.getElementById('logDateFrom');
+    const dateTo = document.getElementById('logDateTo');
+    const searchInput = document.getElementById('logSearchInput');
+    
+    if (categoryFilter) categoryFilter.value = '';
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    if (searchInput) searchInput.value = '';
+    
+    loadActivityLogs(1);
 }
 
 // Initialize on page load

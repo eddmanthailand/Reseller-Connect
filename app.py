@@ -188,6 +188,9 @@ def login():
         else:
             redirect_url = '/dashboard'
         
+        log_activity('login', 'auth', f"เข้าสู่ระบบ: {user['username']} ({user['role']})", 
+                    target_type='user', target_id=user['id'], target_name=user['full_name'])
+        
         return jsonify({
             'message': 'เข้าสู่ระบบสำเร็จ',
             'user': {
@@ -211,6 +214,10 @@ def login():
 @app.route('/api/logout', methods=['POST'])
 def logout():
     """Handle user logout"""
+    user_name = session.get('full_name', 'Unknown')
+    user_id = session.get('user_id')
+    log_activity('logout', 'auth', f"ออกจากระบบ: {user_name}", 
+                target_type='user', target_id=user_id, target_name=user_name)
     session.clear()
     return jsonify({'message': 'ออกจากระบบสำเร็จ'}), 200
 
@@ -240,6 +247,36 @@ def send_email(to_email, subject, html_content):
     except Exception as e:
         print(f"Email error: {e}")
         return False
+
+def log_activity(action_type, action_category, description, target_type=None, target_id=None, target_name=None, extra_data=None):
+    """Log user activity to activity_logs table"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        user_id = session.get('user_id')
+        user_name = session.get('full_name', 'ระบบ')
+        ip_address = request.remote_addr if request else None
+        user_agent = request.headers.get('User-Agent', '')[:500] if request else None
+        
+        cursor.execute('''
+            INSERT INTO activity_logs 
+            (user_id, user_name, action_type, action_category, description, target_type, target_id, target_name, ip_address, user_agent, extra_data)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (user_id, user_name, action_type, action_category, description, 
+              target_type, target_id, target_name, ip_address, user_agent, 
+              json.dumps(extra_data) if extra_data else None))
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Log activity error: {e}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/register', methods=['POST'])
 def register_reseller():
@@ -512,6 +549,9 @@ def approve_reseller_application(app_id):
         '''
         send_email(app['email'], 'ใบสมัครตัวแทนจำหน่ายได้รับการอนุมัติแล้ว', approval_email_html)
         
+        log_activity('approve', 'application', f"อนุมัติใบสมัคร: {app['full_name']} ({app['email']})", 
+                    target_type='application', target_id=app_id, target_name=app['full_name'])
+        
         return jsonify({'message': 'อนุมัติใบสมัครสำเร็จ', 'user_id': new_user_id}), 200
         
     except Exception as e:
@@ -566,6 +606,9 @@ def reject_reseller_application(app_id):
         '''
         send_email(app['email'], 'แจ้งผลการพิจารณาใบสมัครตัวแทนจำหน่าย', rejection_email_html)
         
+        log_activity('reject', 'application', f"ปฏิเสธใบสมัคร: {app['full_name']} ({app['email']})" + (f" - เหตุผล: {reject_reason}" if reject_reason else ""), 
+                    target_type='application', target_id=app_id, target_name=app['full_name'])
+        
         return jsonify({'message': 'ปฏิเสธใบสมัครสำเร็จ'}), 200
         
     except Exception as e:
@@ -589,6 +632,120 @@ def get_current_user():
         'role': session.get('role'),
         'reseller_tier': session.get('reseller_tier')
     }), 200
+
+@app.route('/api/activity-logs', methods=['GET'])
+@admin_required
+def get_activity_logs():
+    """Get activity logs with filtering and pagination"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    category = request.args.get('category', '')
+    action_type = request.args.get('action_type', '')
+    user_id = request.args.get('user_id', '', type=str)
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    search = request.args.get('search', '')
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        where_clauses = []
+        params = []
+        
+        if category:
+            where_clauses.append('action_category = %s')
+            params.append(category)
+        
+        if action_type:
+            where_clauses.append('action_type = %s')
+            params.append(action_type)
+        
+        if user_id:
+            where_clauses.append('user_id = %s')
+            params.append(int(user_id))
+        
+        if date_from:
+            where_clauses.append('created_at >= %s')
+            params.append(date_from)
+        
+        if date_to:
+            where_clauses.append('created_at <= %s::date + interval \'1 day\'')
+            params.append(date_to)
+        
+        if search:
+            where_clauses.append('(description ILIKE %s OR user_name ILIKE %s OR target_name ILIKE %s)')
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term, search_term])
+        
+        where_sql = ' AND '.join(where_clauses) if where_clauses else '1=1'
+        
+        cursor.execute(f'SELECT COUNT(*) FROM activity_logs WHERE {where_sql}', params)
+        total = cursor.fetchone()['count']
+        
+        offset = (page - 1) * per_page
+        cursor.execute(f'''
+            SELECT id, user_id, user_name, action_type, action_category, description,
+                   target_type, target_id, target_name, ip_address, created_at
+            FROM activity_logs 
+            WHERE {where_sql}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        ''', params + [per_page, offset])
+        
+        logs = cursor.fetchall()
+        result = []
+        for log in logs:
+            log_dict = dict(log)
+            log_dict['created_at'] = log_dict['created_at'].isoformat() if log_dict['created_at'] else None
+            result.append(log_dict)
+        
+        return jsonify({
+            'logs': result,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/activity-logs/categories', methods=['GET'])
+@admin_required
+def get_activity_log_categories():
+    """Get distinct activity log categories"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT DISTINCT action_category FROM activity_logs ORDER BY action_category')
+        categories = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute('SELECT DISTINCT action_type FROM activity_logs ORDER BY action_type')
+        action_types = [row[0] for row in cursor.fetchall()]
+        
+        return jsonify({
+            'categories': categories,
+            'action_types': action_types
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/roles', methods=['GET'])
 @admin_required
