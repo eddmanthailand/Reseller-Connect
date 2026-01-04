@@ -10,7 +10,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from replit.object_storage import Client
-from datetime import timedelta
+from datetime import timedelta, datetime
 import time
 import secrets
 
@@ -320,6 +320,102 @@ def send_email(to_email, subject, html_content):
         print(f"Email error: {e}")
         return False
 
+def send_order_notification_to_admin(order_number, reseller_name, total_amount, item_count):
+    """Send email notification to admin when new order is created"""
+    html = f'''
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #8b5cf6;">📦 คำสั่งซื้อใหม่</h2>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <p><strong>หมายเลขคำสั่งซื้อ:</strong> {order_number}</p>
+            <p><strong>ตัวแทนจำหน่าย:</strong> {reseller_name}</p>
+            <p><strong>จำนวนรายการ:</strong> {item_count} รายการ</p>
+            <p><strong>ยอดรวม:</strong> ฿{total_amount:,.2f}</p>
+        </div>
+        <p>กรุณาเข้าสู่ระบบเพื่อตรวจสอบคำสั่งซื้อ</p>
+    </div>
+    '''
+    send_email('cmidcoteam@gmail.com', f'[คำสั่งซื้อใหม่] {order_number} - {reseller_name}', html)
+
+def send_order_status_email(to_email, reseller_name, order_number, status, message, extra_info=''):
+    """Send order status update email to reseller"""
+    status_colors = {
+        'approved': '#22c55e',
+        'request_new_slip': '#f59e0b',
+        'shipped': '#3b82f6',
+        'delivered': '#10b981',
+        'cancelled': '#ef4444'
+    }
+    status_labels = {
+        'approved': '✅ สลิปได้รับการยืนยัน',
+        'request_new_slip': '⚠️ กรุณาอัปโหลดสลิปใหม่',
+        'shipped': '🚚 จัดส่งสินค้าแล้ว',
+        'delivered': '📦 ส่งถึงปลายทางแล้ว',
+        'cancelled': '❌ คำสั่งซื้อถูกยกเลิก'
+    }
+    color = status_colors.get(status, '#6b7280')
+    label = status_labels.get(status, 'อัปเดตสถานะ')
+    
+    html = f'''
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: {color};">{label}</h2>
+        <p>สวัสดี คุณ{reseller_name}</p>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <p><strong>หมายเลขคำสั่งซื้อ:</strong> {order_number}</p>
+            <p>{message}</p>
+            {f'<p>{extra_info}</p>' if extra_info else ''}
+        </div>
+        <p>หากมีข้อสงสัย สามารถติดต่อได้ที่ Line: @cmidco</p>
+        <p style="color: #666; margin-top: 20px;">ขอบคุณที่ใช้บริการ</p>
+    </div>
+    '''
+    subject = f'[{label}] คำสั่งซื้อ {order_number}'
+    send_email(to_email, subject, html)
+
+def send_low_stock_alert(admin_email, products):
+    """Send email alert for low stock products"""
+    items_html = ''
+    for p in products:
+        items_html += f'<tr><td style="padding: 8px; border-bottom: 1px solid #eee;">{p["name"]}</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{p["sku_code"]}</td><td style="padding: 8px; border-bottom: 1px solid #eee; color: #ef4444;">{p["stock"]} ชิ้น</td></tr>'
+    
+    html = f'''
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #f59e0b;">⚠️ แจ้งเตือนสินค้าใกล้หมด</h2>
+        <p>สินค้าต่อไปนี้มีสต็อกต่ำกว่าที่กำหนด:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 10px; text-align: left;">สินค้า</th>
+                    <th style="padding: 10px; text-align: left;">รหัส SKU</th>
+                    <th style="padding: 10px; text-align: left;">สต็อกคงเหลือ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {items_html}
+            </tbody>
+        </table>
+        <p>กรุณาเติมสต็อกโดยเร็ว</p>
+    </div>
+    '''
+    send_email(admin_email, f'[แจ้งเตือน] สินค้าใกล้หมด {len(products)} รายการ', html)
+
+def send_password_reset_email(to_email, full_name, reset_token, reset_link):
+    """Send password reset email"""
+    html = f'''
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #8b5cf6;">🔐 รีเซ็ตรหัสผ่าน</h2>
+        <p>สวัสดี คุณ{full_name}</p>
+        <p>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{reset_link}" style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">รีเซ็ตรหัสผ่าน</a>
+        </div>
+        <p style="color: #666;">ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง</p>
+        <p style="color: #666;">หากคุณไม่ได้ขอรีเซ็ตรหัสผ่าน กรุณาเพิกเฉยอีเมลนี้</p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #999; font-size: 12px;">หากปุ่มไม่ทำงาน คัดลอกลิงก์นี้: {reset_link}</p>
+    </div>
+    '''
+    send_email(to_email, 'รีเซ็ตรหัสผ่าน - ระบบตัวแทนจำหน่าย', html)
+
 def log_activity(action_type, action_category, description, target_type=None, target_id=None, target_name=None, extra_data=None):
     """Log user activity to activity_logs table"""
     conn = None
@@ -433,6 +529,118 @@ def register_reseller():
         send_email(data['email'], 'ได้รับใบสมัครตัวแทนจำหน่ายแล้ว', applicant_email_html)
         
         return jsonify({'message': 'ส่งใบสมัครสำเร็จ', 'id': application_id}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/forgot-password', methods=['POST'])
+def forgot_password():
+    """Request password reset email"""
+    data = request.json
+    email = data.get('email', '').strip().lower() if data else ''
+    
+    if not email:
+        return jsonify({'error': 'กรุณากรอกอีเมล'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id, full_name, email FROM users WHERE LOWER(email) = %s', (email,))
+        user = cursor.fetchone()
+        
+        if user:
+            reset_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now() + timedelta(hours=1)
+            
+            cursor.execute('''
+                INSERT INTO password_reset_tokens (user_id, token, expires_at)
+                VALUES (%s, %s, %s)
+            ''', (user['id'], reset_token, expires_at))
+            
+            conn.commit()
+            
+            base_url = os.environ.get('REPLIT_DEV_DOMAIN', '')
+            if base_url:
+                reset_link = f"https://{base_url}/reset-password?token={reset_token}"
+            else:
+                reset_link = f"/reset-password?token={reset_token}"
+            
+            send_password_reset_email(user['email'], user['full_name'], reset_token, reset_link)
+        
+        return jsonify({'message': 'หากอีเมลนี้มีในระบบ คุณจะได้รับลิงก์รีเซ็ตรหัสผ่านทางอีเมล'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/reset-password')
+def reset_password_page():
+    """Render password reset page"""
+    return render_template('reset_password.html')
+
+@app.route('/api/reset-password', methods=['POST'])
+def reset_password():
+    """Reset password with token"""
+    data = request.json
+    token = data.get('token', '') if data else ''
+    new_password = data.get('password', '') if data else ''
+    
+    if not token or not new_password:
+        return jsonify({'error': 'ข้อมูลไม่ครบ'}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({'error': 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT prt.id, prt.user_id, prt.expires_at, prt.used_at, u.email
+            FROM password_reset_tokens prt
+            JOIN users u ON u.id = prt.user_id
+            WHERE prt.token = %s
+        ''', (token,))
+        reset_token = cursor.fetchone()
+        
+        if not reset_token:
+            return jsonify({'error': 'ลิงก์รีเซ็ตไม่ถูกต้อง'}), 400
+        
+        if reset_token['used_at']:
+            return jsonify({'error': 'ลิงก์นี้ถูกใช้งานแล้ว'}), 400
+        
+        if reset_token['expires_at'] < datetime.now():
+            return jsonify({'error': 'ลิงก์หมดอายุแล้ว กรุณาขอลิงก์ใหม่'}), 400
+        
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        cursor.execute('UPDATE users SET password = %s WHERE id = %s', (hashed_password, reset_token['user_id']))
+        cursor.execute('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = %s', (reset_token['id'],))
+        
+        conn.commit()
+        
+        log_activity('update', 'user', f"รีเซ็ตรหัสผ่านสำเร็จ: {reset_token['email']}", 
+                    target_type='user', target_id=reset_token['user_id'])
+        
+        return jsonify({'message': 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่'}), 200
         
     except Exception as e:
         if conn:
@@ -810,6 +1018,45 @@ def get_activity_log_categories():
             'categories': categories,
             'action_types': action_types
         }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/check-low-stock', methods=['POST'])
+@admin_required
+def check_and_alert_low_stock():
+    """Check for low stock products and send email alert"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT p.name, s.sku_code, s.stock, COALESCE(p.low_stock_threshold, 5) as threshold
+            FROM skus s
+            JOIN products p ON p.id = s.product_id
+            WHERE s.stock > 0 AND s.stock <= COALESCE(p.low_stock_threshold, 5)
+            ORDER BY s.stock ASC
+            LIMIT 50
+        ''')
+        
+        low_stock_products = [dict(row) for row in cursor.fetchall()]
+        
+        if low_stock_products:
+            send_low_stock_alert('cmidcoteam@gmail.com', low_stock_products)
+            log_activity('alert', 'stock', f"ส่งแจ้งเตือนสินค้าใกล้หมด {len(low_stock_products)} รายการ")
+            return jsonify({
+                'message': f'ส่งแจ้งเตือนสินค้าใกล้หมด {len(low_stock_products)} รายการ',
+                'products': low_stock_products
+            }), 200
+        else:
+            return jsonify({'message': 'ไม่มีสินค้าใกล้หมด'}), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -6050,6 +6297,15 @@ def create_order():
         # Add shipment count to response
         order['shipment_count'] = len(warehouse_shipments)
         
+        # Send email notification to admin
+        reseller_name = session.get('full_name', 'Unknown')
+        send_order_notification_to_admin(
+            order['order_number'], 
+            reseller_name, 
+            float(order['final_amount']), 
+            len(items)
+        )
+        
         return jsonify({
             'message': 'Order created successfully',
             'order': order
@@ -6453,6 +6709,38 @@ def update_shipment(order_id, shipment_id):
                 ''', (order_id,))
         
         conn.commit()
+        
+        # Send email notification for shipped/delivered status
+        if data.get('status') in ['shipped', 'delivered']:
+            try:
+                cursor.execute('''
+                    SELECT u.full_name, u.email, o.order_number 
+                    FROM users u 
+                    JOIN orders o ON o.user_id = u.id 
+                    WHERE o.id = %s
+                ''', (order_id,))
+                reseller_info = cursor.fetchone()
+                if reseller_info and reseller_info['email']:
+                    if data['status'] == 'shipped':
+                        tracking_info = f"เลขพัสดุ: {updated.get('tracking_number', '-')} | ขนส่ง: {updated.get('shipping_provider', '-')}"
+                        send_order_status_email(
+                            reseller_info['email'],
+                            reseller_info['full_name'],
+                            reseller_info['order_number'] or f'#{order_id}',
+                            'shipped',
+                            'สินค้าของคุณถูกจัดส่งแล้ว',
+                            tracking_info
+                        )
+                    elif data['status'] == 'delivered':
+                        send_order_status_email(
+                            reseller_info['email'],
+                            reseller_info['full_name'],
+                            reseller_info['order_number'] or f'#{order_id}',
+                            'delivered',
+                            'สินค้าของคุณถูกส่งถึงปลายทางเรียบร้อยแล้ว'
+                        )
+            except Exception as email_err:
+                print(f"Email notification error: {email_err}")
         
         return jsonify({
             'message': 'Shipment updated successfully',
@@ -7596,6 +7884,32 @@ def approve_order(order_id):
         
         conn.commit()
         
+        # Get reseller info for email
+        cursor2 = None
+        conn2 = None
+        try:
+            conn2 = get_db()
+            cursor2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor2.execute('SELECT full_name, email FROM users WHERE id = %s', (order['user_id'],))
+            reseller = cursor2.fetchone()
+            cursor2.execute('SELECT order_number FROM orders WHERE id = %s', (order_id,))
+            order_info = cursor2.fetchone()
+            if reseller and reseller['email']:
+                send_order_status_email(
+                    reseller['email'],
+                    reseller['full_name'],
+                    order_info['order_number'] if order_info else f'#{order_id}',
+                    'approved',
+                    'สลิปการชำระเงินของคุณได้รับการยืนยันแล้ว กำลังเตรียมจัดส่งสินค้า'
+                )
+        except Exception as email_err:
+            print(f"Email notification error: {email_err}")
+        finally:
+            if cursor2:
+                cursor2.close()
+            if conn2:
+                conn2.close()
+        
         # Notify user
         create_notification(
             order['user_id'],
@@ -7659,6 +7973,19 @@ def request_new_slip(order_id):
         
         conn.commit()
         
+        # Get reseller info for email
+        cursor.execute('SELECT full_name, email FROM users WHERE id = %s', (order['user_id'],))
+        reseller = cursor.fetchone()
+        if reseller and reseller['email']:
+            send_order_status_email(
+                reseller['email'],
+                reseller['full_name'],
+                order['order_number'] or f'#{order_id}',
+                'request_new_slip',
+                'กรุณาอัปโหลดสลิปการชำระเงินใหม่',
+                f'เหตุผล: {reason}'
+            )
+        
         # Notify user
         create_notification(
             order['user_id'],
@@ -7668,9 +7995,6 @@ def request_new_slip(order_id):
             'order',
             order_id
         )
-        
-        # TODO: Send email notification when email system is ready
-        # send_email_notification(order['user_id'], 'request_new_slip', order_id, reason)
         
         return jsonify({'message': 'ขอสลิปใหม่สำเร็จ'}), 200
         
@@ -7749,6 +8073,24 @@ def cancel_order(order_id):
         ''', (reason, order_id))
         
         conn.commit()
+        
+        # Get reseller info for email and order number
+        cursor.execute('''
+            SELECT u.full_name, u.email, o.order_number 
+            FROM users u 
+            JOIN orders o ON o.user_id = u.id 
+            WHERE o.id = %s
+        ''', (order_id,))
+        reseller_info = cursor.fetchone()
+        if reseller_info and reseller_info['email']:
+            send_order_status_email(
+                reseller_info['email'],
+                reseller_info['full_name'],
+                reseller_info['order_number'] or f'#{order_id}',
+                'cancelled',
+                'คำสั่งซื้อของคุณถูกยกเลิก',
+                f'เหตุผล: {reason}' if reason else ''
+            )
         
         # Notify user
         create_notification(

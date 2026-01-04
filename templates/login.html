@@ -410,6 +410,10 @@
             </div>
 
             <button type="submit" class="btn-login">เข้าสู่ระบบ</button>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="#" onclick="showForgotPassword()" style="color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px;">ลืมรหัสผ่าน?</a>
+            </div>
         </form>
 
         <div class="register-link">
@@ -490,6 +494,29 @@
                 this.parentElement.style.transform = 'scale(1)';
             });
         });
+        
+        async function showForgotPassword() {
+            const email = prompt('กรุณากรอกอีเมลที่ใช้ลงทะเบียน:');
+            if (!email) return;
+            
+            try {
+                const response = await fetch('/api/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert(result.message, 'success');
+                } else {
+                    showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+            }
+        }
     </script>
 </body>
 </html>
