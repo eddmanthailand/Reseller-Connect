@@ -1762,7 +1762,7 @@ async function viewOrderDetails(orderId) {
             itemsHtml = order.items.map(item => {
                 const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
                 const customizationDisplay = item.customization_labels && item.customization_labels.length > 0 
-                    ? `<div style="color: #a5f3fc; font-size: 11px; margin-top: 4px;">ตัวเลือกเสริม: ${item.customization_labels.map(l => escapeHtml(l)).join(', ')}</div>` 
+                    ? `<div style="color: #a5f3fc; font-size: 11px; margin-top: 4px;">${item.customization_labels.map(l => escapeHtml(l)).join(', ')}</div>` 
                     : '';
                 return `
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);">
@@ -2138,7 +2138,7 @@ function printShippingLabel(shipmentIndex) {
     const itemsHtml = shipment.items.map((item, idx) => {
         const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
         const customizationDisplay = item.customization_labels && item.customization_labels.length > 0 
-            ? `<div style="font-size: 11px; color: #6b21a8; margin-top: 3px;">ตัวเลือกเสริม: ${item.customization_labels.join(', ')}</div>` 
+            ? `<div style="font-size: 11px; color: #6b21a8; margin-top: 3px;">${item.customization_labels.join(', ')}</div>` 
             : '';
         return `
         <tr>
