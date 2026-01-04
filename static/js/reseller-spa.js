@@ -86,10 +86,16 @@ function switchPage(pageName) {
         page.classList.toggle('active', page.id === `page-${pageName}`);
     });
 
+    // Sync Bottom Tab Bar
+    document.querySelectorAll('.bottom-tab-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.page === pageName);
+    });
+
     if (window.innerWidth <= 768) {
         const sidebar = document.getElementById('sidebar');
         sidebar.classList.remove('active');
-        document.querySelector('.sidebar-overlay').classList.remove('active');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) overlay.classList.remove('active');
     }
 
     switch (pageName) {
@@ -521,50 +527,68 @@ function openProductModal(product) {
         `;
     }
     
+    // Build gallery HTML with proper classes
+    let modalGalleryHtml = '';
+    if (product.images && product.images.length > 1) {
+        modalGalleryHtml = `
+            <div class="product-modal-gallery">
+                ${product.images.map((img, idx) => `
+                    <img src="${img.image_url}" alt="Product ${idx+1}" 
+                         onclick="changeMainImage('${img.image_url}')"
+                         class="gallery-thumb ${idx === 0 ? 'active' : ''}">
+                `).join('')}
+            </div>
+        `;
+    }
+
     document.getElementById('productModalContent').innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: 400px;">
-            <div style="padding: 16px; background: rgba(255,255,255,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div class="product-modal-grid">
+            <div class="product-modal-images">
                 ${mainImage 
-                    ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" style="width: 100%; height: 320px; object-fit: contain;">`
-                    : `<div style="width: 100%; height: 320px; background: rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" class="product-modal-main-image">`
+                    : `<div style="width: 100%; height: 200px; background: rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                        </div>`
                 }
-                ${galleryHtml}
+                ${modalGalleryHtml}
             </div>
-            <div style="padding: 24px; max-height: 500px; overflow-y: auto;">
-                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">${product.brand_name || ''}</div>
-                <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">${product.name}</h3>
-                <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">SKU: ${product.parent_sku || '-'}</div>
+            <div class="product-modal-info">
+                <div class="product-modal-brand">${product.brand_name || ''}</div>
+                <h3 class="product-modal-name">${product.name}</h3>
+                <div class="product-modal-sku">SKU: ${product.parent_sku || '-'}</div>
                 
-                <div style="margin-bottom: 20px;">
+                <div class="product-modal-price-section">
                     ${discount > 0 ? `
                         <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคาปกติ</div>
-                        <div style="text-decoration: line-through; color: rgba(255,255,255,0.4); font-size: 18px; margin-bottom: 4px;">฿${originalPrice.toLocaleString()}</div>
-                        <div style="font-size: 12px; color: #22c55e; margin-bottom: 4px;">ราคาสำหรับคุณ <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px;">-${discount}%</span></div>
+                        <div class="product-modal-original-price">฿${originalPrice.toLocaleString()}</div>
+                        <div class="product-modal-discount-label">ราคาสำหรับคุณ <span class="product-modal-discount-badge">-${discount}%</span></div>
                     ` : '<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคา</div>'}
-                    <span id="modalPrice" style="font-size: 28px; font-weight: 700; color: #22c55e;">฿${price.toLocaleString()}</span>
+                    <span id="modalPrice" class="product-modal-final-price">฿${price.toLocaleString()}</span>
                 </div>
                 
                 ${optionsHtml}
                 ${customizationsHtml}
                 ${sizeChartHtml}
                 
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 20px;">
-                    <span style="font-size: 13px; color: rgba(255,255,255,0.7);">จำนวน:</span>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button onclick="changeModalQty(-1)" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; cursor: pointer;">-</button>
-                        <input type="number" id="modalQty" value="1" min="1" style="width: 60px; text-align: center; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white;">
-                        <button onclick="changeModalQty(1)" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; cursor: pointer;">+</button>
-                    </div>
-                    <span id="modalStock" style="font-size: 12px; color: rgba(255,255,255,0.5);">คงเหลือ ${stock} ชิ้น</span>
-                </div>
-                
-                <button onclick="addToCartFromModal()" style="width: 100%; margin-top: 20px; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 10px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-                    เพิ่มลงตะกร้า
-                </button>
+                <div id="modalStock" style="font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 12px;">คงเหลือ ${stock} ชิ้น</div>
             </div>
+        </div>
+        
+        <!-- Sticky Footer -->
+        <div class="product-modal-sticky-footer">
+            <div class="sticky-footer-price">
+                <span class="label">ราคา</span>
+                <span id="stickyPrice" class="price">฿${price.toLocaleString()}</span>
+            </div>
+            <div class="sticky-footer-qty">
+                <button onclick="changeModalQty(-1)">-</button>
+                <input type="number" id="modalQty" value="1" min="1">
+                <button onclick="changeModalQty(1)">+</button>
+            </div>
+            <button onclick="addToCartFromModal()" class="sticky-footer-add-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                เพิ่มลงตะกร้า
+            </button>
         </div>
     `;
     
@@ -607,7 +631,10 @@ function updateSelectedSku() {
     
     if (matchingSku) {
         selectedSkuId = matchingSku.id;
-        document.getElementById('modalPrice').textContent = `฿${(matchingSku.final_price || matchingSku.price).toLocaleString()}`;
+        const newPrice = `฿${(matchingSku.final_price || matchingSku.price).toLocaleString()}`;
+        document.getElementById('modalPrice').textContent = newPrice;
+        const stickyPriceEl = document.getElementById('stickyPrice');
+        if (stickyPriceEl) stickyPriceEl.textContent = newPrice;
         document.getElementById('modalStock').textContent = `คงเหลือ ${matchingSku.stock || 0} ชิ้น`;
     }
 }
@@ -809,45 +836,47 @@ function renderCart() {
     
     const total = cartItems.reduce((sum, item) => sum + (item.final_price * item.quantity), 0);
     
+    const cartItemsHtml = cartItems.map(item => {
+        // SKU variant options
+        const skuOptionsHtml = (item.sku_options && item.sku_options.length > 0) ?
+            `<div class="cart-item-options">${item.sku_options.map(opt => 
+                `<span class="sku-option-tag">${opt.option_name}: ${opt.option_value}</span>`
+            ).join('')}</div>` : '';
+        
+        // Customizations (resolved names from API)
+        let customizationsHtml = '';
+        if (item.customizations && item.customizations.length > 0) {
+            const custTags = item.customizations.map(c => 
+                `<span class="customization-tag">${c.name}: ${c.value}</span>`
+            ).join('');
+            customizationsHtml = `<div class="cart-item-customizations">${custTags}</div>`;
+        }
+        
+        return `
+        <div class="cart-item">
+            <img class="cart-item-image" src="${item.image_url || ''}" onerror="this.style.display='none'" alt="">
+            <div class="cart-item-info">
+                <div class="cart-item-name">${item.product_name}</div>
+                <div class="cart-item-sku">${item.sku_code}</div>
+                ${skuOptionsHtml}
+                ${customizationsHtml}
+                <div class="cart-item-price">฿${item.final_price.toLocaleString()}</div>
+                <div class="cart-item-qty">
+                    <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity - 1})">-</button>
+                    <span>${item.quantity}</span>
+                    <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity + 1})">+</button>
+                    <button class="btn-icon delete" onclick="removeFromCart(${item.id})" style="margin-left: auto;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `}).join('');
+    
     container.innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr 300px; gap: 24px;">
-            <div>
-                ${cartItems.map(item => {
-                    // SKU variant options
-                    const skuOptionsHtml = (item.sku_options && item.sku_options.length > 0) ?
-                        `<div class="cart-item-options">${item.sku_options.map(opt => 
-                            `<span class="sku-option-tag">${opt.option_name}: ${opt.option_value}</span>`
-                        ).join('')}</div>` : '';
-                    
-                    // Customizations (resolved names from API)
-                    let customizationsHtml = '';
-                    if (item.customizations && item.customizations.length > 0) {
-                        const custTags = item.customizations.map(c => 
-                            `<span class="customization-tag">${c.name}: ${c.value}</span>`
-                        ).join('');
-                        customizationsHtml = `<div class="cart-item-customizations">${custTags}</div>`;
-                    }
-                    
-                    return `
-                    <div class="cart-item">
-                        <img class="cart-item-image" src="${item.image_url || ''}" onerror="this.style.display='none'" alt="">
-                        <div class="cart-item-info">
-                            <div class="cart-item-name">${item.product_name}</div>
-                            <div class="cart-item-sku">${item.sku_code}</div>
-                            ${skuOptionsHtml}
-                            ${customizationsHtml}
-                            <div class="cart-item-price">฿${item.final_price.toLocaleString()}</div>
-                            <div class="cart-item-qty">
-                                <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity - 1})">-</button>
-                                <span>${item.quantity}</span>
-                                <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity + 1})">+</button>
-                                <button class="btn-icon delete" onclick="removeFromCart(${item.id})" style="margin-left: auto;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `}).join('')}
+        <div class="cart-grid">
+            <div class="cart-items-list">
+                ${cartItemsHtml}
             </div>
             <div class="cart-summary">
                 <h3 style="margin-bottom: 16px;">สรุปคำสั่งซื้อ</h3>
@@ -1482,11 +1511,21 @@ async function loadCartBadge() {
             const items = data.items || [];
             const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
             const badge = document.getElementById('cartBadge');
+            const bottomBadge = document.getElementById('bottomCartBadge');
+            
             if (totalQty > 0) {
-                badge.textContent = totalQty > 99 ? '99+' : totalQty;
-                badge.style.display = 'block';
+                const displayQty = totalQty > 99 ? '99+' : totalQty;
+                if (badge) {
+                    badge.textContent = displayQty;
+                    badge.style.display = 'block';
+                }
+                if (bottomBadge) {
+                    bottomBadge.textContent = displayQty;
+                    bottomBadge.style.display = 'block';
+                }
             } else {
-                badge.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+                if (bottomBadge) bottomBadge.style.display = 'none';
             }
         }
     } catch (error) {
