@@ -77,7 +77,7 @@ def csrf_protect(f):
     def decorated_function(*args, **kwargs):
         if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
             if not validate_csrf_token():
-                return jsonify({'error': 'CSRF token ไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บ'}), 403
+                return jsonify({'error': 'เซสชันหมดอายุ กรุณารีเฟรชหน้าเว็บ'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -92,7 +92,7 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
-                return jsonify({'error': 'Unauthorized - Please login'}), 401
+                return jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated_function
@@ -102,10 +102,10 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
-                return jsonify({'error': 'Unauthorized - Please login'}), 401
+                return jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
             return redirect(url_for('login_page'))
         if session.get('role') not in ['Super Admin', 'Assistant Admin']:
-            return jsonify({'error': 'Unauthorized - Admin access required'}), 403
+            return jsonify({'error': 'คุณไม่มีสิทธิ์เข้าถึงส่วนนี้ (เฉพาะแอดมิน)'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -185,7 +185,7 @@ def login():
     data = request.json
     
     if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Missing username or password'}), 400
+        return jsonify({'error': 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'}), 400
     
     username = data['username']
     password = data['password']
@@ -469,21 +469,21 @@ def register_reseller():
         
         cursor.execute('SELECT id FROM users WHERE username = %s', (data['username'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Username นี้มีผู้ใช้งานแล้ว'}), 400
+            return jsonify({'error': 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว'}), 400
         
         cursor.execute('SELECT id FROM users WHERE email = %s', (data['email'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Email นี้มีผู้ใช้งานแล้ว'}), 400
+            return jsonify({'error': 'อีเมลนี้ถูกใช้งานแล้ว'}), 400
         
         cursor.execute('SELECT id FROM reseller_applications WHERE username = %s AND status = %s', 
                       (data['username'], 'pending'))
         if cursor.fetchone():
-            return jsonify({'error': 'Username นี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
+            return jsonify({'error': 'ชื่อผู้ใช้นี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
         
         cursor.execute('SELECT id FROM reseller_applications WHERE email = %s AND status = %s', 
                       (data['email'], 'pending'))
         if cursor.fetchone():
-            return jsonify({'error': 'Email นี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
+            return jsonify({'error': 'อีเมลนี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
         
         password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
@@ -599,7 +599,7 @@ def reset_password():
     new_password = data.get('password', '') if data else ''
     
     if not token or not new_password:
-        return jsonify({'error': 'ข้อมูลไม่ครบ'}), 400
+        return jsonify({'error': 'กรุณากรอกข้อมูลให้ครบถ้วน'}), 400
     
     if len(new_password) < 6:
         return jsonify({'error': 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'}), 400
@@ -619,7 +619,7 @@ def reset_password():
         reset_token = cursor.fetchone()
         
         if not reset_token:
-            return jsonify({'error': 'ลิงก์รีเซ็ตไม่ถูกต้อง'}), 400
+            return jsonify({'error': 'ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุ'}), 400
         
         if reset_token['used_at']:
             return jsonify({'error': 'ลิงก์นี้ถูกใช้งานแล้ว'}), 400
@@ -779,7 +779,7 @@ def approve_reseller_application(app_id):
         
         cursor.execute('SELECT id FROM users WHERE username = %s', (app['username'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Username นี้มีผู้ใช้งานแล้ว'}), 400
+            return jsonify({'error': 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว'}), 400
         
         cursor.execute('SELECT id FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
         default_tier = cursor.fetchone()
@@ -788,7 +788,7 @@ def approve_reseller_application(app_id):
         cursor.execute('SELECT id FROM roles WHERE name = %s', ('Reseller',))
         reseller_role = cursor.fetchone()
         if not reseller_role:
-            return jsonify({'error': 'ไม่พบ Role Reseller'}), 500
+            return jsonify({'error': 'ไม่พบบทบาทตัวแทนจำหน่ายในระบบ'}), 500
         
         cursor.execute('''
             INSERT INTO users 
@@ -1115,7 +1115,7 @@ def get_reseller_stats():
     """Get statistics for reseller dashboard"""
     user_role = session.get('role')
     if user_role not in ['Reseller', 'Super Admin', 'Assistant Admin']:
-        return jsonify({'error': 'Unauthorized access'}), 403
+        return jsonify({'error': 'คุณไม่มีสิทธิ์เข้าถึง'}), 403
     
     conn = None
     cursor = None
@@ -1197,12 +1197,12 @@ def create_user():
     
     # Validate required fields
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     required_fields = ['full_name', 'username', 'password', 'role_id']
     for field in required_fields:
         if field not in data or not data[field]:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
+            return jsonify({'error': f'กรุณากรอก {field}'}), 400
     
     # Hash password with bcrypt
     password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -1216,7 +1216,7 @@ def create_user():
         # Check if username already exists
         cursor.execute('SELECT id FROM users WHERE username = %s', (data['username'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Username already exists'}), 400
+            return jsonify({'error': 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว'}), 400
         
         # Insert new user
         reseller_tier_id = data.get('reseller_tier_id') if data.get('reseller_tier_id') else None
@@ -1249,7 +1249,7 @@ def create_user():
         conn.commit()
         
         return jsonify({
-            'message': 'User created successfully',
+            'message': 'สร้างผู้ใช้สำเร็จ',
             'user': user
         }), 201
         
@@ -1286,7 +1286,7 @@ def get_user(user_id):
         
         user = cursor.fetchone()
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         return jsonify(dict(user)), 200
         
@@ -1305,7 +1305,7 @@ def update_user(user_id):
     data = request.json
     
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     conn = None
     cursor = None
@@ -1317,13 +1317,13 @@ def update_user(user_id):
         cursor.execute('SELECT id, username FROM users WHERE id = %s', (user_id,))
         existing_user = cursor.fetchone()
         if not existing_user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         # Check if username is being changed and if it's already taken
         if 'username' in data and data['username'] != existing_user['username']:
             cursor.execute('SELECT id FROM users WHERE username = %s AND id != %s', (data['username'], user_id))
             if cursor.fetchone():
-                return jsonify({'error': 'Username already exists'}), 400
+                return jsonify({'error': 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว'}), 400
         
         # Build update query
         update_fields = []
@@ -1391,7 +1391,7 @@ def update_user(user_id):
             update_values.append(password_hash)
         
         if not update_fields:
-            return jsonify({'error': 'No fields to update'}), 400
+            return jsonify({'error': 'ไม่มีข้อมูลที่ต้องการอัพเดท'}), 400
         
         update_values.append(user_id)
         cursor.execute(f'''
@@ -1413,7 +1413,7 @@ def update_user(user_id):
         updated_user = dict(cursor.fetchone())
         
         return jsonify({
-            'message': 'User updated successfully',
+            'message': 'อัพเดทผู้ใช้สำเร็จ',
             'user': updated_user
         }), 200
         
@@ -1440,13 +1440,13 @@ def delete_user(user_id):
         # Check if user exists
         cursor.execute('SELECT id FROM users WHERE id = %s', (user_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         # Delete user
         cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
         conn.commit()
         
-        return jsonify({'message': 'User deleted successfully'}), 200
+        return jsonify({'message': 'ลบผู้ใช้สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -1495,11 +1495,11 @@ def get_brands():
 def create_brand():
     """Create a new brand (Super Admin only)"""
     if session.get('role') != 'Super Admin':
-        return jsonify({'error': 'Only Super Admin can create brands'}), 403
+        return jsonify({'error': 'เฉพาะ Super Admin เท่านั้นที่สามารถสร้างแบรนด์'}), 403
     
     data = request.json
     if not data or 'name' not in data:
-        return jsonify({'error': 'Brand name is required'}), 400
+        return jsonify({'error': 'กรุณากรอกชื่อแบรนด์'}), 400
     
     conn = None
     cursor = None
@@ -1510,7 +1510,7 @@ def create_brand():
         # Check if brand already exists
         cursor.execute('SELECT id FROM brands WHERE name = %s', (data['name'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Brand name already exists'}), 400
+            return jsonify({'error': 'ชื่อแบรนด์นี้มีอยู่แล้ว'}), 400
         
         cursor.execute('''
             INSERT INTO brands (name, description)
@@ -1538,11 +1538,11 @@ def create_brand():
 def update_brand(brand_id):
     """Update a brand (Super Admin only)"""
     if session.get('role') != 'Super Admin':
-        return jsonify({'error': 'Only Super Admin can update brands'}), 403
+        return jsonify({'error': 'เฉพาะ Super Admin เท่านั้นที่สามารถแก้ไขแบรนด์'}), 403
     
     data = request.json
     if not data or 'name' not in data:
-        return jsonify({'error': 'Brand name is required'}), 400
+        return jsonify({'error': 'กรุณากรอกชื่อแบรนด์'}), 400
     
     conn = None
     cursor = None
@@ -1553,12 +1553,12 @@ def update_brand(brand_id):
         # Check if brand exists
         cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Brand not found'}), 404
+            return jsonify({'error': 'ไม่พบแบรนด์'}), 404
         
         # Check for duplicate name
         cursor.execute('SELECT id FROM brands WHERE name = %s AND id != %s', (data['name'], brand_id))
         if cursor.fetchone():
-            return jsonify({'error': 'Brand name already exists'}), 400
+            return jsonify({'error': 'ชื่อแบรนด์นี้มีอยู่แล้ว'}), 400
         
         cursor.execute('''
             UPDATE brands SET name = %s, description = %s
@@ -1586,7 +1586,7 @@ def update_brand(brand_id):
 def delete_brand(brand_id):
     """Delete a brand (Super Admin only, only if no products)"""
     if session.get('role') != 'Super Admin':
-        return jsonify({'error': 'Only Super Admin can delete brands'}), 403
+        return jsonify({'error': 'เฉพาะ Super Admin เท่านั้นที่สามารถลบแบรนด์'}), 403
     
     conn = None
     cursor = None
@@ -1597,19 +1597,19 @@ def delete_brand(brand_id):
         # Check if brand exists
         cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Brand not found'}), 404
+            return jsonify({'error': 'ไม่พบแบรนด์'}), 404
         
         # Check if brand has products
         cursor.execute('SELECT COUNT(*) as count FROM products WHERE brand_id = %s', (brand_id,))
         count = cursor.fetchone()['count']
         if count > 0:
-            return jsonify({'error': f'Cannot delete brand with {count} products. Please move or delete products first.'}), 400
+            return jsonify({'error': f'ไม่สามารถลบแบรนด์ที่มี {count} สินค้าอยู่ กรุณาย้ายหรือลบสินค้าก่อน'}), 400
         
         # Delete brand
         cursor.execute('DELETE FROM brands WHERE id = %s', (brand_id,))
         conn.commit()
         
-        return jsonify({'message': 'Brand deleted successfully'}), 200
+        return jsonify({'message': 'ลบแบรนด์สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -1655,11 +1655,11 @@ def get_admin_brands(user_id):
 def update_admin_brands(user_id):
     """Update brands assigned to an admin user (Super Admin only)"""
     if session.get('role') != 'Super Admin':
-        return jsonify({'error': 'Only Super Admin can assign brands'}), 403
+        return jsonify({'error': 'เฉพาะ Super Admin เท่านั้นที่สามารถกำหนดแบรนด์'}), 403
     
     data = request.json
     if not data or 'brand_ids' not in data:
-        return jsonify({'error': 'Brand IDs required'}), 400
+        return jsonify({'error': 'กรุณาเลือกแบรนด์'}), 400
     
     conn = None
     cursor = None
@@ -1675,7 +1675,7 @@ def update_admin_brands(user_id):
         ''', (user_id,))
         user = cursor.fetchone()
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         # Delete existing assignments
         cursor.execute('DELETE FROM admin_brand_access WHERE user_id = %s', (user_id,))
@@ -1690,7 +1690,7 @@ def update_admin_brands(user_id):
         
         conn.commit()
         
-        return jsonify({'message': 'Brands assigned successfully'}), 200
+        return jsonify({'message': 'กำหนดแบรนด์สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -1744,7 +1744,7 @@ def create_category():
         data = request.get_json()
         
         if not data or not data.get('name'):
-            return jsonify({'error': 'Category name is required'}), 400
+            return jsonify({'error': 'กรุณากรอกชื่อหมวดหมู่'}), 400
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -1766,7 +1766,7 @@ def create_category():
     except psycopg2.errors.UniqueViolation:
         if conn:
             conn.rollback()
-        return jsonify({'error': 'Category with this name already exists'}), 409
+        return jsonify({'error': 'ชื่อหมวดหมู่นี้มีอยู่แล้ว'}), 409
     except Exception as e:
         if conn:
             conn.rollback()
@@ -1787,7 +1787,7 @@ def update_category(category_id):
         data = request.get_json()
         
         if not data or not data.get('name'):
-            return jsonify({'error': 'Category name is required'}), 400
+            return jsonify({'error': 'กรุณากรอกชื่อหมวดหมู่'}), 400
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -1804,7 +1804,7 @@ def update_category(category_id):
         
         category = cursor.fetchone()
         if not category:
-            return jsonify({'error': 'Category not found'}), 404
+            return jsonify({'error': 'ไม่พบหมวดหมู่'}), 404
         
         conn.commit()
         return jsonify(dict(category)), 200
@@ -1812,7 +1812,7 @@ def update_category(category_id):
     except psycopg2.errors.UniqueViolation:
         if conn:
             conn.rollback()
-        return jsonify({'error': 'Category with this name already exists'}), 409
+        return jsonify({'error': 'ชื่อหมวดหมู่นี้มีอยู่แล้ว'}), 409
     except Exception as e:
         if conn:
             conn.rollback()
@@ -1837,10 +1837,10 @@ def delete_category(category_id):
         deleted = cursor.fetchone()
         
         if not deleted:
-            return jsonify({'error': 'Category not found'}), 404
+            return jsonify({'error': 'ไม่พบหมวดหมู่'}), 404
         
         conn.commit()
-        return jsonify({'message': 'Category deleted successfully'}), 200
+        return jsonify({'message': 'ลบหมวดหมู่สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -1985,7 +1985,7 @@ def get_product(product_id):
         product = cursor.fetchone()
         
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         product = dict(product)
         
@@ -2090,12 +2090,12 @@ def create_product():
     
     # Validate required fields
     if not data or 'name' not in data or 'parent_sku' not in data:
-        return jsonify({'error': 'Missing required fields: name, parent_sku'}), 400
+        return jsonify({'error': 'กรุณากรอกชื่อสินค้าและรหัส SKU'}), 400
     
     # Validate brand_id is provided
     brand_id = data.get('brand_id')
     if not brand_id:
-        return jsonify({'error': 'Missing required field: brand_id'}), 400
+        return jsonify({'error': 'กรุณาเลือกแบรนด์'}), 400
     
     conn = None
     cursor = None
@@ -2106,12 +2106,12 @@ def create_product():
         # Check if brand exists
         cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Brand not found'}), 400
+            return jsonify({'error': 'ไม่พบแบรนด์'}), 400
         
         # Check if parent_sku already exists
         cursor.execute('SELECT id FROM products WHERE parent_sku = %s', (data['parent_sku'],))
         if cursor.fetchone():
-            return jsonify({'error': 'Parent SKU already exists'}), 400
+            return jsonify({'error': 'รหัส SKU หลักนี้มีอยู่แล้ว'}), 400
         
         # Insert product with brand_id, status, and shipping info
         status = data.get('status', 'active')
@@ -2209,7 +2209,7 @@ def create_product():
         conn.commit()
         
         return jsonify({
-            'message': 'Product created successfully',
+            'message': 'สร้างสินค้าสำเร็จ',
             'product_id': product_id
         }), 201
         
@@ -2230,7 +2230,7 @@ def reorder_product_images(product_id):
     data = request.json
     
     if not data or 'image_ids' not in data:
-        return jsonify({'error': 'Missing image_ids array'}), 400
+        return jsonify({'error': 'ไม่ได้เลือกรูปภาพ'}), 400
     
     image_ids = data['image_ids']
     
@@ -2243,7 +2243,7 @@ def reorder_product_images(product_id):
         # Check if product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Update sort_order for each image
         for idx, image_id in enumerate(image_ids):
@@ -2255,7 +2255,7 @@ def reorder_product_images(product_id):
         
         conn.commit()
         
-        return jsonify({'message': 'Images reordered successfully'}), 200
+        return jsonify({'message': 'จัดเรียงรูปภาพสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -2275,11 +2275,11 @@ def update_product(product_id):
     data = request.json
     
     if not data or 'name' not in data:
-        return jsonify({'error': 'Missing required field: name'}), 400
+        return jsonify({'error': 'กรุณากรอกชื่อ'}), 400
     
     brand_id = data.get('brand_id')
     if not brand_id:
-        return jsonify({'error': 'Missing required field: brand_id'}), 400
+        return jsonify({'error': 'กรุณาเลือกแบรนด์'}), 400
     
     conn = None
     cursor = None
@@ -2290,12 +2290,12 @@ def update_product(product_id):
         # Validate brand exists
         cursor.execute('SELECT id FROM brands WHERE id = %s', (brand_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Brand not found'}), 400
+            return jsonify({'error': 'ไม่พบแบรนด์'}), 400
         
         # Validate product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Update basic product information including shipping info
         status = data.get('status', 'active')
@@ -2529,7 +2529,7 @@ def update_product(product_id):
                 pass  # Don't fail the request if storage cleanup fails
         
         return jsonify({
-            'message': 'Product updated successfully',
+            'message': 'อัพเดทสินค้าสำเร็จ',
             'product_id': product_id
         }), 200
         
@@ -2554,7 +2554,7 @@ def update_product_status(product_id):
         status = data.get('status')
         
         if status not in ['active', 'inactive', 'draft']:
-            return jsonify({'error': 'Invalid status. Must be active, inactive, or draft'}), 400
+            return jsonify({'error': 'สถานะไม่ถูกต้อง กรุณาเลือก: ใช้งาน, ไม่ใช้งาน หรือ ฉบับร่าง'}), 400
         
         conn = get_db()
         cursor = conn.cursor()
@@ -2566,10 +2566,10 @@ def update_product_status(product_id):
         ''', (status, product_id))
         
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         conn.commit()
-        return jsonify({'message': 'Status updated successfully', 'status': status}), 200
+        return jsonify({'message': 'อัพเดทสถานะสำเร็จ', 'status': status}), 200
         
     except Exception as e:
         if conn:
@@ -2595,7 +2595,7 @@ def delete_product(product_id):
         cursor.execute('SELECT id, size_chart_image_url FROM products WHERE id = %s', (product_id,))
         product = cursor.fetchone()
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Get all product images before deletion
         cursor.execute('SELECT image_url FROM product_images WHERE product_id = %s', (product_id,))
@@ -2627,7 +2627,7 @@ def delete_product(product_id):
             except Exception:
                 pass  # Don't fail the request if storage cleanup fails
         
-        return jsonify({'message': 'Product deleted successfully'}), 200
+        return jsonify({'message': 'ลบสินค้าสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -2649,7 +2649,7 @@ def update_sku(sku_id):
         data = request.get_json()
         
         if not data:
-            return jsonify({'error': 'No data provided'}), 400
+            return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
         
         updates = []
         params = []
@@ -2658,17 +2658,17 @@ def update_sku(sku_id):
             try:
                 price = round(float(data['price']), 2)
                 if price < 0:
-                    return jsonify({'error': 'Price cannot be negative'}), 400
+                    return jsonify({'error': 'ราคาต้องไม่ติดลบ'}), 400
                 updates.append('price = %s')
                 params.append(price)
             except (ValueError, TypeError):
-                return jsonify({'error': 'Invalid price value'}), 400
+                return jsonify({'error': 'ราคาไม่ถูกต้อง'}), 400
         
         # Stock updates disabled - silently ignore to preserve price edit functionality
         # Stock changes must go through Stock Adjustment page for audit trail
         
         if not updates:
-            return jsonify({'error': 'No valid fields to update'}), 400
+            return jsonify({'error': 'ไม่มีข้อมูลที่ต้องการอัพเดท'}), 400
         
         params.append(sku_id)
         
@@ -2682,10 +2682,10 @@ def update_sku(sku_id):
         ''', tuple(params))
         
         if not cursor.fetchone():
-            return jsonify({'error': 'SKU not found'}), 404
+            return jsonify({'error': 'ไม่พบ SKU'}), 404
         
         conn.commit()
-        return jsonify({'message': 'SKU updated successfully'}), 200
+        return jsonify({'message': 'อัพเดท SKU สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -2753,7 +2753,7 @@ def create_product_customization(product_id):
         data = request.get_json()
         
         if not data or not data.get('name'):
-            return jsonify({'error': 'Customization name is required'}), 400
+            return jsonify({'error': 'กรุณากรอกชื่อตัวเลือก'}), 400
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -2816,7 +2816,7 @@ def update_customization(customization_id):
         data = request.get_json()
         
         if not data or not data.get('name'):
-            return jsonify({'error': 'Customization name is required'}), 400
+            return jsonify({'error': 'กรุณากรอกชื่อตัวเลือก'}), 400
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -2836,7 +2836,7 @@ def update_customization(customization_id):
         
         result = cursor.fetchone()
         if not result:
-            return jsonify({'error': 'Customization not found'}), 404
+            return jsonify({'error': 'ไม่พบตัวเลือก'}), 404
         
         customization = dict(result)
         
@@ -2889,10 +2889,10 @@ def delete_customization(customization_id):
         cursor.execute('DELETE FROM product_customizations WHERE id = %s RETURNING id', (customization_id,))
         
         if not cursor.fetchone():
-            return jsonify({'error': 'Customization not found'}), 404
+            return jsonify({'error': 'ไม่พบตัวเลือก'}), 404
         
         conn.commit()
-        return jsonify({'message': 'Customization deleted successfully'}), 200
+        return jsonify({'message': 'ลบตัวเลือกสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -2910,19 +2910,19 @@ def upload_single_file():
     """Upload a single file to Replit Object Storage"""
     try:
         if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+            return jsonify({'error': 'ไม่ได้เลือกไฟล์'}), 400
         
         file = request.files['file']
         
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return jsonify({'error': 'ไม่ได้เลือกไฟล์'}), 400
         
         # Allowed extensions
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
         
         if file_ext not in allowed_extensions:
-            return jsonify({'error': 'File type not allowed'}), 400
+            return jsonify({'error': 'ประเภทไฟล์ไม่ถูกต้อง'}), 400
         
         # Initialize Object Storage client
         storage_client = Client()
@@ -2938,7 +2938,7 @@ def upload_single_file():
         image_url = f"/storage/{unique_filename}"
         
         return jsonify({
-            'message': 'File uploaded successfully',
+            'message': 'อัพโหลดไฟล์สำเร็จ',
             'url': image_url
         }), 200
         
@@ -2951,12 +2951,12 @@ def upload_images():
     """Upload multiple product images to Replit Object Storage"""
     try:
         if 'images' not in request.files:
-            return jsonify({'error': 'No image files provided'}), 400
+            return jsonify({'error': 'ไม่ได้เลือกรูปภาพ'}), 400
         
         files = request.files.getlist('images')
         
         if not files or len(files) == 0:
-            return jsonify({'error': 'No files selected'}), 400
+            return jsonify({'error': 'ไม่ได้เลือกไฟล์'}), 400
         
         # Allowed extensions
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -2986,10 +2986,10 @@ def upload_images():
             uploaded_images.append(image_url)
         
         if len(uploaded_images) == 0:
-            return jsonify({'error': 'No valid images uploaded'}), 400
+            return jsonify({'error': 'ไม่มีรูปภาพที่ถูกต้อง'}), 400
         
         return jsonify({
-            'message': f'{len(uploaded_images)} image(s) uploaded successfully',
+            'message': f'อัพโหลดรูปภาพสำเร็จ {len(uploaded_images)} รูป',
             'image_urls': uploaded_images
         }), 200
         
@@ -3016,7 +3016,7 @@ def serve_image(filename):
         return send_file(BytesIO(image_data), mimetype=content_type)
         
     except Exception as e:
-        return jsonify({'error': 'Image not found'}), 404
+        return jsonify({'error': 'ไม่พบรูปภาพ'}), 404
 
 # ==================== RESELLER TIER PRICING ENDPOINTS ====================
 
@@ -3033,7 +3033,7 @@ def get_product_tier_pricing(product_id):
         # Check if product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Get tier pricing
         cursor.execute('''
@@ -3073,7 +3073,7 @@ def save_product_tier_pricing(product_id):
         data = request.get_json()
         
         if not data or 'pricing' not in data:
-            return jsonify({'error': 'Missing pricing data'}), 400
+            return jsonify({'error': 'ไม่ได้กรอกข้อมูลราคา'}), 400
         
         pricing_data = data['pricing']
         
@@ -3083,7 +3083,7 @@ def save_product_tier_pricing(product_id):
         # Check if product exists
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Get all tiers
         cursor.execute('SELECT id, name FROM reseller_tiers ORDER BY level_rank')
@@ -3136,7 +3136,7 @@ def save_product_tier_pricing(product_id):
             result.append(p_dict)
         
         return jsonify({
-            'message': 'Tier pricing saved successfully',
+            'message': 'บันทึกราคาตามระดับสำเร็จ',
             'pricing': result
         }), 200
         
@@ -3172,10 +3172,10 @@ def update_user_tier_override(user_id):
         user = cursor.fetchone()
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         if user['role_name'] != 'Reseller':
-            return jsonify({'error': 'User is not a reseller'}), 400
+            return jsonify({'error': 'ผู้ใช้ไม่ใช่ตัวแทนจำหน่าย'}), 400
         
         tier_id = data.get('reseller_tier_id')
         manual_override = data.get('tier_manual_override', False)
@@ -3184,7 +3184,7 @@ def update_user_tier_override(user_id):
             # Verify tier exists
             cursor.execute('SELECT id FROM reseller_tiers WHERE id = %s', (tier_id,))
             if not cursor.fetchone():
-                return jsonify({'error': 'Tier not found'}), 404
+                return jsonify({'error': 'ไม่พบระดับสมาชิก'}), 404
         
         cursor.execute('''
             UPDATE users 
@@ -3197,7 +3197,7 @@ def update_user_tier_override(user_id):
         conn.commit()
         
         return jsonify({
-            'message': 'User tier updated successfully',
+            'message': 'อัพเดทระดับผู้ใช้สำเร็จ',
             'user': updated
         }), 200
         
@@ -3231,7 +3231,7 @@ def update_reseller_tier(tier_id):
         
         cursor.execute('SELECT id FROM reseller_tiers WHERE id = %s', (tier_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Tier not found'}), 404
+            return jsonify({'error': 'ไม่พบระดับสมาชิก'}), 404
         
         upgrade_threshold = data.get('upgrade_threshold', 0)
         description = data.get('description', '')
@@ -3249,7 +3249,7 @@ def update_reseller_tier(tier_id):
         conn.commit()
         
         return jsonify({
-            'message': 'Tier updated successfully',
+            'message': 'อัพเดทระดับสมาชิกสำเร็จ',
             'tier': updated
         }), 200
         
@@ -3302,7 +3302,7 @@ def update_reseller_tiers_bulk():
         conn.commit()
         
         return jsonify({
-            'message': 'Tiers updated successfully',
+            'message': 'อัพเดทระดับสมาชิกสำเร็จ',
             'tiers': updated_tiers
         }), 200
         
@@ -3341,10 +3341,10 @@ def add_user_purchase(user_id):
         user = cursor.fetchone()
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         if user['role_name'] != 'Reseller':
-            return jsonify({'error': 'User is not a reseller'}), 400
+            return jsonify({'error': 'ผู้ใช้ไม่ใช่ตัวแทนจำหน่าย'}), 400
         
         new_total = float(user['total_purchases'] or 0) + float(amount)
         
@@ -3375,7 +3375,7 @@ def add_user_purchase(user_id):
         conn.commit()
         
         return jsonify({
-            'message': 'Purchase added successfully',
+            'message': 'เพิ่มยอดซื้อสำเร็จ',
             'new_total': new_total,
             'tier_upgraded': tier_upgraded,
             'new_tier': new_tier_name
@@ -3592,7 +3592,7 @@ def update_sales_channel(channel_id):
         
         channel = cursor.fetchone()
         if not channel:
-            return jsonify({'error': 'Channel not found'}), 404
+            return jsonify({'error': 'ไม่พบช่องทางขาย'}), 404
         
         conn.commit()
         return jsonify(dict(channel)), 200
@@ -3625,10 +3625,10 @@ def delete_sales_channel(channel_id):
         
         cursor.execute('DELETE FROM sales_channels WHERE id = %s RETURNING id', (channel_id,))
         if cursor.fetchone() is None:
-            return jsonify({'error': 'Channel not found'}), 404
+            return jsonify({'error': 'ไม่พบช่องทางขาย'}), 404
         
         conn.commit()
-        return jsonify({'message': 'Channel deleted successfully'}), 200
+        return jsonify({'message': 'ลบช่องทางขายสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -3721,7 +3721,7 @@ def save_promptpay_settings():
         conn.commit()
         
         return jsonify({
-            'message': 'PromptPay settings saved successfully',
+            'message': 'บันทึกการตั้งค่า PromptPay สำเร็จ',
             'settings': settings
         }), 200
         
@@ -3943,7 +3943,7 @@ def delete_shipping_rate(rate_id):
         cursor.execute('DELETE FROM shipping_weight_rates WHERE id = %s', (rate_id,))
         conn.commit()
         
-        return jsonify({'message': 'Rate deleted successfully'}), 200
+        return jsonify({'message': 'ลบอัตราค่าจัดส่งสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -4082,7 +4082,7 @@ def delete_shipping_promotion(promo_id):
         cursor.execute('DELETE FROM shipping_promotions WHERE id = %s', (promo_id,))
         conn.commit()
         
-        return jsonify({'message': 'Promotion deleted successfully'}), 200
+        return jsonify({'message': 'ลบโปรโมชั่นสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -4402,7 +4402,7 @@ def save_order_number_settings():
         settings['preview'] = f"{prefix}-{current_period}-{str(next_seq).zfill(digit_count)}"
         
         return jsonify({
-            'message': 'Order number settings saved successfully',
+            'message': 'บันทึกการตั้งค่าเลขที่ใบสั่งซื้อสำเร็จ',
             'settings': settings
         }), 200
         
@@ -4896,7 +4896,7 @@ def get_reseller_dashboard_stats():
         user = cursor.fetchone()
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         # Get this month's purchases
         today = datetime.now().date()
@@ -5612,7 +5612,7 @@ def get_reseller_product_detail(product_id):
         product = cursor.fetchone()
         
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         product = dict(product)
         discount_percent = float(product['discount_percent']) if product['discount_percent'] else 0
@@ -6620,7 +6620,7 @@ def update_shipment(order_id, shipment_id):
                 update_fields.append('delivered_at = CURRENT_TIMESTAMP')
         
         if not update_fields:
-            return jsonify({'error': 'No fields to update'}), 400
+            return jsonify({'error': 'ไม่มีข้อมูลที่ต้องการอัพเดท'}), 400
         
         update_values.append(shipment_id)
         cursor.execute(f'''
@@ -8402,7 +8402,7 @@ def update_warehouse(warehouse_id):
     
     data = request.json
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     conn = None
     cursor = None
@@ -8427,7 +8427,7 @@ def update_warehouse(warehouse_id):
             update_values.append(data['is_active'])
         
         if not update_fields:
-            return jsonify({'error': 'No fields to update'}), 400
+            return jsonify({'error': 'ไม่มีข้อมูลที่ต้องการอัพเดท'}), 400
         
         update_values.append(warehouse_id)
         cursor.execute(f'''
@@ -8540,7 +8540,7 @@ def get_product_warehouse_stock(product_id):
         
         cursor.execute('SELECT id FROM products WHERE id = %s', (product_id,))
         if not cursor.fetchone():
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         cursor.execute('''
             SELECT s.id as sku_id, s.sku_code, s.stock as total_stock,
@@ -8608,7 +8608,7 @@ def get_product_skus_with_stock(product_id):
         ''', (product_id,))
         product = cursor.fetchone()
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
         # Get options for this product
         cursor.execute('''
@@ -8772,7 +8772,7 @@ def create_stock_transfer():
     """Create a stock transfer between warehouses"""
     data = request.json
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     required = ['sku_id', 'from_warehouse_id', 'to_warehouse_id', 'quantity']
     for field in required:
@@ -8966,7 +8966,7 @@ def create_stock_adjustment():
     """Create a stock adjustment"""
     data = request.json
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     required = ['sku_id', 'warehouse_id', 'quantity', 'adjustment_type']
     for field in required:
@@ -9066,7 +9066,7 @@ def create_bulk_stock_adjustment():
     """Create multiple stock adjustments at once - supports per-item warehouse_id"""
     data = request.json
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        return jsonify({'error': 'ไม่ได้รับข้อมูล'}), 400
     
     if 'adjustments' not in data or not data['adjustments'] or len(data['adjustments']) == 0:
         return jsonify({'error': 'At least one adjustment is required'}), 400
@@ -9374,7 +9374,7 @@ def get_sku_warehouse_stock(sku_id):
         
         sku = cursor.fetchone()
         if not sku:
-            return jsonify({'error': 'SKU not found'}), 404
+            return jsonify({'error': 'ไม่พบ SKU'}), 404
         
         cursor.execute('''
             SELECT w.id as warehouse_id, w.name as warehouse_name,
@@ -9617,7 +9617,7 @@ def import_stock():
     
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error': 'ไม่ได้เลือกไฟล์'}), 400
     
     if not file.filename.endswith('.csv'):
         return jsonify({'error': 'Only CSV files are supported'}), 400
