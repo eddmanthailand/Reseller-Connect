@@ -5623,7 +5623,7 @@ def get_order_detail(order_id):
                     JOIN option_values ov ON ov.id = svm.option_value_id
                     JOIN options o ON o.id = ov.option_id
                     WHERE svm.sku_id = %s
-                    ORDER BY o.sort_order
+                    ORDER BY o.id
                 ''', (item_dict['sku_id'],))
                 option_values = cursor.fetchall()
                 item_dict['variant_name'] = ' - '.join([ov['option_value'] for ov in option_values]) if option_values else ''
