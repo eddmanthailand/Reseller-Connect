@@ -109,8 +109,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
+    <!-- Mobile menu button -->
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+    
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
     <div class="dashboard-container">
-        <!-- Sidebar Toggle Button -->
+        <!-- Sidebar Toggle Button (Desktop) -->
         <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="3" x2="21" y1="6" y2="6"/>

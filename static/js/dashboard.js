@@ -36,7 +36,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Sidebar Toggle Function
+// Sidebar Toggle Function (Desktop)
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const body = document.body;
@@ -48,6 +48,20 @@ function toggleSidebar() {
         // Save state to localStorage
         const isCollapsed = sidebar.classList.contains('collapsed');
         localStorage.setItem('sidebarCollapsed', isCollapsed);
+    }
+}
+
+// Mobile Sidebar Toggle Function
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    if (sidebar) {
+        sidebar.classList.toggle('open');
+        sidebar.classList.toggle('active');
+    }
+    if (overlay) {
+        overlay.classList.toggle('active');
     }
 }
 
