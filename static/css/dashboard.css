@@ -1915,12 +1915,17 @@ tr:hover td {
     
     /* Users page mobile */
     #page-users {
-        max-width: 100%;
-        padding: 0 8px;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0 8px !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
     }
     
     #page-users .page-header {
         padding: 16px 8px;
+        max-width: 100%;
+        box-sizing: border-box;
     }
     
     #page-users .page-header h1 {
@@ -1934,11 +1939,15 @@ tr:hover td {
     
     #page-users .content-wrapper {
         padding: 0;
+        max-width: 100%;
+        box-sizing: border-box;
     }
     
     #page-users .card {
         padding: 12px;
         margin-bottom: 16px;
+        max-width: 100%;
+        box-sizing: border-box;
     }
     
     #page-users .card h2 {
@@ -1947,6 +1956,7 @@ tr:hover td {
     
     #page-users .form-group {
         margin-bottom: 12px;
+        max-width: 100%;
     }
     
     #page-users .form-group label {
@@ -1957,24 +1967,38 @@ tr:hover td {
     #page-users .form-group select {
         font-size: 14px;
         padding: 10px 12px;
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    #page-users .btn {
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
     }
     
     #page-users .user-filter-bar {
         flex-direction: column;
         gap: 10px;
+        max-width: 100%;
     }
     
     #page-users .user-filter-bar .search-box {
         width: 100%;
+        max-width: 100%;
     }
     
     #page-users .user-filter-bar .search-box input {
         width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
     
     #page-users .table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        max-width: 100%;
     }
     
     #page-users table {
