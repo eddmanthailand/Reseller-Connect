@@ -70,7 +70,7 @@ body::after {
     display: flex;
     min-height: 100vh;
     position: relative;
-    z-index: 1;
+    /* Removed z-index to prevent stacking context issues with mobile sidebar */
 }
 
 /* Sidebar Toggle Button */
