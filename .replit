@@ -37,7 +37,7 @@ packages = ["cargo", "freetype", "lcms2", "libiconv", "libimagequant", "libjpeg"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--reuse-port", "app:app"]
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--workers=4", "--reuse-port", "app:app"]
 
 [objectStorage]
 defaultBucketID = "replit-objstore-8c6e8c60-841b-4882-8a69-88f2b490267a"
