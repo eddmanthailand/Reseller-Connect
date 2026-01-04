@@ -569,11 +569,8 @@ def forgot_password():
             
             conn.commit()
             
-            base_url = os.environ.get('REPLIT_DEV_DOMAIN', '')
-            if base_url:
-                reset_link = f"https://{base_url}/reset-password?token={reset_token}"
-            else:
-                reset_link = f"/reset-password?token={reset_token}"
+            # Use request host for correct URL
+            reset_link = f"{request.host_url}reset-password?token={reset_token}"
             
             send_password_reset_email(user['email'], user['full_name'], reset_token, reset_link)
         
