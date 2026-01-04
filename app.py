@@ -5551,7 +5551,7 @@ def get_order_detail(order_id):
         order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
         order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
         
-        # Get order items
+        # Get order items with variant names
         cursor.execute('''
             SELECT oi.*, s.sku_code, p.name as product_name, p.parent_sku,
                    (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
@@ -5568,6 +5568,17 @@ def get_order_detail(order_id):
             item_dict['subtotal'] = float(item_dict['subtotal']) if item_dict['subtotal'] else 0
             item_dict['tier_discount_percent'] = float(item_dict['tier_discount_percent']) if item_dict['tier_discount_percent'] else 0
             item_dict['discount_amount'] = float(item_dict['discount_amount']) if item_dict['discount_amount'] else 0
+            # Get variant name (option values) for this SKU
+            cursor.execute('''
+                SELECT ov.value as option_value
+                FROM sku_values_map svm
+                JOIN option_values ov ON ov.id = svm.option_value_id
+                JOIN options o ON o.id = ov.option_id
+                WHERE svm.sku_id = %s
+                ORDER BY o.id
+            ''', (item_dict['sku_id'],))
+            option_values = cursor.fetchall()
+            item_dict['variant_name'] = ' - '.join([ov['option_value'] for ov in option_values]) if option_values else ''
             items.append(item_dict)
         
         order['items'] = items

@@ -1759,15 +1759,18 @@ async function viewOrderDetails(orderId) {
         // Build items HTML - Modern card style
         let itemsHtml = '';
         if (order.items && order.items.length > 0) {
-            itemsHtml = order.items.map(item => `
+            itemsHtml = order.items.map(item => {
+                const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
+                return `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);">
                     <div style="flex: 1;">
-                        <div style="color: #fff; font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
+                        <div style="color: #fff; font-weight: 500;">${escapeHtml(item.product_name || 'Product')}${escapeHtml(variantDisplay)}</div>
                         <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 2px;">SKU: ${escapeHtml(item.sku_code || '-')} | จำนวน: ${item.quantity}</div>
                     </div>
                     <div style="color: #fff; font-weight: 600; font-size: 15px;">฿${parseFloat(item.subtotal || item.unit_price * item.quantity).toLocaleString('th-TH')}</div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
         
         // Build shipments HTML - Modern design
