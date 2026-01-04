@@ -51,6 +51,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Stock Adjustment System:** Adjust stock for external sales channels (Shopee, Lazada, TikTok, Facebook, LINE, offline stores) and other reasons (damaged, lost, expired, miscount, stock-in, returns). All adjustments automatically update total SKU stock and create audit log entries.
 - **Stock Audit Log:** Complete history of all stock changes with before/after quantities, change type, reference to source transaction, user who made the change, and timestamps. Supports filtering by date, warehouse, change type.
 - **Order Shipment System:** Automatic shipment splitting by warehouse during order creation. Each shipment tracks warehouse source, tracking number, shipping provider, and status (pending/shipped/delivered).
+- **Shipping Label Printing:** A4 format with horizontal split design. Top half displays shipping info (sender, recipient, tracking number, provider). Bottom half displays packing list with checkboxes, SKU codes, quantities, and signature fields. Print per shipment from order detail modal. No weight displayed. Tracking URLs auto-generated from shipping provider templates.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
