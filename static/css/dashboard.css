@@ -1788,9 +1788,11 @@ tr:hover td {
 
     /* Page header mobile */
     .page-header {
+        display: flex;
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+        width: 100%;
     }
 
     .page-header h1 {
