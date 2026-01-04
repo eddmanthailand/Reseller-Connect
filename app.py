@@ -5344,13 +5344,16 @@ def create_order():
         channel = cursor.fetchone()
         channel_id = channel['id'] if channel else None
         
+        # Get customer_id if provided
+        customer_id = data.get('customer_id')
+        
         # Create order with new order number format (ORD-YYMM-XXXX)
         order_number = generate_order_number(cursor)
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes)
-            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, customer_id)
+            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes))
+        ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes, customer_id))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs using cart_item_id as unique key
