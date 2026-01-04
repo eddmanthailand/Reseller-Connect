@@ -1420,18 +1420,19 @@
 
         /* Order Card Mobile Styles */
         .order-card-mobile {
-            background: rgba(30, 20, 50, 0.9);
-            backdrop-filter: blur(10px);
-            border-radius: 14px;
+            background: #1a1025;
+            border-radius: 16px;
             padding: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(168, 85, 247, 0.3);
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
 
         .order-card-mobile:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            border-color: rgba(168, 85, 247, 0.5);
         }
 
         .order-card-mobile:active {
@@ -1442,19 +1443,19 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
 
         .order-card-number {
-            font-weight: 600;
-            font-size: 15px;
+            font-weight: 700;
+            font-size: 16px;
             color: #ffffff;
         }
 
         .order-card-status {
             color: white;
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
             font-size: 11px;
             font-weight: 600;
         }
@@ -1463,29 +1464,30 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 4px;
+            padding: 10px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .order-card-date {
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.7);
             font-size: 13px;
         }
 
         .order-card-amount {
             color: #22c55e;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 18px;
         }
 
         .order-card-btn {
             width: 100%;
             margin-top: 12px;
-            padding: 12px;
+            padding: 14px;
             font-size: 14px;
             font-weight: 600;
             background: linear-gradient(135deg, #a855f7, #ec4899);
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             color: white;
             cursor: pointer;
             display: flex;
@@ -1493,6 +1495,7 @@
             justify-content: center;
             gap: 8px;
             touch-action: manipulation;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
         }
 
         .order-card-btn:active {
