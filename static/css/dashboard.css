@@ -1910,6 +1910,83 @@ tr:hover td {
     .tier-form-row {
         grid-template-columns: 1fr !important;
     }
+
+    /* ===== PAGE-SPECIFIC MOBILE CONSTRAINTS ===== */
+    
+    /* Users page mobile */
+    #page-users {
+        max-width: 100%;
+        padding: 0 8px;
+    }
+    
+    #page-users .page-header {
+        padding: 16px 8px;
+    }
+    
+    #page-users .page-header h1 {
+        font-size: 18px;
+    }
+    
+    #page-users .page-header h1 svg {
+        width: 22px;
+        height: 22px;
+    }
+    
+    #page-users .content-wrapper {
+        padding: 0;
+    }
+    
+    #page-users .card {
+        padding: 12px;
+        margin-bottom: 16px;
+    }
+    
+    #page-users .card h2 {
+        font-size: 15px;
+    }
+    
+    #page-users .form-group {
+        margin-bottom: 12px;
+    }
+    
+    #page-users .form-group label {
+        font-size: 12px;
+    }
+    
+    #page-users .form-group input,
+    #page-users .form-group select {
+        font-size: 14px;
+        padding: 10px 12px;
+    }
+    
+    #page-users .user-filter-bar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    #page-users .user-filter-bar .search-box {
+        width: 100%;
+    }
+    
+    #page-users .user-filter-bar .search-box input {
+        width: 100%;
+    }
+    
+    #page-users .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    #page-users table {
+        min-width: 500px;
+        font-size: 11px;
+    }
+    
+    #page-users table th,
+    #page-users table td {
+        padding: 8px 6px;
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 480px) {
