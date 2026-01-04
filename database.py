@@ -736,6 +736,40 @@ def init_db():
                 VALUES ('ส่งฟรีเมื่อซื้อครบ 800 บาท', 'free_shipping', 800, TRUE)
             ''')
         
+        # Create reseller_applications table (registration applications from public)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reseller_applications (
+                id SERIAL PRIMARY KEY,
+                full_name VARCHAR(255) NOT NULL,
+                username VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                phone VARCHAR(50) NOT NULL,
+                line_id VARCHAR(100),
+                address TEXT,
+                province VARCHAR(100),
+                district VARCHAR(100),
+                subdistrict VARCHAR(100),
+                postal_code VARCHAR(10),
+                notes TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                reviewed_by INTEGER REFERENCES users(id),
+                reviewed_at TIMESTAMP,
+                reject_reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Migration: Add line_id column to users table if not exists
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'line_id') THEN
+                    ALTER TABLE users ADD COLUMN line_id VARCHAR(100);
+                END IF;
+            END $$;
+        ''')
+        
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

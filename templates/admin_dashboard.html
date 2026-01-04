@@ -156,6 +156,19 @@
                     <span class="sidebar-text">จัดการผู้ใช้</span>
                 </a>
                 
+                <a href="#" class="nav-item" data-page="applications" data-role="Super Admin">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <line x1="19" y1="8" x2="19" y2="14"/>
+                            <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">ผู้สมัครใหม่</span>
+                    <span class="pending-badge" id="applicationsCount" style="display: none;">0</span>
+                </a>
+                
                 <a href="#" class="nav-item" data-page="orders">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -651,6 +664,92 @@
                         <div class="brand-sales-grid" id="brandSalesGrid">
                             <div class="loading-placeholder">กำลังโหลด...</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reseller Applications Page -->
+            <div id="page-applications" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 10px;">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <line x1="19" y1="8" x2="19" y2="14"/>
+                            <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                        ผู้สมัครตัวแทนจำหน่ายใหม่
+                    </h1>
+                    <p>ตรวจสอบและอนุมัติใบสมัครตัวแทนจำหน่าย</p>
+                </div>
+
+                <div class="content-wrapper">
+                    <div class="card">
+                        <div class="filter-toolbar" style="margin-bottom: 15px;">
+                            <div class="status-tabs">
+                                <button class="status-tab active" data-status="pending" onclick="filterApplications('pending')">รออนุมัติ <span id="app-count-pending" class="tab-count">0</span></button>
+                                <button class="status-tab" data-status="approved" onclick="filterApplications('approved')">อนุมัติแล้ว <span id="app-count-approved" class="tab-count">0</span></button>
+                                <button class="status-tab" data-status="rejected" onclick="filterApplications('rejected')">ปฏิเสธ <span id="app-count-rejected" class="tab-count">0</span></button>
+                                <button class="status-tab" data-status="all" onclick="filterApplications('all')">ทั้งหมด</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table" id="applicationsTable">
+                                <thead>
+                                    <tr>
+                                        <th>ชื่อ-นามสกุล</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>เบอร์โทร</th>
+                                        <th>Line ID</th>
+                                        <th>จังหวัด</th>
+                                        <th>สถานะ</th>
+                                        <th>วันที่สมัคร</th>
+                                        <th>การจัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="applicationsTableBody">
+                                    <tr>
+                                        <td colspan="9" style="text-align: center;">กำลังโหลด...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Application Detail Modal -->
+            <div id="applicationDetailModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 600px;">
+                    <div class="modal-header">
+                        <h3>รายละเอียดใบสมัคร</h3>
+                        <button class="modal-close" onclick="closeApplicationModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" id="applicationDetailBody">
+                    </div>
+                    <div class="modal-footer" id="applicationActions">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reject Reason Modal -->
+            <div id="rejectReasonModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 400px;">
+                    <div class="modal-header">
+                        <h3>ระบุเหตุผลที่ปฏิเสธ</h3>
+                        <button class="modal-close" onclick="closeRejectModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>เหตุผล (ถ้ามี)</label>
+                            <textarea id="rejectReasonText" placeholder="ระบุเหตุผลที่ปฏิเสธ..." style="width: 100%; min-height: 80px; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeRejectModal()">ยกเลิก</button>
+                        <button class="btn btn-danger" onclick="confirmReject()">ปฏิเสธใบสมัคร</button>
                     </div>
                 </div>
             </div>

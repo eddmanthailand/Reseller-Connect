@@ -41,3 +41,8 @@ run = ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--reuse-port", "
 
 [objectStorage]
 defaultBucketID = "replit-objstore-8c6e8c60-841b-4882-8a69-88f2b490267a"
+
+[userenv]
+
+[userenv.shared]
+ADMIN_EMAIL = "cmidcoteam@gmail.com"

@@ -278,9 +278,42 @@
 
         .footer-text {
             text-align: center;
-            margin-top: 24px;
+            margin-top: 16px;
             color: rgba(255, 255, 255, 0.8);
             font-size: 13px;
+        }
+
+        .register-link {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-register {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.3), rgba(67, 160, 71, 0.3));
+            backdrop-filter: blur(10px);
+            color: white;
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-register:hover {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.5), rgba(67, 160, 71, 0.5));
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-register svg {
+            stroke: white;
         }
 
         /* Loading Spinner */
@@ -378,6 +411,18 @@
 
             <button type="submit" class="btn-login">เข้าสู่ระบบ</button>
         </form>
+
+        <div class="register-link">
+            <a href="/register" class="btn-register">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <line x1="19" y1="8" x2="19" y2="14"/>
+                    <line x1="22" y1="11" x2="16" y2="11"/>
+                </svg>
+                สมัครตัวแทนจำหน่าย
+            </a>
+        </div>
 
         <div class="footer-text">
             © 2025 ระบบตัวแทนจำหน่าย

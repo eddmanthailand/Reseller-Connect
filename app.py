@@ -6,6 +6,9 @@ from functools import wraps
 from database import get_db, init_db
 import os
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from replit.object_storage import Client
 
 app = Flask(__name__)
@@ -75,6 +78,13 @@ def login_page():
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
+@app.route('/register')
+def register_page():
+    """Render registration page for new resellers"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('register.html')
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -141,7 +151,7 @@ def login():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Get user by username
+        # Get user by username or email
         cursor.execute('''
             SELECT 
                 u.id,
@@ -154,8 +164,8 @@ def login():
             FROM users u
             JOIN roles r ON u.role_id = r.id
             LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
-            WHERE u.username = %s
-        ''', (username,))
+            WHERE u.username = %s OR u.email = %s
+        ''', (username, username))
         
         user = cursor.fetchone()
         
@@ -203,6 +213,370 @@ def logout():
     """Handle user logout"""
     session.clear()
     return jsonify({'message': 'ออกจากระบบสำเร็จ'}), 200
+
+def send_email(to_email, subject, html_content):
+    """Send email using Gmail SMTP"""
+    try:
+        gmail_user = 'cmidcoteam@gmail.com'
+        gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+        
+        if not gmail_password:
+            print("GMAIL_APP_PASSWORD not set")
+            return False
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"ระบบตัวแทนจำหน่าย <{gmail_user}>"
+        msg['To'] = to_email
+        
+        html_part = MIMEText(html_content, 'html', 'utf-8')
+        msg.attach(html_part)
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(gmail_user, gmail_password)
+            server.sendmail(gmail_user, to_email, msg.as_string())
+        
+        return True
+    except Exception as e:
+        print(f"Email error: {e}")
+        return False
+
+@app.route('/api/register', methods=['POST'])
+def register_reseller():
+    """Handle new reseller registration"""
+    data = request.json
+    
+    required_fields = ['full_name', 'username', 'email', 'password', 'phone', 'line_id', 
+                       'address', 'province', 'district', 'subdistrict', 'postal_code']
+    
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'error': f'กรุณากรอก {field}'}), 400
+    
+    if len(data['password']) < 6:
+        return jsonify({'error': 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'}), 400
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM users WHERE username = %s', (data['username'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Username นี้มีผู้ใช้งานแล้ว'}), 400
+        
+        cursor.execute('SELECT id FROM users WHERE email = %s', (data['email'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Email นี้มีผู้ใช้งานแล้ว'}), 400
+        
+        cursor.execute('SELECT id FROM reseller_applications WHERE username = %s AND status = %s', 
+                      (data['username'], 'pending'))
+        if cursor.fetchone():
+            return jsonify({'error': 'Username นี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
+        
+        cursor.execute('SELECT id FROM reseller_applications WHERE email = %s AND status = %s', 
+                      (data['email'], 'pending'))
+        if cursor.fetchone():
+            return jsonify({'error': 'Email นี้มีใบสมัครรอพิจารณาอยู่แล้ว'}), 400
+        
+        password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        cursor.execute('''
+            INSERT INTO reseller_applications 
+            (full_name, username, email, password_hash, phone, line_id, address, province, district, subdistrict, postal_code, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (data['full_name'], data['username'], data['email'], password_hash, 
+              data['phone'], data['line_id'], data['address'], data['province'], 
+              data['district'], data['subdistrict'], data['postal_code'], data.get('notes', '')))
+        
+        application_id = cursor.fetchone()['id']
+        conn.commit()
+        
+        admin_email_html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #667eea;">มีใบสมัครตัวแทนจำหน่ายใหม่</h2>
+            <p>มีผู้สมัครใหม่รอการอนุมัติ:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>ชื่อ-นามสกุล:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['full_name']}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Username:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['username']}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Email:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['email']}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>เบอร์โทร:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['phone']}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Line ID:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['line_id']}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>จังหวัด:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['province']}</td></tr>
+            </table>
+            <p style="margin-top: 20px;">กรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติใบสมัคร</p>
+        </div>
+        '''
+        send_email('cmidcoteam@gmail.com', f'[ใบสมัครใหม่] {data["full_name"]} - รอการอนุมัติ', admin_email_html)
+        
+        applicant_email_html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #667eea;">ขอบคุณสำหรับการสมัครตัวแทนจำหน่าย</h2>
+            <p>สวัสดีคุณ {data['full_name']},</p>
+            <p>เราได้รับใบสมัครของคุณเรียบร้อยแล้ว</p>
+            <p>ทีมงานจะตรวจสอบข้อมูลและติดต่อกลับทางโทรศัพท์เพื่อยืนยันข้อมูล</p>
+            <p>หากมีข้อสงสัย สามารถติดต่อได้ที่ Line: @cmidco</p>
+            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นตัวแทนจำหน่ายกับเรา</p>
+        </div>
+        '''
+        send_email(data['email'], 'ได้รับใบสมัครตัวแทนจำหน่ายแล้ว', applicant_email_html)
+        
+        return jsonify({'message': 'ส่งใบสมัครสำเร็จ', 'id': application_id}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-applications', methods=['GET'])
+@admin_required
+def get_reseller_applications():
+    """Get all reseller applications (admin only)"""
+    status = request.args.get('status', 'pending')
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        if status == 'all':
+            cursor.execute('''
+                SELECT ra.*, u.full_name as reviewed_by_name
+                FROM reseller_applications ra
+                LEFT JOIN users u ON ra.reviewed_by = u.id
+                ORDER BY ra.created_at DESC
+            ''')
+        else:
+            cursor.execute('''
+                SELECT ra.*, u.full_name as reviewed_by_name
+                FROM reseller_applications ra
+                LEFT JOIN users u ON ra.reviewed_by = u.id
+                WHERE ra.status = %s
+                ORDER BY ra.created_at DESC
+            ''', (status,))
+        
+        applications = cursor.fetchall()
+        result = []
+        for app in applications:
+            app_dict = dict(app)
+            if app_dict.get('created_at'):
+                app_dict['created_at'] = app_dict['created_at'].isoformat()
+            if app_dict.get('reviewed_at'):
+                app_dict['reviewed_at'] = app_dict['reviewed_at'].isoformat()
+            del app_dict['password_hash']
+            result.append(app_dict)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-applications/count', methods=['GET'])
+@admin_required
+def get_reseller_applications_count():
+    """Get count of pending reseller applications"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM reseller_applications WHERE status = 'pending'")
+        count = cursor.fetchone()[0]
+        
+        return jsonify({'count': count}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-applications/<int:app_id>', methods=['GET'])
+@admin_required
+def get_reseller_application(app_id):
+    """Get a specific reseller application"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT ra.*, u.full_name as reviewed_by_name
+            FROM reseller_applications ra
+            LEFT JOIN users u ON ra.reviewed_by = u.id
+            WHERE ra.id = %s
+        ''', (app_id,))
+        
+        app = cursor.fetchone()
+        if not app:
+            return jsonify({'error': 'ไม่พบใบสมัคร'}), 404
+        
+        app_dict = dict(app)
+        if app_dict.get('created_at'):
+            app_dict['created_at'] = app_dict['created_at'].isoformat()
+        if app_dict.get('reviewed_at'):
+            app_dict['reviewed_at'] = app_dict['reviewed_at'].isoformat()
+        
+        return jsonify(app_dict), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-applications/<int:app_id>/approve', methods=['POST'])
+@admin_required
+def approve_reseller_application(app_id):
+    """Approve a reseller application and create user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT * FROM reseller_applications WHERE id = %s', (app_id,))
+        app = cursor.fetchone()
+        
+        if not app:
+            return jsonify({'error': 'ไม่พบใบสมัคร'}), 404
+        
+        if app['status'] != 'pending':
+            return jsonify({'error': 'ใบสมัครนี้ได้รับการพิจารณาแล้ว'}), 400
+        
+        cursor.execute('SELECT id FROM users WHERE username = %s', (app['username'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Username นี้มีผู้ใช้งานแล้ว'}), 400
+        
+        cursor.execute('SELECT id FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
+        default_tier = cursor.fetchone()
+        tier_id = default_tier['id'] if default_tier else None
+        
+        cursor.execute('SELECT id FROM roles WHERE name = %s', ('Reseller',))
+        reseller_role = cursor.fetchone()
+        if not reseller_role:
+            return jsonify({'error': 'ไม่พบ Role Reseller'}), 500
+        
+        cursor.execute('''
+            INSERT INTO users 
+            (full_name, username, password, role_id, reseller_tier_id, email, phone, line_id, address, province, district, subdistrict, postal_code)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (app['full_name'], app['username'], app['password_hash'], reseller_role['id'], tier_id,
+              app['email'], app['phone'], app['line_id'], app['address'], app['province'], 
+              app['district'], app['subdistrict'], app['postal_code']))
+        
+        new_user_id = cursor.fetchone()['id']
+        
+        cursor.execute('''
+            UPDATE reseller_applications 
+            SET status = 'approved', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (session['user_id'], app_id))
+        
+        conn.commit()
+        
+        approval_email_html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4CAF50;">ยินดีด้วย! ใบสมัครของคุณได้รับการอนุมัติแล้ว</h2>
+            <p>สวัสดีคุณ {app['full_name']},</p>
+            <p>ใบสมัครตัวแทนจำหน่ายของคุณได้รับการอนุมัติเรียบร้อยแล้ว</p>
+            <p>คุณสามารถเข้าสู่ระบบได้ทันทีด้วยข้อมูลดังนี้:</p>
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <p><strong>Username:</strong> {app['username']}</p>
+                <p><strong>Email:</strong> {app['email']}</p>
+                <p>(ใช้รหัสผ่านที่คุณตั้งไว้ตอนสมัคร)</p>
+            </div>
+            <p>หากมีข้อสงสัย สามารถติดต่อได้ที่ Line: @cmidco</p>
+            <p style="margin-top: 20px; color: #666;">ขอบคุณที่เป็นส่วนหนึ่งของเรา</p>
+        </div>
+        '''
+        send_email(app['email'], 'ใบสมัครตัวแทนจำหน่ายได้รับการอนุมัติแล้ว', approval_email_html)
+        
+        return jsonify({'message': 'อนุมัติใบสมัครสำเร็จ', 'user_id': new_user_id}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller-applications/<int:app_id>/reject', methods=['POST'])
+@admin_required
+def reject_reseller_application(app_id):
+    """Reject a reseller application"""
+    data = request.json
+    reject_reason = data.get('reason', '') if data else ''
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT * FROM reseller_applications WHERE id = %s', (app_id,))
+        app = cursor.fetchone()
+        
+        if not app:
+            return jsonify({'error': 'ไม่พบใบสมัคร'}), 404
+        
+        if app['status'] != 'pending':
+            return jsonify({'error': 'ใบสมัครนี้ได้รับการพิจารณาแล้ว'}), 400
+        
+        cursor.execute('''
+            UPDATE reseller_applications 
+            SET status = 'rejected', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP, reject_reason = %s
+            WHERE id = %s
+        ''', (session['user_id'], reject_reason, app_id))
+        
+        conn.commit()
+        
+        rejection_email_html = f'''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #f44336;">แจ้งผลการพิจารณาใบสมัคร</h2>
+            <p>สวัสดีคุณ {app['full_name']},</p>
+            <p>เราขอแจ้งให้ทราบว่าใบสมัครตัวแทนจำหน่ายของคุณไม่ผ่านการอนุมัติในครั้งนี้</p>
+            {f'<p><strong>เหตุผล:</strong> {reject_reason}</p>' if reject_reason else ''}
+            <p>หากต้องการสอบถามเพิ่มเติม สามารถติดต่อได้ที่ Line: @cmidco</p>
+            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นตัวแทนจำหน่ายกับเรา</p>
+        </div>
+        '''
+        send_email(app['email'], 'แจ้งผลการพิจารณาใบสมัครตัวแทนจำหน่าย', rejection_email_html)
+        
+        return jsonify({'message': 'ปฏิเสธใบสมัครสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/me', methods=['GET'])
 @login_required
