@@ -653,6 +653,38 @@ def init_db():
             )
         ''')
         
+        # Create shipping_providers table (courier companies)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS shipping_providers (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                logo_url VARCHAR(500),
+                tracking_url VARCHAR(500),
+                is_active BOOLEAN DEFAULT TRUE,
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Insert default shipping providers if none exist
+        cursor.execute('SELECT COUNT(*) FROM shipping_providers')
+        if cursor.fetchone()[0] == 0:
+            default_providers = [
+                ('Kerry Express', None, 'https://th.kerryexpress.com/th/track/', 1),
+                ('Flash Express', None, 'https://flashexpress.com/fle/tracking?se=', 2),
+                ('J&T Express', None, 'https://www.jtexpress.co.th/service/track', 3),
+                ('Thailand Post', None, 'https://track.thailandpost.co.th/', 4),
+                ('Shopee Express', None, None, 5),
+                ('Lazada Express', None, None, 6),
+                ('NinjaVan', None, 'https://www.ninjavan.co/th-th/tracking', 7),
+                ('Best Express', None, 'https://www.best-inc.co.th/track', 8),
+            ]
+            for name, logo, tracking, order in default_providers:
+                cursor.execute('''
+                    INSERT INTO shipping_providers (name, logo_url, tracking_url, display_order)
+                    VALUES (%s, %s, %s, %s)
+                ''', (name, logo, tracking, order))
+        
         # Create shipping_weight_rates table (shipping rates by weight range)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS shipping_weight_rates (

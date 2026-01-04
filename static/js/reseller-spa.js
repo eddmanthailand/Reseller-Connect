@@ -1498,36 +1498,278 @@ function renderOrders(orders) {
     
     const statusLabels = {
         'pending_payment': 'รอชำระเงิน',
-        'pending_verification': 'รอตรวจสอบ',
+        'under_review': 'รอตรวจสอบ',
         'paid': 'ชำระแล้ว',
-        'processing': 'กำลังจัดส่ง',
-        'shipped': 'จัดส่งแล้ว',
-        'completed': 'เสร็จสิ้น',
+        'shipped': 'กำลังจัดส่ง',
+        'delivered': 'จัดส่งสำเร็จ',
+        'rejected': 'ปฏิเสธ',
         'cancelled': 'ยกเลิก'
     };
     
-    const statusClass = {
-        'pending_payment': 'pending',
-        'pending_verification': 'pending',
-        'paid': 'paid',
-        'processing': 'paid',
-        'shipped': 'paid',
-        'completed': 'paid',
-        'cancelled': 'cancelled'
+    const statusColors = {
+        'pending_payment': '#f59e0b',
+        'under_review': '#3b82f6',
+        'paid': '#22c55e',
+        'shipped': '#8b5cf6',
+        'delivered': '#10b981',
+        'rejected': '#ef4444',
+        'cancelled': '#6b7280'
     };
     
     container.innerHTML = orders.map(order => `
-        <div class="order-card">
-            <div class="order-header">
-                <span class="order-number">#${order.order_number}</span>
-                <span class="order-status ${statusClass[order.status] || 'pending'}">${statusLabels[order.status] || order.status}</span>
+        <div class="order-card" style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer;" onclick="viewResellerOrderDetails(${order.id})">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-weight: 600; color: #a855f7;">${order.order_number || '#' + order.id}</span>
+                <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px;">${statusLabels[order.status] || order.status}</span>
             </div>
             <div style="display: flex; justify-content: space-between; color: rgba(255,255,255,0.6); font-size: 13px;">
-                <span>${new Date(order.created_at).toLocaleDateString('th-TH')}</span>
-                <span style="color: #22c55e; font-weight: 600;">฿${(order.final_amount || 0).toLocaleString()}</span>
+                <span>${new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                <span style="color: #22c55e; font-weight: 600;">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
             </div>
+            ${order.status === 'pending_payment' ? `
+                <button class="btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="width: 100%; margin-top: 12px; padding: 10px; font-size: 13px; background: linear-gradient(135deg, #a855f7, #ec4899);">
+                    อัพโหลดสลิปชำระเงิน
+                </button>
+            ` : ''}
         </div>
     `).join('');
+}
+
+async function viewResellerOrderDetails(orderId) {
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/orders/${orderId}`);
+        if (!response.ok) throw new Error('Failed to load order');
+        
+        const order = await response.json();
+        
+        const statusLabels = {
+            'pending_payment': 'รอชำระเงิน',
+            'under_review': 'รอตรวจสอบ',
+            'paid': 'ชำระแล้ว',
+            'shipped': 'กำลังจัดส่ง',
+            'delivered': 'จัดส่งสำเร็จ',
+            'rejected': 'ปฏิเสธ',
+            'cancelled': 'ยกเลิก'
+        };
+        
+        const statusColors = {
+            'pending_payment': '#f59e0b',
+            'under_review': '#3b82f6',
+            'paid': '#22c55e',
+            'shipped': '#8b5cf6',
+            'delivered': '#10b981',
+            'rejected': '#ef4444',
+            'cancelled': '#6b7280'
+        };
+        
+        let itemsHtml = '';
+        if (order.items && order.items.length > 0) {
+            itemsHtml = order.items.map(item => `
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div>
+                        <div style="font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
+                        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${escapeHtml(item.sku_code || '')} x${item.quantity}</div>
+                    </div>
+                    <span style="font-weight: 600;">฿${(item.subtotal || item.unit_price * item.quantity || 0).toLocaleString('th-TH')}</span>
+                </div>
+            `).join('');
+        }
+        
+        let shipmentsHtml = '';
+        if (order.shipments && order.shipments.length > 0) {
+            shipmentsHtml = `
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 10px; font-size: 14px;">การจัดส่ง</h4>
+                    ${order.shipments.map(s => {
+                        const shipmentStatus = s.status === 'pending' ? 'รอจัดส่ง' : s.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
+                        const shipmentColor = s.status === 'pending' ? '#f59e0b' : s.status === 'shipped' ? '#8b5cf6' : '#10b981';
+                        return `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-size: 13px; font-weight: 500;">${escapeHtml(s.warehouse_name)}</span>
+                                    <span style="background: ${shipmentColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${shipmentStatus}</span>
+                                </div>
+                                ${s.tracking_number ? `
+                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7);">
+                                        <strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+        
+        let slipsHtml = '';
+        if (order.payment_slips && order.payment_slips.length > 0) {
+            slipsHtml = `
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 10px; font-size: 14px;">หลักฐานการชำระเงิน</h4>
+                    ${order.payment_slips.map(slip => {
+                        const slipStatus = slip.status === 'approved' ? 'อนุมัติ' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ';
+                        const slipColor = slip.status === 'approved' ? '#22c55e' : slip.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                        return `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                                <img src="${slip.slip_image_url}" style="max-width: 100%; max-height: 200px; border-radius: 6px; cursor: pointer;" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                                <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="background: ${slipColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${slipStatus}</span>
+                                    ${slip.amount ? `<span style="font-size: 12px;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</span>` : ''}
+                                </div>
+                                ${slip.status === 'rejected' && slip.notes ? `<div style="font-size: 12px; color: #ef4444; margin-top: 4px;">${escapeHtml(slip.notes)}</div>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+        
+        let actionsHtml = '';
+        if (order.status === 'pending_payment') {
+            actionsHtml = `
+                <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; margin-top: 16px; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #a855f7, #ec4899);">
+                    อัพโหลดสลิปชำระเงิน
+                </button>
+            `;
+        }
+        
+        const modalHtml = `
+            <div id="orderDetailModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+                <div style="background: linear-gradient(135deg, rgba(30,20,50,0.98), rgba(20,10,40,0.98)); border: 1px solid rgba(168,85,247,0.3); border-radius: 16px; max-width: 500px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative;">
+                    <button onclick="closeOrderModal()" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 5px; line-height: 1;">&times;</button>
+                    <div style="padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 style="font-size: 18px;">${order.order_number || '#' + order.id}</h2>
+                            <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 12px;">${statusLabels[order.status] || order.status}</span>
+                        </div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px;">
+                            <div>วันที่: ${new Date(order.created_at).toLocaleString('th-TH')}</div>
+                            ${order.notes ? `<div style="margin-top: 4px;">หมายเหตุ: ${escapeHtml(order.notes)}</div>` : ''}
+                        </div>
+                        <h4 style="margin-bottom: 8px; font-size: 14px;">รายการสินค้า</h4>
+                        <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
+                            ${itemsHtml || '<p style="opacity: 0.6; text-align: center;">ไม่มีรายการ</p>'}
+                            <div style="display: flex; justify-content: space-between; padding-top: 10px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); font-weight: 600;">
+                                <span>ยอดรวม</span>
+                                <span>฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
+                            </div>
+                        </div>
+                        ${shipmentsHtml}
+                        ${slipsHtml}
+                        ${actionsHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    } catch (error) {
+        console.error('Error loading order details:', error);
+        showAlert('ไม่สามารถโหลดรายละเอียดได้', 'error');
+    }
+}
+
+function closeOrderModal() {
+    const modal = document.getElementById('orderDetailModal');
+    if (modal) modal.remove();
+}
+
+function openPaymentSlipModal(orderId) {
+    const modalHtml = `
+        <div id="paymentSlipModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 20px;">
+            <div style="background: linear-gradient(135deg, rgba(30,20,50,0.98), rgba(20,10,40,0.98)); border: 1px solid rgba(168,85,247,0.3); border-radius: 16px; max-width: 400px; width: 100%; position: relative;">
+                <button onclick="closePaymentSlipModal()" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 5px; line-height: 1;">&times;</button>
+                <div style="padding: 24px;">
+                    <h3 style="margin-bottom: 16px; font-size: 16px;">อัพโหลดสลิปชำระเงิน</h3>
+                    <div style="text-align: center; padding: 24px; border: 2px dashed rgba(168,85,247,0.5); border-radius: 12px; margin-bottom: 16px; cursor: pointer;" onclick="document.getElementById('slipFileInput').click()">
+                        <input type="file" id="slipFileInput" accept="image/*" style="display: none;" onchange="previewSlipImage(this)">
+                        <div id="slipPreviewContainer" style="display: none;">
+                            <img id="slipPreviewImg" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                        </div>
+                        <div id="slipUploadPlaceholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 8px; opacity: 0.5;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <p style="color: rgba(255,255,255,0.6); font-size: 13px;">คลิกเพื่อเลือกรูปสลิป</p>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="font-size: 13px; display: block; margin-bottom: 6px;">ยอดที่โอน (บาท)</label>
+                        <input type="number" id="slipAmount" class="form-input" placeholder="ระบุยอดที่โอน" style="width: 100%;">
+                    </div>
+                    <button onclick="uploadPaymentSlip(${orderId})" id="btnUploadSlip" class="btn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #a855f7, #ec4899);">
+                        อัพโหลดสลิป
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closePaymentSlipModal() {
+    const modal = document.getElementById('paymentSlipModal');
+    if (modal) modal.remove();
+}
+
+function previewSlipImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('slipPreviewImg').src = e.target.result;
+            document.getElementById('slipPreviewContainer').style.display = 'block';
+            document.getElementById('slipUploadPlaceholder').style.display = 'none';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+async function uploadPaymentSlip(orderId) {
+    const fileInput = document.getElementById('slipFileInput');
+    const amount = document.getElementById('slipAmount').value;
+    
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlert('กรุณาเลือกรูปสลิป', 'error');
+        return;
+    }
+    
+    const btn = document.getElementById('btnUploadSlip');
+    btn.disabled = true;
+    btn.textContent = 'กำลังอัพโหลด...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('slip_image', fileInput.files[0]);
+        if (amount) formData.append('amount', amount);
+        
+        const response = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            showAlert('อัพโหลดสลิปสำเร็จ รอตรวจสอบ', 'success');
+            closePaymentSlipModal();
+            closeOrderModal();
+            loadOrders();
+        } else {
+            const error = await response.json();
+            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            btn.disabled = false;
+            btn.textContent = 'อัพโหลดสลิป';
+        }
+    } catch (error) {
+        console.error('Error uploading slip:', error);
+        showAlert('เกิดข้อผิดพลาด', 'error');
+        btn.disabled = false;
+        btn.textContent = 'อัพโหลดสลิป';
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 async function loadCustomers() {

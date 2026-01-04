@@ -3247,6 +3247,146 @@ def delete_shipping_promotion(promo_id):
         if conn:
             conn.close()
 
+# ==================== SHIPPING PROVIDERS API ====================
+
+@app.route('/api/shipping-providers', methods=['GET'])
+@login_required
+def get_shipping_providers():
+    """Get all shipping providers"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, logo_url, tracking_url, is_active, display_order, created_at
+            FROM shipping_providers
+            ORDER BY display_order, name
+        ''')
+        providers = cursor.fetchall()
+        
+        return jsonify(providers), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-providers', methods=['POST'])
+@admin_required
+def create_shipping_provider():
+    """Create a new shipping provider"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        logo_url = data.get('logo_url')
+        tracking_url = data.get('tracking_url')
+        is_active = data.get('is_active', True)
+        display_order = data.get('display_order', 0)
+        
+        if not name:
+            return jsonify({'error': 'กรุณาระบุชื่อบริษัทขนส่ง'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            INSERT INTO shipping_providers (name, logo_url, tracking_url, is_active, display_order)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, name, logo_url, tracking_url, is_active, display_order, created_at
+        ''', (name, logo_url, tracking_url, is_active, display_order))
+        
+        provider = cursor.fetchone()
+        conn.commit()
+        
+        return jsonify(provider), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-providers/<int:provider_id>', methods=['PUT'])
+@admin_required
+def update_shipping_provider(provider_id):
+    """Update a shipping provider"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        logo_url = data.get('logo_url')
+        tracking_url = data.get('tracking_url')
+        is_active = data.get('is_active')
+        display_order = data.get('display_order')
+        
+        if not name:
+            return jsonify({'error': 'กรุณาระบุชื่อบริษัทขนส่ง'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE shipping_providers
+            SET name = %s, logo_url = %s, tracking_url = %s, is_active = %s, display_order = %s
+            WHERE id = %s
+            RETURNING id, name, logo_url, tracking_url, is_active, display_order, created_at
+        ''', (name, logo_url, tracking_url, is_active, display_order, provider_id))
+        
+        provider = cursor.fetchone()
+        if not provider:
+            return jsonify({'error': 'ไม่พบบริษัทขนส่ง'}), 404
+        
+        conn.commit()
+        
+        return jsonify(provider), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/shipping-providers/<int:provider_id>', methods=['DELETE'])
+@admin_required
+def delete_shipping_provider(provider_id):
+    """Delete a shipping provider"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM shipping_providers WHERE id = %s', (provider_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'ลบบริษัทขนส่งสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/calculate-shipping', methods=['POST'])
 @login_required
 def calculate_shipping():
@@ -5338,7 +5478,7 @@ def get_user_orders():
                    sc.name as channel_name,
                    (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
             FROM orders o
-            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             WHERE o.user_id = %s
         '''
         params = [user_id]
@@ -5385,7 +5525,7 @@ def get_order_detail(order_id):
         query = '''
             SELECT o.*, sc.name as channel_name, u.full_name as customer_name
             FROM orders o
-            LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+            LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             LEFT JOIN users u ON u.id = o.user_id
             WHERE o.id = %s
         '''
@@ -5418,8 +5558,9 @@ def get_order_detail(order_id):
         for item in cursor.fetchall():
             item_dict = dict(item)
             item_dict['unit_price'] = float(item_dict['unit_price']) if item_dict['unit_price'] else 0
-            item_dict['final_price'] = float(item_dict['final_price']) if item_dict['final_price'] else 0
-            item_dict['discount_percent'] = float(item_dict['discount_percent']) if item_dict['discount_percent'] else 0
+            item_dict['subtotal'] = float(item_dict['subtotal']) if item_dict['subtotal'] else 0
+            item_dict['tier_discount_percent'] = float(item_dict['tier_discount_percent']) if item_dict['tier_discount_percent'] else 0
+            item_dict['discount_amount'] = float(item_dict['discount_amount']) if item_dict['discount_amount'] else 0
             items.append(item_dict)
         
         order['items'] = items
@@ -5526,6 +5667,81 @@ def update_shipment(order_id, shipment_id):
         ''', update_values)
         
         updated = dict(cursor.fetchone())
+        
+        # Check if all shipments are delivered -> update order status and trigger tier upgrade
+        # Only process if shipment was NOT already delivered (idempotency check)
+        if updated['status'] == 'delivered' and shipment['status'] != 'delivered':
+            cursor.execute('''
+                SELECT COUNT(*) as total, 
+                       COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_count
+                FROM order_shipments WHERE order_id = %s
+            ''', (order_id,))
+            shipment_stats = cursor.fetchone()
+            
+            if shipment_stats['total'] == shipment_stats['delivered_count']:
+                # Check if order is already delivered (idempotency)
+                cursor.execute('SELECT status FROM orders WHERE id = %s', (order_id,))
+                current_order_status = cursor.fetchone()
+                
+                if current_order_status and current_order_status['status'] != 'delivered':
+                    # All shipments delivered - update order status
+                    cursor.execute('''
+                        UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        RETURNING user_id, final_amount
+                    ''', (order_id,))
+                    order_data = cursor.fetchone()
+                    
+                    if order_data:
+                        # Trigger tier upgrade for reseller
+                        user_id = order_data['user_id']
+                        order_amount = float(order_data['final_amount'] or 0)
+                        
+                        # Get user info
+                        cursor.execute('''
+                            SELECT u.id, u.total_purchases, u.reseller_tier_id, u.tier_manual_override, r.name as role_name
+                            FROM users u
+                            JOIN roles r ON r.id = u.role_id
+                            WHERE u.id = %s
+                        ''', (user_id,))
+                        user = cursor.fetchone()
+                        
+                        if user and user['role_name'] == 'Reseller':
+                            new_total = float(user['total_purchases'] or 0) + order_amount
+                            
+                            # Update total_purchases
+                            cursor.execute('''
+                                UPDATE users SET total_purchases = %s WHERE id = %s
+                            ''', (new_total, user_id))
+                            
+                            # Check tier upgrade if not manual override
+                            if not user.get('tier_manual_override'):
+                                cursor.execute('''
+                                    SELECT id, name, upgrade_threshold 
+                                    FROM reseller_tiers 
+                                    WHERE upgrade_threshold <= %s AND is_manual_only = FALSE
+                                    ORDER BY upgrade_threshold DESC LIMIT 1
+                                ''', (new_total,))
+                                new_tier = cursor.fetchone()
+                                
+                                if new_tier and new_tier['id'] != user['reseller_tier_id']:
+                                    cursor.execute('''
+                                        UPDATE users SET reseller_tier_id = %s WHERE id = %s
+                                    ''', (new_tier['id'], user_id))
+        
+        # Check if any shipment is shipped -> update order status to shipped
+        elif data.get('status') == 'shipped':
+            cursor.execute('''
+                SELECT status FROM orders WHERE id = %s
+            ''', (order_id,))
+            current_order = cursor.fetchone()
+            
+            if current_order and current_order['status'] == 'paid':
+                cursor.execute('''
+                    UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (order_id,))
+        
         conn.commit()
         
         return jsonify({
@@ -6046,7 +6262,7 @@ def get_sales_history():
                         WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
-                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                LEFT JOIN sales_channels sc ON sc.id = o.channel_id
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
@@ -6062,13 +6278,13 @@ def get_sales_history():
                        (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
-                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                LEFT JOIN sales_channels sc ON sc.id = o.channel_id
                 WHERE DATE(o.created_at) >= %s AND DATE(o.created_at) <= %s
             '''
             params = [start, end]
         
         if channel_id:
-            query += ' AND o.sales_channel_id = %s'
+            query += ' AND o.channel_id = %s'
             params.append(int(channel_id))
         
         if status:
@@ -6514,7 +6730,7 @@ def get_all_orders():
                        (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
-                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                LEFT JOIN sales_channels sc ON sc.id = o.channel_id
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
@@ -6535,7 +6751,7 @@ def get_all_orders():
                        (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
-                LEFT JOIN sales_channels sc ON sc.id = o.sales_channel_id
+                LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             '''
             params = []
             
@@ -6755,27 +6971,80 @@ def reject_order(order_id):
 @app.route('/api/admin/orders/<int:order_id>/cancel', methods=['POST'])
 @admin_required
 def cancel_order(order_id):
-    """Cancel order"""
+    """Cancel order and restore stock"""
     conn = None
     cursor = None
     try:
         data = request.get_json() or {}
         reason = data.get('reason', '')
+        admin_id = session.get('user_id')
         
         conn = get_db()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        # Get order status
+        cursor.execute('SELECT id, status, user_id FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        if order['status'] not in ('pending_payment', 'under_review', 'rejected', 'paid'):
+            return jsonify({'error': 'ไม่สามารถยกเลิกคำสั่งซื้อนี้ได้'}), 400
+        
+        # Get order items and shipments to restore stock
         cursor.execute('''
-            UPDATE orders SET status = 'cancelled', notes = CONCAT(COALESCE(notes, ''), ' [Cancelled: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND status IN ('pending_payment', 'under_review', 'rejected')
-            RETURNING id
+            SELECT osi.order_item_id, osi.quantity, os.warehouse_id, oi.sku_id
+            FROM order_shipment_items osi
+            JOIN order_shipments os ON os.id = osi.shipment_id
+            JOIN order_items oi ON oi.id = osi.order_item_id
+            WHERE os.order_id = %s
+        ''', (order_id,))
+        shipment_items = cursor.fetchall()
+        
+        # Restore warehouse stock
+        for item in shipment_items:
+            cursor.execute('''
+                UPDATE sku_warehouse_stock 
+                SET stock = stock + %s 
+                WHERE sku_id = %s AND warehouse_id = %s
+            ''', (item['quantity'], item['sku_id'], item['warehouse_id']))
+            
+            # Log stock restoration
+            cursor.execute('''
+                INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
+                SELECT %s, %s, stock - %s, stock, 'order_cancel', %s, 'order', %s, %s
+                FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
+            ''', (item['sku_id'], item['warehouse_id'], item['quantity'], order_id, f'ยกเลิกออเดอร์: {reason}', admin_id, item['sku_id'], item['warehouse_id']))
+        
+        # Restore main SKU stock
+        cursor.execute('''
+            SELECT sku_id, SUM(quantity) as total_qty
+            FROM order_items WHERE order_id = %s
+            GROUP BY sku_id
+        ''', (order_id,))
+        for sku in cursor.fetchall():
+            cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (sku['total_qty'], sku['sku_id']))
+        
+        # Update order status
+        cursor.execute('''
+            UPDATE orders SET status = 'cancelled', notes = CONCAT(COALESCE(notes, ''), ' [ยกเลิก: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         ''', (reason, order_id))
         
-        if cursor.fetchone() is None:
-            return jsonify({'error': 'Cannot cancel this order'}), 400
-        
         conn.commit()
-        return jsonify({'message': 'Order cancelled'}), 200
+        
+        # Notify user
+        create_notification(
+            order['user_id'],
+            'คำสั่งซื้อถูกยกเลิก',
+            f'คำสั่งซื้อ #{order_id} ถูกยกเลิก: {reason}',
+            'warning',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ'}), 200
         
     except Exception as e:
         if conn:

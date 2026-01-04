@@ -1969,6 +1969,45 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Shipping Providers -->
+                    <div class="settings-card" style="grid-column: 1 / -1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="1" y="3" width="15" height="13"/>
+                                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                                บริษัทขนส่ง
+                            </h3>
+                            <button class="btn-primary" onclick="showAddShippingProviderModal()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"/>
+                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                </svg>
+                                เพิ่มบริษัทขนส่ง
+                            </button>
+                        </div>
+                        
+                        <table class="data-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>ชื่อบริษัท</th>
+                                    <th>URL ติดตามพัสดุ</th>
+                                    <th>ลำดับ</th>
+                                    <th>สถานะ</th>
+                                    <th style="width: 100px;">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="shippingProvidersTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -2297,6 +2336,45 @@
                 <button type="button" class="btn btn-secondary" onclick="closeEditStockModal()">ยกเลิก</button>
                 <button type="button" class="btn" onclick="saveAllStock()">ยืนยัน</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Shipping Provider Modal -->
+    <div id="shippingProviderModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="shippingProviderModalTitle">เพิ่มบริษัทขนส่ง</h2>
+                <button class="modal-close" onclick="closeShippingProviderModal()">&times;</button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveShippingProvider();">
+                <div class="form-group">
+                    <label for="providerName">ชื่อบริษัท *</label>
+                    <input type="text" id="providerName" class="form-input" placeholder="เช่น Kerry Express, Flash Express" required>
+                </div>
+                <div class="form-group">
+                    <label for="providerTrackingUrl">URL ติดตามพัสดุ</label>
+                    <input type="text" id="providerTrackingUrl" class="form-input" placeholder="https://...">
+                    <small style="color: rgba(255,255,255,0.5);">ใส่ URL สำหรับติดตามพัสดุ (ถ้ามี)</small>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="providerDisplayOrder">ลำดับแสดง</label>
+                        <input type="number" id="providerDisplayOrder" class="form-input" value="0" min="0">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>สถานะ</label>
+                        <label class="toggle-switch" style="margin-top: 10px;">
+                            <input type="checkbox" id="providerIsActive" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">ใช้งาน</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeShippingProviderModal()">ยกเลิก</button>
+                    <button type="submit" class="btn">บันทึก</button>
+                </div>
+            </form>
         </div>
     </div>
 

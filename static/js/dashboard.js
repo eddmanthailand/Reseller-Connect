@@ -1587,7 +1587,7 @@ async function loadOrders(status = '') {
     const container = document.getElementById('ordersContainer');
     
     try {
-        let url = `${API_URL}/orders`;
+        let url = `${API_URL}/admin/orders`;
         if (status) url += `?status=${status}`;
         
         const response = await fetch(url);
@@ -1685,7 +1685,7 @@ function renderOrders() {
 
 async function updateOrderCounts() {
     try {
-        const response = await fetch(`${API_URL}/orders?status=under_review`);
+        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
         const reviewOrders = await response.json();
         
         const reviewCountEl = document.getElementById('reviewCount');
@@ -1705,35 +1705,117 @@ async function updateOrderCounts() {
     }
 }
 
+let shippingProvidersCache = [];
+
+async function loadShippingProvidersForOrder() {
+    if (shippingProvidersCache.length > 0) return shippingProvidersCache;
+    try {
+        const response = await fetch(`${API_URL}/shipping-providers`);
+        shippingProvidersCache = await response.json();
+        return shippingProvidersCache.filter(p => p.is_active);
+    } catch (error) {
+        console.error('Error loading shipping providers:', error);
+        return [];
+    }
+}
+
 async function viewOrderDetails(orderId) {
     try {
-        const response = await fetch(`${API_URL}/orders/${orderId}`);
-        const order = await response.json();
+        const [orderResponse, providers] = await Promise.all([
+            fetch(`${API_URL}/orders/${orderId}`),
+            loadShippingProvidersForOrder()
+        ]);
+        const order = await orderResponse.json();
         
         const statusLabels = {
             'pending_payment': 'รอชำระเงิน',
             'under_review': 'รอตรวจสอบ',
             'paid': 'ชำระแล้ว',
+            'shipped': 'กำลังจัดส่ง',
+            'delivered': 'จัดส่งสำเร็จ',
             'rejected': 'ปฏิเสธ',
             'cancelled': 'ยกเลิก'
+        };
+        
+        const statusColors = {
+            'pending_payment': '#f59e0b',
+            'under_review': '#3b82f6',
+            'paid': '#22c55e',
+            'shipped': '#8b5cf6',
+            'delivered': '#10b981',
+            'rejected': '#ef4444',
+            'cancelled': '#6b7280'
         };
         
         let itemsHtml = '';
         if (order.items && order.items.length > 0) {
             itemsHtml = order.items.map(item => `
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <span>${item.product_name || 'Product'} x${item.quantity}</span>
-                    <span>${parseFloat(item.price * item.quantity).toLocaleString('th-TH')} บาท</span>
+                    <span>${escapeHtml(item.product_name || 'Product')} (${escapeHtml(item.sku_code || '')}) x${item.quantity}</span>
+                    <span>฿${parseFloat(item.subtotal || item.unit_price * item.quantity).toLocaleString('th-TH')}</span>
                 </div>
             `).join('');
         }
         
+        // Build shipments HTML with tracking input
+        let shipmentsHtml = '';
+        if (order.shipments && order.shipments.length > 0) {
+            const providerOptions = providers.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
+            
+            shipmentsHtml = `
+                <div style="margin-top: 20px;">
+                    <h4 style="margin-bottom: 12px;">การจัดส่ง (${order.shipments.length} พัสดุ)</h4>
+                    ${order.shipments.map((shipment, idx) => {
+                        const shipmentStatusLabel = shipment.status === 'pending' ? 'รอจัดส่ง' : shipment.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
+                        const shipmentStatusColor = shipment.status === 'pending' ? '#f59e0b' : shipment.status === 'shipped' ? '#8b5cf6' : '#10b981';
+                        
+                        return `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong>คลัง: ${escapeHtml(shipment.warehouse_name)}</strong>
+                                    <span style="background: ${shipmentStatusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${shipmentStatusLabel}</span>
+                                </div>
+                                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">
+                                    สินค้า: ${shipment.items.map(i => `${escapeHtml(i.product_name)} x${i.quantity}`).join(', ')}
+                                </div>
+                                ${order.status === 'paid' || shipment.status === 'pending' ? `
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                                        <select id="provider_${shipment.id}" class="form-select" style="font-size: 12px; padding: 6px;">
+                                            <option value="">-- เลือกขนส่ง --</option>
+                                            ${providerOptions}
+                                        </select>
+                                        <input type="text" id="tracking_${shipment.id}" class="form-input" placeholder="เลขพัสดุ" value="${escapeHtml(shipment.tracking_number || '')}" style="font-size: 12px; padding: 6px;">
+                                    </div>
+                                    <button onclick="updateShipmentTracking(${orderId}, ${shipment.id})" class="btn" style="width: 100%; margin-top: 8px; font-size: 12px; padding: 8px;">
+                                        ${shipment.tracking_number ? 'อัปเดตเลขพัสดุ' : 'บันทึกเลขพัสดุ'}
+                                    </button>
+                                ` : `
+                                    <div style="font-size: 12px; margin-top: 8px;">
+                                        <strong>ขนส่ง:</strong> ${escapeHtml(shipment.shipping_provider || '-')} | 
+                                        <strong>เลขพัสดุ:</strong> ${escapeHtml(shipment.tracking_number || '-')}
+                                    </div>
+                                `}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+        
         let slipHtml = '';
-        if (order.payment_slip_url) {
+        if (order.payment_slips && order.payment_slips.length > 0) {
             slipHtml = `
                 <div style="margin-top: 16px;">
                     <h4 style="margin-bottom: 8px;">หลักฐานการชำระเงิน:</h4>
-                    <img src="${order.payment_slip_url}" alt="Payment Slip" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                    ${order.payment_slips.map(slip => `
+                        <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                            <img src="${slip.slip_image_url}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                            <div style="margin-top: 8px; font-size: 12px;">
+                                <span style="background: ${slip.status === 'approved' ? '#22c55e' : slip.status === 'rejected' ? '#ef4444' : '#f59e0b'}; color: white; padding: 2px 8px; border-radius: 4px;">${slip.status === 'approved' ? 'อนุมัติ' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}</span>
+                                ${slip.amount ? ` | ยอด: ฿${parseFloat(slip.amount).toLocaleString('th-TH')}` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             `;
         }
@@ -1742,34 +1824,45 @@ async function viewOrderDetails(orderId) {
         if (order.status === 'under_review') {
             actionsHtml = `
                 <div style="display: flex; gap: 12px; margin-top: 20px;">
-                    <button class="btn btn-success" onclick="updateOrderStatus(${orderId}, 'paid')" style="flex: 1;">
+                    <button class="btn" onclick="approveOrder(${orderId})" style="flex: 1; background: #22c55e;">
                         ยืนยันการชำระเงิน
                     </button>
-                    <button class="btn btn-danger" onclick="updateOrderStatus(${orderId}, 'rejected')" style="flex: 1;">
+                    <button class="btn" onclick="rejectOrder(${orderId})" style="flex: 1; background: #ef4444;">
                         ปฏิเสธ
+                    </button>
+                </div>
+            `;
+        } else if (order.status === 'paid' || order.status === 'pending_payment') {
+            actionsHtml = `
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button class="btn" onclick="cancelOrderAdmin(${orderId})" style="flex: 1; background: #ef4444;">
+                        ยกเลิกคำสั่งซื้อ
                     </button>
                 </div>
             `;
         }
         
         const modalContent = `
-            <div style="padding: 20px;">
+            <div style="padding: 20px; max-height: 80vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>คำสั่งซื้อ #${order.id}</h2>
-                    <span class="order-status ${order.status}">${statusLabels[order.status]}</span>
+                    <h2>${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
+                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 6px 12px; border-radius: 8px; font-size: 13px;">${statusLabels[order.status] || order.status}</span>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <p><strong>ลูกค้า:</strong> ${order.customer_name || 'N/A'}</p>
+                <div style="margin-bottom: 16px; font-size: 14px;">
+                    <p><strong>ลูกค้า:</strong> ${escapeHtml(order.customer_name || 'N/A')}</p>
+                    <p><strong>ช่องทาง:</strong> ${escapeHtml(order.channel_name || '-')}</p>
                     <p><strong>วันที่:</strong> ${new Date(order.created_at).toLocaleString('th-TH')}</p>
+                    ${order.notes ? `<p><strong>หมายเหตุ:</strong> ${escapeHtml(order.notes)}</p>` : ''}
                 </div>
                 <h4 style="margin-bottom: 8px;">รายการสินค้า:</h4>
                 <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
                     ${itemsHtml || '<p style="opacity: 0.6;">ไม่มีรายการ</p>'}
                     <div style="display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid rgba(255,255,255,0.2); font-weight: bold;">
                         <span>ยอดรวม</span>
-                        <span>${parseFloat(order.total_amount || 0).toLocaleString('th-TH')} บาท</span>
+                        <span>฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
                     </div>
                 </div>
+                ${shipmentsHtml}
                 ${slipHtml}
                 ${actionsHtml}
             </div>
@@ -1778,38 +1871,117 @@ async function viewOrderDetails(orderId) {
         showModal(modalContent);
     } catch (error) {
         console.error('Error loading order details:', error);
-        showAlert('ไม่สามารถโหลดรายละเอียดคำสั่งซื้อได้', 'error');
+        showGlobalAlert('ไม่สามารถโหลดรายละเอียดคำสั่งซื้อได้', 'error');
     }
 }
 
-async function updateOrderStatus(orderId, newStatus) {
-    const confirmMessages = {
-        'paid': 'ยืนยันการชำระเงินและหักสต็อก?',
-        'rejected': 'ปฏิเสธคำสั่งซื้อนี้?'
-    };
+async function updateShipmentTracking(orderId, shipmentId) {
+    const provider = document.getElementById(`provider_${shipmentId}`).value;
+    const tracking = document.getElementById(`tracking_${shipmentId}`).value.trim();
     
-    if (!confirm(confirmMessages[newStatus] || `เปลี่ยนสถานะเป็น ${newStatus}?`)) return;
+    if (!provider || !tracking) {
+        showGlobalAlert('กรุณาเลือกขนส่งและใส่เลขพัสดุ', 'error');
+        return;
+    }
     
     try {
-        const response = await fetch(`${API_URL}/orders/${orderId}/status`, {
+        const response = await fetch(`${API_URL}/orders/${orderId}/shipments/${shipmentId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus })
+            body: JSON.stringify({
+                shipping_provider: provider,
+                tracking_number: tracking,
+                status: 'shipped'
+            })
         });
         
         if (response.ok) {
-            showAlert('อัปเดตสถานะสำเร็จ', 'success');
+            showGlobalAlert('บันทึกเลขพัสดุสำเร็จ', 'success');
+            viewOrderDetails(orderId);
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating shipment:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function approveOrder(orderId) {
+    if (!confirm('ยืนยันการชำระเงินและอนุมัติคำสั่งซื้อนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ', 'success');
             closeModal();
             loadOrders(currentOrdersStatus);
         } else {
             const error = await response.json();
-            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
         }
     } catch (error) {
-        console.error('Error updating order status:', error);
-        showAlert('เกิดข้อผิดพลาด', 'error');
+        console.error('Error approving order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
     }
 }
+
+async function rejectOrder(orderId) {
+    const reason = prompt('เหตุผลในการปฏิเสธ:');
+    if (reason === null) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('ปฏิเสธคำสั่งซื้อสำเร็จ', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error rejecting order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function cancelOrderAdmin(orderId) {
+    const reason = prompt('เหตุผลในการยกเลิก:');
+    if (reason === null) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ สต็อกถูกคืนกลับแล้ว', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error cancelling order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
 
 function showModal(content) {
     let modal = document.getElementById('dynamicModal');
@@ -4741,7 +4913,7 @@ let editingRateId = null;
 let editingPromoId = null;
 
 async function loadShippingSettingsPage() {
-    await Promise.all([loadShippingRates(), loadShippingPromos()]);
+    await Promise.all([loadShippingRates(), loadShippingPromos(), loadShippingProviders()]);
 }
 
 async function loadShippingRates() {
@@ -5175,6 +5347,153 @@ async function deleteShippingPromo(id) {
         }
     } catch (error) {
         console.error('Error deleting shipping promo:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+// =====================================================
+// SHIPPING PROVIDERS FUNCTIONS
+// =====================================================
+
+let shippingProviders = [];
+let editingProviderId = null;
+
+async function loadShippingProviders() {
+    try {
+        const response = await fetch(`${API_URL}/shipping-providers`);
+        if (!response.ok) throw new Error('Failed to load shipping providers');
+        shippingProviders = await response.json();
+        renderShippingProviders();
+    } catch (error) {
+        console.error('Error loading shipping providers:', error);
+        document.getElementById('shippingProvidersTableBody').innerHTML = 
+            '<tr><td colspan="5" style="text-align: center; color: #ef4444;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+    }
+}
+
+function renderShippingProviders() {
+    const tbody = document.getElementById('shippingProvidersTableBody');
+    if (!tbody) return;
+    
+    if (shippingProviders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: rgba(255,255,255,0.5);">ยังไม่มีบริษัทขนส่ง</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = shippingProviders.map(provider => `
+        <tr>
+            <td><strong>${provider.name}</strong></td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                ${provider.tracking_url ? `<a href="${provider.tracking_url}" target="_blank" style="color: #a78bfa;">${provider.tracking_url}</a>` : '<span style="color: rgba(255,255,255,0.4);">-</span>'}
+            </td>
+            <td>${provider.display_order}</td>
+            <td>
+                <span class="status-badge ${provider.is_active ? 'active' : 'inactive'}">
+                    ${provider.is_active ? 'ใช้งาน' : 'ปิด'}
+                </span>
+            </td>
+            <td>
+                <button class="action-btn btn-edit" onclick="editShippingProvider(${provider.id})" title="แก้ไข">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </button>
+                <button class="action-btn btn-delete" onclick="deleteShippingProvider(${provider.id})" title="ลบ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showAddShippingProviderModal() {
+    editingProviderId = null;
+    document.getElementById('shippingProviderModalTitle').textContent = 'เพิ่มบริษัทขนส่ง';
+    document.getElementById('providerName').value = '';
+    document.getElementById('providerTrackingUrl').value = '';
+    document.getElementById('providerDisplayOrder').value = '0';
+    document.getElementById('providerIsActive').checked = true;
+    document.getElementById('shippingProviderModal').style.display = 'flex';
+}
+
+function editShippingProvider(id) {
+    const provider = shippingProviders.find(p => p.id === id);
+    if (!provider) return;
+    
+    editingProviderId = id;
+    document.getElementById('shippingProviderModalTitle').textContent = 'แก้ไขบริษัทขนส่ง';
+    document.getElementById('providerName').value = provider.name;
+    document.getElementById('providerTrackingUrl').value = provider.tracking_url || '';
+    document.getElementById('providerDisplayOrder').value = provider.display_order || 0;
+    document.getElementById('providerIsActive').checked = provider.is_active;
+    document.getElementById('shippingProviderModal').style.display = 'flex';
+}
+
+function closeShippingProviderModal() {
+    document.getElementById('shippingProviderModal').style.display = 'none';
+    editingProviderId = null;
+}
+
+async function saveShippingProvider() {
+    const data = {
+        name: document.getElementById('providerName').value.trim(),
+        tracking_url: document.getElementById('providerTrackingUrl').value.trim() || null,
+        display_order: parseInt(document.getElementById('providerDisplayOrder').value) || 0,
+        is_active: document.getElementById('providerIsActive').checked
+    };
+    
+    if (!data.name) {
+        showGlobalAlert('กรุณาระบุชื่อบริษัทขนส่ง', 'error');
+        return;
+    }
+    
+    try {
+        let response;
+        if (editingProviderId) {
+            response = await fetch(`${API_URL}/shipping-providers/${editingProviderId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        } else {
+            response = await fetch(`${API_URL}/shipping-providers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+        
+        if (response.ok) {
+            closeShippingProviderModal();
+            showGlobalAlert(editingProviderId ? 'อัปเดตบริษัทขนส่งสำเร็จ' : 'เพิ่มบริษัทขนส่งสำเร็จ', 'success');
+            await loadShippingProviders();
+        } else {
+            const result = await response.json();
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving shipping provider:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+async function deleteShippingProvider(id) {
+    if (!confirm('ต้องการลบบริษัทขนส่งนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/shipping-providers/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            showGlobalAlert('ลบบริษัทขนส่งสำเร็จ', 'success');
+            await loadShippingProviders();
+        } else {
+            showGlobalAlert('ไม่สามารถลบได้', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting shipping provider:', error);
         showGlobalAlert('เกิดข้อผิดพลาด', 'error');
     }
 }
