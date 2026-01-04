@@ -7,10 +7,35 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function getTrackingUrl(provider, trackingNumber) {
+    if (!provider || !trackingNumber) return null;
+    const providerLower = provider.toLowerCase();
+    const trackingUrls = {
+        'thailand post': `https://track.thailandpost.co.th/?trackNumber=${trackingNumber}`,
+        'ไปรษณีย์ไทย': `https://track.thailandpost.co.th/?trackNumber=${trackingNumber}`,
+        'kerry express': `https://th.kerryexpress.com/th/track/?track=${trackingNumber}`,
+        'kerry': `https://th.kerryexpress.com/th/track/?track=${trackingNumber}`,
+        'flash express': `https://flashexpress.com/fle/tracking?se=${trackingNumber}`,
+        'flash': `https://flashexpress.com/fle/tracking?se=${trackingNumber}`,
+        'j&t express': `https://www.jtexpress.co.th/index/query/gzquery.html?billcode=${trackingNumber}`,
+        'j&t': `https://www.jtexpress.co.th/index/query/gzquery.html?billcode=${trackingNumber}`,
+        'shopee express': `https://spx.co.th/th/tracking?code=${trackingNumber}`,
+        'spx': `https://spx.co.th/th/tracking?code=${trackingNumber}`,
+        'best express': `https://www.best-inc.co.th/track?bills=${trackingNumber}`,
+        'best': `https://www.best-inc.co.th/track?bills=${trackingNumber}`,
+        'ninja van': `https://www.ninjavan.co/th-th/tracking?id=${trackingNumber}`,
+        'ninjavan': `https://www.ninjavan.co/th-th/tracking?id=${trackingNumber}`,
+        'dhl': `https://www.dhl.com/th-th/home/tracking.html?tracking-id=${trackingNumber}`
+    };
+    return trackingUrls[providerLower] || null;
+}
+
 let currentUser = null;
 let customers = [];
 let products = [];
 let cartItems = [];
+let allOrders = [];
+let currentOrderFilter = 'all';
 
 document.addEventListener('DOMContentLoaded', function() {
     init();
@@ -1475,11 +1500,60 @@ async function loadOrders() {
         if (!response.ok) throw new Error('Failed to load orders');
         
         const data = await response.json();
-        const orders = data.orders || [];
-        renderOrders(orders);
+        allOrders = data.orders || [];
+        updateOrderStatusCounts();
+        
+        const container = document.getElementById('ordersList');
+        if (container) {
+            filterOrdersByStatus(currentOrderFilter);
+        } else {
+            renderOrders(allOrders);
+        }
     } catch (error) {
         console.error('Error loading orders:', error);
     }
+}
+
+function updateOrderStatusCounts() {
+    const counts = {
+        all: allOrders.length,
+        pending_payment: 0,
+        under_review: 0,
+        preparing: 0,
+        shipped: 0,
+        delivered: 0,
+        failed_delivery: 0,
+        cancelled: 0
+    };
+    
+    allOrders.forEach(order => {
+        if (counts.hasOwnProperty(order.status)) {
+            counts[order.status]++;
+        }
+    });
+    
+    Object.keys(counts).forEach(status => {
+        const el = document.getElementById(`count-${status}`);
+        if (el) el.textContent = counts[status];
+    });
+}
+
+function filterOrdersByStatus(status) {
+    currentOrderFilter = status;
+    
+    const tabs = document.querySelectorAll('.status-tab');
+    if (tabs.length > 0) {
+        tabs.forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.status === status);
+        });
+    }
+    
+    let filtered = allOrders;
+    if (status !== 'all') {
+        filtered = allOrders.filter(o => o.status === status);
+    }
+    
+    renderOrders(filtered);
 }
 
 function renderOrders(orders) {
@@ -1564,15 +1638,41 @@ async function viewResellerOrderDetails(orderId) {
         
         let itemsHtml = '';
         if (order.items && order.items.length > 0) {
-            itemsHtml = order.items.map(item => `
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <div>
-                        <div style="font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
-                        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${escapeHtml(item.sku_code || '')} x${item.quantity}</div>
+            itemsHtml = order.items.map(item => {
+                let variantText = '';
+                if (item.variant_values) {
+                    variantText = item.variant_values;
+                }
+                
+                let customizationHtml = '';
+                if (item.customization_data) {
+                    try {
+                        const customizations = typeof item.customization_data === 'string' 
+                            ? JSON.parse(item.customization_data) 
+                            : item.customization_data;
+                        if (Array.isArray(customizations) && customizations.length > 0) {
+                            customizationHtml = customizations.map(c => 
+                                `<span style="background: rgba(168,85,247,0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px;">${escapeHtml(c.name)}: ${escapeHtml(c.choice)}</span>`
+                            ).join('');
+                        }
+                    } catch(e) {}
+                }
+                
+                return `
+                    <div style="padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
+                                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px;">
+                                    ${escapeHtml(item.sku_code || '')} ${variantText ? `| ${escapeHtml(variantText)}` : ''} x${item.quantity}
+                                </div>
+                                ${customizationHtml ? `<div style="margin-top: 4px;">${customizationHtml}</div>` : ''}
+                            </div>
+                            <span style="font-weight: 600; white-space: nowrap;">฿${(item.subtotal || item.unit_price * item.quantity || 0).toLocaleString('th-TH')}</span>
+                        </div>
                     </div>
-                    <span style="font-weight: 600;">฿${(item.subtotal || item.unit_price * item.quantity || 0).toLocaleString('th-TH')}</span>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
         
         let shipmentsHtml = '';
@@ -1583,6 +1683,7 @@ async function viewResellerOrderDetails(orderId) {
                     ${order.shipments.map(s => {
                         const shipmentStatus = s.status === 'pending' ? 'รอจัดส่ง' : s.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
                         const shipmentColor = s.status === 'pending' ? '#f59e0b' : s.status === 'shipped' ? '#8b5cf6' : '#10b981';
+                        const trackingUrl = getTrackingUrl(s.shipping_provider, s.tracking_number);
                         return `
                             <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -1590,8 +1691,9 @@ async function viewResellerOrderDetails(orderId) {
                                     <span style="background: ${shipmentColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${shipmentStatus}</span>
                                 </div>
                                 ${s.tracking_number ? `
-                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7);">
-                                        <strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}
+                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center;">
+                                        <span><strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}</span>
+                                        ${trackingUrl ? `<a href="${trackingUrl}" target="_blank" style="color: #a855f7; text-decoration: none; font-size: 11px;">ติดตามพัสดุ →</a>` : ''}
                                     </div>
                                 ` : ''}
                             </div>
@@ -1624,6 +1726,41 @@ async function viewResellerOrderDetails(orderId) {
             `;
         }
         
+        let recipientHtml = '';
+        const recipient = order.customer || order.reseller;
+        if (recipient) {
+            const addressParts = [
+                recipient.address,
+                recipient.subdistrict,
+                recipient.district,
+                recipient.province,
+                recipient.postal_code
+            ].filter(Boolean);
+            recipientHtml = `
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 10px; font-size: 14px;">ข้อมูลผู้รับ</h4>
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; font-size: 13px;">
+                        <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(recipient.full_name || recipient.name || '')}</div>
+                        <div style="color: rgba(255,255,255,0.7);">${escapeHtml(recipient.phone || '')}</div>
+                        ${addressParts.length > 0 ? `<div style="color: rgba(255,255,255,0.6); margin-top: 4px; line-height: 1.4;">${escapeHtml(addressParts.join(' '))}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        let rejectionNoticeHtml = '';
+        if (order.status === 'pending_payment' && order.payment_slips && order.payment_slips.some(s => s.status === 'rejected')) {
+            const rejectedSlip = order.payment_slips.find(s => s.status === 'rejected');
+            if (rejectedSlip && rejectedSlip.notes) {
+                rejectionNoticeHtml = `
+                    <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="color: #ef4444; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ กรุณาอัพโหลดสลิปใหม่</div>
+                        <div style="color: rgba(255,255,255,0.8); font-size: 12px;">เหตุผล: ${escapeHtml(rejectedSlip.notes)}</div>
+                    </div>
+                `;
+            }
+        }
+        
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
@@ -1642,6 +1779,7 @@ async function viewResellerOrderDetails(orderId) {
                             <h2 style="font-size: 18px;">${order.order_number || '#' + order.id}</h2>
                             <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 12px;">${statusLabels[order.status] || order.status}</span>
                         </div>
+                        ${rejectionNoticeHtml}
                         <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px;">
                             <div>วันที่: ${new Date(order.created_at).toLocaleString('th-TH')}</div>
                             ${order.notes ? `<div style="margin-top: 4px;">หมายเหตุ: ${escapeHtml(order.notes)}</div>` : ''}
@@ -1654,6 +1792,7 @@ async function viewResellerOrderDetails(orderId) {
                                 <span>฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
                             </div>
                         </div>
+                        ${recipientHtml}
                         ${shipmentsHtml}
                         ${slipsHtml}
                         ${actionsHtml}
