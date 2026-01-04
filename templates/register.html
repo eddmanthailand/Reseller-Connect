@@ -170,7 +170,8 @@
         }
 
         .form-group input,
-        .form-group textarea {
+        .form-group textarea,
+        .form-group select {
             width: 100%;
             padding: 12px 14px;
             background: rgba(255, 255, 255, 0.2);
@@ -183,13 +184,28 @@
             font-family: 'Inter', sans-serif;
         }
 
+        .form-group select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .form-group select option {
+            background: #764ba2;
+            color: white;
+        }
+
         .form-group input::placeholder,
         .form-group textarea::placeholder {
             color: rgba(255, 255, 255, 0.6);
         }
 
         .form-group input:focus,
-        .form-group textarea:focus {
+        .form-group textarea:focus,
+        .form-group select:focus {
             outline: none;
             background: rgba(255, 255, 255, 0.25);
             border-color: rgba(255, 255, 255, 0.5);
@@ -405,21 +421,27 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>จังหวัด <span class="required">*</span></label>
-                            <input type="text" id="province" name="province" required placeholder="จังหวัด">
+                            <select id="province" name="province" required>
+                                <option value="">-- เลือกจังหวัด --</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>อำเภอ/เขต <span class="required">*</span></label>
-                            <input type="text" id="district" name="district" required placeholder="อำเภอ/เขต">
+                            <select id="district" name="district" required disabled>
+                                <option value="">-- เลือกอำเภอ/เขต --</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>ตำบล/แขวง <span class="required">*</span></label>
-                            <input type="text" id="subdistrict" name="subdistrict" required placeholder="ตำบล/แขวง">
+                            <select id="subdistrict" name="subdistrict" required disabled>
+                                <option value="">-- เลือกตำบล/แขวง --</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>รหัสไปรษณีย์ <span class="required">*</span></label>
-                            <input type="text" id="postal_code" name="postal_code" required placeholder="10000" maxlength="5">
+                            <input type="text" id="postal_code" name="postal_code" required placeholder="รหัสไปรษณีย์" maxlength="5" readonly>
                         </div>
                     </div>
                 </div>
@@ -471,10 +493,86 @@
     </div>
 
     <script src="/static/js/global-alert.js"></script>
+    <script src="/static/js/thai-address.js"></script>
     <script>
         const registerForm = document.getElementById('registerForm');
         const formSection = document.getElementById('formSection');
         const successSection = document.getElementById('successSection');
+
+        const provinceSelect = document.getElementById('province');
+        const districtSelect = document.getElementById('district');
+        const subdistrictSelect = document.getElementById('subdistrict');
+        const postalCodeInput = document.getElementById('postal_code');
+
+        function initProvinces() {
+            const provinces = Object.keys(THAI_ADDRESSES).sort();
+            provinces.forEach(province => {
+                const option = document.createElement('option');
+                option.value = province;
+                option.textContent = province;
+                provinceSelect.appendChild(option);
+            });
+        }
+
+        provinceSelect.addEventListener('change', function() {
+            const selectedProvince = this.value;
+            districtSelect.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
+            subdistrictSelect.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+            postalCodeInput.value = '';
+            
+            if (selectedProvince && THAI_ADDRESSES[selectedProvince]) {
+                districtSelect.disabled = false;
+                subdistrictSelect.disabled = true;
+                
+                const districts = Object.keys(THAI_ADDRESSES[selectedProvince]).sort();
+                districts.forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtSelect.appendChild(option);
+                });
+            } else {
+                districtSelect.disabled = true;
+                subdistrictSelect.disabled = true;
+            }
+        });
+
+        districtSelect.addEventListener('change', function() {
+            const selectedProvince = provinceSelect.value;
+            const selectedDistrict = this.value;
+            subdistrictSelect.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
+            postalCodeInput.value = '';
+            
+            if (selectedDistrict && THAI_ADDRESSES[selectedProvince] && THAI_ADDRESSES[selectedProvince][selectedDistrict]) {
+                subdistrictSelect.disabled = false;
+                
+                const subdistricts = Object.keys(THAI_ADDRESSES[selectedProvince][selectedDistrict]).sort();
+                subdistricts.forEach(subdistrict => {
+                    const option = document.createElement('option');
+                    option.value = subdistrict;
+                    option.textContent = subdistrict;
+                    subdistrictSelect.appendChild(option);
+                });
+            } else {
+                subdistrictSelect.disabled = true;
+            }
+        });
+
+        subdistrictSelect.addEventListener('change', function() {
+            const selectedProvince = provinceSelect.value;
+            const selectedDistrict = districtSelect.value;
+            const selectedSubdistrict = this.value;
+            
+            if (selectedSubdistrict && THAI_ADDRESSES[selectedProvince] && 
+                THAI_ADDRESSES[selectedProvince][selectedDistrict] &&
+                THAI_ADDRESSES[selectedProvince][selectedDistrict][selectedSubdistrict]) {
+                postalCodeInput.value = THAI_ADDRESSES[selectedProvince][selectedDistrict][selectedSubdistrict];
+            } else {
+                postalCodeInput.value = '';
+            }
+        });
+
+        initProvinces();
 
         registerForm.addEventListener('submit', async function(e) {
             e.preventDefault();
