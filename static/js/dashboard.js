@@ -1773,7 +1773,7 @@ async function viewOrderDetails(orderId) {
             
             shipmentsHtml = `
                 <div style="margin-top: 20px;">
-                    <h4 style="margin-bottom: 12px;">การจัดส่ง (${order.shipments.length} พัสดุ)</h4>
+                    <h4 style="margin-bottom: 12px; color: #ffffff;">การจัดส่ง (${order.shipments.length} พัสดุ)</h4>
                     ${order.shipments.map((shipment, idx) => {
                         const shipmentStatusLabel = shipment.status === 'pending' ? 'รอจัดส่ง' : shipment.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
                         const shipmentStatusColor = shipment.status === 'pending' ? '#f59e0b' : shipment.status === 'shipped' ? '#8b5cf6' : '#10b981';
@@ -1800,13 +1800,13 @@ async function viewOrderDetails(orderId) {
                                 </div>
                                 ${order.status === 'paid' || shipment.status === 'pending' ? `
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-                                        <select id="provider_${shipment.id}" class="form-select" style="font-size: 12px; padding: 6px;">
-                                            <option value="">-- เลือกขนส่ง --</option>
-                                            ${providerOptions}
+                                        <select id="provider_${shipment.id}" style="font-size: 12px; padding: 8px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;">
+                                            <option value="" style="background: #1e1e2e; color: white;">-- เลือกขนส่ง --</option>
+                                            ${providers.map(p => `<option value="${escapeHtml(p.name)}" style="background: #1e1e2e; color: white;">${escapeHtml(p.name)}</option>`).join('')}
                                         </select>
-                                        <input type="text" id="tracking_${shipment.id}" class="form-input" placeholder="เลขพัสดุ" value="${escapeHtml(shipment.tracking_number || '')}" style="font-size: 12px; padding: 6px;">
+                                        <input type="text" id="tracking_${shipment.id}" placeholder="เลขพัสดุ" value="${escapeHtml(shipment.tracking_number || '')}" style="font-size: 12px; padding: 8px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;">
                                     </div>
-                                    <button onclick="updateShipmentTracking(${orderId}, ${shipment.id})" class="btn" style="width: 100%; margin-top: 8px; font-size: 12px; padding: 8px;">
+                                    <button onclick="updateShipmentTracking(${orderId}, ${shipment.id})" class="btn" style="width: 100%; margin-top: 8px; font-size: 12px; padding: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 6px; cursor: pointer;">
                                         ${shipment.tracking_number ? 'อัปเดตเลขพัสดุ' : 'บันทึกเลขพัสดุ'}
                                     </button>
                                 ` : `
@@ -1827,7 +1827,7 @@ async function viewOrderDetails(orderId) {
         if (order.payment_slips && order.payment_slips.length > 0) {
             slipHtml = `
                 <div style="margin-top: 16px;">
-                    <h4 style="margin-bottom: 8px;">หลักฐานการชำระเงิน:</h4>
+                    <h4 style="margin-bottom: 8px; color: #ffffff;">หลักฐานการชำระเงิน:</h4>
                     ${order.payment_slips.map(slip => `
                         <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
                             <img src="${slip.slip_image_url}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
@@ -1919,7 +1919,7 @@ async function viewOrderDetails(orderId) {
                     <p><strong>วันที่:</strong> ${new Date(order.created_at).toLocaleString('th-TH')}</p>
                     ${order.notes ? `<p><strong>หมายเหตุ:</strong> ${escapeHtml(order.notes)}</p>` : ''}
                 </div>
-                <h4 style="margin-bottom: 8px;">รายการสินค้า:</h4>
+                <h4 style="margin-bottom: 8px; color: #ffffff;">รายการสินค้า:</h4>
                 <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
                     ${itemsHtml || '<p style="opacity: 0.6;">ไม่มีรายการ</p>'}
                     <div style="display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid rgba(255,255,255,0.2); font-weight: bold;">
