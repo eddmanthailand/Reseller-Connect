@@ -1869,7 +1869,7 @@ async function viewOrderDetails(orderId) {
             const resellerFullAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ');
             resellerHtml = `
                 <div style="background: rgba(139,92,246,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px; color: #c4b5fd;">ข้อมูลผู้สั่ง (Reseller)</h4>
+                    <h4 style="margin-bottom: 8px; color: #ffffff;">ข้อมูลผู้สั่ง (Reseller)</h4>
                     <div style="font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                         <p><strong>ชื่อ:</strong> ${escapeHtml(order.reseller_name)}</p>
                         <p><strong>Tier:</strong> ${escapeHtml(order.reseller_tier_name || '-')}</p>
@@ -1889,7 +1889,7 @@ async function viewOrderDetails(orderId) {
             const fullAddress = [c.address, c.subdistrict, c.district, c.province, c.postal_code].filter(Boolean).join(' ');
             customerHtml = `
                 <div style="background: rgba(34,197,94,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px; color: #86efac;">ข้อมูลผู้รับ (ลูกค้าปลายทาง)</h4>
+                    <h4 style="margin-bottom: 8px; color: #ffffff;">ข้อมูลผู้รับ (ลูกค้าปลายทาง)</h4>
                     <div style="font-size: 13px;">
                         <p><strong>ชื่อ:</strong> ${escapeHtml(c.full_name || '-')}</p>
                         <p><strong>โทร:</strong> ${escapeHtml(c.phone || '-')}</p>
@@ -2085,16 +2085,19 @@ function printShippingLabel(shipmentIndex) {
     
     // Items
     const totalQty = shipment.items.reduce((sum, i) => sum + i.quantity, 0);
-    const itemsHtml = shipment.items.map((item, idx) => `
+    const itemsHtml = shipment.items.map((item, idx) => {
+        const variantDisplay = item.variant_name ? ` (${item.variant_name})` : '';
+        return `
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">
                 <span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #333; border-radius: 3px; vertical-align: middle;"></span>
             </td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}. ${item.product_name || 'สินค้า'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}. ${item.product_name || 'สินค้า'}${variantDisplay}</td>
             <td style="padding: 8px; border-bottom: 1px solid #ddd; font-size: 11px; color: #666;">${item.sku_code || ''}</td>
             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold;">x ${item.quantity}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
     
     // Open print window
     const printWindow = window.open('', '_blank', 'width=800,height=1100');

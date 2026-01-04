@@ -5603,7 +5603,7 @@ def get_order_detail(order_id):
                 tracking_template = provider_tracking_map.get(shipment_dict['shipping_provider'], '')
                 if tracking_template:
                     shipment_dict['tracking_url'] = tracking_template.replace('{tracking}', shipment_dict['tracking_number'])
-            # Get items in this shipment
+            # Get items in this shipment with option values
             cursor.execute('''
                 SELECT osi.id, osi.order_item_id, osi.quantity,
                        oi.sku_id, s.sku_code, p.name as product_name
@@ -5613,7 +5613,22 @@ def get_order_detail(order_id):
                 JOIN products p ON p.id = s.product_id
                 WHERE osi.shipment_id = %s
             ''', (shipment_dict['id'],))
-            shipment_dict['items'] = [dict(item) for item in cursor.fetchall()]
+            shipment_items = []
+            for item in cursor.fetchall():
+                item_dict = dict(item)
+                # Get option values for this SKU
+                cursor.execute('''
+                    SELECT o.name as option_name, ov.value as option_value
+                    FROM sku_values_map svm
+                    JOIN option_values ov ON ov.id = svm.option_value_id
+                    JOIN options o ON o.id = ov.option_id
+                    WHERE svm.sku_id = %s
+                    ORDER BY o.sort_order
+                ''', (item_dict['sku_id'],))
+                option_values = cursor.fetchall()
+                item_dict['variant_name'] = ' - '.join([ov['option_value'] for ov in option_values]) if option_values else ''
+                shipment_items.append(item_dict)
+            shipment_dict['items'] = shipment_items
             shipments.append(shipment_dict)
         
         order['shipments'] = shipments
