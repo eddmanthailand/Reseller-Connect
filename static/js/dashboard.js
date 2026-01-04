@@ -1972,10 +1972,21 @@ async function viewOrderDetails(orderId) {
                 </div>
             `;
         } else {
+            // Fallback: Use reseller as recipient (same as shipping label)
+            const resellerRecipientAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ');
             customerHtml = `
-                <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
-                    <svg width="24" height="24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" viewBox="0 0 24 24" style="margin: 0 auto 8px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin: 0;">ไม่ได้ระบุลูกค้าปลายทาง (Reseller รับสินค้าเอง)</p>
+                <div style="background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05)); border: 1px solid rgba(34,197,94,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #22c55e, #16a34a); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        </div>
+                        <h4 style="color: #fff; font-size: 14px; font-weight: 600; margin: 0;">ผู้รับ (Reseller รับเอง)</h4>
+                    </div>
+                    <div style="font-size: 13px; color: #fff;">
+                        <div style="margin-bottom: 6px;"><span style="color: rgba(255,255,255,0.6);">ชื่อ:</span> <strong>${escapeHtml(order.reseller_name || '-')}</strong></div>
+                        <div style="margin-bottom: 6px;"><span style="color: rgba(255,255,255,0.6);">โทร:</span> <strong>${escapeHtml(order.reseller_phone || '-')}</strong></div>
+                        <div><span style="color: rgba(255,255,255,0.6);">ที่อยู่:</span> ${escapeHtml(resellerRecipientAddress || '-')}</div>
+                    </div>
                 </div>
             `;
         }
