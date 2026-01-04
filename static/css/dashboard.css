@@ -20,6 +20,28 @@
     --font-xl: 16px;
     --font-2xl: 18px;
     --font-3xl: 22px;
+    --page-max-width: 1200px;
+}
+
+/* Page inner wrapper - constrains content width like home page */
+.page-inner {
+    max-width: var(--page-max-width);
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Apply max-width constraint to all page content */
+.page-content {
+    max-width: var(--page-max-width);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Content wrapper also constrained */
+.content-wrapper {
+    max-width: var(--page-max-width);
+    margin-left: auto;
+    margin-right: auto;
 }
 
 body {
