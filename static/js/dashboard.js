@@ -6607,7 +6607,7 @@ async function loadActivityLogs(page = 1) {
     if (search) url += `&search=${encodeURIComponent(search)}`;
     
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to fetch logs');
         
         const data = await response.json();
