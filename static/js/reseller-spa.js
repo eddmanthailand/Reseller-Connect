@@ -1630,18 +1630,19 @@ function renderOrders(orders) {
     };
     
     container.innerHTML = orders.map(order => `
-        <div class="order-card" style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer;" onclick="viewResellerOrderDetails(${order.id})">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-weight: 600; color: #ffffff;">${order.order_number || '#' + order.id}</span>
-                <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px;">${statusLabels[order.status] || order.status}</span>
+        <div class="order-card-mobile" onclick="viewResellerOrderDetails(${order.id})">
+            <div class="order-card-header">
+                <span class="order-card-number">${order.order_number || '#' + order.id}</span>
+                <span class="order-card-status" style="background: ${statusColors[order.status] || '#6b7280'};">${statusLabels[order.status] || order.status}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; color: rgba(255,255,255,0.6); font-size: 13px;">
-                <span>${new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                <span style="color: #22c55e; font-weight: 600;">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
+            <div class="order-card-details">
+                <span class="order-card-date">${new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                <span class="order-card-amount">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
             </div>
             ${order.status === 'pending_payment' ? `
-                <button class="btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="width: 100%; margin-top: 12px; padding: 10px; font-size: 13px; background: linear-gradient(135deg, #a855f7, #ec4899);">
-                    อัพโหลดสลิปชำระเงิน
+                <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    อัพโหลดสลิป
                 </button>
             ` : ''}
         </div>
