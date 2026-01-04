@@ -1500,7 +1500,7 @@ async function loadOrders() {
         if (!response.ok) throw new Error('Failed to load orders');
         
         const data = await response.json();
-        allOrders = data.orders || [];
+        allOrders = Array.isArray(data) ? data : (data.orders || []);
         updateOrderStatusCounts();
         
         const container = document.getElementById('ordersList');
