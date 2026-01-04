@@ -23,6 +23,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 
 ### Feature Specifications
 - **Authentication:** Custom session management, bcrypt hashing, role-based access control.
+- **Public Landing Page:** Beautiful landing page for visitors (non-logged in users) featuring hero section, benefits highlights, tier system preview, and product showcase with blurred reseller prices. Built with Tailwind CSS and responsive design.
 - **Admin Dashboard:** Multi-page layout, real-time statistics, user management (CRUD, role assignment, tier assignment), product management, settings.
 - **Reseller Dashboard:** Dedicated view showing user info, tier level, and products with tier-specific pricing.
 - **User Management:** Create/edit/delete users, assign roles (Super Admin, Assistant Admin, Reseller), assign reseller tiers with manual override. Role-based brand access control for Assistant Admins.

@@ -111,10 +111,10 @@ def admin_required(f):
 
 @app.route('/')
 def index():
-    """Redirect to dashboard if logged in, otherwise to login page"""
+    """Show landing page for guests, redirect to dashboard if logged in"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login_page'))
+    return render_template('landing_page.html')
 
 @app.route('/login')
 def login_page():
@@ -178,6 +178,67 @@ def brand_management():
 def category_management():
     """Render the category management page"""
     return render_template('category_management.html')
+
+@app.route('/api/public/products', methods=['GET'])
+def public_products():
+    """Get products for public landing page (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT 
+                p.id,
+                p.name,
+                b.name as brand_name,
+                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as image_url,
+                (SELECT MIN(s.price) FROM skus s WHERE s.product_id = p.id) as retail_price,
+                COALESCE((SELECT SUM(s.stock) FROM skus s WHERE s.product_id = p.id), 0) as total_stock
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.status = 'active'
+            ORDER BY p.created_at DESC
+            LIMIT 8
+        ''')
+        products = cursor.fetchall()
+        
+        return jsonify({'products': products}), 200
+    except Exception as e:
+        print(f"Error fetching public products: {e}")
+        return jsonify({'products': [], 'error': str(e)}), 200
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/public/tiers', methods=['GET'])
+def public_tiers():
+    """Get reseller tiers for public landing page (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, name, description, upgrade_threshold, level_rank
+            FROM reseller_tiers
+            ORDER BY level_rank ASC
+        ''')
+        tiers = cursor.fetchall()
+        
+        return jsonify({'tiers': tiers}), 200
+    except Exception as e:
+        print(f"Error fetching tiers: {e}")
+        return jsonify({'tiers': [], 'error': str(e)}), 200
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.route('/api/login', methods=['POST'])
 def login():
