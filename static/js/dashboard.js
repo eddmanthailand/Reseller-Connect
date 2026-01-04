@@ -1612,7 +1612,10 @@ function renderOrders() {
     const statusLabels = {
         'pending_payment': 'รอชำระเงิน',
         'under_review': 'รอตรวจสอบ',
+        'preparing': 'เตรียมสินค้า',
         'paid': 'ชำระแล้ว',
+        'shipped': 'กำลังจัดส่ง',
+        'delivered': 'จัดส่งสำเร็จ',
         'rejected': 'ปฏิเสธ',
         'cancelled': 'ยกเลิก'
     };
@@ -1620,7 +1623,10 @@ function renderOrders() {
     const statusColors = {
         'pending_payment': '#f59e0b',
         'under_review': '#3b82f6',
+        'preparing': '#8b5cf6',
         'paid': '#22c55e',
+        'shipped': '#0ea5e9',
+        'delivered': '#10b981',
         'rejected': '#ef4444',
         'cancelled': '#6b7280'
     };
