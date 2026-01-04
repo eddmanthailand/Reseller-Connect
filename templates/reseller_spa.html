@@ -1012,13 +1012,25 @@
 
             /* Move sidebar footer higher on mobile */
             .sidebar-footer {
-                margin-top: 20px;
+                margin-top: 16px;
                 padding-top: 16px;
+                padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
                 position: relative;
             }
 
             .nav-menu {
                 flex: none;
+            }
+
+            /* Compact user profile on mobile */
+            .user-profile {
+                padding: 10px;
+                margin-bottom: 8px;
+            }
+
+            .btn-logout {
+                padding: 10px 14px;
+                font-size: 13px;
             }
 
             .main-content {
