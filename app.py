@@ -6936,9 +6936,9 @@ def approve_order(order_id):
                 VALUES (%s, 'sale', %s, 'order', %s, %s, %s)
             ''', (item['sku_id'], -item['quantity'], order_id, f'Order #{order_id} approved', admin_id))
         
-        # Update order status
+        # Update order status to preparing (ready to ship)
         cursor.execute('''
-            UPDATE orders SET status = 'paid', updated_at = CURRENT_TIMESTAMP
+            UPDATE orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (order_id,))
         
@@ -7015,10 +7015,10 @@ def approve_order(order_id):
         if conn:
             conn.close()
 
-@app.route('/api/admin/orders/<int:order_id>/reject', methods=['POST'])
+@app.route('/api/admin/orders/<int:order_id>/request-new-slip', methods=['POST'])
 @admin_required
-def reject_order(order_id):
-    """Reject order payment"""
+def request_new_slip(order_id):
+    """Request new payment slip - delete old slip and reset to pending_payment"""
     conn = None
     cursor = None
     try:
@@ -7026,11 +7026,14 @@ def reject_order(order_id):
         data = request.get_json() or {}
         reason = data.get('reason', '')
         
+        if not reason:
+            return jsonify({'error': 'กรุณาระบุเหตุผล'}), 400
+        
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         # Get order
-        cursor.execute('SELECT id, status, user_id FROM orders WHERE id = %s', (order_id,))
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
         order = cursor.fetchone()
         
         if not order:
@@ -7039,31 +7042,34 @@ def reject_order(order_id):
         if order['status'] != 'under_review':
             return jsonify({'error': 'Order is not under review'}), 400
         
-        # Update order status
-        cursor.execute('''
-            UPDATE orders SET status = 'rejected', notes = CONCAT(COALESCE(notes, ''), ' [Rejected: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        ''', (reason, order_id))
+        # Delete old payment slips for this order
+        cursor.execute('DELETE FROM payment_slips WHERE order_id = %s', (order_id,))
         
-        # Update slip status
+        # Update order status back to pending_payment
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
         cursor.execute('''
-            UPDATE payment_slips SET status = 'rejected', admin_notes = %s, reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
-            WHERE order_id = %s AND status = 'pending'
-        ''', (reason, admin_id, order_id))
+            UPDATE orders SET status = 'pending_payment', 
+                             notes = CONCAT(COALESCE(notes, ''), '[', %s, '] ขอสลิปใหม่: ', %s, ' | '), 
+                             updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (timestamp, reason, order_id))
         
         conn.commit()
         
         # Notify user
         create_notification(
             order['user_id'],
-            'สลิปไม่ถูกต้อง',
-            f'คำสั่งซื้อ #{order_id} ไม่ผ่านการตรวจสอบ: {reason}',
+            'กรุณาแนบสลิปใหม่',
+            f'คำสั่งซื้อ {order["order_number"] or "#" + str(order_id)}: {reason}',
             'warning',
             'order',
             order_id
         )
         
-        return jsonify({'message': 'Order rejected'}), 200
+        # TODO: Send email notification when email system is ready
+        # send_email_notification(order['user_id'], 'request_new_slip', order_id, reason)
+        
+        return jsonify({'message': 'ขอสลิปใหม่สำเร็จ'}), 200
         
     except Exception as e:
         if conn:
@@ -7096,7 +7102,7 @@ def cancel_order(order_id):
         if not order:
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
         
-        if order['status'] not in ('pending_payment', 'under_review', 'rejected', 'paid'):
+        if order['status'] not in ('pending_payment', 'under_review', 'rejected', 'paid', 'preparing', 'failed_delivery'):
             return jsonify({'error': 'ไม่สามารถยกเลิกคำสั่งซื้อนี้ได้'}), 400
         
         # Get order items and shipments to restore stock
@@ -7152,6 +7158,173 @@ def cancel_order(order_id):
         )
         
         return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/mark-delivered', methods=['POST'])
+@admin_required
+def mark_order_delivered(order_id):
+    """Mark order as delivered"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        if order['status'] != 'shipped':
+            return jsonify({'error': 'คำสั่งซื้อนี้ยังไม่ได้จัดส่ง'}), 400
+        
+        cursor.execute('''
+            UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (order_id,))
+        
+        # Update all shipments to delivered
+        cursor.execute('''
+            UPDATE order_shipments SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+            WHERE order_id = %s
+        ''', (order_id,))
+        
+        conn.commit()
+        
+        create_notification(
+            order['user_id'],
+            'ได้รับสินค้าแล้ว',
+            f'คำสั่งซื้อ {order["order_number"] or "#" + str(order_id)} จัดส่งสำเร็จแล้ว',
+            'success',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'อัปเดตสถานะสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/mark-failed-delivery', methods=['POST'])
+@admin_required
+def mark_order_failed_delivery(order_id):
+    """Mark order as failed delivery (returned)"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json() or {}
+        reason = data.get('reason', 'สินค้าตีกลับ')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        if order['status'] != 'shipped':
+            return jsonify({'error': 'คำสั่งซื้อนี้ยังไม่ได้จัดส่ง'}), 400
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        cursor.execute('''
+            UPDATE orders SET status = 'failed_delivery', 
+                             notes = CONCAT(COALESCE(notes, ''), '[', %s, '] จัดส่งไม่สำเร็จ: ', %s, ' | '),
+                             updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (timestamp, reason, order_id))
+        
+        conn.commit()
+        
+        create_notification(
+            order['user_id'],
+            'จัดส่งไม่สำเร็จ',
+            f'คำสั่งซื้อ {order["order_number"] or "#" + str(order_id)}: {reason}',
+            'warning',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'อัปเดตสถานะสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/reship', methods=['POST'])
+@admin_required
+def reship_order(order_id):
+    """Reship order after failed delivery - reset to preparing"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        if order['status'] != 'failed_delivery':
+            return jsonify({'error': 'คำสั่งซื้อนี้ไม่อยู่ในสถานะจัดส่งไม่สำเร็จ'}), 400
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        cursor.execute('''
+            UPDATE orders SET status = 'preparing', 
+                             notes = CONCAT(COALESCE(notes, ''), '[', %s, '] จัดส่งใหม่ | '),
+                             updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (timestamp, order_id))
+        
+        # Reset shipment tracking
+        cursor.execute('''
+            UPDATE order_shipments SET tracking_number = NULL, shipping_provider = NULL, status = 'pending', shipped_at = NULL
+            WHERE order_id = %s
+        ''', (order_id,))
+        
+        conn.commit()
+        
+        create_notification(
+            order['user_id'],
+            'กำลังจัดส่งใหม่',
+            f'คำสั่งซื้อ {order["order_number"] or "#" + str(order_id)} กำลังจัดส่งใหม่',
+            'info',
+            'order',
+            order_id
+        )
+        
+        return jsonify({'message': 'เริ่มจัดส่งใหม่สำเร็จ'}), 200
         
     except Exception as e:
         if conn:

@@ -103,7 +103,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName] = fullHash.split('?');
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'quick-order', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
         }
@@ -507,6 +507,8 @@ function switchPage(pageName) {
         loadQuickOrderPage();
     } else if (pageName === 'shipping-settings') {
         loadShippingSettingsPage();
+    } else if (pageName === 'slip-review') {
+        loadSlipReviewPage();
     }
 }
 
@@ -1612,10 +1614,11 @@ function renderOrders() {
     const statusLabels = {
         'pending_payment': 'รอชำระเงิน',
         'under_review': 'รอตรวจสอบ',
-        'preparing': 'เตรียมสินค้า',
+        'preparing': 'ที่ต้องจัดส่ง',
         'paid': 'ชำระแล้ว',
         'shipped': 'กำลังจัดส่ง',
         'delivered': 'จัดส่งสำเร็จ',
+        'failed_delivery': 'จัดส่งไม่สำเร็จ',
         'rejected': 'ปฏิเสธ',
         'cancelled': 'ยกเลิก'
     };
@@ -1627,6 +1630,7 @@ function renderOrders() {
         'paid': '#22c55e',
         'shipped': '#0ea5e9',
         'delivered': '#10b981',
+        'failed_delivery': '#ef4444',
         'rejected': '#ef4444',
         'cancelled': '#6b7280'
     };
@@ -1870,24 +1874,54 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
-        // Build action buttons
+        // Build action buttons based on order status
         let actionsHtml = '';
         if (order.status === 'under_review') {
             actionsHtml = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
-                    <button onclick="approveOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="approveSlip(${orderId}); closeModal('orderDetailModal');" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยืนยันการชำระเงิน
                     </button>
-                    <button onclick="rejectOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
-                        ปฏิเสธ
+                    <button onclick="requestNewSlip(${orderId}); closeModal('orderDetailModal');" style="padding: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        ขอสลิปใหม่
                     </button>
                 </div>
             `;
-        } else if (order.status === 'paid' || order.status === 'pending_payment') {
+        } else if (order.status === 'pending_payment') {
             actionsHtml = `
                 <div style="margin-top: 24px;">
                     <button onclick="cancelOrderAdmin(${orderId})" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิกคำสั่งซื้อ
+                    </button>
+                </div>
+            `;
+        } else if (order.status === 'preparing') {
+            actionsHtml = `
+                <div style="margin-top: 24px;">
+                    <button onclick="cancelOrderAdmin(${orderId})" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        ยกเลิกคำสั่งซื้อ
+                    </button>
+                </div>
+            `;
+        } else if (order.status === 'shipped') {
+            actionsHtml = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
+                    <button onclick="markDelivered(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        ส่งสำเร็จ
+                    </button>
+                    <button onclick="markFailedDelivery(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        จัดส่งไม่สำเร็จ
+                    </button>
+                </div>
+            `;
+        } else if (order.status === 'failed_delivery') {
+            actionsHtml = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
+                    <button onclick="reshipOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        จัดส่งใหม่
+                    </button>
+                    <button onclick="cancelOrderAdmin(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        ยกเลิก / คืนเงิน
                     </button>
                 </div>
             `;
@@ -2053,6 +2087,54 @@ async function approveOrder(orderId) {
     }
 }
 
+async function approveSlip(orderId) {
+    if (!confirm('ยืนยันการชำระเงินและเริ่มเตรียมสินค้า?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('อนุมัติสลิปสำเร็จ - เริ่มเตรียมสินค้า', 'success');
+            loadOrders(currentOrdersStatus);
+            loadSlipReviewOrders();
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error approving slip:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function requestNewSlip(orderId) {
+    const reason = prompt('เหตุผลที่ต้องขอสลิปใหม่ (เช่น สลิปไม่ชัด, ยอดเงินไม่ตรง):', 'สลิปไม่ชัด กรุณาส่งใหม่');
+    if (!reason) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/request-new-slip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('แจ้งขอสลิปใหม่สำเร็จ', 'warning');
+            loadOrders(currentOrdersStatus);
+            loadSlipReviewOrders();
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error requesting new slip:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
 async function rejectOrder(orderId) {
     const reason = prompt('เหตุผลในการปฏิเสธ:');
     if (reason === null) return;
@@ -2099,6 +2181,77 @@ async function cancelOrderAdmin(orderId) {
         }
     } catch (error) {
         console.error('Error cancelling order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function markDelivered(orderId) {
+    if (!confirm('ยืนยันว่าลูกค้าได้รับสินค้าแล้ว?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/mark-delivered`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('อัปเดตสถานะสำเร็จ - จัดส่งสำเร็จ', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error marking delivered:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function markFailedDelivery(orderId) {
+    const reason = prompt('เหตุผลที่จัดส่งไม่สำเร็จ:', 'สินค้าตีกลับ');
+    if (!reason) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/mark-failed-delivery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('อัปเดตสถานะสำเร็จ - จัดส่งไม่สำเร็จ', 'warning');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error marking failed delivery:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function reshipOrder(orderId) {
+    if (!confirm('เริ่มจัดส่งใหม่สำหรับคำสั่งซื้อนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/reship`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            showGlobalAlert('เริ่มจัดส่งใหม่สำเร็จ', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
+        } else {
+            const error = await response.json();
+            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error reshipping order:', error);
         showGlobalAlert('เกิดข้อผิดพลาด', 'error');
     }
 }
@@ -4933,6 +5086,139 @@ function exportCurrentStock() {
     window.location.href = `${API_URL}/admin/stock/export?type=current`;
 }
 
+// ==================== SLIP REVIEW SECTION ====================
+
+async function loadSlipReviewPage() {
+    const container = document.getElementById('slipReviewContent');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>';
+    
+    await loadSlipReviewOrders();
+}
+
+async function loadSlipReviewOrders() {
+    const container = document.getElementById('slipReviewContent');
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
+        if (!response.ok) throw new Error('Failed to load orders');
+        const orders = await response.json();
+        
+        // Update badge count
+        const badge = document.getElementById('slipReviewCount');
+        if (badge) {
+            if (orders.length > 0) {
+                badge.textContent = orders.length;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        if (orders.length === 0) {
+            container.innerHTML = `
+                <div class="card" style="text-align: center; padding: 60px;">
+                    <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 16px;">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h3 style="color: #fff; font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
+                    <p style="color: rgba(255,255,255,0.5); font-size: 14px;">สลิปทั้งหมดถูกตรวจสอบแล้ว</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px;">
+                ${orders.map(order => renderSlipReviewCard(order)).join('')}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading slip review orders:', error);
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #f87171;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
+    }
+}
+
+function renderSlipReviewCard(order) {
+    const orderDate = new Date(order.created_at).toLocaleDateString('th-TH', { 
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+    
+    const slipUrl = order.payment_slips && order.payment_slips.length > 0 
+        ? order.payment_slips[order.payment_slips.length - 1].slip_image_url 
+        : null;
+    
+    return `
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 140px 1fr; min-height: 240px;">
+                <div style="background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="viewSlipFullscreen('${slipUrl}')">
+                    ${slipUrl 
+                        ? `<img src="${slipUrl}" alt="Payment Slip" style="width: 100%; height: 100%; object-fit: contain;">`
+                        : `<div style="color: rgba(255,255,255,0.3); text-align: center; padding: 20px;">ไม่มีสลิป</div>`
+                    }
+                </div>
+                <div style="padding: 16px; display: flex; flex-direction: column;">
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="font-weight: 700; color: #fff; font-size: 15px;">#${escapeHtml(order.order_number || 'ORD-' + order.id)}</span>
+                            <span style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500;">รอตรวจสอบ</span>
+                        </div>
+                        <div style="font-size: 12px; color: rgba(255,255,255,0.5);">${orderDate}</div>
+                    </div>
+                    
+                    <div style="font-size: 13px; color: #fff; margin-bottom: 8px;">
+                        <strong>${escapeHtml(order.reseller_name || 'ไม่ระบุ')}</strong>
+                        ${order.reseller_tier_name ? `<span style="color: rgba(255,255,255,0.5);"> (${escapeHtml(order.reseller_tier_name)})</span>` : ''}
+                    </div>
+                    
+                    <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
+                        ${order.item_count || '-'} รายการ
+                    </div>
+                    
+                    <div style="font-size: 18px; font-weight: 700; color: #22c55e; margin-bottom: auto;">
+                        ฿${parseFloat(order.total_amount).toLocaleString('th-TH', {minimumFractionDigits: 2})}
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+                        <button onclick="approveSlip(${order.id})" style="padding: 10px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            อนุมัติ
+                        </button>
+                        <button onclick="requestNewSlip(${order.id})" style="padding: 10px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            ขอสลิปใหม่
+                        </button>
+                    </div>
+                    
+                    <button onclick="viewOrderDetails(${order.id})" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 8px;">
+                        ดูรายละเอียด
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function viewSlipFullscreen(imageUrl) {
+    if (!imageUrl) {
+        showGlobalAlert('ไม่พบภาพสลิป', 'error');
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'slipFullscreenModal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: zoom-out;';
+    modal.onclick = () => modal.remove();
+    
+    modal.innerHTML = `
+        <img src="${imageUrl}" alt="Payment Slip" style="max-width: 90%; max-height: 90%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 50px rgba(0,0,0,0.5);">
+        <button onclick="event.stopPropagation(); this.parentElement.remove();" style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(255,255,255,0.2); border: none; border-radius: 50%; color: #fff; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
 // ==================== QUICK ORDER SECTION ====================
 
 let quickOrderItems = [];
@@ -5209,6 +5495,188 @@ document.addEventListener('change', function(e) {
         updateQuickOrderSummary();
     }
 });
+
+// =====================================================
+// SLIP REVIEW PAGE FUNCTIONS
+// =====================================================
+
+async function loadSlipReviewPage() {
+    const container = document.getElementById('slipReviewContent');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p>กำลังโหลด...</p></div>';
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
+        if (!response.ok) throw new Error('Failed to load orders');
+        
+        const orders = await response.json();
+        
+        if (orders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 60px;">
+                    <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 16px;">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h3 style="color: rgba(255,255,255,0.6); font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 14px;">สลิปทั้งหมดได้รับการตรวจสอบแล้ว</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Fetch full details for each order
+        const orderDetails = await Promise.all(orders.map(async (order) => {
+            const detailRes = await fetch(`${API_URL}/orders/${order.id}`);
+            return await detailRes.json();
+        }));
+        
+        container.innerHTML = `
+            <div style="display: grid; gap: 20px;">
+                ${orderDetails.map(order => {
+                    const slip = order.payment_slips && order.payment_slips.length > 0 ? order.payment_slips[0] : null;
+                    const customerName = order.customer ? order.customer.full_name : order.reseller_name;
+                    const itemCount = order.items ? order.items.reduce((sum, i) => sum + i.quantity, 0) : 0;
+                    
+                    return `
+                    <div class="slip-review-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden;">
+                        <div style="display: grid; grid-template-columns: 280px 1fr; gap: 0;">
+                            <!-- Slip Image -->
+                            <div style="padding: 20px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                ${slip ? `
+                                    <img src="${slip.slip_image_url}" alt="Payment Slip" 
+                                         style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer; transition: transform 0.2s;"
+                                         onclick="showSlipFullscreen('${slip.slip_image_url}')"
+                                         onmouseover="this.style.transform='scale(1.02)'" 
+                                         onmouseout="this.style.transform='scale(1)'">
+                                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px;">คลิกเพื่อขยาย</p>
+                                ` : `
+                                    <div style="color: rgba(255,255,255,0.4); text-align: center;">
+                                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        <p style="margin-top: 8px;">ไม่มีสลิป</p>
+                                    </div>
+                                `}
+                            </div>
+                            
+                            <!-- Order Info -->
+                            <div style="padding: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                                    <div>
+                                        <h3 style="color: #fff; font-size: 18px; font-weight: 600; margin: 0 0 4px 0;">${order.order_number || '#' + order.id}</h3>
+                                        <p style="color: rgba(255,255,255,0.5); font-size: 13px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
+                                    </div>
+                                    <span style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;">รอตรวจสอบ</span>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้สั่ง</div>
+                                        <div style="font-size: 14px; color: #fff; font-weight: 500;">${escapeHtml(order.reseller_name || '-')}</div>
+                                        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${escapeHtml(order.reseller_tier_name || '')}</div>
+                                    </div>
+                                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
+                                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้รับ</div>
+                                        <div style="font-size: 14px; color: #fff; font-weight: 500;">${escapeHtml(customerName || '-')}</div>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 20px; margin-bottom: 16px; font-size: 14px;">
+                                    <div><span style="color: rgba(255,255,255,0.5);">สินค้า:</span> <strong style="color: #fff;">${itemCount} ชิ้น</strong></div>
+                                    <div><span style="color: rgba(255,255,255,0.5);">ยอดรวม:</span> <strong style="color: #22c55e;">฿${parseFloat(order.final_amount || 0).toLocaleString('th-TH')}</strong></div>
+                                    ${slip && slip.amount ? `<div><span style="color: rgba(255,255,255,0.5);">ยอดในสลิป:</span> <strong style="color: #fbbf24;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></div>` : ''}
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div style="display: flex; gap: 12px;">
+                                    <button onclick="approveSlip(${order.id})" style="flex: 1; padding: 12px 20px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                                        ยืนยันการชำระเงิน
+                                    </button>
+                                    <button onclick="requestNewSlip(${order.id})" style="flex: 1; padding: 12px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        ขอสลิปใหม่
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error loading slip review:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                <button onclick="loadSlipReviewPage()" style="margin-top: 12px; padding: 8px 16px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 8px; cursor: pointer;">ลองใหม่</button>
+            </div>
+        `;
+    }
+}
+
+function showSlipFullscreen(imageUrl) {
+    const overlay = document.createElement('div');
+    overlay.id = 'slipFullscreenOverlay';
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+    overlay.onclick = () => overlay.remove();
+    
+    overlay.innerHTML = `
+        <img src="${imageUrl}" style="max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+        <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: none; color: #fff; width: 48px; height: 48px; border-radius: 50%; cursor: pointer; font-size: 24px;">×</button>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+async function approveSlip(orderId) {
+    if (!confirm('ยืนยันการชำระเงินและอนุมัติคำสั่งซื้อนี้?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ - สถานะเปลี่ยนเป็น "ที่ต้องจัดส่ง"', 'success');
+            loadSlipReviewPage();
+        } else {
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error approving order:', error);
+        showGlobalAlert('เกิดข้อผิดพลาดในการอนุมัติ', 'error');
+    }
+}
+
+async function requestNewSlip(orderId) {
+    const reason = prompt('เหตุผลในการขอสลิปใหม่:', 'สลิปไม่ชัด');
+    if (!reason) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/admin/orders/${orderId}/request-new-slip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+            showGlobalAlert('ขอสลิปใหม่สำเร็จ - แจ้งเตือนตัวแทนจำหน่ายแล้ว', 'success');
+            loadSlipReviewPage();
+        } else {
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error requesting new slip:', error);
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
 
 // =====================================================
 // SHIPPING SETTINGS FUNCTIONS
