@@ -1610,18 +1610,41 @@ tr:hover td {
     .main-content {
         margin-left: var(--sidebar-collapsed);
         padding: 24px 16px;
+        width: calc(100% - var(--sidebar-collapsed));
+        max-width: calc(100vw - var(--sidebar-collapsed));
+        overflow-x: hidden;
+        box-sizing: border-box;
     }
 
     .stats-grid {
         grid-template-columns: 1fr;
     }
 
+    .dashboard-stats-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .dashboard-stats-row .stat-card {
+        padding: 16px;
+    }
+
     .page-header h1 {
-        font-size: 26px;
+        font-size: 22px;
     }
 
     .card {
-        padding: 24px 20px;
+        padding: 16px;
+    }
+
+    /* Quick stats row for admin */
+    .quick-stats-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .quick-stat-card {
+        padding: 12px;
     }
 }
 
