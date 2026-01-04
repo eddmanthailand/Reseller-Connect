@@ -10,6 +10,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from replit.object_storage import Client
+from datetime import timedelta
+import time
+import secrets
 
 app = Flask(__name__)
 
@@ -26,8 +29,35 @@ app.secret_key = session_secret
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 
-CORS(app, supports_credentials=True)
+# Rate limiting storage (in-memory for simplicity)
+login_attempts = {}
+RATE_LIMIT_MAX_ATTEMPTS = 5
+RATE_LIMIT_WINDOW = 300  # 5 minutes
+
+# CSRF token storage
+def generate_csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+def validate_csrf_token():
+    token = request.headers.get('X-CSRF-Token') or request.form.get('_csrf_token')
+    if not token or token != session.get('_csrf_token'):
+        return False
+    return True
+
+# CORS configuration - allow Replit domains
+allowed_origins = [
+    f"https://{os.environ.get('REPLIT_DEV_DOMAIN', '')}",
+    f"https://{os.environ.get('REPLIT_DEPLOYMENT_DOMAIN', '')}",
+    "https://ekgshops.com",
+    "https://www.ekgshops.com"
+]
+allowed_origins = [o for o in allowed_origins if o and o != "https://"]
+
+CORS(app, supports_credentials=True, origins=allowed_origins)
 
 # Initialize database on startup
 init_db()
@@ -40,6 +70,21 @@ def add_header(response):
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
+
+# CSRF protection decorator for state-changing endpoints
+def csrf_protect(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+            if not validate_csrf_token():
+                return jsonify({'error': 'CSRF token ไม่ถูกต้อง กรุณารีเฟรชหน้าเว็บ'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    """Get CSRF token for authenticated requests"""
+    return jsonify({'csrf_token': generate_csrf_token()}), 200
 
 # Authentication decorator
 def login_required(f):
@@ -145,6 +190,20 @@ def login():
     username = data['username']
     password = data['password']
     
+    # Rate limiting check
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    current_time = time.time()
+    
+    # Clean old entries
+    login_attempts[client_ip] = [t for t in login_attempts.get(client_ip, []) 
+                                  if current_time - t < RATE_LIMIT_WINDOW]
+    
+    if len(login_attempts.get(client_ip, [])) >= RATE_LIMIT_MAX_ATTEMPTS:
+        remaining = int(RATE_LIMIT_WINDOW - (current_time - login_attempts[client_ip][0]))
+        return jsonify({'error': f'ลองเข้าสู่ระบบมากเกินไป กรุณารอ {remaining} วินาที'}), 429
+    
     conn = None
     cursor = None
     try:
@@ -171,7 +230,19 @@ def login():
         
         # Verify password with bcrypt
         if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+            # Record failed attempt
+            if client_ip not in login_attempts:
+                login_attempts[client_ip] = []
+            login_attempts[client_ip].append(current_time)
             return jsonify({'error': 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}), 401
+        
+        # Clear failed attempts on successful login
+        if client_ip in login_attempts:
+            del login_attempts[client_ip]
+        
+        # Regenerate session to prevent session fixation
+        session.clear()
+        session.permanent = True
         
         # Set session
         session['user_id'] = user['id']
@@ -179,6 +250,7 @@ def login():
         session['full_name'] = user['full_name']
         session['role'] = user['role']
         session['reseller_tier'] = user['reseller_tier']
+        session['_csrf_token'] = secrets.token_hex(32)
         
         # Determine redirect URL based on role
         if user['role'] in ['Super Admin', 'Assistant Admin']:

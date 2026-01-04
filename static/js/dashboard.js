@@ -1,6 +1,33 @@
 // API Base URL (use window.API_URL set by template, fallback to '/api')
 const API_URL = (typeof window !== 'undefined' && window.API_URL) ? window.API_URL : '/api';
 
+// CSRF Token management
+let csrfToken = null;
+
+async function fetchCsrfToken() {
+    try {
+        const response = await fetch(`${API_URL}/csrf-token`, { credentials: 'include' });
+        if (response.ok) {
+            const data = await response.json();
+            csrfToken = data.csrf_token;
+        }
+    } catch (error) {
+        console.error('Failed to fetch CSRF token:', error);
+    }
+}
+
+function getSecureFetchOptions(options = {}) {
+    const headers = options.headers || {};
+    if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+    }
+    return {
+        ...options,
+        credentials: 'include',
+        headers: headers
+    };
+}
+
 // Utility function to escape HTML
 function escapeHtml(text) {
     if (!text) return '';
@@ -70,6 +97,9 @@ async function init() {
     try {
         // Restore sidebar state first
         restoreSidebarState();
+        
+        // Fetch CSRF token for secure requests
+        await fetchCsrfToken();
         
         await loadCurrentUser();
         await Promise.all([
