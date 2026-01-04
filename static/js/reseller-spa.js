@@ -1496,7 +1496,7 @@ async function loadCartBadge() {
 
 async function loadOrders() {
     try {
-        const response = await fetch(`${RESELLER_API_URL}/reseller/orders`);
+        const response = await fetch(`${RESELLER_API_URL}/orders`);
         if (!response.ok) throw new Error('Failed to load orders');
         
         const data = await response.json();
