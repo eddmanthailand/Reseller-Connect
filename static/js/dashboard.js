@@ -1756,64 +1756,76 @@ async function viewOrderDetails(orderId) {
             'cancelled': '#6b7280'
         };
         
+        // Build items HTML - Modern card style
         let itemsHtml = '';
         if (order.items && order.items.length > 0) {
             itemsHtml = order.items.map(item => `
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <span>${escapeHtml(item.product_name || 'Product')} (${escapeHtml(item.sku_code || '')}) x${item.quantity}</span>
-                    <span>฿${parseFloat(item.subtotal || item.unit_price * item.quantity).toLocaleString('th-TH')}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <div style="flex: 1;">
+                        <div style="color: #fff; font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
+                        <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 2px;">SKU: ${escapeHtml(item.sku_code || '-')} | จำนวน: ${item.quantity}</div>
+                    </div>
+                    <div style="color: #fff; font-weight: 600; font-size: 15px;">฿${parseFloat(item.subtotal || item.unit_price * item.quantity).toLocaleString('th-TH')}</div>
                 </div>
             `).join('');
         }
         
-        // Build shipments HTML with tracking input
+        // Build shipments HTML - Modern design
         let shipmentsHtml = '';
         if (order.shipments && order.shipments.length > 0) {
-            const providerOptions = providers.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
-            
             shipmentsHtml = `
-                <div style="margin-top: 20px;">
-                    <h4 style="margin-bottom: 12px; color: #ffffff;">การจัดส่ง (${order.shipments.length} พัสดุ)</h4>
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <svg width="20" height="20" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1"/><polygon points="12 15 17 21 7 21 12 15"/></svg>
+                        <h4 style="color: #fff; font-size: 16px; font-weight: 600; margin: 0;">การจัดส่ง (${order.shipments.length} พัสดุ)</h4>
+                    </div>
                     ${order.shipments.map((shipment, idx) => {
-                        const shipmentStatusLabel = shipment.status === 'pending' ? 'รอจัดส่ง' : shipment.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
-                        const shipmentStatusColor = shipment.status === 'pending' ? '#f59e0b' : shipment.status === 'shipped' ? '#8b5cf6' : '#10b981';
+                        const shipmentStatusLabel = shipment.status === 'pending' ? 'รอจัดส่ง' : shipment.status === 'shipped' ? 'จัดส่งแล้ว' : 'ส่งสำเร็จ';
+                        const shipmentStatusColor = shipment.status === 'pending' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : shipment.status === 'shipped' ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' : 'linear-gradient(135deg, #10b981, #059669)';
                         
-                        // Build tracking URL (now pre-computed from API)
                         let trackingLinkHtml = '';
                         if (shipment.tracking_url) {
-                            trackingLinkHtml = `<a href="${escapeHtml(shipment.tracking_url)}" target="_blank" style="color: #86efac; text-decoration: underline; font-size: 11px;">ติดตามพัสดุ</a>`;
+                            trackingLinkHtml = `<a href="${escapeHtml(shipment.tracking_url)}" target="_blank" style="color: #a5f3fc; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                ติดตามพัสดุ
+                            </a>`;
                         }
                         
                         return `
-                            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <strong>คลัง: ${escapeHtml(shipment.warehouse_name)}</strong>
+                            <div style="background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px; backdrop-filter: blur(10px);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <svg width="16" height="16" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                                        </div>
+                                        <span style="color: #fff; font-weight: 600;">${escapeHtml(shipment.warehouse_name)}</span>
+                                    </div>
                                     <div style="display: flex; gap: 8px; align-items: center;">
-                                        <button onclick="printShippingLabel(${idx})" class="btn" style="font-size: 10px; padding: 4px 8px; background: #6366f1;">
+                                        <button onclick="printShippingLabel(${idx})" style="font-size: 11px; padding: 6px 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                                             พิมพ์ใบปะหน้า
                                         </button>
-                                        <span style="background: ${shipmentStatusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${shipmentStatusLabel}</span>
+                                        <span style="background: ${shipmentStatusColor}; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;">${shipmentStatusLabel}</span>
                                     </div>
                                 </div>
-                                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">
-                                    สินค้า: ${shipment.items.map(i => `${escapeHtml(i.product_name)} x${i.quantity}`).join(', ')}
+                                <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 12px; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                    ${shipment.items.map(i => `<span style="color: #fff;">${escapeHtml(i.product_name)}</span> <span style="color: rgba(255,255,255,0.5);">x${i.quantity}</span>`).join(', ')}
                                 </div>
                                 ${order.status === 'paid' || shipment.status === 'pending' ? `
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-                                        <select id="provider_${shipment.id}" style="font-size: 12px; padding: 8px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;">
-                                            <option value="" style="background: #1e1e2e; color: white;">-- เลือกขนส่ง --</option>
-                                            ${providers.map(p => `<option value="${escapeHtml(p.name)}" style="background: #1e1e2e; color: white;">${escapeHtml(p.name)}</option>`).join('')}
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+                                        <select id="provider_${shipment.id}" style="font-size: 13px; padding: 10px 12px; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; outline: none;">
+                                            <option value="" style="background: #1a1a2e;">-- เลือกขนส่ง --</option>
+                                            ${providers.map(p => `<option value="${escapeHtml(p.name)}" style="background: #1a1a2e;">${escapeHtml(p.name)}</option>`).join('')}
                                         </select>
-                                        <input type="text" id="tracking_${shipment.id}" placeholder="เลขพัสดุ" value="${escapeHtml(shipment.tracking_number || '')}" style="font-size: 12px; padding: 8px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;">
+                                        <input type="text" id="tracking_${shipment.id}" placeholder="เลขพัสดุ" value="${escapeHtml(shipment.tracking_number || '')}" style="font-size: 13px; padding: 10px 12px; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; outline: none;">
                                     </div>
-                                    <button onclick="updateShipmentTracking(${orderId}, ${shipment.id})" class="btn" style="width: 100%; margin-top: 8px; font-size: 12px; padding: 8px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    <button onclick="updateShipmentTracking(${orderId}, ${shipment.id})" style="width: 100%; margin-top: 12px; font-size: 13px; padding: 12px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                                         ${shipment.tracking_number ? 'อัปเดตเลขพัสดุ' : 'บันทึกเลขพัสดุ'}
                                     </button>
                                 ` : `
-                                    <div style="font-size: 12px; margin-top: 8px;">
-                                        <strong>ขนส่ง:</strong> ${escapeHtml(shipment.shipping_provider || '-')} | 
-                                        <strong>เลขพัสดุ:</strong> ${escapeHtml(shipment.tracking_number || '-')}
-                                        ${trackingLinkHtml ? ` | ${trackingLinkHtml}` : ''}
+                                    <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #fff; margin-top: 8px;">
+                                        <div><span style="color: rgba(255,255,255,0.6);">ขนส่ง:</span> <strong>${escapeHtml(shipment.shipping_provider || '-')}</strong></div>
+                                        <div><span style="color: rgba(255,255,255,0.6);">เลขพัสดุ:</span> <strong>${escapeHtml(shipment.tracking_number || '-')}</strong></div>
+                                        ${trackingLinkHtml}
                                     </div>
                                 `}
                             </div>
@@ -1823,17 +1835,21 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
+        // Build payment slips HTML
         let slipHtml = '';
         if (order.payment_slips && order.payment_slips.length > 0) {
             slipHtml = `
-                <div style="margin-top: 16px;">
-                    <h4 style="margin-bottom: 8px; color: #ffffff;">หลักฐานการชำระเงิน:</h4>
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        <h4 style="color: #fff; font-size: 16px; font-weight: 600; margin: 0;">หลักฐานการชำระเงิน</h4>
+                    </div>
                     ${order.payment_slips.map(slip => `
-                        <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
-                            <img src="${slip.slip_image_url}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
-                            <div style="margin-top: 8px; font-size: 12px;">
-                                <span style="background: ${slip.status === 'approved' ? '#22c55e' : slip.status === 'rejected' ? '#ef4444' : '#f59e0b'}; color: white; padding: 2px 8px; border-radius: 4px;">${slip.status === 'approved' ? 'อนุมัติ' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}</span>
-                                ${slip.amount ? ` | ยอด: ฿${parseFloat(slip.amount).toLocaleString('th-TH')}` : ''}
+                        <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                            <img src="${slip.slip_image_url}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px; display: block; margin: 0 auto;">
+                            <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #fff;">
+                                <span style="background: ${slip.status === 'approved' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : slip.status === 'rejected' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #f59e0b, #d97706)'}; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">${slip.status === 'approved' ? 'อนุมัติแล้ว' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}</span>
+                                ${slip.amount ? `<span>ยอด: <strong>฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></span>` : ''}
                             </div>
                         </div>
                     `).join('')}
@@ -1841,43 +1857,49 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
+        // Build action buttons
         let actionsHtml = '';
         if (order.status === 'under_review') {
             actionsHtml = `
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                    <button class="btn" onclick="approveOrder(${orderId})" style="flex: 1; background: #22c55e;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
+                    <button onclick="approveOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยืนยันการชำระเงิน
                     </button>
-                    <button class="btn" onclick="rejectOrder(${orderId})" style="flex: 1; background: #ef4444;">
+                    <button onclick="rejectOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ปฏิเสธ
                     </button>
                 </div>
             `;
         } else if (order.status === 'paid' || order.status === 'pending_payment') {
             actionsHtml = `
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                    <button class="btn" onclick="cancelOrderAdmin(${orderId})" style="flex: 1; background: #ef4444;">
+                <div style="margin-top: 24px;">
+                    <button onclick="cancelOrderAdmin(${orderId})" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิกคำสั่งซื้อ
                     </button>
                 </div>
             `;
         }
         
-        // Build reseller info section
+        // Build reseller info section - Modern card
         let resellerHtml = '';
         if (order.reseller_name) {
             const resellerFullAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ');
             resellerHtml = `
-                <div style="background: rgba(139,92,246,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px; color: #ffffff;">ข้อมูลผู้สั่ง (Reseller)</h4>
-                    <div style="font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                        <p><strong>ชื่อ:</strong> ${escapeHtml(order.reseller_name)}</p>
-                        <p><strong>Tier:</strong> ${escapeHtml(order.reseller_tier_name || '-')}</p>
-                        ${order.reseller_brand_name ? `<p><strong>ร้าน:</strong> ${escapeHtml(order.reseller_brand_name)}</p>` : ''}
-                        <p><strong>โทร:</strong> ${escapeHtml(order.reseller_phone || '-')}</p>
-                        ${order.reseller_email ? `<p><strong>อีเมล:</strong> ${escapeHtml(order.reseller_email)}</p>` : ''}
+                <div style="background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.05)); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <h4 style="color: #fff; font-size: 14px; font-weight: 600; margin: 0;">ผู้สั่ง (Reseller)</h4>
                     </div>
-                    ${resellerFullAddress ? `<p style="font-size: 12px; margin-top: 8px;"><strong>ที่อยู่:</strong> ${escapeHtml(resellerFullAddress)}</p>` : ''}
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #fff;">
+                        <div><span style="color: rgba(255,255,255,0.6);">ชื่อ:</span> <strong>${escapeHtml(order.reseller_name)}</strong></div>
+                        <div><span style="color: rgba(255,255,255,0.6);">Tier:</span> <strong>${escapeHtml(order.reseller_tier_name || '-')}</strong></div>
+                        ${order.reseller_brand_name ? `<div><span style="color: rgba(255,255,255,0.6);">ร้าน:</span> <strong>${escapeHtml(order.reseller_brand_name)}</strong></div>` : ''}
+                        <div><span style="color: rgba(255,255,255,0.6);">โทร:</span> <strong>${escapeHtml(order.reseller_phone || '-')}</strong></div>
+                        ${order.reseller_email ? `<div style="grid-column: span 2;"><span style="color: rgba(255,255,255,0.6);">อีเมล:</span> <strong>${escapeHtml(order.reseller_email)}</strong></div>` : ''}
+                    </div>
+                    ${resellerFullAddress ? `<div style="font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);"><span style="color: rgba(255,255,255,0.6);">ที่อยู่:</span> ${escapeHtml(resellerFullAddress)}</div>` : ''}
                 </div>
             `;
         }
@@ -1888,45 +1910,66 @@ async function viewOrderDetails(orderId) {
             const c = order.customer;
             const fullAddress = [c.address, c.subdistrict, c.district, c.province, c.postal_code].filter(Boolean).join(' ');
             customerHtml = `
-                <div style="background: rgba(34,197,94,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px; color: #ffffff;">ข้อมูลผู้รับ (ลูกค้าปลายทาง)</h4>
-                    <div style="font-size: 13px;">
-                        <p><strong>ชื่อ:</strong> ${escapeHtml(c.full_name || '-')}</p>
-                        <p><strong>โทร:</strong> ${escapeHtml(c.phone || '-')}</p>
-                        <p><strong>ที่อยู่:</strong> ${escapeHtml(fullAddress || '-')}</p>
+                <div style="background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05)); border: 1px solid rgba(34,197,94,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #22c55e, #16a34a); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        </div>
+                        <h4 style="color: #fff; font-size: 14px; font-weight: 600; margin: 0;">ผู้รับ (ลูกค้าปลายทาง)</h4>
+                    </div>
+                    <div style="font-size: 13px; color: #fff;">
+                        <div style="margin-bottom: 6px;"><span style="color: rgba(255,255,255,0.6);">ชื่อ:</span> <strong>${escapeHtml(c.full_name || '-')}</strong></div>
+                        <div style="margin-bottom: 6px;"><span style="color: rgba(255,255,255,0.6);">โทร:</span> <strong>${escapeHtml(c.phone || '-')}</strong></div>
+                        <div><span style="color: rgba(255,255,255,0.6);">ที่อยู่:</span> ${escapeHtml(fullAddress || '-')}</div>
                     </div>
                 </div>
             `;
         } else {
             customerHtml = `
-                <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <h4 style="margin-bottom: 8px; color: rgba(255,255,255,0.6);">ข้อมูลผู้รับ</h4>
-                    <p style="font-size: 13px; color: rgba(255,255,255,0.5);">ไม่ได้ระบุลูกค้าปลายทาง (Reseller รับสินค้าเอง)</p>
+                <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
+                    <svg width="24" height="24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" viewBox="0 0 24 24" style="margin: 0 auto 8px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin: 0;">ไม่ได้ระบุลูกค้าปลายทาง (Reseller รับสินค้าเอง)</p>
                 </div>
             `;
         }
         
+        // Build complete modal content
         const modalContent = `
-            <div style="padding: 20px; max-height: 80vh; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
-                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 6px 12px; border-radius: 8px; font-size: 13px;">${statusLabels[order.status] || order.status}</span>
+            <div style="padding: 24px; max-height: 80vh; overflow-y: auto; color: #fff;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div>
+                        <h2 style="color: #fff; font-size: 22px; font-weight: 700; margin: 0 0 4px 0;">${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
+                        <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
+                    </div>
+                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;">${statusLabels[order.status] || order.status}</span>
                 </div>
-                ${resellerHtml}
-                ${customerHtml}
-                <div style="margin-bottom: 16px; font-size: 14px;">
-                    <p><strong>ช่องทาง:</strong> ${escapeHtml(order.channel_name || '-')}</p>
-                    <p><strong>วันที่:</strong> ${new Date(order.created_at).toLocaleString('th-TH')}</p>
-                    ${order.notes ? `<p><strong>หมายเหตุ:</strong> ${escapeHtml(order.notes)}</p>` : ''}
+                
+                <!-- Info cards -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                    ${resellerHtml}
+                    ${customerHtml}
                 </div>
-                <h4 style="margin-bottom: 8px; color: #ffffff;">รายการสินค้า:</h4>
-                <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
-                    ${itemsHtml || '<p style="opacity: 0.6;">ไม่มีรายการ</p>'}
-                    <div style="display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid rgba(255,255,255,0.2); font-weight: bold;">
-                        <span>ยอดรวม</span>
-                        <span>฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
+                
+                <!-- Order meta -->
+                <div style="display: flex; gap: 20px; margin-bottom: 20px; font-size: 13px; color: #fff;">
+                    <div><span style="color: rgba(255,255,255,0.6);">ช่องทาง:</span> <strong>${escapeHtml(order.channel_name || '-')}</strong></div>
+                    ${order.notes ? `<div><span style="color: rgba(255,255,255,0.6);">หมายเหตุ:</span> ${escapeHtml(order.notes)}</div>` : ''}
+                </div>
+                
+                <!-- Items section -->
+                <div style="background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        <h4 style="color: #fff; font-size: 15px; font-weight: 600; margin: 0;">รายการสินค้า</h4>
+                    </div>
+                    ${itemsHtml || '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px 0;">ไม่มีรายการ</p>'}
+                    <div style="display: flex; justify-content: space-between; padding: 16px 0 0; margin-top: 12px; border-top: 2px solid rgba(255,255,255,0.15);">
+                        <span style="color: #fff; font-size: 16px; font-weight: 600;">ยอดรวมทั้งหมด</span>
+                        <span style="color: #fff; font-size: 20px; font-weight: 700;">฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
                     </div>
                 </div>
+                
                 ${shipmentsHtml}
                 ${slipHtml}
                 ${actionsHtml}
