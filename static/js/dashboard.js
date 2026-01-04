@@ -1727,6 +1727,12 @@ async function viewOrderDetails(orderId) {
         ]);
         const order = await orderResponse.json();
         
+        // Check for API error
+        if (order.error || !orderResponse.ok) {
+            showGlobalAlert(order.error || 'ไม่สามารถโหลดรายละเอียดคำสั่งซื้อได้', 'error');
+            return;
+        }
+        
         // Store order data for printing immediately after fetch
         window.currentOrderData = order;
         
