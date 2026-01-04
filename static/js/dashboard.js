@@ -1668,7 +1668,7 @@ function renderOrders() {
         
         html += `
             <tr>
-                <td style="font-weight: 600; color: #a855f7;">${orderNumber}</td>
+                <td style="font-weight: 600; color: #ffffff;">${orderNumber}</td>
                 <td>${escapeHtml(order.customer_name || 'N/A')}</td>
                 <td><span style="font-size: 11px; padding: 2px 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">${escapeHtml(channelName)}</span></td>
                 <td style="font-weight: 600;">฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</td>
@@ -4422,7 +4422,7 @@ async function loadStockSummaryPage() {
                         <div style="font-weight: 600; color: #fff;">${escapeHtml(w.name)}</div>
                         <div style="font-size: 12px; color: #9ca3af;">${w.sku_count} SKU</div>
                     </div>
-                    <div style="font-size: 24px; font-weight: 700; color: #8b5cf6;">${parseInt(w.stock).toLocaleString()}</div>
+                    <div style="font-size: 24px; font-weight: 700; color: #ffffff;">${parseInt(w.stock).toLocaleString()}</div>
                 </div>
             `).join('');
         }
@@ -4727,7 +4727,7 @@ function showQuickOrderSkuSelector(product, skus) {
                         <div style="font-size: 11px; color: #9ca3af;">${escapeHtml(sku.variant_name || '-')}</div>
                     </div>
                     <div style="text-align: right;">
-                        <div style="font-size: 13px; color: #a855f7; font-weight: 600;">฿${formatNumber(sku.price)}</div>
+                        <div style="font-size: 13px; color: #ffffff; font-weight: 600;">฿${formatNumber(sku.price)}</div>
                         <div style="font-size: 11px; color: ${sku.total_stock > 0 ? '#10b981' : '#ef4444'};">คงเหลือ: ${sku.total_stock || 0}</div>
                     </div>
                 </div>
@@ -4805,7 +4805,7 @@ function renderQuickOrderItems() {
             <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.product_name)}</div>
                 <div style="font-size: 12px; color: #9ca3af;">${escapeHtml(item.sku_code)} ${item.variant_name ? '| ' + escapeHtml(item.variant_name) : ''}</div>
-                <div style="font-size: 13px; color: #a855f7; font-weight: 600; margin-top: 4px;">฿${formatNumber(item.price)} x ${item.quantity} = ฿${formatNumber(item.price * item.quantity)}</div>
+                <div style="font-size: 13px; color: #ffffff; font-weight: 600; margin-top: 4px;">฿${formatNumber(item.price)} x ${item.quantity} = ฿${formatNumber(item.price * item.quantity)}</div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
                 <div style="display: flex; align-items: center; gap: 6px;">

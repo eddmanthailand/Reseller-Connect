@@ -1519,7 +1519,7 @@ function renderOrders(orders) {
     container.innerHTML = orders.map(order => `
         <div class="order-card" style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer;" onclick="viewResellerOrderDetails(${order.id})">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-weight: 600; color: #a855f7;">${order.order_number || '#' + order.id}</span>
+                <span style="font-weight: 600; color: #ffffff;">${order.order_number || '#' + order.id}</span>
                 <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px;">${statusLabels[order.status] || order.status}</span>
             </div>
             <div style="display: flex; justify-content: space-between; color: rgba(255,255,255,0.6); font-size: 13px;">
