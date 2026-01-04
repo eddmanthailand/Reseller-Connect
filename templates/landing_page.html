@@ -164,10 +164,10 @@
                 if (data.products && data.products.length > 0) {
                     container.innerHTML = data.products.map(product => `
                         <div class="product-card bg-white rounded-xl shadow-md overflow-hidden group">
-                            <div class="h-40 sm:h-48 bg-gray-100 relative overflow-hidden">
+                            <div class="h-40 sm:h-48 bg-white relative overflow-hidden flex items-center justify-center p-2">
                                 <img src="${product.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}" 
                                      alt="${product.name}" 
-                                     class="w-full h-full object-cover group-hover:scale-110 transition duration-500"
+                                     class="max-w-full max-h-full object-contain group-hover:scale-105 transition duration-500"
                                      onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
                                 ${product.total_stock <= 10 ? '<span class="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">HOT</span>' : ''}
                             </div>
