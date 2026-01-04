@@ -5523,10 +5523,17 @@ def get_order_detail(order_id):
         
         # Get order (check ownership for non-admins)
         query = '''
-            SELECT o.*, sc.name as channel_name, u.full_name as customer_name
+            SELECT o.*, sc.name as channel_name, 
+                   u.full_name as reseller_name, u.username as reseller_username,
+                   u.phone as reseller_phone, u.email as reseller_email,
+                   u.address as reseller_address, u.province as reseller_province,
+                   u.district as reseller_district, u.subdistrict as reseller_subdistrict,
+                   u.postal_code as reseller_postal_code, u.brand_name as reseller_brand_name,
+                   rt.name as reseller_tier_name
             FROM orders o
             LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             LEFT JOIN users u ON u.id = o.user_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
             WHERE o.id = %s
         '''
         if user_role not in ['Super Admin', 'Assistant Admin']:
@@ -5574,6 +5581,10 @@ def get_order_detail(order_id):
         ''', (order_id,))
         order['payment_slips'] = [dict(s) for s in cursor.fetchall()]
         
+        # Get shipping providers tracking URL mapping
+        cursor.execute('SELECT name, tracking_url FROM shipping_providers WHERE is_active = TRUE')
+        provider_tracking_map = {p['name']: p['tracking_url'] for p in cursor.fetchall()}
+        
         # Get shipments with warehouse info
         cursor.execute('''
             SELECT os.id, os.warehouse_id, os.tracking_number, os.shipping_provider,
@@ -5587,6 +5598,11 @@ def get_order_detail(order_id):
         shipments = []
         for shipment in cursor.fetchall():
             shipment_dict = dict(shipment)
+            # Add tracking URL if available
+            if shipment_dict.get('shipping_provider') and shipment_dict.get('tracking_number'):
+                tracking_template = provider_tracking_map.get(shipment_dict['shipping_provider'], '')
+                if tracking_template:
+                    shipment_dict['tracking_url'] = tracking_template.replace('{tracking}', shipment_dict['tracking_number'])
             # Get items in this shipment
             cursor.execute('''
                 SELECT osi.id, osi.order_item_id, osi.quantity,
@@ -5601,6 +5617,21 @@ def get_order_detail(order_id):
             shipments.append(shipment_dict)
         
         order['shipments'] = shipments
+        
+        # Get customer info if exists (reseller's customer)
+        if order.get('customer_id'):
+            cursor.execute('''
+                SELECT full_name, phone, email, address, province, district, subdistrict, postal_code
+                FROM reseller_customers WHERE id = %s
+            ''', (order['customer_id'],))
+            customer = cursor.fetchone()
+            if customer:
+                order['customer'] = dict(customer)
+        
+        # Get shipping provider tracking URLs
+        cursor.execute('SELECT name, tracking_url FROM shipping_providers WHERE is_active = TRUE')
+        tracking_urls = {p['name']: p['tracking_url'] for p in cursor.fetchall()}
+        order['tracking_urls'] = tracking_urls
         
         return jsonify(order), 200
         

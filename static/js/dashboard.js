@@ -1727,6 +1727,9 @@ async function viewOrderDetails(orderId) {
         ]);
         const order = await orderResponse.json();
         
+        // Store order data for printing immediately after fetch
+        window.currentOrderData = order;
+        
         const statusLabels = {
             'pending_payment': 'รอชำระเงิน',
             'under_review': 'รอตรวจสอบ',
@@ -1769,11 +1772,22 @@ async function viewOrderDetails(orderId) {
                         const shipmentStatusLabel = shipment.status === 'pending' ? 'รอจัดส่ง' : shipment.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
                         const shipmentStatusColor = shipment.status === 'pending' ? '#f59e0b' : shipment.status === 'shipped' ? '#8b5cf6' : '#10b981';
                         
+                        // Build tracking URL (now pre-computed from API)
+                        let trackingLinkHtml = '';
+                        if (shipment.tracking_url) {
+                            trackingLinkHtml = `<a href="${escapeHtml(shipment.tracking_url)}" target="_blank" style="color: #86efac; text-decoration: underline; font-size: 11px;">ติดตามพัสดุ</a>`;
+                        }
+                        
                         return `
                             <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <strong>คลัง: ${escapeHtml(shipment.warehouse_name)}</strong>
-                                    <span style="background: ${shipmentStatusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${shipmentStatusLabel}</span>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <button onclick="printShippingLabel(${idx})" class="btn" style="font-size: 10px; padding: 4px 8px; background: #6366f1;">
+                                            พิมพ์ใบปะหน้า
+                                        </button>
+                                        <span style="background: ${shipmentStatusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${shipmentStatusLabel}</span>
+                                    </div>
                                 </div>
                                 <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">
                                     สินค้า: ${shipment.items.map(i => `${escapeHtml(i.product_name)} x${i.quantity}`).join(', ')}
@@ -1793,6 +1807,7 @@ async function viewOrderDetails(orderId) {
                                     <div style="font-size: 12px; margin-top: 8px;">
                                         <strong>ขนส่ง:</strong> ${escapeHtml(shipment.shipping_provider || '-')} | 
                                         <strong>เลขพัสดุ:</strong> ${escapeHtml(shipment.tracking_number || '-')}
+                                        ${trackingLinkHtml ? ` | ${trackingLinkHtml}` : ''}
                                     </div>
                                 `}
                             </div>
@@ -1842,14 +1857,58 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
+        // Build reseller info section
+        let resellerHtml = '';
+        if (order.reseller_name) {
+            const resellerFullAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ');
+            resellerHtml = `
+                <div style="background: rgba(139,92,246,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <h4 style="margin-bottom: 8px; color: #c4b5fd;">ข้อมูลผู้สั่ง (Reseller)</h4>
+                    <div style="font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                        <p><strong>ชื่อ:</strong> ${escapeHtml(order.reseller_name)}</p>
+                        <p><strong>Tier:</strong> ${escapeHtml(order.reseller_tier_name || '-')}</p>
+                        ${order.reseller_brand_name ? `<p><strong>ร้าน:</strong> ${escapeHtml(order.reseller_brand_name)}</p>` : ''}
+                        <p><strong>โทร:</strong> ${escapeHtml(order.reseller_phone || '-')}</p>
+                        ${order.reseller_email ? `<p><strong>อีเมล:</strong> ${escapeHtml(order.reseller_email)}</p>` : ''}
+                    </div>
+                    ${resellerFullAddress ? `<p style="font-size: 12px; margin-top: 8px;"><strong>ที่อยู่:</strong> ${escapeHtml(resellerFullAddress)}</p>` : ''}
+                </div>
+            `;
+        }
+        
+        // Build customer (recipient) info section
+        let customerHtml = '';
+        if (order.customer) {
+            const c = order.customer;
+            const fullAddress = [c.address, c.subdistrict, c.district, c.province, c.postal_code].filter(Boolean).join(' ');
+            customerHtml = `
+                <div style="background: rgba(34,197,94,0.15); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <h4 style="margin-bottom: 8px; color: #86efac;">ข้อมูลผู้รับ (ลูกค้าปลายทาง)</h4>
+                    <div style="font-size: 13px;">
+                        <p><strong>ชื่อ:</strong> ${escapeHtml(c.full_name || '-')}</p>
+                        <p><strong>โทร:</strong> ${escapeHtml(c.phone || '-')}</p>
+                        <p><strong>ที่อยู่:</strong> ${escapeHtml(fullAddress || '-')}</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            customerHtml = `
+                <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <h4 style="margin-bottom: 8px; color: rgba(255,255,255,0.6);">ข้อมูลผู้รับ</h4>
+                    <p style="font-size: 13px; color: rgba(255,255,255,0.5);">ไม่ได้ระบุลูกค้าปลายทาง (Reseller รับสินค้าเอง)</p>
+                </div>
+            `;
+        }
+        
         const modalContent = `
             <div style="padding: 20px; max-height: 80vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
                     <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 6px 12px; border-radius: 8px; font-size: 13px;">${statusLabels[order.status] || order.status}</span>
                 </div>
+                ${resellerHtml}
+                ${customerHtml}
                 <div style="margin-bottom: 16px; font-size: 14px;">
-                    <p><strong>ลูกค้า:</strong> ${escapeHtml(order.customer_name || 'N/A')}</p>
                     <p><strong>ช่องทาง:</strong> ${escapeHtml(order.channel_name || '-')}</p>
                     <p><strong>วันที่:</strong> ${new Date(order.created_at).toLocaleString('th-TH')}</p>
                     ${order.notes ? `<p><strong>หมายเหตุ:</strong> ${escapeHtml(order.notes)}</p>` : ''}
@@ -1982,6 +2041,186 @@ async function cancelOrderAdmin(orderId) {
     }
 }
 
+function printShippingLabel(shipmentIndex) {
+    const order = window.currentOrderData;
+    if (!order || !order.shipments || !order.shipments[shipmentIndex]) {
+        showGlobalAlert('ไม่พบข้อมูล Shipment', 'error');
+        return;
+    }
+    
+    const shipment = order.shipments[shipmentIndex];
+    const orderNumber = order.order_number || `ORD-${order.id}`;
+    const orderDate = new Date(order.created_at).toLocaleDateString('th-TH', { 
+        year: 'numeric', month: 'short', day: 'numeric' 
+    });
+    
+    // Sender info (from reseller or store)
+    const senderName = order.reseller_brand_name || order.reseller_name || 'ร้านค้า';
+    const senderPhone = order.reseller_phone || '-';
+    const senderAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province].filter(Boolean).join(' ') || '-';
+    
+    // Recipient info (customer or reseller if no customer)
+    let recipientName = '-', recipientPhone = '-', recipientAddress = '-';
+    if (order.customer) {
+        recipientName = order.customer.full_name || '-';
+        recipientPhone = order.customer.phone || '-';
+        recipientAddress = [order.customer.address, order.customer.subdistrict, order.customer.district, order.customer.province, order.customer.postal_code].filter(Boolean).join(' ') || '-';
+    } else {
+        // Fallback to reseller as recipient
+        recipientName = order.reseller_name || '-';
+        recipientPhone = order.reseller_phone || '-';
+        recipientAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ') || '-';
+    }
+    
+    // Shipment info
+    const warehouseName = shipment.warehouse_name || 'คลังสินค้า';
+    const shippingProvider = shipment.shipping_provider || '';
+    const trackingNumber = shipment.tracking_number || '';
+    
+    // Items
+    const totalQty = shipment.items.reduce((sum, i) => sum + i.quantity, 0);
+    const itemsHtml = shipment.items.map((item, idx) => `
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">
+                <span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #333; border-radius: 3px; vertical-align: middle;"></span>
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${idx + 1}. ${item.product_name || 'สินค้า'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-size: 11px; color: #666;">${item.sku_code || ''}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold;">x ${item.quantity}</td>
+        </tr>
+    `).join('');
+    
+    // Open print window
+    const printWindow = window.open('', '_blank', 'width=800,height=1100');
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ใบปะหน้าพัสดุ - ${orderNumber}</title>
+    <style>
+        @page { size: A4; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Sarabun', 'Segoe UI', sans-serif; font-size: 14px; color: #333; }
+        .page { width: 190mm; min-height: 277mm; margin: 0 auto; }
+        .half { height: 138.5mm; padding: 15px; }
+        .shipping-half { border-bottom: 3px dashed #999; }
+        .packing-half { }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #333; }
+        .provider-box { background: #f0f0f0; padding: 8px 15px; border-radius: 5px; font-size: 16px; font-weight: bold; }
+        .tracking-box { text-align: right; }
+        .tracking-number { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+        .addresses { display: flex; gap: 20px; margin-bottom: 15px; }
+        .address-box { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
+        .address-box h4 { font-size: 12px; color: #666; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .address-box .name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .address-box .phone { color: #333; margin-bottom: 5px; }
+        .address-box .addr { font-size: 13px; line-height: 1.4; }
+        .order-info { display: flex; justify-content: space-between; padding: 10px; background: #f5f5f5; border-radius: 5px; font-size: 13px; }
+        .packing-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .packing-title { font-size: 18px; font-weight: bold; }
+        .warehouse-badge { background: #e0e7ff; color: #3730a3; padding: 5px 12px; border-radius: 5px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        th { background: #f0f0f0; padding: 10px; text-align: left; font-size: 12px; border-bottom: 2px solid #ddd; }
+        .summary { display: flex; justify-content: space-between; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+        .signature { display: flex; gap: 30px; margin-top: auto; }
+        .sig-box { flex: 1; }
+        .sig-line { border-bottom: 1px solid #333; height: 25px; margin-bottom: 5px; }
+        .sig-label { font-size: 11px; color: #666; }
+        @media print { 
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Top Half: Shipping Info -->
+        <div class="half shipping-half">
+            <div class="header">
+                <div class="provider-box">${shippingProvider || '-- ขนส่ง --'}</div>
+                <div class="tracking-box">
+                    ${trackingNumber ? `<div class="tracking-number">${trackingNumber}</div>` : '<div style="color: #999;">-- ยังไม่มีเลขพัสดุ --</div>'}
+                </div>
+            </div>
+            
+            <div class="addresses">
+                <div class="address-box">
+                    <h4>ผู้ส่ง</h4>
+                    <div class="name">${senderName}</div>
+                    <div class="phone">โทร: ${senderPhone}</div>
+                    <div class="addr">${senderAddress}</div>
+                </div>
+                <div class="address-box">
+                    <h4>ผู้รับ</h4>
+                    <div class="name">${recipientName}</div>
+                    <div class="phone">โทร: ${recipientPhone}</div>
+                    <div class="addr">${recipientAddress}</div>
+                </div>
+            </div>
+            
+            <div class="order-info">
+                <span><strong>Order:</strong> ${orderNumber}</span>
+                <span><strong>วันที่:</strong> ${orderDate}</span>
+                <span><strong>จำนวน:</strong> ${totalQty} ชิ้น</span>
+            </div>
+        </div>
+        
+        <!-- Bottom Half: Packing List -->
+        <div class="half packing-half">
+            <div class="packing-header">
+                <div class="packing-title">ใบจัดสินค้า</div>
+                <div class="warehouse-badge">คลัง: ${warehouseName}</div>
+            </div>
+            
+            <div style="margin-bottom: 10px; font-size: 13px;">
+                <strong>Order:</strong> ${orderNumber} | <strong>วันที่:</strong> ${orderDate}
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40px; text-align: center;">✓</th>
+                        <th>รายการสินค้า</th>
+                        <th style="width: 120px;">SKU</th>
+                        <th style="width: 60px; text-align: center;">จำนวน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHtml}
+                </tbody>
+            </table>
+            
+            <div class="summary">
+                <span><strong>รวมทั้งหมด:</strong> ${totalQty} ชิ้น</span>
+                <span><strong>ผู้รับ:</strong> ${recipientName}</span>
+            </div>
+            
+            <div class="signature">
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-label">ผู้จัดสินค้า</div>
+                </div>
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-label">วันที่/เวลา</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 300);
+        };
+    </script>
+</body>
+</html>
+    `);
+    printWindow.document.close();
+}
 
 function showModal(content) {
     let modal = document.getElementById('dynamicModal');
