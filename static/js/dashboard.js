@@ -1745,20 +1745,20 @@ async function viewOrderDetails(orderId) {
         const statusLabels = {
             'pending_payment': 'รอชำระเงิน',
             'under_review': 'รอตรวจสอบ',
-            'paid': 'ชำระแล้ว',
+            'preparing': 'ที่ต้องจัดส่ง',
             'shipped': 'กำลังจัดส่ง',
             'delivered': 'จัดส่งสำเร็จ',
-            'rejected': 'ปฏิเสธ',
+            'failed_delivery': 'จัดส่งไม่สำเร็จ',
             'cancelled': 'ยกเลิก'
         };
         
         const statusColors = {
             'pending_payment': '#f59e0b',
             'under_review': '#3b82f6',
-            'paid': '#22c55e',
-            'shipped': '#8b5cf6',
+            'preparing': '#8b5cf6',
+            'shipped': '#0ea5e9',
             'delivered': '#10b981',
-            'rejected': '#ef4444',
+            'failed_delivery': '#ef4444',
             'cancelled': '#6b7280'
         };
         
