@@ -10482,9 +10482,9 @@ def get_mto_product_detail(product_id):
         if not product:
             return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
-        # Get SKUs with tier pricing and MOQ
+        # Get SKUs with tier pricing and MOQ (exclude cost_price for resellers)
         cursor.execute('''
-            SELECT s.*, 
+            SELECT s.id, s.product_id, s.sku_code, s.price, s.stock,
                    COALESCE(tp.adjusted_price, s.price) as final_price,
                    COALESCE(s.min_order_qty, 1) as min_order_qty
             FROM skus s
@@ -10979,6 +10979,7 @@ def admin_create_mto_product():
         name = data.get('name')
         parent_sku = data.get('parent_sku')
         brand_id = data.get('brand_id')
+        category_id = data.get('category_id')
         description = data.get('description', '')
         production_days = data.get('production_days', 7)
         deposit_percent = data.get('deposit_percent', 50)
@@ -10999,10 +11000,10 @@ def admin_create_mto_product():
             return jsonify({'error': 'รหัส SPU นี้มีอยู่แล้ว'}), 400
         
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, brand_id, description, product_type, production_days, deposit_percent, status, size_chart_image_url)
-            VALUES (%s, %s, %s, %s, 'made_to_order', %s, %s, %s, %s)
+            INSERT INTO products (name, parent_sku, brand_id, category_id, description, product_type, production_days, deposit_percent, status, size_chart_image_url)
+            VALUES (%s, %s, %s, %s, %s, 'made_to_order', %s, %s, %s, %s)
             RETURNING id
-        ''', (name, parent_sku, brand_id, description, production_days, deposit_percent, status, size_chart_image_url))
+        ''', (name, parent_sku, brand_id, category_id, description, production_days, deposit_percent, status, size_chart_image_url))
         product_id = cursor.fetchone()['id']
         
         # Save images
@@ -11188,7 +11189,7 @@ def admin_update_mto_product(product_id):
         update_fields = []
         params = []
         
-        for field in ['name', 'description', 'production_days', 'deposit_percent', 'status', 'brand_id', 'parent_sku', 'size_chart_image_url']:
+        for field in ['name', 'description', 'production_days', 'deposit_percent', 'status', 'brand_id', 'category_id', 'parent_sku', 'size_chart_image_url']:
             if field in data:
                 update_fields.append(f'{field} = %s')
                 params.append(data[field])

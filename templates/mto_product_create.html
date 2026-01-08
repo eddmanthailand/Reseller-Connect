@@ -564,13 +564,27 @@
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">สถานะ</label>
-                            <select id="product_status" class="form-input" style="cursor: pointer;">
-                                <option value="draft">แบบร่าง</option>
-                                <option value="active">เปิดใช้งาน</option>
-                                <option value="inactive">ปิดใช้งาน</option>
+                            <label class="form-label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; color: #f472b6;">
+                                    <path d="M12 2 2 7l10 5 10-5-10-5Z"/>
+                                    <path d="m2 17 10 5 10-5"/>
+                                    <path d="m2 12 10 5 10-5"/>
+                                </svg>
+                                หมวดหมู่สินค้า
+                            </label>
+                            <select id="category_id" class="form-input" style="cursor: pointer;">
+                                <option value="">-- ไม่ระบุหมวดหมู่ --</option>
                             </select>
                         </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label class="form-label">สถานะ</label>
+                        <select id="product_status" class="form-input" style="cursor: pointer; max-width: 200px;">
+                            <option value="draft">แบบร่าง</option>
+                            <option value="active">เปิดใช้งาน</option>
+                            <option value="inactive">ปิดใช้งาน</option>
+                        </select>
                     </div>
                     
                     <div class="grid-2-cols">
@@ -788,6 +802,25 @@
             }
         }
 
+        async function loadCategories() {
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+                const data = await response.json();
+                const select = document.getElementById('category_id');
+                
+                if (data.categories) {
+                    data.categories.forEach(cat => {
+                        const option = document.createElement('option');
+                        option.value = cat.id;
+                        option.textContent = cat.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
         async function loadCurrentUser() {
             try {
                 const response = await fetch(`${API_URL}/me`);
@@ -887,15 +920,16 @@
                 setTimeout(() => {
                     sizeChartState.cropper = new Cropper(cropImage, {
                         viewMode: 1,
-                        dragMode: 'move',
-                        autoCropArea: 1,
+                        dragMode: 'crop',
+                        autoCrop: false,
                         restore: false,
                         guides: true,
                         center: true,
-                        highlight: false,
+                        highlight: true,
                         cropBoxMovable: true,
                         cropBoxResizable: true,
                         toggleDragModeOnDblclick: false,
+                        background: true,
                     });
                 }, 100);
             };
@@ -1163,6 +1197,7 @@
             e.preventDefault();
             
             const brandId = document.getElementById('brand_id').value;
+            const categoryId = document.getElementById('category_id').value;
             const name = document.getElementById('product_name').value.trim();
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
@@ -1243,6 +1278,7 @@
                 
                 const productData = {
                     brand_id: parseInt(brandId),
+                    category_id: categoryId ? parseInt(categoryId) : null,
                     name,
                     parent_sku: parentSku,
                     description,
@@ -1316,6 +1352,7 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             loadBrands();
+            loadCategories();
             loadCurrentUser();
         });
     </script>

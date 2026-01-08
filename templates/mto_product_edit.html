@@ -158,13 +158,19 @@
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">สถานะ</label>
-                            <select id="product_status" class="form-input" style="cursor: pointer;">
-                                <option value="draft">แบบร่าง</option>
-                                <option value="active">เปิดใช้งาน</option>
-                                <option value="inactive">ปิดใช้งาน</option>
+                            <label class="form-label">หมวดหมู่สินค้า</label>
+                            <select id="category_id" class="form-input" style="cursor: pointer;">
+                                <option value="">-- ไม่ระบุหมวดหมู่ --</option>
                             </select>
                         </div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label class="form-label">สถานะ</label>
+                        <select id="product_status" class="form-input" style="cursor: pointer; max-width: 200px;">
+                            <option value="draft">แบบร่าง</option>
+                            <option value="active">เปิดใช้งาน</option>
+                            <option value="inactive">ปิดใช้งาน</option>
+                        </select>
                     </div>
                     <div class="grid-2-cols">
                         <div>
@@ -317,7 +323,11 @@
                 document.getElementById('deposit_percent').value = productData.deposit_percent || 50;
                 
                 await loadBrands();
+                await loadCategories();
                 document.getElementById('brand_id').value = productData.brand_id;
+                if (productData.category_id) {
+                    document.getElementById('category_id').value = productData.category_id;
+                }
                 
                 existingImages = (productData.images || []).map(img => img.image_url);
                 renderExistingImages();
@@ -352,6 +362,24 @@
                     option.textContent = brand.name;
                     select.appendChild(option);
                 });
+            }
+        }
+
+        async function loadCategories() {
+            try {
+                const response = await fetch(`${API_URL}/categories`, { credentials: 'include' });
+                const data = await response.json();
+                const select = document.getElementById('category_id');
+                if (data.categories) {
+                    data.categories.forEach(cat => {
+                        const option = document.createElement('option');
+                        option.value = cat.id;
+                        option.textContent = cat.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
             }
         }
 
@@ -423,8 +451,8 @@
                 if (sizeChartState.cropper) sizeChartState.cropper.destroy();
                 setTimeout(() => {
                     sizeChartState.cropper = new Cropper(cropImage, {
-                        viewMode: 1, dragMode: 'move', autoCropArea: 1, restore: false,
-                        guides: true, center: true, highlight: false,
+                        viewMode: 1, dragMode: 'crop', autoCrop: false, restore: false,
+                        guides: true, center: true, highlight: true, background: true,
                         cropBoxMovable: true, cropBoxResizable: true, toggleDragModeOnDblclick: false,
                     });
                 }, 100);
@@ -680,8 +708,10 @@
                 const options = collectOptionsData();
                 const skus = collectSkusData(options);
                 
+                const categoryId = document.getElementById('category_id').value;
                 const data = {
                     brand_id: parseInt(document.getElementById('brand_id').value),
+                    category_id: categoryId ? parseInt(categoryId) : null,
                     name: document.getElementById('product_name').value.trim(),
                     parent_sku: document.getElementById('parent_sku').value.trim(),
                     description: document.getElementById('product_description').value.trim(),
