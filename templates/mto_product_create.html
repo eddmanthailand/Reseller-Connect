@@ -785,7 +785,7 @@
 
         async function loadBrands() {
             try {
-                const response = await fetch(`${API_URL}/brands`);
+                const response = await fetch(`${API_URL}/brands`, { credentials: 'include' });
                 const data = await response.json();
                 const select = document.getElementById('brand_id');
                 
@@ -804,7 +804,7 @@
 
         async function loadCategories() {
             try {
-                const response = await fetch(`${API_URL}/categories`);
+                const response = await fetch(`${API_URL}/categories`, { credentials: 'include' });
                 const data = await response.json();
                 const select = document.getElementById('category_id');
                 
@@ -823,7 +823,7 @@
 
         async function loadCurrentUser() {
             try {
-                const response = await fetch(`${API_URL}/me`);
+                const response = await fetch(`${API_URL}/me`, { credentials: 'include' });
                 const data = await response.json();
                 if (data.username) {
                     document.getElementById('currentUser').textContent = data.full_name || data.username;
