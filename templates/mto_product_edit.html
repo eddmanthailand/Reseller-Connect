@@ -353,16 +353,15 @@
 
         async function loadBrands() {
             const response = await fetch(`${API_URL}/brands`, { credentials: 'include' });
-            const brands = await response.json();
+            const data = await response.json();
             const select = document.getElementById('brand_id');
-            if (brands.brands) {
-                brands.brands.forEach(brand => {
-                    const option = document.createElement('option');
-                    option.value = brand.id;
-                    option.textContent = brand.name;
-                    select.appendChild(option);
-                });
-            }
+            const brands = Array.isArray(data) ? data : (data.brands || []);
+            brands.forEach(brand => {
+                const option = document.createElement('option');
+                option.value = brand.id;
+                option.textContent = brand.name;
+                select.appendChild(option);
+            });
         }
 
         async function loadCategories() {

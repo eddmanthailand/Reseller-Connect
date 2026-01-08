@@ -789,14 +789,13 @@
                 const data = await response.json();
                 const select = document.getElementById('brand_id');
                 
-                if (data.brands) {
-                    data.brands.forEach(brand => {
-                        const option = document.createElement('option');
-                        option.value = brand.id;
-                        option.textContent = brand.name;
-                        select.appendChild(option);
-                    });
-                }
+                const brands = Array.isArray(data) ? data : (data.brands || []);
+                brands.forEach(brand => {
+                    const option = document.createElement('option');
+                    option.value = brand.id;
+                    option.textContent = brand.name;
+                    select.appendChild(option);
+                });
             } catch (error) {
                 console.error('Error loading brands:', error);
             }
