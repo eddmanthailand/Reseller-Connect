@@ -130,6 +130,13 @@ def register_page():
         return redirect(url_for('dashboard'))
     return render_template('register.html')
 
+@app.route('/become-reseller')
+def fb_landing_page():
+    """Landing page for Facebook Ads - separate from main registration"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('fb_landing.html')
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -560,6 +567,11 @@ def register_reseller():
         
         password_hash = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
+        source = data.get('source', '')
+        notes = data.get('notes', '')
+        if source:
+            notes = f"[source: {source}] {notes}".strip()
+        
         cursor.execute('''
             INSERT INTO reseller_applications 
             (full_name, username, email, password_hash, phone, line_id, address, province, district, subdistrict, postal_code, notes)
@@ -567,7 +579,7 @@ def register_reseller():
             RETURNING id
         ''', (data['full_name'], data['username'], data['email'], password_hash, 
               data['phone'], data['line_id'], data['address'], data['province'], 
-              data['district'], data['subdistrict'], data['postal_code'], data.get('notes', '')))
+              data['district'], data['subdistrict'], data['postal_code'], notes))
         
         application_id = cursor.fetchone()['id']
         conn.commit()
