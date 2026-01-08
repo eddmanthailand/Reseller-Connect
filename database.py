@@ -800,6 +800,183 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)
         ''')
         
+        # ==========================================
+        # Made-to-Order (สินค้าสั่งผลิต) System
+        # ==========================================
+        
+        # Migration: Add product_type and production_days to products table
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'product_type') THEN
+                    ALTER TABLE products ADD COLUMN product_type VARCHAR(20) DEFAULT 'ready_stock';
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'production_days') THEN
+                    ALTER TABLE products ADD COLUMN production_days INTEGER DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'deposit_percent') THEN
+                    ALTER TABLE products ADD COLUMN deposit_percent INTEGER DEFAULT 50;
+                END IF;
+            END $$;
+        ''')
+        
+        # Migration: Add min_order_qty to skus table (MOQ per color/variant)
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'skus' AND column_name = 'min_order_qty') THEN
+                    ALTER TABLE skus ADD COLUMN min_order_qty INTEGER DEFAULT 1;
+                END IF;
+            END $$;
+        ''')
+        
+        # Create quotation_requests table (คำขอใบเสนอราคาจาก Reseller)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quotation_requests (
+                id SERIAL PRIMARY KEY,
+                request_number VARCHAR(50) UNIQUE,
+                reseller_id INTEGER NOT NULL REFERENCES users(id),
+                status VARCHAR(30) DEFAULT 'pending',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create quotation_request_items table (รายการสินค้าในคำขอ)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quotation_request_items (
+                id SERIAL PRIMARY KEY,
+                request_id INTEGER NOT NULL REFERENCES quotation_requests(id) ON DELETE CASCADE,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                sku_id INTEGER REFERENCES skus(id),
+                sku_code VARCHAR(100),
+                option_snapshot JSONB,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price DECIMAL(12,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create quotations table (ใบเสนอราคา)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quotations (
+                id SERIAL PRIMARY KEY,
+                quote_number VARCHAR(50) UNIQUE,
+                request_id INTEGER REFERENCES quotation_requests(id),
+                reseller_id INTEGER NOT NULL REFERENCES users(id),
+                admin_id INTEGER REFERENCES users(id),
+                status VARCHAR(30) DEFAULT 'draft',
+                subtotal DECIMAL(12,2) DEFAULT 0,
+                discount_amount DECIMAL(12,2) DEFAULT 0,
+                total_amount DECIMAL(12,2) DEFAULT 0,
+                deposit_percent INTEGER DEFAULT 50,
+                deposit_amount DECIMAL(12,2) DEFAULT 0,
+                balance_amount DECIMAL(12,2) DEFAULT 0,
+                production_days INTEGER DEFAULT 0,
+                expected_completion_date DATE,
+                valid_until DATE,
+                payment_instructions TEXT,
+                admin_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sent_at TIMESTAMP,
+                accepted_at TIMESTAMP,
+                rejected_at TIMESTAMP
+            )
+        ''')
+        
+        # Create quotation_items table (รายการในใบเสนอราคา)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quotation_items (
+                id SERIAL PRIMARY KEY,
+                quotation_id INTEGER NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                sku_id INTEGER REFERENCES skus(id),
+                sku_code VARCHAR(100),
+                product_name VARCHAR(255),
+                option_text VARCHAR(255),
+                quantity INTEGER NOT NULL DEFAULT 1,
+                original_price DECIMAL(12,2),
+                final_price DECIMAL(12,2),
+                line_total DECIMAL(12,2),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create mto_orders table (คำสั่งซื้อสินค้าสั่งผลิต - หลังชำระมัดจำ)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mto_orders (
+                id SERIAL PRIMARY KEY,
+                order_number VARCHAR(50) UNIQUE,
+                quotation_id INTEGER REFERENCES quotations(id),
+                reseller_id INTEGER NOT NULL REFERENCES users(id),
+                status VARCHAR(30) DEFAULT 'awaiting_deposit',
+                total_amount DECIMAL(12,2) DEFAULT 0,
+                deposit_amount DECIMAL(12,2) DEFAULT 0,
+                deposit_paid DECIMAL(12,2) DEFAULT 0,
+                balance_amount DECIMAL(12,2) DEFAULT 0,
+                balance_paid DECIMAL(12,2) DEFAULT 0,
+                production_days INTEGER DEFAULT 0,
+                payment_confirmed_at TIMESTAMP,
+                expected_completion_date DATE,
+                production_started_at TIMESTAMP,
+                production_completed_at TIMESTAMP,
+                balance_requested_at TIMESTAMP,
+                balance_paid_at TIMESTAMP,
+                shipped_at TIMESTAMP,
+                tracking_number VARCHAR(100),
+                shipping_provider VARCHAR(100),
+                admin_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create mto_order_items table (รายการในคำสั่งซื้อสินค้าสั่งผลิต)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mto_order_items (
+                id SERIAL PRIMARY KEY,
+                mto_order_id INTEGER NOT NULL REFERENCES mto_orders(id) ON DELETE CASCADE,
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                sku_id INTEGER REFERENCES skus(id),
+                sku_code VARCHAR(100),
+                product_name VARCHAR(255),
+                option_text VARCHAR(255),
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price DECIMAL(12,2),
+                line_total DECIMAL(12,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create mto_payments table (บันทึกการชำระเงินสินค้าสั่งผลิต)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mto_payments (
+                id SERIAL PRIMARY KEY,
+                mto_order_id INTEGER NOT NULL REFERENCES mto_orders(id) ON DELETE CASCADE,
+                payment_type VARCHAR(20) NOT NULL,
+                amount DECIMAL(12,2) NOT NULL,
+                payment_method VARCHAR(50),
+                transaction_ref VARCHAR(100),
+                slip_image_url TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                confirmed_by INTEGER REFERENCES users(id),
+                confirmed_at TIMESTAMP,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create indexes for MTO tables
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_quotation_requests_reseller ON quotation_requests(reseller_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_quotation_requests_status ON quotation_requests(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_quotations_reseller ON quotations(reseller_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_quotations_status ON quotations(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mto_orders_reseller ON mto_orders(reseller_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mto_orders_status ON mto_orders(status)')
+        
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         
