@@ -7503,76 +7503,8 @@ async function saveMtoProduct() {
     }
 }
 
-async function editMtoProduct(productId) {
-    try {
-        const response = await fetch(`/api/admin/mto/products/${productId}`, { credentials: 'include' });
-        const product = await response.json();
-        
-        if (!response.ok) {
-            showAlert('error', product.error || 'ไม่พบสินค้า');
-            return;
-        }
-        
-        await loadBrandsForMtoProduct();
-        
-        document.getElementById('mtoProductId').value = product.id;
-        document.getElementById('mtoProductName').value = product.name;
-        document.getElementById('mtoProductSpu').value = product.parent_sku;
-        document.getElementById('mtoProductBrand').value = product.brand_id;
-        document.getElementById('mtoProductDescription').value = product.description || '';
-        document.getElementById('mtoProductionDays').value = product.production_days || 7;
-        document.getElementById('mtoDepositPercent').value = product.deposit_percent || 50;
-        document.getElementById('mtoProductStatus').value = product.status || 'draft';
-        document.getElementById('mtoProductModalTitle').textContent = 'แก้ไขสินค้าสั่งผลิต';
-        
-        // Load images
-        mtoProductImages = (product.images || []).map(img => img.image_url);
-        renderMtoImagePreview();
-        
-        // Load options
-        const container = document.getElementById('mtoOptionsContainer');
-        container.innerHTML = '';
-        
-        (product.options || []).forEach((opt, optIdx) => {
-            const isFirst = optIdx === 0;
-            let valuesHtml = '';
-            (opt.values || []).forEach(val => {
-                valuesHtml += `
-                    <div class="mto-value-chip" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(168,85,247,0.2); padding: 6px 10px; border-radius: 6px;">
-                        <input type="text" class="mto-value-input" value="${escapeHtml(val.value)}" style="width: 80px; background: transparent; border: none; color: #fff; font-size: 12px;" onchange="updateMtoSkuPreview()">
-                        ${isFirst ? `<input type="number" class="mto-min-qty" value="${val.min_order_qty || 0}" min="0" style="width: 60px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; font-size: 11px; padding: 2px 4px;" title="จำนวนขั้นต่ำ">` : ''}
-                        <button type="button" onclick="this.parentElement.remove(); updateMtoSkuPreview();" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; padding: 2px;">&times;</button>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML += `
-                <div class="mto-option-row" data-index="${optIdx}" style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 12px; margin-bottom: 10px;">
-                        <div style="flex: 1;">
-                            <label style="font-size: 12px; color: rgba(255,255,255,0.7);">ชื่อตัวเลือก ${isFirst ? '(เช่น สี) *' : ''}</label>
-                            <input type="text" class="form-input mto-option-name" value="${escapeHtml(opt.name)}" onchange="updateMtoSkuPreview()">
-                        </div>
-                        <button type="button" class="btn btn-danger" onclick="removeMtoOption(this)" style="align-self: flex-end; padding: 8px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                    </div>
-                    <div class="mto-option-values" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        ${valuesHtml}
-                    </div>
-                    <button type="button" class="btn btn-secondary" onclick="addMtoOptionValue(this, ${isFirst})" style="margin-top: 8px; font-size: 11px; padding: 4px 10px;">
-                        + เพิ่มค่า
-                    </button>
-                </div>
-            `;
-        });
-        
-        updateMtoSkuPreview();
-        document.getElementById('mtoProductModal').style.display = 'flex';
-        
-    } catch (error) {
-        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
-    }
+function editMtoProduct(productId) {
+    window.location.href = `/admin/mto/products/edit/${productId}`;
 }
 
 async function deleteMtoProduct(productId, productName) {

@@ -57,6 +57,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Made-to-Order (MTO) System:** Complete workflow for custom production orders:
     - Admin: Create MTO products with production_days, min_order_qty (per primary option value), deposit_percent settings.
     - Admin: Full CRUD for MTO products with options builder, SKU preview, and image upload.
+    - Admin: Full-page MTO product create/edit UI (`mto_product_create.html`, `mto_product_edit.html`) matching ready-stock product design with glassmorphism, section cards, drag-drop image sorting, size chart upload with Cropper.js.
     - Admin: 4-page management (Quotation Requests, Quotations, MTO Orders, Payment Verification).
     - Admin: Timeline tracking, status updates, payment confirmation with slip review.
     - Reseller: MTO product catalog with Matrix Grid ordering UI (primary option as rows, secondary as columns).

@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สร้างสินค้าสั่งผลิต - Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    <style>
+        .option-value-tag {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(59, 130, 246, 0.2);
+            backdrop-filter: blur(10px);
+            color: white;
+            border-radius: 20px;
+            padding: 6px 14px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: grab;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .option-value-tag:hover {
+            background: rgba(59, 130, 246, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .option-value-tag:active {
+            cursor: grabbing;
+        }
+
+        .remove-tag-btn {
+            margin-left: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .remove-tag-btn:hover {
+            color: #ef4444;
+        }
+
+        .tag-input {
+            border: none;
+            outline: none;
+            padding: 6px;
+            background-color: transparent;
+            min-width: 150px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .tag-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .sortable-list {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            min-height: 60px;
+        }
+
+        .sortable-ghost {
+            opacity: 0.4;
+            background: rgba(59, 130, 246, 0.4);
+        }
+
+        .option-block {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .option-block:hover {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .option-name-input {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            border: none;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            outline: none;
+            padding: 8px 0;
+            width: 100%;
+            transition: border-color 0.3s ease;
+        }
+
+        .option-name-input:focus {
+            border-bottom-color: rgba(59, 130, 246, 0.8);
+        }
+
+        .option-name-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .variants-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .variants-table th,
+        .variants-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .variants-table th {
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .variants-table td {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .variants-table input[type="text"],
+        .variants-table input[type="number"] {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .variants-table input:focus {
+            border-color: rgba(59, 130, 246, 0.8);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .variants-table input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .section-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .section-card:hover {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .section-title {
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: rgba(59, 130, 246, 0.8);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .form-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        select.form-input {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpolyline points='6,9 12,15 18,9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+
+        select.form-input option {
+            background: #1e1b4b;
+            color: white;
+            padding: 12px;
+        }
+
+        .form-label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .btn-primary {
+            padding: 12px 24px;
+            background: rgba(59, 130, 246, 0.2);
+            backdrop-filter: blur(10px);
+            color: white;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            background: rgba(59, 130, 246, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-success:hover {
+            background: rgba(34, 197, 94, 0.3);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-gray {
+            background: rgba(107, 114, 128, 0.2);
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+
+        .btn-gray:hover {
+            background: rgba(107, 114, 128, 0.3);
+            box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);
+        }
+
+        .full-page-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0;
+            margin: 0;
+        }
+
+        .full-page-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .full-page-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-info {
+            color: white;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .crop-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .crop-modal.active {
+            display: flex;
+        }
+
+        .crop-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .crop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .crop-header h3 {
+            margin: 0;
+            color: #667eea;
+            font-size: 20px;
+        }
+
+        .crop-image-container {
+            max-width: 800px;
+            max-height: 500px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .crop-image-container img {
+            max-width: 100%;
+            display: block;
+        }
+
+        .crop-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .size-chart-preview {
+            margin-top: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+        }
+
+        .size-chart-preview img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .size-chart-preview.has-image {
+            border-style: solid;
+            border-color: rgba(139, 92, 246, 0.5);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .grid-2-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .master-inputs {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0;
+        }
+
+        .input-group input {
+            border-radius: 12px 0 0 12px;
+            border-right: none;
+        }
+
+        .input-group button {
+            border-radius: 0 12px 12px 0;
+            white-space: nowrap;
+        }
+
+        .mto-settings-box {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 20px;
+        }
+
+        .min-qty-input {
+            width: 80px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .min-qty-input:focus {
+            outline: none;
+            border-color: rgba(236, 72, 153, 0.6);
+        }
+
+        .option-value-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .option-value-row:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .full-page-header {
+                padding: 16px 20px;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .full-page-content {
+                padding: 20px;
+            }
+            .grid-2-cols {
+                grid-template-columns: 1fr;
+            }
+            .master-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="full-page-container">
+        <header class="full-page-header">
+            <div class="header-left">
+                <a href="/admin#mto-products" class="btn-primary btn-gray" style="text-decoration: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m12 19-7-7 7-7"/>
+                        <path d="M19 12H5"/>
+                    </svg>
+                    กลับ
+                </a>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; background: linear-gradient(135deg, rgba(236, 72, 153, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ec4899;">
+                            <path d="M5 12h14"/>
+                            <path d="M12 5v14"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 style="margin: 0; color: white; font-size: 24px; font-weight: 600;">สร้างสินค้าสั่งผลิต</h1>
+                        <p style="margin: 4px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 14px;">กรอกข้อมูลสินค้าสั่งผลิต (Made-to-Order) พร้อมตัวเลือกและ SKU</p>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="user-info" id="currentUser">Loading...</span>
+                <button onclick="handleLogout()" class="btn-primary btn-danger" style="padding: 8px 16px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" x2="9" y1="12" y2="12"/>
+                    </svg>
+                    ออกจากระบบ
+                </button>
+            </div>
+        </header>
+
+        <main class="full-page-content">
+            <form id="mtoProductForm">
+                <div class="section-card">
+                    <h2 class="section-title">1. ข้อมูลสินค้าหลัก</h2>
+                    
+                    <div class="grid-2-cols" style="margin-bottom: 20px;">
+                        <div>
+                            <label class="form-label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; color: #a78bfa;">
+                                    <path d="M4 7V4h16v3"/>
+                                    <path d="M9 20h6"/>
+                                    <path d="M12 4v16"/>
+                                </svg>
+                                แบรนด์ <span style="color: rgba(239, 68, 68, 0.9);">*</span>
+                            </label>
+                            <select id="brand_id" class="form-input" required style="cursor: pointer;">
+                                <option value="">-- เลือกแบรนด์ --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">สถานะ</label>
+                            <select id="product_status" class="form-input" style="cursor: pointer;">
+                                <option value="draft">แบบร่าง</option>
+                                <option value="active">เปิดใช้งาน</option>
+                                <option value="inactive">ปิดใช้งาน</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid-2-cols">
+                        <div>
+                            <label class="form-label">ชื่อสินค้า <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                            <input type="text" id="product_name" class="form-input" placeholder="เช่น เสื้อยืดพิมพ์ลายสั่งผลิต" required>
+                        </div>
+                        <div>
+                            <label class="form-label">รหัส SPU <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                            <input type="text" id="parent_sku" class="form-input" placeholder="เช่น MTO-TSH-001" required>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 16px;">
+                        <label class="form-label">รายละเอียดสินค้า (ไม่บังคับ)</label>
+                        <textarea id="product_description" class="form-input" rows="3" placeholder="อธิบายรายละเอียดสินค้า..."></textarea>
+                    </div>
+                    
+                    <div class="mto-settings-box">
+                        <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: white; display: flex; align-items: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ec4899;">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            การตั้งค่าสินค้าสั่งผลิต
+                        </h3>
+                        <div class="grid-2-cols">
+                            <div>
+                                <label class="form-label">ระยะเวลาผลิต (วัน) <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                                <input type="number" id="production_days" class="form-input" value="7" min="1" required>
+                                <p style="margin-top: 4px; font-size: 12px; color: rgba(255, 255, 255, 0.5);">จำนวนวันที่ใช้ในการผลิตสินค้า</p>
+                            </div>
+                            <div>
+                                <label class="form-label">เปอร์เซ็นต์มัดจำ (%) <span style="color: rgba(239, 68, 68, 0.9);">*</span></label>
+                                <input type="number" id="deposit_percent" class="form-input" value="50" min="0" max="100" required>
+                                <p style="margin-top: 4px; font-size: 12px; color: rgba(255, 255, 255, 0.5);">ลูกค้าต้องจ่ายมัดจำก่อนเริ่มผลิต</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2 class="section-title">2. รูปภาพสินค้า</h2>
+                    
+                    <div>
+                        <label class="form-label">รูปภาพสินค้า (สามารถเลือกหลายรูป)</label>
+                        <input type="file" id="product_images" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input" multiple>
+                        <div style="margin-top: 8px; font-size: 13px; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24;">
+                                <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+                                <path d="M9 18h6"/>
+                                <path d="M10 22h4"/>
+                            </svg>
+                            เลือกรูปภาพ แล้วลากเพื่อจัดเรียงลำดับ
+                        </div>
+                        
+                        <div id="images-gallery" style="margin-top: 16px; display: none;">
+                            <p style="font-size: 13px; opacity: 0.9; margin-bottom: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+                                    <path d="M5 9l7 7 7-7"/>
+                                </svg>
+                                ลากเพื่อเรียงลำดับรูปภาพ (รูปแรกจะแสดงในรายการสินค้า)
+                            </p>
+                            <div id="sortable-images" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                        <label class="form-label">ตารางไซส์ (ไม่บังคับ)</label>
+                        <input type="file" id="size_chart_image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="form-input">
+                        <div style="margin-top: 8px; font-size: 13px; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #fbbf24;">
+                                <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+                                <path d="M9 18h6"/>
+                                <path d="M10 22h4"/>
+                            </svg>
+                            อัปโหลดรูปตารางไซส์สินค้า - ขนาดอิสระ (สำหรับสินค้าเสื้อผ้า รองเท้า ฯลฯ)
+                        </div>
+                        
+                        <div id="size-chart-preview" class="size-chart-preview" style="display: none;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <p style="margin: 0; font-size: 14px; font-weight: 500;">ตัวอย่างตารางไซส์</p>
+                                <button type="button" onclick="removeSizeChart()" class="btn-primary btn-danger" style="padding: 4px 12px; font-size: 12px;">
+                                    ลบ
+                                </button>
+                            </div>
+                            <img id="size-chart-preview-img" src="" alt="Size Chart Preview">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h2 class="section-title">3. ตัวเลือกสินค้า (Options)</h2>
+                    <p style="color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-bottom: 20px; padding: 12px; background: rgba(236, 72, 153, 0.1); border-radius: 8px; border: 1px solid rgba(236, 72, 153, 0.2);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px; color: #ec4899;">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4"/>
+                            <path d="M12 8h.01"/>
+                        </svg>
+                        <strong>ตัวเลือกแรก (เช่น สี)</strong> จะใช้กำหนดจำนวนขั้นต่ำต่อค่า - Reseller ต้องสั่งขั้นต่ำตามจำนวนที่กำหนดต่อสี
+                    </p>
+                    <div id="options-container"></div>
+                    <button type="button" id="add-option-btn" class="btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" x2="12" y1="5" y2="19"/>
+                            <line x1="5" x2="19" y1="12" y2="12"/>
+                        </svg>
+                        เพิ่มคุณสมบัติ (เช่น สี, ขนาด)
+                    </button>
+                </div>
+
+                <div class="section-card">
+                    <h2 class="section-title">4. สร้างรายการสินค้าย่อย (SKU Variants)</h2>
+                    <button type="button" id="generate-variants-btn" class="btn-primary btn-success" style="width: 100%; justify-content: center; padding: 16px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" x2="12" y1="22.08" y2="12"/>
+                        </svg>
+                        สร้างตาราง Variant Matrix
+                    </button>
+                </div>
+
+                <div id="variants-section" class="section-card" style="display: none;">
+                    <h2 class="section-title">5. กรอกข้อมูล Variant Matrix</h2>
+                    
+                    <div class="master-inputs">
+                        <div>
+                            <label class="form-label">ราคาทั้งหมด</label>
+                            <div class="input-group">
+                                <input type="number" id="master_price" class="form-input" placeholder="299" step="0.01">
+                                <button type="button" id="btn_apply_price" class="btn-primary btn-gray">Apply to All</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">ต้นทุนทั้งหมด</label>
+                            <div class="input-group">
+                                <input type="number" id="master_cost" class="form-input" placeholder="150" step="0.01">
+                                <button type="button" id="btn_apply_cost" class="btn-primary btn-gray">Apply to All</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table id="variants-table" class="variants-table"></table>
+                    </div>
+                </div>
+
+                <div class="section-card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%); border-color: rgba(34, 197, 94, 0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h3 style="margin: 0; color: white; font-size: 18px;">พร้อมบันทึกสินค้าสั่งผลิต?</h3>
+                            <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 14px;">ตรวจสอบข้อมูลให้ครบถ้วนก่อนกดบันทึก</p>
+                        </div>
+                        <button type="submit" class="btn-primary btn-success" style="padding: 14px 32px; font-size: 16px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            บันทึกสินค้าสั่งผลิต
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <div id="sizeCropModal" class="crop-modal">
+        <div class="crop-container">
+            <div class="crop-header">
+                <h3>ครอปรูปตารางไซส์</h3>
+                <button type="button" onclick="closeSizeCropModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #667eea;">&times;</button>
+            </div>
+            <div class="crop-image-container">
+                <img id="sizeCropImage" src="" alt="Crop Image">
+            </div>
+            <div class="crop-actions">
+                <button type="button" class="btn-primary btn-gray" onclick="closeSizeCropModal()">ยกเลิก</button>
+                <button type="button" class="btn-primary btn-success" onclick="applySizeCrop()">ครอปและใช้งาน</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        
+        let imageState = {
+            files: [],
+            sortedOrder: []
+        };
+        
+        let sizeChartState = {
+            file: null,
+            croppedBlob: null,
+            cropper: null
+        };
+
+        async function loadBrands() {
+            try {
+                const response = await fetch(`${API_URL}/brands`);
+                const data = await response.json();
+                const select = document.getElementById('brand_id');
+                
+                if (data.brands) {
+                    data.brands.forEach(brand => {
+                        const option = document.createElement('option');
+                        option.value = brand.id;
+                        option.textContent = brand.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading brands:', error);
+            }
+        }
+
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch(`${API_URL}/me`);
+                const data = await response.json();
+                if (data.username) {
+                    document.getElementById('currentUser').textContent = data.full_name || data.username;
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+            }
+        }
+
+        function handleLogout() {
+            window.location.href = '/logout';
+        }
+
+        document.getElementById('product_images').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            
+            imageState.files = files;
+            imageState.sortedOrder = files.map((_, i) => i);
+            
+            renderImageGallery();
+        });
+
+        function renderImageGallery() {
+            const gallery = document.getElementById('images-gallery');
+            const container = document.getElementById('sortable-images');
+            
+            if (imageState.files.length === 0) {
+                gallery.style.display = 'none';
+                return;
+            }
+            
+            gallery.style.display = 'block';
+            container.innerHTML = '';
+            
+            imageState.sortedOrder.forEach((fileIndex, sortIndex) => {
+                const file = imageState.files[fileIndex];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const div = document.createElement('div');
+                    div.className = 'image-item';
+                    div.dataset.fileIndex = fileIndex;
+                    div.style.cssText = 'position: relative; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.1); cursor: grab;';
+                    
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="Product image" style="width: 100%; height: 100px; object-fit: cover;">
+                        <button type="button" onclick="removeImage(${fileIndex})" style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); border: none; border-radius: 50%; width: 24px; height: 24px; color: white; cursor: pointer; font-size: 14px;">&times;</button>
+                        ${sortIndex === 0 ? '<div style="position: absolute; bottom: 4px; left: 4px; background: rgba(34, 197, 94, 0.9); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px;">หลัก</div>' : ''}
+                    `;
+                    
+                    container.appendChild(div);
+                    
+                    if (container.children.length === imageState.files.length) {
+                        new Sortable(container, {
+                            animation: 150,
+                            ghostClass: 'sortable-ghost',
+                            onEnd: function(evt) {
+                                const items = container.querySelectorAll('.image-item');
+                                imageState.sortedOrder = Array.from(items).map(item => parseInt(item.dataset.fileIndex));
+                                renderImageGallery();
+                            }
+                        });
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function removeImage(fileIndex) {
+            imageState.sortedOrder = imageState.sortedOrder.filter(i => i !== fileIndex);
+            renderImageGallery();
+        }
+
+        document.getElementById('size_chart_image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            sizeChartState.file = file;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const modal = document.getElementById('sizeCropModal');
+                const cropImage = document.getElementById('sizeCropImage');
+                
+                cropImage.src = event.target.result;
+                modal.classList.add('active');
+                
+                if (sizeChartState.cropper) {
+                    sizeChartState.cropper.destroy();
+                }
+                
+                setTimeout(() => {
+                    sizeChartState.cropper = new Cropper(cropImage, {
+                        viewMode: 1,
+                        dragMode: 'move',
+                        autoCropArea: 1,
+                        restore: false,
+                        guides: true,
+                        center: true,
+                        highlight: false,
+                        cropBoxMovable: true,
+                        cropBoxResizable: true,
+                        toggleDragModeOnDblclick: false,
+                    });
+                }, 100);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function closeSizeCropModal() {
+            const modal = document.getElementById('sizeCropModal');
+            modal.classList.remove('active');
+            if (sizeChartState.cropper) {
+                sizeChartState.cropper.destroy();
+                sizeChartState.cropper = null;
+            }
+            document.getElementById('size_chart_image').value = '';
+        }
+
+        function applySizeCrop() {
+            if (!sizeChartState.cropper) return;
+            
+            const canvas = sizeChartState.cropper.getCroppedCanvas({
+                maxWidth: 1200,
+                maxHeight: 1200,
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+            
+            canvas.toBlob(function(blob) {
+                sizeChartState.croppedBlob = blob;
+                
+                const preview = document.getElementById('size-chart-preview');
+                const previewImg = document.getElementById('size-chart-preview-img');
+                
+                previewImg.src = canvas.toDataURL('image/jpeg', 0.9);
+                preview.style.display = 'block';
+                preview.classList.add('has-image');
+                
+                closeSizeCropModal();
+            }, 'image/jpeg', 0.9);
+        }
+
+        function removeSizeChart() {
+            sizeChartState.file = null;
+            sizeChartState.croppedBlob = null;
+            document.getElementById('size-chart-preview').style.display = 'none';
+            document.getElementById('size_chart_image').value = '';
+        }
+
+        let optionCounter = 0;
+        
+        document.getElementById('add-option-btn').addEventListener('click', addOption);
+
+        function addOption() {
+            const container = document.getElementById('options-container');
+            const optionId = optionCounter++;
+            const isFirstOption = container.children.length === 0;
+            
+            const optionBlock = document.createElement('div');
+            optionBlock.className = 'option-block';
+            optionBlock.id = `option-${optionId}`;
+            
+            optionBlock.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <input type="text" class="option-name-input" placeholder="ชื่อตัวเลือก (เช่น สี, ขนาด)" style="flex: 1; margin-right: 16px;">
+                    ${isFirstOption ? '<span style="background: rgba(236, 72, 153, 0.2); color: #ec4899; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">ตัวเลือกหลัก</span>' : ''}
+                    <button type="button" onclick="removeOption(${optionId})" class="btn-primary btn-danger" style="padding: 6px 12px; font-size: 12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"/>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                        </svg>
+                        ลบ
+                    </button>
+                </div>
+                <div class="sortable-list" id="values-${optionId}">
+                    <input type="text" class="tag-input" placeholder="พิมพ์ค่าแล้วกด Enter..." onkeypress="handleValueInput(event, ${optionId}, ${isFirstOption})">
+                </div>
+                ${isFirstOption ? `
+                <div id="min-qty-container-${optionId}" style="margin-top: 16px; padding: 16px; background: rgba(236, 72, 153, 0.1); border-radius: 12px; border: 1px solid rgba(236, 72, 153, 0.2);">
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px; color: #ec4899;">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                        จำนวนขั้นต่ำต่อค่า (เช่น ต้องสั่งสีละ 10 ตัว)
+                    </p>
+                    <div id="min-qty-list-${optionId}"></div>
+                </div>
+                ` : ''}
+            `;
+            
+            container.appendChild(optionBlock);
+            
+            new Sortable(document.getElementById(`values-${optionId}`), {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                filter: '.tag-input',
+                preventOnFilter: false
+            });
+        }
+
+        function handleValueInput(event, optionId, isFirstOption) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            
+            const input = event.target;
+            const value = input.value.trim();
+            if (!value) return;
+            
+            const container = document.getElementById(`values-${optionId}`);
+            
+            const tag = document.createElement('span');
+            tag.className = 'option-value-tag';
+            tag.dataset.value = value;
+            tag.innerHTML = `${value}<span class="remove-tag-btn" onclick="removeValue(this, ${optionId}, ${isFirstOption})">&times;</span>`;
+            
+            container.insertBefore(tag, input);
+            input.value = '';
+            
+            if (isFirstOption) {
+                updateMinQtyList(optionId);
+            }
+        }
+
+        function removeValue(btn, optionId, isFirstOption) {
+            btn.parentElement.remove();
+            if (isFirstOption) {
+                updateMinQtyList(optionId);
+            }
+        }
+
+        function updateMinQtyList(optionId) {
+            const container = document.getElementById(`min-qty-list-${optionId}`);
+            if (!container) return;
+            
+            const values = document.querySelectorAll(`#values-${optionId} .option-value-tag`);
+            
+            if (values.length === 0) {
+                container.innerHTML = '<p style="color: rgba(255,255,255,0.5); font-size: 13px;">เพิ่มค่าตัวเลือกก่อน...</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            values.forEach(tag => {
+                const value = tag.dataset.value;
+                const existingInput = container.querySelector(`input[data-value="${value}"]`);
+                const existingQty = existingInput ? existingInput.value : '10';
+                
+                const row = document.createElement('div');
+                row.className = 'option-value-row';
+                row.innerHTML = `
+                    <span style="flex: 1; color: white;">${value}</span>
+                    <input type="number" class="min-qty-input" data-value="${value}" value="${existingQty}" min="1" placeholder="10">
+                    <span style="color: rgba(255,255,255,0.6); font-size: 13px;">ชิ้น</span>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function removeOption(optionId) {
+            const element = document.getElementById(`option-${optionId}`);
+            if (element) element.remove();
+        }
+
+        document.getElementById('generate-variants-btn').addEventListener('click', generateVariants);
+
+        function generateVariants() {
+            const options = collectOptionsData();
+            
+            if (options.length === 0) {
+                showAlert('กรุณาเพิ่มตัวเลือกสินค้าก่อน', 'warning');
+                return;
+            }
+            
+            const parentSku = document.getElementById('parent_sku').value.trim() || 'SKU';
+            
+            const combinations = cartesianProduct(options.map(o => o.values));
+            
+            const table = document.getElementById('variants-table');
+            let html = '<thead><tr><th>SKU Code</th>';
+            options.forEach(opt => {
+                html += `<th>${opt.name}</th>`;
+            });
+            html += '<th style="width: 120px;">ราคา (฿)</th>';
+            html += '<th style="width: 120px;">ต้นทุน (฿)</th>';
+            html += '</tr></thead><tbody>';
+            
+            combinations.forEach((combo, index) => {
+                const suffix = combo.map((v, i) => v.substring(0, 2).toUpperCase()).join('-');
+                const skuCode = `${parentSku}-${suffix}`;
+                
+                html += '<tr>';
+                html += `<td><input type="text" class="sku-code" value="${skuCode}"></td>`;
+                combo.forEach(val => {
+                    html += `<td>${val}</td>`;
+                });
+                html += '<td><input type="number" class="sku-price" placeholder="0" step="0.01" min="0"></td>';
+                html += '<td><input type="number" class="sku-cost" placeholder="0" step="0.01" min="0"></td>';
+                html += '</tr>';
+            });
+            
+            html += '</tbody>';
+            table.innerHTML = html;
+            
+            document.getElementById('variants-section').style.display = 'block';
+            document.getElementById('variants-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cartesianProduct(arrays) {
+            if (arrays.length === 0) return [[]];
+            return arrays.reduce((acc, curr) => {
+                const result = [];
+                acc.forEach(a => {
+                    curr.forEach(b => {
+                        result.push([...a, b]);
+                    });
+                });
+                return result;
+            }, [[]]);
+        }
+
+        function collectOptionsData() {
+            const options = [];
+            const optionBlocks = document.querySelectorAll('.option-block');
+            
+            optionBlocks.forEach((block, index) => {
+                const name = block.querySelector('.option-name-input').value.trim();
+                const tags = block.querySelectorAll('.option-value-tag');
+                const values = Array.from(tags).map(tag => tag.dataset.value);
+                
+                if (name && values.length > 0) {
+                    const option = { name, values };
+                    
+                    if (index === 0) {
+                        const minQtyInputs = block.querySelectorAll('.min-qty-input');
+                        option.min_order_qtys = {};
+                        minQtyInputs.forEach(input => {
+                            option.min_order_qtys[input.dataset.value] = parseInt(input.value) || 10;
+                        });
+                    }
+                    
+                    options.push(option);
+                }
+            });
+            
+            return options;
+        }
+
+        document.getElementById('btn_apply_price').addEventListener('click', function() {
+            const masterPrice = document.getElementById('master_price').value;
+            if (masterPrice) {
+                document.querySelectorAll('.sku-price').forEach(input => {
+                    input.value = masterPrice;
+                });
+            }
+        });
+
+        document.getElementById('btn_apply_cost').addEventListener('click', function() {
+            const masterCost = document.getElementById('master_cost').value;
+            if (masterCost) {
+                document.querySelectorAll('.sku-cost').forEach(input => {
+                    input.value = masterCost;
+                });
+            }
+        });
+
+        document.getElementById('mtoProductForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const brandId = document.getElementById('brand_id').value;
+            const name = document.getElementById('product_name').value.trim();
+            const parentSku = document.getElementById('parent_sku').value.trim();
+            const description = document.getElementById('product_description').value.trim();
+            const status = document.getElementById('product_status').value;
+            const productionDays = document.getElementById('production_days').value;
+            const depositPercent = document.getElementById('deposit_percent').value;
+            
+            if (!brandId) {
+                showAlert('กรุณาเลือกแบรนด์', 'warning');
+                return;
+            }
+            
+            if (!name || !parentSku) {
+                showAlert('กรุณากรอกชื่อสินค้าและรหัส SPU', 'warning');
+                return;
+            }
+            
+            const submitBtn = document.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึก...';
+                
+                let imageUrls = [];
+                if (imageState.sortedOrder.length > 0) {
+                    submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดรูปภาพ...';
+                    
+                    const formData = new FormData();
+                    imageState.sortedOrder.forEach(fileIndex => {
+                        formData.append('images', imageState.files[fileIndex]);
+                    });
+                    
+                    const uploadResponse = await fetch(`${API_URL}/upload-images`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!uploadResponse.ok) {
+                        const uploadError = await uploadResponse.json();
+                        throw new Error(uploadError.error || 'อัพโหลดรูปภาพล้มเหลว');
+                    }
+                    
+                    const uploadResult = await uploadResponse.json();
+                    imageUrls = uploadResult.image_urls || [];
+                }
+                
+                let sizeChartImageUrl = null;
+                if (sizeChartState.croppedBlob) {
+                    submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังอัพโหลดตารางไซส์...';
+                    
+                    const sizeChartFormData = new FormData();
+                    const sizeChartFile = new File(
+                        [sizeChartState.croppedBlob], 
+                        sizeChartState.file.name,
+                        { type: 'image/jpeg' }
+                    );
+                    sizeChartFormData.append('images', sizeChartFile);
+                    
+                    const sizeChartUploadResponse = await fetch(`${API_URL}/upload-images`, {
+                        method: 'POST',
+                        body: sizeChartFormData
+                    });
+                    
+                    if (!sizeChartUploadResponse.ok) {
+                        const uploadError = await sizeChartUploadResponse.json();
+                        throw new Error(uploadError.error || 'อัพโหลดตารางไซส์ล้มเหลว');
+                    }
+                    
+                    const sizeChartUploadResult = await sizeChartUploadResponse.json();
+                    sizeChartImageUrl = sizeChartUploadResult.image_urls?.[0] || null;
+                }
+                
+                submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> กำลังบันทึกข้อมูลสินค้า...';
+                
+                const options = collectOptionsData();
+                const skus = collectSkusData(options);
+                
+                const productData = {
+                    brand_id: parseInt(brandId),
+                    name,
+                    parent_sku: parentSku,
+                    description,
+                    status,
+                    production_days: parseInt(productionDays),
+                    deposit_percent: parseInt(depositPercent),
+                    image_urls: imageUrls,
+                    size_chart_image_url: sizeChartImageUrl,
+                    options: options.map((opt, idx) => ({
+                        name: opt.name,
+                        values: opt.values.map((v, i) => ({ 
+                            value: v, 
+                            sort_order: i,
+                            min_order_qty: idx === 0 && opt.min_order_qtys ? (opt.min_order_qtys[v] || 10) : null
+                        }))
+                    })),
+                    skus
+                };
+                
+                const response = await fetch(`${API_URL}/admin/mto/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(productData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('บันทึกสินค้าสั่งผลิตสำเร็จ', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/admin#mto-products';
+                    }, 1000);
+                } else {
+                    throw new Error(result.error || 'บันทึกข้อมูลล้มเหลว');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('เกิดข้อผิดพลาด: ' + error.message, 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        });
+
+        function collectSkusData(options) {
+            const skus = [];
+            const rows = document.querySelectorAll('#variants-table tbody tr');
+            
+            rows.forEach(row => {
+                const skuCode = row.querySelector('.sku-code').value;
+                const price = parseFloat(row.querySelector('.sku-price').value) || 0;
+                const costPrice = parseFloat(row.querySelector('.sku-cost').value) || 0;
+                
+                const variantValues = [];
+                const cells = row.querySelectorAll('td');
+                for (let i = 1; i < cells.length - 2; i++) {
+                    variantValues.push(cells[i].textContent.trim());
+                }
+                
+                skus.push({
+                    sku_code: skuCode,
+                    price,
+                    cost_price: costPrice,
+                    stock: 0,
+                    variant_values: variantValues,
+                    option_value_ids: []
+                });
+            });
+            
+            return skus;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBrands();
+            loadCurrentUser();
+        });
+    </script>
+    <script src="/static/js/global-alert.js"></script>
+</body>
+</html>

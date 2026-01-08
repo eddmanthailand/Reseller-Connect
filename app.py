@@ -167,6 +167,18 @@ def product_edit(product_id):
     """Render the product edit page"""
     return render_template('product_edit.html')
 
+@app.route('/admin/mto/products/create')
+@admin_required
+def mto_product_create():
+    """Render the MTO product creation page"""
+    return render_template('mto_product_create.html')
+
+@app.route('/admin/mto/products/edit/<int:product_id>')
+@admin_required
+def mto_product_edit(product_id):
+    """Render the MTO product edit page"""
+    return render_template('mto_product_edit.html')
+
 @app.route('/admin/brands')
 @admin_required
 def brand_management():
@@ -10972,7 +10984,9 @@ def admin_create_mto_product():
         deposit_percent = data.get('deposit_percent', 50)
         status = data.get('status', 'draft')
         options = data.get('options', [])
-        images = data.get('images', [])
+        images = data.get('images') or data.get('image_urls', [])
+        size_chart_image_url = data.get('size_chart_image_url')
+        skus_data = data.get('skus', [])
         
         if not name or not parent_sku or not brand_id:
             return jsonify({'error': 'กรุณากรอกข้อมูลที่จำเป็น'}), 400
@@ -10980,17 +10994,15 @@ def admin_create_mto_product():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Check if SPU exists
         cursor.execute('SELECT id FROM products WHERE parent_sku = %s', (parent_sku,))
         if cursor.fetchone():
             return jsonify({'error': 'รหัส SPU นี้มีอยู่แล้ว'}), 400
         
-        # Create product
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, brand_id, description, product_type, production_days, deposit_percent, status)
-            VALUES (%s, %s, %s, %s, 'made_to_order', %s, %s, %s)
+            INSERT INTO products (name, parent_sku, brand_id, description, product_type, production_days, deposit_percent, status, size_chart_image_url)
+            VALUES (%s, %s, %s, %s, 'made_to_order', %s, %s, %s, %s)
             RETURNING id
-        ''', (name, parent_sku, brand_id, description, production_days, deposit_percent, status))
+        ''', (name, parent_sku, brand_id, description, production_days, deposit_percent, status, size_chart_image_url))
         product_id = cursor.fetchone()['id']
         
         # Save images
@@ -11027,8 +11039,34 @@ def admin_create_mto_product():
             
             option_values_map.append(opt_value_ids)
         
-        # Generate SKU combinations
-        if option_values_map:
+        if skus_data:
+            for i, sku_info in enumerate(skus_data):
+                sku_code = sku_info.get('sku_code', f"{parent_sku}-{i}")
+                price = sku_info.get('price', 0)
+                cost_price = sku_info.get('cost_price', 0)
+                
+                cursor.execute('''
+                    INSERT INTO skus (product_id, sku_code, price, cost_price, stock)
+                    VALUES (%s, %s, %s, %s, 0)
+                    RETURNING id
+                ''', (product_id, sku_code, price, cost_price))
+                sku_id = cursor.fetchone()['id']
+                
+                variant_values = sku_info.get('variant_values', [])
+                for j, val_name in enumerate(variant_values):
+                    if j < len(option_values_map):
+                        for ov_id in option_values_map[j]:
+                            cursor.execute('''
+                                SELECT value FROM option_values WHERE id = %s
+                            ''', (ov_id,))
+                            row = cursor.fetchone()
+                            if row and row['value'] == val_name:
+                                cursor.execute('''
+                                    INSERT INTO sku_values_map (sku_id, option_value_id)
+                                    VALUES (%s, %s)
+                                ''', (sku_id, ov_id))
+                                break
+        elif option_values_map:
             from itertools import product as cartesian
             combinations = list(cartesian(*option_values_map))
             
@@ -11143,30 +11181,17 @@ def admin_update_mto_product(product_id):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Check if product exists
         cursor.execute('SELECT id FROM products WHERE id = %s AND product_type = %s', (product_id, 'made_to_order'))
         if not cursor.fetchone():
             return jsonify({'error': 'ไม่พบสินค้า'}), 404
         
-        # Update product fields
         update_fields = []
         params = []
         
-        if 'name' in data:
-            update_fields.append('name = %s')
-            params.append(data['name'])
-        if 'description' in data:
-            update_fields.append('description = %s')
-            params.append(data['description'])
-        if 'production_days' in data:
-            update_fields.append('production_days = %s')
-            params.append(data['production_days'])
-        if 'deposit_percent' in data:
-            update_fields.append('deposit_percent = %s')
-            params.append(data['deposit_percent'])
-        if 'status' in data:
-            update_fields.append('status = %s')
-            params.append(data['status'])
+        for field in ['name', 'description', 'production_days', 'deposit_percent', 'status', 'brand_id', 'parent_sku', 'size_chart_image_url']:
+            if field in data:
+                update_fields.append(f'{field} = %s')
+                params.append(data[field])
         
         if update_fields:
             update_fields.append('updated_at = CURRENT_TIMESTAMP')
@@ -11176,19 +11201,80 @@ def admin_update_mto_product(product_id):
                 WHERE id = %s
             ''', params)
         
-        # Update SKU prices if provided
-        if 'skus' in data:
-            for sku_data in data['skus']:
-                if 'id' in sku_data and 'price' in sku_data:
-                    cursor.execute('UPDATE skus SET price = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s',
-                                   (sku_data['price'], sku_data['id']))
+        image_urls = data.get('image_urls') or data.get('images')
+        if image_urls is not None:
+            cursor.execute('DELETE FROM product_images WHERE product_id = %s', (product_id,))
+            for i, img_url in enumerate(image_urls):
+                cursor.execute('''
+                    INSERT INTO product_images (product_id, image_url, sort_order)
+                    VALUES (%s, %s, %s)
+                ''', (product_id, img_url, i))
         
-        # Update option value min_order_qty if provided
-        if 'option_values' in data:
-            for ov in data['option_values']:
-                if 'id' in ov and 'min_order_qty' in ov:
-                    cursor.execute('UPDATE option_values SET min_order_qty = %s WHERE id = %s',
-                                   (ov['min_order_qty'], ov['id']))
+        if 'options' in data:
+            cursor.execute('SELECT id FROM options WHERE product_id = %s', (product_id,))
+            old_opts = cursor.fetchall()
+            for opt in old_opts:
+                cursor.execute('DELETE FROM option_values WHERE option_id = %s', (opt['id'],))
+            cursor.execute('DELETE FROM options WHERE product_id = %s', (product_id,))
+            
+            option_values_map = []
+            for opt_idx, opt in enumerate(data['options']):
+                opt_name = opt.get('name')
+                values = opt.get('values', [])
+                
+                cursor.execute('''
+                    INSERT INTO options (product_id, name)
+                    VALUES (%s, %s)
+                    RETURNING id
+                ''', (product_id, opt_name))
+                option_id = cursor.fetchone()['id']
+                
+                opt_value_ids = []
+                for val_idx, val in enumerate(values):
+                    val_name = val.get('value')
+                    min_qty = val.get('min_order_qty', 0) if opt_idx == 0 else 0
+                    
+                    cursor.execute('''
+                        INSERT INTO option_values (option_id, value, sort_order, min_order_qty)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    ''', (option_id, val_name, val_idx, min_qty))
+                    opt_value_ids.append(cursor.fetchone()['id'])
+                
+                option_values_map.append(opt_value_ids)
+            
+            if 'skus' in data:
+                cursor.execute('SELECT id FROM skus WHERE product_id = %s', (product_id,))
+                old_skus = cursor.fetchall()
+                for old_sku in old_skus:
+                    cursor.execute('DELETE FROM sku_values_map WHERE sku_id = %s', (old_sku['id'],))
+                cursor.execute('DELETE FROM skus WHERE product_id = %s', (product_id,))
+                
+                parent_sku = data.get('parent_sku', '')
+                for i, sku_info in enumerate(data['skus']):
+                    sku_code = sku_info.get('sku_code', f"{parent_sku}-{i}")
+                    price = sku_info.get('price', 0)
+                    cost_price = sku_info.get('cost_price', 0)
+                    
+                    cursor.execute('''
+                        INSERT INTO skus (product_id, sku_code, price, cost_price, stock)
+                        VALUES (%s, %s, %s, %s, 0)
+                        RETURNING id
+                    ''', (product_id, sku_code, price, cost_price))
+                    new_sku_id = cursor.fetchone()['id']
+                    
+                    variant_values = sku_info.get('variant_values', [])
+                    for j, val_name in enumerate(variant_values):
+                        if j < len(option_values_map):
+                            for ov_id in option_values_map[j]:
+                                cursor.execute('SELECT value FROM option_values WHERE id = %s', (ov_id,))
+                                row = cursor.fetchone()
+                                if row and row['value'] == val_name:
+                                    cursor.execute('''
+                                        INSERT INTO sku_values_map (sku_id, option_value_id)
+                                        VALUES (%s, %s)
+                                    ''', (new_sku_id, ov_id))
+                                    break
         
         conn.commit()
         
