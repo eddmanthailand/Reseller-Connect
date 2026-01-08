@@ -2555,30 +2555,21 @@ async function openMtoRequestModal(productId) {
     document.getElementById('mtoProductId').value = productId;
     document.getElementById('mtoPreviewImage').src = product.image_url || '/static/images/placeholder.png';
     document.getElementById('mtoPreviewName').textContent = product.name;
-    document.getElementById('mtoPreviewMeta').textContent = `${product.production_days || 14} วันผลิต | ขั้นต่ำ ${product.min_order_qty || 10} ชิ้น | มัดจำ ${product.deposit_percent || 50}%`;
+    document.getElementById('mtoPreviewMeta').textContent = `${product.production_days || 14} วันผลิต | มัดจำ ${product.deposit_percent || 50}%`;
     
-    // Load SKUs for selection
+    // Reset matrix items
+    window.mtoMatrixItems = [];
+    window.mtoHasMinQtyError = false;
+    
+    // Load product details with options for Matrix Grid
     try {
-        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/products/${productId}/skus`);
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/products/${productId}/details`);
         if (response.ok) {
-            const skus = await response.json();
+            const data = await response.json();
             const container = document.getElementById('mtoSkuSelection');
             
-            if (skus.length > 0) {
-                container.innerHTML = `
-                    <label style="display: block; margin-bottom: 12px; font-weight: 500; color: white;">เลือกตัวเลือกสินค้า *</label>
-                    <div class="mto-sku-list" style="max-height: 200px; overflow-y: auto;">
-                        ${skus.map(sku => `
-                            <div class="mto-sku-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 8px;">
-                                <input type="checkbox" id="sku_${sku.id}" name="sku_selection" value="${sku.id}" style="width: 18px; height: 18px;">
-                                <label for="sku_${sku.id}" style="flex: 1; color: white; cursor: pointer;">
-                                    ${sku.sku_code} - ${sku.variant_name || 'ไม่ระบุ'}
-                                </label>
-                                <input type="number" id="qty_${sku.id}" min="${product.min_order_qty || 1}" value="${product.min_order_qty || 10}" placeholder="จำนวน" style="width: 80px; padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; text-align: center;">
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
+            if (data.options && data.options.length > 0) {
+                container.innerHTML = renderMtoMatrixGrid(data);
             } else {
                 container.innerHTML = `
                     <div class="form-group">
@@ -2587,13 +2578,209 @@ async function openMtoRequestModal(productId) {
                     </div>
                 `;
             }
+        } else {
+            // Fallback to simple quantity input
+            const container = document.getElementById('mtoSkuSelection');
+            container.innerHTML = `
+                <div class="form-group">
+                    <label>จำนวนที่ต้องการ *</label>
+                    <input type="number" id="mtoRequestQty" min="${product.min_order_qty || 1}" value="${product.min_order_qty || 10}" required>
+                </div>
+            `;
         }
     } catch (error) {
-        console.error('Error loading SKUs:', error);
+        console.error('Error loading product details:', error);
+        const container = document.getElementById('mtoSkuSelection');
+        container.innerHTML = `
+            <div class="form-group">
+                <label>จำนวนที่ต้องการ *</label>
+                <input type="number" id="mtoRequestQty" min="${product.min_order_qty || 1}" value="${product.min_order_qty || 10}" required>
+            </div>
+        `;
     }
     
     document.getElementById('mtoRequestNotes').value = '';
     document.getElementById('mtoRequestModal').classList.add('active');
+}
+
+function renderMtoMatrixGrid(data) {
+    const options = data.options || [];
+    const skus = data.skus || [];
+    
+    if (options.length === 0) return '<p style="color: rgba(255,255,255,0.5);">ไม่มีตัวเลือกสินค้า</p>';
+    
+    const primaryOption = options[0];
+    const primaryValues = primaryOption.values || [];
+    
+    if (options.length === 1) {
+        return `
+            <div class="mto-matrix-wrapper">
+                <div class="mto-matrix-info" style="margin-bottom: 12px; padding: 10px; background: rgba(168,85,247,0.15); border-radius: 8px; font-size: 12px; color: rgba(255,255,255,0.9);">
+                    <strong>${primaryOption.name}:</strong> แต่ละค่าต้องมีจำนวนขั้นต่ำตามที่กำหนด
+                </div>
+                <table class="mto-matrix-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding: 10px; background: rgba(0,0,0,0.3); color: white;">${primaryOption.name}</th>
+                            <th style="text-align: center; padding: 10px; background: rgba(0,0,0,0.3); color: white; width: 70px;">ขั้นต่ำ</th>
+                            <th style="text-align: center; padding: 10px; background: rgba(0,0,0,0.3); color: white; width: 90px;">จำนวน</th>
+                            <th style="text-align: center; padding: 10px; background: rgba(0,0,0,0.3); color: white;">ราคา/ชิ้น</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${primaryValues.map(val => {
+                            const sku = skus.find(s => s.option_values && s.option_values.some(ov => ov.id === val.id));
+                            const skuId = sku ? sku.id : 0;
+                            const price = sku ? sku.price : 0;
+                            return `
+                                <tr data-primary-value="${val.id}">
+                                    <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); color: white;">${val.value}</td>
+                                    <td style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); font-size: 12px;" data-min-qty="${val.min_order_qty || 1}">${val.min_order_qty || 1}</td>
+                                    <td style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                        <input type="number" class="mto-qty-input" data-sku-id="${skuId}" data-primary-value="${val.id}" min="0" value="0" oninput="updateMtoMatrixSummary()" style="width: 70px; padding: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; text-align: center;">
+                                    </td>
+                                    <td style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7);">${formatNumber(price)} ฿</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+                <div id="mtoMatrixSummary" class="mto-matrix-summary" style="margin-top: 16px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px;"></div>
+            </div>
+        `;
+    }
+    
+    const secondaryOption = options[1];
+    const secondaryValues = secondaryOption.values || [];
+    
+    let html = `
+        <div class="mto-matrix-wrapper" style="overflow-x: auto;">
+            <div class="mto-matrix-info" style="margin-bottom: 12px; padding: 10px; background: rgba(168,85,247,0.15); border-radius: 8px; font-size: 12px; color: rgba(255,255,255,0.9);">
+                <strong>${primaryOption.name}:</strong> แต่ละ${primaryOption.name}ต้องมีจำนวนรวมขั้นต่ำตามคอลัมน์ "ขั้นต่ำ"
+            </div>
+            <table class="mto-matrix-table" style="width: 100%; border-collapse: collapse; min-width: 400px;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 10px; background: rgba(0,0,0,0.3); color: white;">${primaryOption.name}</th>
+                        <th style="text-align: center; padding: 10px; background: rgba(0,0,0,0.3); color: rgba(255,255,255,0.7); font-size: 11px; width: 50px;">ขั้นต่ำ</th>
+                        ${secondaryValues.map(sv => `
+                            <th style="text-align: center; padding: 10px; background: rgba(0,0,0,0.3); color: white; font-size: 12px;">${sv.value}</th>
+                        `).join('')}
+                        <th style="text-align: center; padding: 10px; background: rgba(168,85,247,0.2); color: #a855f7; font-size: 12px; width: 60px;">รวม</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    primaryValues.forEach(pv => {
+        html += `
+            <tr data-primary-value="${pv.id}">
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); color: white; font-weight: 500;">${pv.value}</td>
+                <td style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); font-size: 11px;" data-min-qty="${pv.min_order_qty || 1}">${pv.min_order_qty || 1}</td>
+        `;
+        
+        secondaryValues.forEach(sv => {
+            const sku = skus.find(s => {
+                if (!s.option_values) return false;
+                return s.option_values.some(ov => ov.id === pv.id) && s.option_values.some(ov => ov.id === sv.id);
+            });
+            const skuId = sku ? sku.id : 0;
+            
+            html += `
+                <td style="padding: 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <input type="number" class="mto-qty-input" data-sku-id="${skuId}" data-primary-value="${pv.id}" data-secondary-value="${sv.id}" min="0" value="0" oninput="updateMtoMatrixSummary()" style="width: 50px; padding: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; text-align: center; font-size: 13px;">
+                </td>
+            `;
+        });
+        
+        html += `
+                <td class="row-total" style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(168,85,247,0.1); color: #a855f7; font-weight: 600;" data-row="${pv.id}">0</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+            <div id="mtoMatrixSummary" class="mto-matrix-summary" style="margin-top: 16px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px;"></div>
+        </div>
+    `;
+    
+    return html;
+}
+
+function updateMtoMatrixSummary() {
+    const inputs = document.querySelectorAll('.mto-qty-input');
+    const primaryTotals = {};
+    let grandTotal = 0;
+    const skuItems = [];
+    let hasMinQtyError = false;
+    
+    inputs.forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        const skuId = input.dataset.skuId;
+        const primaryValue = input.dataset.primaryValue;
+        
+        if (!primaryTotals[primaryValue]) {
+            primaryTotals[primaryValue] = { total: 0, minQty: 0 };
+        }
+        primaryTotals[primaryValue].total += qty;
+        grandTotal += qty;
+        
+        if (qty > 0 && skuId && skuId !== '0') {
+            skuItems.push({ sku_id: parseInt(skuId), quantity: qty });
+        }
+    });
+    
+    document.querySelectorAll('.row-total').forEach(cell => {
+        const rowId = cell.dataset.row;
+        if (primaryTotals[rowId]) {
+            cell.textContent = primaryTotals[rowId].total;
+        }
+    });
+    
+    const minQtyCells = document.querySelectorAll('[data-min-qty]');
+    let errors = [];
+    
+    minQtyCells.forEach(cell => {
+        const row = cell.closest('tr');
+        const primaryValue = row.dataset.primaryValue;
+        const minQty = parseInt(cell.dataset.minQty) || 1;
+        const rowTotal = primaryTotals[primaryValue]?.total || 0;
+        
+        if (rowTotal > 0 && rowTotal < minQty) {
+            hasMinQtyError = true;
+            const rowLabel = row.querySelector('td:first-child')?.textContent || primaryValue;
+            errors.push(`${rowLabel}: ต้องมีอย่างน้อย ${minQty} ชิ้น (ปัจจุบัน ${rowTotal})`);
+            row.style.background = 'rgba(239,68,68,0.15)';
+        } else {
+            row.style.background = '';
+        }
+    });
+    
+    const summaryDiv = document.getElementById('mtoMatrixSummary');
+    if (summaryDiv) {
+        let summaryHtml = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: rgba(255,255,255,0.7);">จำนวนรวม:</span>
+                <span style="color: white; font-size: 18px; font-weight: 600;">${grandTotal} ชิ้น</span>
+            </div>
+        `;
+        
+        if (errors.length > 0) {
+            summaryHtml += `
+                <div style="margin-top: 10px; padding: 10px; background: rgba(239,68,68,0.2); border-radius: 6px; border: 1px solid rgba(239,68,68,0.4);">
+                    <div style="color: #f87171; font-size: 12px; margin-bottom: 4px; font-weight: 500;">ไม่ถึงขั้นต่ำ:</div>
+                    ${errors.map(e => `<div style="color: rgba(255,255,255,0.8); font-size: 11px;">• ${e}</div>`).join('')}
+                </div>
+            `;
+        }
+        
+        summaryDiv.innerHTML = summaryHtml;
+    }
+    
+    window.mtoMatrixItems = skuItems;
+    window.mtoHasMinQtyError = hasMinQtyError;
 }
 
 function closeMtoRequestModal() {
@@ -2606,16 +2793,17 @@ async function handleSubmitMtoRequest(event) {
     const productId = document.getElementById('mtoProductId').value;
     const notes = document.getElementById('mtoRequestNotes').value;
     
-    // Collect selected SKUs and quantities
-    const items = [];
-    const checkboxes = document.querySelectorAll('input[name="sku_selection"]:checked');
+    // Check for min quantity errors
+    if (window.mtoHasMinQtyError) {
+        showAlert('จำนวนไม่ถึงขั้นต่ำ กรุณาตรวจสอบใหม่', 'error');
+        return;
+    }
     
-    if (checkboxes.length > 0) {
-        checkboxes.forEach(cb => {
-            const skuId = cb.value;
-            const qty = parseInt(document.getElementById(`qty_${skuId}`).value) || 1;
-            items.push({ sku_id: parseInt(skuId), quantity: qty });
-        });
+    // Collect items from matrix or simple input
+    let items = [];
+    
+    if (window.mtoMatrixItems && window.mtoMatrixItems.length > 0) {
+        items = window.mtoMatrixItems;
     } else {
         const qtyInput = document.getElementById('mtoRequestQty');
         if (qtyInput) {
@@ -2624,7 +2812,7 @@ async function handleSubmitMtoRequest(event) {
     }
     
     if (items.length === 0) {
-        showAlert('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', 'error');
+        showAlert('กรุณาระบุจำนวนอย่างน้อย 1 รายการ', 'error');
         return;
     }
     

@@ -6103,6 +6103,70 @@ def get_reseller_mto_products():
         if conn:
             conn.close()
 
+@app.route('/api/reseller/mto/products/<int:product_id>/details', methods=['GET'])
+@login_required
+def get_reseller_mto_product_details(product_id):
+    """Get MTO product with options and SKUs for matrix ordering"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get product
+        cursor.execute('''
+            SELECT id, name, parent_sku, production_days, deposit_percent
+            FROM products
+            WHERE id = %s AND product_type = 'made_to_order' AND status = 'active'
+        ''', (product_id,))
+        product = cursor.fetchone()
+        
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        product = dict(product)
+        
+        # Get options with values (including min_order_qty)
+        cursor.execute('SELECT id, name FROM options WHERE product_id = %s ORDER BY id', (product_id,))
+        options = [dict(o) for o in cursor.fetchall()]
+        
+        for opt in options:
+            cursor.execute('''
+                SELECT id, value, min_order_qty
+                FROM option_values
+                WHERE option_id = %s
+                ORDER BY sort_order
+            ''', (opt['id'],))
+            opt['values'] = [dict(v) for v in cursor.fetchall()]
+        
+        product['options'] = options
+        
+        # Get SKUs with option values
+        cursor.execute('SELECT id, sku_code, price FROM skus WHERE product_id = %s ORDER BY id', (product_id,))
+        skus = [dict(s) for s in cursor.fetchall()]
+        
+        for sku in skus:
+            cursor.execute('''
+                SELECT ov.id, ov.value, o.name as option_name, o.id as option_id
+                FROM sku_values_map svm
+                JOIN option_values ov ON svm.option_value_id = ov.id
+                JOIN options o ON ov.option_id = o.id
+                WHERE svm.sku_id = %s
+            ''', (sku['id'],))
+            sku['option_values'] = [dict(ov) for ov in cursor.fetchall()]
+        
+        product['skus'] = skus
+        
+        return jsonify(product), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/reseller/mto/products/<int:product_id>/skus', methods=['GET'])
 @login_required
 def get_reseller_mto_product_skus(product_id):
@@ -11704,6 +11768,34 @@ def admin_update_mto_order_status(order_id):
         cursor.execute(f'''
             UPDATE mto_orders SET {', '.join(update_fields)} WHERE id = %s
         ''', params)
+        
+        # Update total_purchases when order is fulfilled
+        if new_status == 'fulfilled':
+            reseller_id = order['reseller_id']
+            order_total = float(order['total_amount'] or 0)
+            
+            # Add MTO order total to reseller's total_purchases
+            cursor.execute('''
+                UPDATE users SET total_purchases = COALESCE(total_purchases, 0) + %s
+                WHERE id = %s
+            ''', (order_total, reseller_id))
+            
+            # Check for tier upgrade
+            cursor.execute('''
+                SELECT u.id, u.reseller_tier_id, u.total_purchases, u.tier_manual_override,
+                       (SELECT id FROM reseller_tiers 
+                        WHERE upgrade_threshold <= u.total_purchases + %s
+                        AND is_manual_only = FALSE
+                        ORDER BY level_rank DESC LIMIT 1) as eligible_tier_id
+                FROM users u WHERE u.id = %s
+            ''', (order_total, reseller_id))
+            user = cursor.fetchone()
+            
+            if user and not user['tier_manual_override']:
+                eligible_tier = user['eligible_tier_id']
+                if eligible_tier and eligible_tier != user['reseller_tier_id']:
+                    cursor.execute('UPDATE users SET reseller_tier_id = %s WHERE id = %s',
+                                   (eligible_tier, reseller_id))
         
         conn.commit()
         
