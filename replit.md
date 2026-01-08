@@ -54,6 +54,15 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Order Shipment System:** Automatic shipment splitting by warehouse during order creation. Each shipment tracks warehouse source, tracking number, shipping provider, and status (pending/shipped/delivered).
 - **Shipping Label Printing:** A4 format with horizontal split design. Top half displays shipping info (sender, recipient, tracking number, provider). Bottom half displays packing list with checkboxes, SKU codes, quantities, and signature fields. Print per shipment from order detail modal. No weight displayed. Tracking URLs auto-generated from shipping provider templates.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
+- **Made-to-Order (MTO) System:** Complete workflow for custom production orders:
+    - Admin: Create MTO products with production_days, min_order_qty, deposit_percent settings.
+    - Admin: 4-page management (Quotation Requests, Quotations, MTO Orders, Payment Verification).
+    - Admin: Timeline tracking, status updates, payment confirmation with slip review.
+    - Reseller: MTO product catalog with request quote functionality.
+    - Reseller: View/accept/reject quotations, track order status and production progress.
+    - Reseller: Upload payment slips for deposit and balance payments.
+    - Workflow: Request → Quote → Accept → Deposit → Production → Balance → Ship → Complete.
+    - Payment structure: Configurable deposit % (default 50%), balance payment gate before shipping.
 
 ### System Design Choices
 - **Backend Framework:** Flask (lightweight, flexible).
@@ -75,6 +84,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Reseller Customer Database:** `reseller_customers` (with `reseller_id`, `full_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `notes`).
 - **Warehouse System:** `warehouses` (id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active), `sku_warehouse_stock` (sku_id, warehouse_id, stock), `order_shipments` (order_id, warehouse_id, tracking_number, shipping_provider, status, shipped_at, delivered_at), `order_shipment_items` (shipment_id, order_item_id, quantity).
 - **Stock Management:** `stock_transfers` (id, sku_id, from_warehouse_id, to_warehouse_id, quantity, notes, created_at, created_by), `stock_adjustments` (id, sku_id, warehouse_id, quantity_change, adjustment_type, sales_channel, notes, created_at, created_by), `stock_audit_log` (id, sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_at, created_by).
+- **MTO System:** `quotation_requests` (reseller_id, product_id, notes, status, created_at), `quotation_request_items` (request_id, sku_id, quantity), `quotations` (request_id, total_amount, valid_until, notes, created_at), `quotation_items` (quotation_id, sku_id, quantity, unit_price), `mto_orders` (quotation_id, reseller_id, total_amount, deposit_percent, deposit_amount, balance_amount, status, expected_completion_date, created_at), `mto_order_items` (mto_order_id, sku_id, quantity, unit_price), `mto_payments` (mto_order_id, payment_type, amount, slip_image_url, status, confirmed_at, created_at), `mto_status_history` (mto_order_id, old_status, new_status, notes, created_at, created_by). Products table extended with `product_type`, `production_days`, `min_order_qty`, `deposit_percent`.
 
 ## External Dependencies
 

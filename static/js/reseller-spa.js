@@ -120,6 +120,9 @@ function switchPage(pageName) {
         case 'profile':
             loadProfile();
             break;
+        case 'mto-catalog':
+            loadMtoCatalog();
+            break;
     }
 }
 
@@ -2423,4 +2426,640 @@ function getSelectedText(selectId) {
     if (!select || select.selectedIndex < 0) return '';
     const option = select.options[select.selectedIndex];
     return option.dataset.name || option.textContent || '';
+}
+
+// ===========================================
+// MTO (Made-to-Order) Functions
+// ===========================================
+
+let mtoProducts = [];
+let mtoQuotes = [];
+let mtoOrders = [];
+let currentMtoQuoteFilter = 'all';
+let currentMtoOrderFilter = 'all';
+
+async function loadMtoCatalog() {
+    loadMtoProducts();
+    loadResellerMtoQuotes();
+    loadResellerMtoOrders();
+}
+
+async function loadMtoProducts() {
+    const grid = document.getElementById('mtoCatalogGrid');
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/products`);
+        if (!response.ok) throw new Error('Failed to load products');
+        
+        mtoProducts = await response.json();
+        
+        if (mtoProducts.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path></svg>
+                    <h3>ยังไม่มีสินค้าสั่งผลิต</h3>
+                    <p>กรุณารอสินค้าใหม่เร็วๆ นี้</p>
+                </div>
+            `;
+            return;
+        }
+        
+        grid.innerHTML = mtoProducts.map(product => `
+            <div class="mto-product-card">
+                <img src="${product.image_url || '/static/images/placeholder.png'}" alt="${product.name}" class="mto-product-image" onerror="this.src='/static/images/placeholder.png'">
+                <div class="mto-product-info">
+                    <div class="mto-product-name">${product.name}</div>
+                    <div class="mto-product-meta">
+                        <span>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            ${product.production_days || 14} วันผลิต
+                        </span>
+                        <span>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path></svg>
+                            ขั้นต่ำ ${product.min_order_qty || 10} ชิ้น
+                        </span>
+                    </div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 12px;">
+                        มัดจำ ${product.deposit_percent || 50}%
+                    </div>
+                    <div class="mto-product-actions">
+                        <button class="btn-request-quote" onclick="openMtoRequestModal(${product.id})">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                            ขอใบเสนอราคา
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading MTO products:', error);
+        grid.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <h3>ไม่สามารถโหลดข้อมูลได้</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function searchMtoCatalog() {
+    const query = document.getElementById('mtoCatalogSearch').value.toLowerCase();
+    const grid = document.getElementById('mtoCatalogGrid');
+    const filtered = mtoProducts.filter(p => p.name.toLowerCase().includes(query));
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <h3>ไม่พบสินค้า</h3>
+                <p>ลองค้นหาด้วยคำอื่น</p>
+            </div>
+        `;
+        return;
+    }
+    
+    grid.innerHTML = filtered.map(product => `
+        <div class="mto-product-card">
+            <img src="${product.image_url || '/static/images/placeholder.png'}" alt="${product.name}" class="mto-product-image" onerror="this.src='/static/images/placeholder.png'">
+            <div class="mto-product-info">
+                <div class="mto-product-name">${product.name}</div>
+                <div class="mto-product-meta">
+                    <span>${product.production_days || 14} วันผลิต</span>
+                    <span>ขั้นต่ำ ${product.min_order_qty || 10} ชิ้น</span>
+                </div>
+                <div class="mto-product-actions">
+                    <button class="btn-request-quote" onclick="openMtoRequestModal(${product.id})">ขอใบเสนอราคา</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function switchMtoTab(tabName) {
+    document.querySelectorAll('.mto-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    
+    document.querySelectorAll('.mto-tab-content').forEach(content => {
+        const isActive = content.id === `mto-tab-${tabName}`;
+        content.classList.toggle('active', isActive);
+        content.style.display = isActive ? 'block' : 'none';
+    });
+    
+    if (tabName === 'quotes') loadResellerMtoQuotes();
+    if (tabName === 'mto-orders') loadResellerMtoOrders();
+}
+
+async function openMtoRequestModal(productId) {
+    const product = mtoProducts.find(p => p.id === productId);
+    if (!product) return;
+    
+    document.getElementById('mtoProductId').value = productId;
+    document.getElementById('mtoPreviewImage').src = product.image_url || '/static/images/placeholder.png';
+    document.getElementById('mtoPreviewName').textContent = product.name;
+    document.getElementById('mtoPreviewMeta').textContent = `${product.production_days || 14} วันผลิต | ขั้นต่ำ ${product.min_order_qty || 10} ชิ้น | มัดจำ ${product.deposit_percent || 50}%`;
+    
+    // Load SKUs for selection
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/products/${productId}/skus`);
+        if (response.ok) {
+            const skus = await response.json();
+            const container = document.getElementById('mtoSkuSelection');
+            
+            if (skus.length > 0) {
+                container.innerHTML = `
+                    <label style="display: block; margin-bottom: 12px; font-weight: 500; color: white;">เลือกตัวเลือกสินค้า *</label>
+                    <div class="mto-sku-list" style="max-height: 200px; overflow-y: auto;">
+                        ${skus.map(sku => `
+                            <div class="mto-sku-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 8px;">
+                                <input type="checkbox" id="sku_${sku.id}" name="sku_selection" value="${sku.id}" style="width: 18px; height: 18px;">
+                                <label for="sku_${sku.id}" style="flex: 1; color: white; cursor: pointer;">
+                                    ${sku.sku_code} - ${sku.variant_name || 'ไม่ระบุ'}
+                                </label>
+                                <input type="number" id="qty_${sku.id}" min="${product.min_order_qty || 1}" value="${product.min_order_qty || 10}" placeholder="จำนวน" style="width: 80px; padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: white; text-align: center;">
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="form-group">
+                        <label>จำนวนที่ต้องการ *</label>
+                        <input type="number" id="mtoRequestQty" min="${product.min_order_qty || 1}" value="${product.min_order_qty || 10}" required>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading SKUs:', error);
+    }
+    
+    document.getElementById('mtoRequestNotes').value = '';
+    document.getElementById('mtoRequestModal').classList.add('active');
+}
+
+function closeMtoRequestModal() {
+    document.getElementById('mtoRequestModal').classList.remove('active');
+}
+
+async function handleSubmitMtoRequest(event) {
+    event.preventDefault();
+    
+    const productId = document.getElementById('mtoProductId').value;
+    const notes = document.getElementById('mtoRequestNotes').value;
+    
+    // Collect selected SKUs and quantities
+    const items = [];
+    const checkboxes = document.querySelectorAll('input[name="sku_selection"]:checked');
+    
+    if (checkboxes.length > 0) {
+        checkboxes.forEach(cb => {
+            const skuId = cb.value;
+            const qty = parseInt(document.getElementById(`qty_${skuId}`).value) || 1;
+            items.push({ sku_id: parseInt(skuId), quantity: qty });
+        });
+    } else {
+        const qtyInput = document.getElementById('mtoRequestQty');
+        if (qtyInput) {
+            items.push({ quantity: parseInt(qtyInput.value) || 1 });
+        }
+    }
+    
+    if (items.length === 0) {
+        showAlert('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/quotation-requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                product_id: parseInt(productId),
+                items: items,
+                notes: notes
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to submit request');
+        }
+        
+        showAlert('ส่งคำขอใบเสนอราคาเรียบร้อยแล้ว', 'success');
+        closeMtoRequestModal();
+        switchMtoTab('quotes');
+    } catch (error) {
+        showAlert(error.message, 'error');
+    }
+}
+
+async function loadResellerMtoQuotes() {
+    const container = document.getElementById('mtoQuotesList');
+    try {
+        let url = `${RESELLER_API_URL}/reseller/mto/quotations`;
+        if (currentMtoQuoteFilter !== 'all') {
+            url += `?status=${currentMtoQuoteFilter}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load quotes');
+        
+        mtoQuotes = await response.json();
+        
+        // Update badge
+        const pendingCount = mtoQuotes.filter(q => q.status === 'quoted').length;
+        const badge = document.getElementById('quotesBadge');
+        if (pendingCount > 0) {
+            badge.textContent = pendingCount;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
+        
+        if (mtoQuotes.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
+                    <h3>ไม่มีใบเสนอราคา</h3>
+                    <p>เลือกสินค้าจากแคตตาล็อกเพื่อขอใบเสนอราคา</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = mtoQuotes.map(quote => `
+            <div class="mto-quote-card">
+                <div class="mto-card-header">
+                    <div>
+                        <div class="mto-card-title">${quote.product_name}</div>
+                        <div class="mto-card-date">${formatDate(quote.created_at)}</div>
+                    </div>
+                    <span class="mto-status-badge mto-status-${quote.status}">${getMtoQuoteStatusText(quote.status)}</span>
+                </div>
+                <div class="mto-card-items">
+                    ${(quote.items || []).map(item => `
+                        <div class="mto-card-item">
+                            <span>${item.sku_code || 'ไม่ระบุ'} ${item.variant_name ? `(${item.variant_name})` : ''}</span>
+                            <span>x ${item.quantity}</span>
+                        </div>
+                    `).join('')}
+                    ${quote.total_amount ? `
+                        <div class="mto-card-summary">
+                            <span>รวมทั้งสิ้น</span>
+                            <span>฿${formatNumber(quote.total_amount)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="mto-card-actions">
+                    ${quote.status === 'quoted' ? `
+                        <button class="btn-mto-action btn-mto-primary" onclick="acceptMtoQuote(${quote.id})">ตอบรับใบเสนอราคา</button>
+                        <button class="btn-mto-action btn-mto-danger" onclick="rejectMtoQuote(${quote.id})">ปฏิเสธ</button>
+                    ` : quote.status === 'pending' ? `
+                        <button class="btn-mto-action btn-mto-secondary" disabled>รอใบเสนอราคา...</button>
+                    ` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading quotes:', error);
+        container.innerHTML = `<div class="empty-state"><h3>เกิดข้อผิดพลาด</h3><p>${error.message}</p></div>`;
+    }
+}
+
+function filterResellerMtoQuotes(status) {
+    currentMtoQuoteFilter = status;
+    document.querySelectorAll('#mto-tab-quotes .filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === status);
+    });
+    loadResellerMtoQuotes();
+}
+
+async function acceptMtoQuote(quoteId) {
+    if (!confirm('ยืนยันการตอบรับใบเสนอราคานี้?')) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/quotations/${quoteId}/accept`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to accept quote');
+        }
+        
+        showAlert('ตอบรับใบเสนอราคาเรียบร้อย กรุณาชำระเงินมัดจำ', 'success');
+        loadResellerMtoQuotes();
+        switchMtoTab('mto-orders');
+    } catch (error) {
+        showAlert(error.message, 'error');
+    }
+}
+
+async function rejectMtoQuote(quoteId) {
+    if (!confirm('ยืนยันการปฏิเสธใบเสนอราคานี้?')) return;
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/quotations/${quoteId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) throw new Error('Failed to reject quote');
+        
+        showAlert('ปฏิเสธใบเสนอราคาแล้ว', 'info');
+        loadResellerMtoQuotes();
+    } catch (error) {
+        showAlert(error.message, 'error');
+    }
+}
+
+async function loadResellerMtoOrders() {
+    const container = document.getElementById('resellerMtoOrdersList');
+    try {
+        let url = `${RESELLER_API_URL}/reseller/mto/orders`;
+        if (currentMtoOrderFilter !== 'all') {
+            url += `?status=${currentMtoOrderFilter}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load orders');
+        
+        mtoOrders = await response.json();
+        
+        // Update badges
+        const actionNeeded = mtoOrders.filter(o => ['awaiting_deposit', 'balance_requested'].includes(o.status)).length;
+        const tabBadge = document.getElementById('mtoOrdersBadgeTab');
+        const navBadge = document.getElementById('mtoOrdersBadge');
+        
+        [tabBadge, navBadge].forEach(badge => {
+            if (badge) {
+                if (actionNeeded > 0) {
+                    badge.textContent = actionNeeded;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+        
+        if (mtoOrders.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <h3>ยังไม่มีออเดอร์สั่งผลิต</h3>
+                    <p>ตอบรับใบเสนอราคาเพื่อเริ่มกระบวนการผลิต</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = mtoOrders.map(order => {
+            let progressPercent = 0;
+            let progressText = '';
+            
+            if (order.status === 'production' && order.expected_completion_date) {
+                const start = new Date(order.payment_confirmed_at);
+                const end = new Date(order.expected_completion_date);
+                const now = new Date();
+                const total = end - start;
+                const elapsed = now - start;
+                progressPercent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+                const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+                progressText = daysLeft > 0 ? `เหลืออีก ${daysLeft} วัน` : 'ใกล้เสร็จ';
+            }
+            
+            return `
+                <div class="mto-order-card">
+                    <div class="mto-card-header">
+                        <div>
+                            <div class="mto-card-title">${order.mto_order_number || `MTO-${order.id}`}</div>
+                            <div class="mto-card-date">${order.product_name}</div>
+                        </div>
+                        <span class="mto-status-badge mto-status-${order.status}">${getMtoOrderStatusText(order.status)}</span>
+                    </div>
+                    
+                    ${order.status === 'production' ? `
+                        <div class="mto-progress">
+                            <div class="mto-progress-bar">
+                                <div class="mto-progress-fill" style="width: ${progressPercent}%;"></div>
+                            </div>
+                            <div class="mto-progress-text">
+                                <span>กำลังผลิต</span>
+                                <span>${progressText}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mto-card-items">
+                        <div class="mto-card-item">
+                            <span>ยอดรวม</span>
+                            <span>฿${formatNumber(order.total_amount || 0)}</span>
+                        </div>
+                        <div class="mto-card-item">
+                            <span>มัดจำ (${order.deposit_percent || 50}%)</span>
+                            <span style="color: ${order.deposit_paid ? '#22c55e' : '#fbbf24'}">
+                                ฿${formatNumber(order.deposit_amount || 0)} ${order.deposit_paid ? '✓' : '(รอชำระ)'}
+                            </span>
+                        </div>
+                        <div class="mto-card-item">
+                            <span>ยอดคงเหลือ</span>
+                            <span style="color: ${order.balance_paid ? '#22c55e' : 'rgba(255,255,255,0.7)'}">
+                                ฿${formatNumber(order.balance_amount || 0)} ${order.balance_paid ? '✓' : ''}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mto-card-actions">
+                        ${order.status === 'awaiting_deposit' ? `
+                            <button class="btn-mto-action btn-mto-primary" onclick="openMtoPayment(${order.id}, 'deposit', ${order.deposit_amount})">ชำระมัดจำ</button>
+                        ` : order.status === 'balance_requested' ? `
+                            <button class="btn-mto-action btn-mto-primary" onclick="openMtoPayment(${order.id}, 'balance', ${order.balance_amount})">ชำระยอดเหลือ</button>
+                        ` : ''}
+                        <button class="btn-mto-action btn-mto-secondary" onclick="viewMtoOrderDetail(${order.id})">ดูรายละเอียด</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading orders:', error);
+        container.innerHTML = `<div class="empty-state"><h3>เกิดข้อผิดพลาด</h3><p>${error.message}</p></div>`;
+    }
+}
+
+function filterResellerMtoOrders(status) {
+    currentMtoOrderFilter = status;
+    document.querySelectorAll('#mto-tab-mto-orders .filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === status);
+    });
+    loadResellerMtoOrders();
+}
+
+async function openMtoPayment(orderId, paymentType, amount) {
+    document.getElementById('mtoPaymentOrderId').value = orderId;
+    document.getElementById('mtoPaymentType').value = paymentType;
+    document.getElementById('mtoPaymentTitle').textContent = paymentType === 'deposit' ? 'ชำระมัดจำ' : 'ชำระยอดเหลือ';
+    document.getElementById('mtoPaymentAmount').textContent = `฿${formatNumber(amount)}`;
+    
+    // Generate QR code
+    const qrContainer = document.getElementById('mtoQrCode');
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/orders/${orderId}/qr-code?payment_type=${paymentType}`);
+        if (response.ok) {
+            const data = await response.json();
+            qrContainer.innerHTML = `<img src="${data.qr_code}" alt="PromptPay QR" style="max-width: 200px;">`;
+        } else {
+            qrContainer.innerHTML = '<p style="color: #666;">ไม่สามารถสร้าง QR Code ได้</p>';
+        }
+    } catch (error) {
+        qrContainer.innerHTML = '<p style="color: #666;">กรุณาโอนเงินตามรายละเอียดที่แจ้ง</p>';
+    }
+    
+    document.getElementById('mtoPaymentSlip').value = '';
+    document.getElementById('mtoPaymentModal').classList.add('active');
+}
+
+function closeMtoPaymentModal() {
+    document.getElementById('mtoPaymentModal').classList.remove('active');
+}
+
+async function handleSubmitMtoPayment(event) {
+    event.preventDefault();
+    
+    const orderId = document.getElementById('mtoPaymentOrderId').value;
+    const paymentType = document.getElementById('mtoPaymentType').value;
+    const slipFile = document.getElementById('mtoPaymentSlip').files[0];
+    
+    if (!slipFile) {
+        showAlert('กรุณาอัปโหลดหลักฐานการโอน', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('payment_type', paymentType);
+    formData.append('slip', slipFile);
+    
+    try {
+        const response = await fetch(`${RESELLER_API_URL}/reseller/mto/orders/${orderId}/payment`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to submit payment');
+        }
+        
+        showAlert('อัปโหลดหลักฐานการชำระเงินเรียบร้อย รอการตรวจสอบ', 'success');
+        closeMtoPaymentModal();
+        loadResellerMtoOrders();
+    } catch (error) {
+        showAlert(error.message, 'error');
+    }
+}
+
+async function viewMtoOrderDetail(orderId) {
+    const order = mtoOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const content = document.getElementById('mtoOrderDetailContent');
+    content.innerHTML = `
+        <div style="padding: 20px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; color: white;">${order.mto_order_number || `MTO-${order.id}`}</h3>
+                <span class="mto-status-badge mto-status-${order.status}">${getMtoOrderStatusText(order.status)}</span>
+            </div>
+            <p style="color: rgba(255,255,255,0.7); margin: 0;">สินค้า: ${order.product_name}</p>
+        </div>
+        
+        <div class="mto-timeline" style="padding: 20px;">
+            ${getMtoOrderTimeline(order)}
+        </div>
+        
+        <div style="padding: 20px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+            <h4 style="margin: 0 0 12px 0; color: white;">สรุปยอดเงิน</h4>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <span style="color: rgba(255,255,255,0.7);">ยอดรวมทั้งหมด</span>
+                <span style="color: white; font-weight: 600;">฿${formatNumber(order.total_amount || 0)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <span style="color: rgba(255,255,255,0.7);">มัดจำ (${order.deposit_percent || 50}%)</span>
+                <span style="color: ${order.deposit_paid ? '#22c55e' : '#fbbf24'};">
+                    ฿${formatNumber(order.deposit_amount || 0)} ${order.deposit_paid ? '✓ ชำระแล้ว' : ''}
+                </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                <span style="color: rgba(255,255,255,0.7);">ยอดคงเหลือ</span>
+                <span style="color: ${order.balance_paid ? '#22c55e' : 'rgba(255,255,255,0.7)'};">
+                    ฿${formatNumber(order.balance_amount || 0)} ${order.balance_paid ? '✓ ชำระแล้ว' : ''}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('mtoOrderDetailModal').classList.add('active');
+}
+
+function closeMtoOrderDetailModal() {
+    document.getElementById('mtoOrderDetailModal').classList.remove('active');
+}
+
+function getMtoOrderTimeline(order) {
+    const steps = [
+        { key: 'created', label: 'สร้างคำสั่งซื้อ', date: order.created_at },
+        { key: 'deposit', label: 'ชำระมัดจำ', date: order.deposit_paid ? order.deposit_paid_at : null },
+        { key: 'production', label: 'เริ่มผลิต', date: order.production_started_at },
+        { key: 'balance', label: 'ชำระยอดเหลือ', date: order.balance_paid ? order.balance_paid_at : null },
+        { key: 'shipped', label: 'จัดส่ง', date: order.shipped_at },
+        { key: 'fulfilled', label: 'เสร็จสิ้น', date: order.fulfilled_at }
+    ];
+    
+    return steps.map((step, index) => `
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: ${step.date ? 'var(--primary)' : 'rgba(255,255,255,0.2)'}; display: flex; align-items: center; justify-content: center;">
+                ${step.date ? '✓' : index + 1}
+            </div>
+            <div>
+                <div style="color: ${step.date ? 'white' : 'rgba(255,255,255,0.5)'}; font-weight: 500;">${step.label}</div>
+                <div style="font-size: 12px; color: rgba(255,255,255,0.5);">${step.date ? formatDate(step.date) : '-'}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getMtoQuoteStatusText(status) {
+    const statusMap = {
+        'pending': 'รอใบเสนอราคา',
+        'quoted': 'ได้รับใบเสนอราคา',
+        'accepted': 'ตอบรับแล้ว',
+        'rejected': 'ปฏิเสธ',
+        'expired': 'หมดอายุ'
+    };
+    return statusMap[status] || status;
+}
+
+function getMtoOrderStatusText(status) {
+    const statusMap = {
+        'awaiting_deposit': 'รอชำระมัดจำ',
+        'deposit_pending': 'รอตรวจสอบมัดจำ',
+        'deposit_paid': 'ชำระมัดจำแล้ว',
+        'production': 'กำลังผลิต',
+        'balance_requested': 'รอชำระยอดเหลือ',
+        'balance_pending': 'รอตรวจสอบยอดเหลือ',
+        'balance_paid': 'ชำระยอดเหลือแล้ว',
+        'ready_to_ship': 'พร้อมจัดส่ง',
+        'shipped': 'จัดส่งแล้ว',
+        'fulfilled': 'เสร็จสิ้น',
+        'cancelled': 'ยกเลิก'
+    };
+    return statusMap[status] || status;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatNumber(num) {
+    return new Intl.NumberFormat('th-TH').format(num || 0);
 }

@@ -214,6 +214,61 @@
                     <span class="sidebar-text">ขายด่วน</span>
                 </a>
                 
+                <a href="#" class="nav-item has-submenu" data-page="mto-management">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M12 18v-6"/>
+                            <path d="m9 15 3 3 3-3"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">สินค้าสั่งผลิต</span>
+                    <span class="pending-badge" id="mtoRequestsCount" style="display: none;">0</span>
+                </a>
+                <div class="submenu" id="mto-management-submenu">
+                    <a href="#" class="submenu-item" data-page="mto-requests">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <path d="M14 2v6h6"/>
+                                <path d="M16 13H8"/>
+                                <path d="M16 17H8"/>
+                                <path d="M10 9H8"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">คำขอใบเสนอราคา</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="mto-quotations">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <path d="M14 2v6h6"/>
+                                <path d="M9 15l2 2 4-4"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ใบเสนอราคา</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="mto-orders">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">คำสั่งซื้อสั่งผลิต</span>
+                    </a>
+                    <a href="#" class="submenu-item" data-page="mto-payments">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                                <line x1="1" y1="10" x2="23" y2="10"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">ตรวจสอบการชำระ</span>
+                    </a>
+                </div>
+                
                 <a href="#" class="nav-item has-submenu" data-page="products">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2258,6 +2313,164 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- MTO Requests Page -->
+            <div id="page-mto-requests" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <path d="M14 2v6h6"/>
+                            <path d="M16 13H8"/>
+                            <path d="M16 17H8"/>
+                        </svg>
+                        คำขอใบเสนอราคา
+                    </h1>
+                    <p>จัดการคำขอใบเสนอราคาจาก Reseller</p>
+                </div>
+                
+                <div class="status-tabs" style="margin-bottom: 20px;">
+                    <button class="status-tab active" data-status="all" onclick="filterMtoRequests('all')">ทั้งหมด</button>
+                    <button class="status-tab" data-status="pending" onclick="filterMtoRequests('pending')">รอดำเนินการ <span id="mtoReqPendingCount" class="tab-badge">0</span></button>
+                    <button class="status-tab" data-status="quoted" onclick="filterMtoRequests('quoted')">เสนอราคาแล้ว</button>
+                </div>
+                
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>เลขที่</th>
+                                <th>Reseller</th>
+                                <th>จำนวนรายการ</th>
+                                <th>จำนวนชิ้น</th>
+                                <th>สถานะ</th>
+                                <th>วันที่</th>
+                                <th>จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtoRequestsTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- MTO Quotations Page -->
+            <div id="page-mto-quotations" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <path d="M14 2v6h6"/>
+                            <path d="M9 15l2 2 4-4"/>
+                        </svg>
+                        ใบเสนอราคา
+                    </h1>
+                    <p>จัดการใบเสนอราคาสินค้าสั่งผลิต</p>
+                </div>
+                
+                <div class="status-tabs" style="margin-bottom: 20px;">
+                    <button class="status-tab active" data-status="all" onclick="filterMtoQuotations('all')">ทั้งหมด</button>
+                    <button class="status-tab" data-status="draft" onclick="filterMtoQuotations('draft')">แบบร่าง</button>
+                    <button class="status-tab" data-status="sent" onclick="filterMtoQuotations('sent')">ส่งแล้ว</button>
+                    <button class="status-tab" data-status="accepted" onclick="filterMtoQuotations('accepted')">ยอมรับ</button>
+                </div>
+                
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>เลขที่</th>
+                                <th>Reseller</th>
+                                <th>ยอดรวม</th>
+                                <th>มัดจำ</th>
+                                <th>สถานะ</th>
+                                <th>หมดอายุ</th>
+                                <th>จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtoQuotationsTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- MTO Orders Page -->
+            <div id="page-mto-orders" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                        คำสั่งซื้อสินค้าสั่งผลิต
+                    </h1>
+                    <p>ติดตามและจัดการคำสั่งซื้อสินค้าสั่งผลิต</p>
+                </div>
+                
+                <div class="status-tabs" style="margin-bottom: 20px; flex-wrap: wrap; gap: 8px;">
+                    <button class="status-tab active" data-status="all" onclick="filterMtoOrders('all')">ทั้งหมด</button>
+                    <button class="status-tab" data-status="awaiting_deposit" onclick="filterMtoOrders('awaiting_deposit')">รอมัดจำ</button>
+                    <button class="status-tab" data-status="deposit_paid" onclick="filterMtoOrders('deposit_paid')">ชำระมัดจำแล้ว</button>
+                    <button class="status-tab" data-status="production" onclick="filterMtoOrders('production')">กำลังผลิต</button>
+                    <button class="status-tab" data-status="balance_requested" onclick="filterMtoOrders('balance_requested')">รอชำระยอดเหลือ</button>
+                    <button class="status-tab" data-status="balance_paid" onclick="filterMtoOrders('balance_paid')">ชำระครบ</button>
+                    <button class="status-tab" data-status="shipped" onclick="filterMtoOrders('shipped')">จัดส่งแล้ว</button>
+                </div>
+                
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>เลขที่</th>
+                                <th>Reseller</th>
+                                <th>ยอดรวม</th>
+                                <th>มัดจำ/ยอดเหลือ</th>
+                                <th>สถานะ</th>
+                                <th>คาดว่าเสร็จ</th>
+                                <th>จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtoOrdersTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- MTO Payments Page -->
+            <div id="page-mto-payments" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                            <line x1="1" y1="10" x2="23" y2="10"/>
+                        </svg>
+                        ตรวจสอบการชำระเงินสินค้าสั่งผลิต
+                    </h1>
+                    <p>ตรวจสอบและยืนยันการชำระเงินมัดจำ/ยอดคงเหลือ</p>
+                </div>
+                
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>เลขคำสั่งซื้อ</th>
+                                <th>Reseller</th>
+                                <th>ประเภท</th>
+                                <th>จำนวนเงิน</th>
+                                <th>สลิป</th>
+                                <th>วันที่</th>
+                                <th>จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtoPaymentsTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

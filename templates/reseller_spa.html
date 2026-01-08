@@ -469,6 +469,234 @@
             margin-top: 8px;
         }
 
+        /* MTO Tabs Styles */
+        .mto-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mto-tab:hover { background: rgba(255, 255, 255, 0.15); }
+        .mto-tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-color: transparent;
+            color: white;
+        }
+        .tab-badge {
+            background: #ef4444;
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+        .mto-tab-content { display: none; }
+        .mto-tab-content.active { display: block; }
+
+        /* MTO Filter Buttons */
+        .filter-btn {
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover { background: rgba(255, 255, 255, 0.15); }
+        .filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* MTO Products Grid */
+        .mto-products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .mto-product-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .mto-product-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+        }
+        .mto-product-image {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .mto-product-info {
+            padding: 16px;
+        }
+        .mto-product-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 8px;
+        }
+        .mto-product-meta {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .mto-product-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .mto-product-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-request-quote {
+            flex: 1;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-request-quote:hover { transform: scale(1.02); }
+
+        /* MTO Quote/Order Cards */
+        .mto-quote-card, .mto-order-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .mto-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .mto-card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+        }
+        .mto-card-date {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 4px;
+        }
+        .mto-status-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .mto-status-pending { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .mto-status-quoted { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .mto-status-accepted { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .mto-status-awaiting_deposit { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .mto-status-deposit_paid { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .mto-status-production { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+        .mto-status-balance_requested { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        .mto-status-balance_paid { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .mto-status-ready_to_ship { background: rgba(14, 165, 233, 0.2); color: #0ea5e9; }
+        .mto-status-shipped { background: rgba(20, 184, 166, 0.2); color: #14b8a6; }
+        .mto-status-fulfilled { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .mto-status-cancelled { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+        .mto-card-items {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        .mto-card-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .mto-card-summary {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+        .mto-card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-mto-action {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-mto-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            color: white;
+        }
+        .btn-mto-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        .btn-mto-danger {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+        }
+
+        /* Progress Bar */
+        .mto-progress {
+            margin: 16px 0;
+        }
+        .mto-progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .mto-progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            transition: width 0.3s;
+        }
+        .mto-progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
         .section-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: white; }
 
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1739,6 +1967,11 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                     ประวัติคำสั่งซื้อ
                 </a>
+                <a href="#" class="nav-item" data-page="mto-catalog">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M12 18v-6"></path><path d="M9 15l3 3 3-3"></path></svg>
+                    สินค้าสั่งผลิต
+                    <span class="nav-badge" id="mtoOrdersBadge" style="display: none;">0</span>
+                </a>
                 <a href="#" class="nav-item" data-page="customers">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     ลูกค้าของฉัน
@@ -2257,6 +2490,82 @@
                     </form>
                 </div>
             </div>
+
+            <!-- MTO Catalog Page -->
+            <div id="page-mto-catalog" class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">สินค้าสั่งผลิต</h1>
+                        <p class="page-subtitle">เลือกดูสินค้าและขอใบเสนอราคา</p>
+                    </div>
+                </div>
+                
+                <!-- MTO Navigation Tabs -->
+                <div class="mto-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="mto-tab active" data-tab="catalog" onclick="switchMtoTab('catalog')">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path></svg>
+                        แคตตาล็อก
+                    </button>
+                    <button class="mto-tab" data-tab="quotes" onclick="switchMtoTab('quotes')">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                        ใบเสนอราคา
+                        <span class="tab-badge" id="quotesBadge" style="display: none;">0</span>
+                    </button>
+                    <button class="mto-tab" data-tab="mto-orders" onclick="switchMtoTab('mto-orders')">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        ติดตามออเดอร์
+                        <span class="tab-badge" id="mtoOrdersBadgeTab" style="display: none;">0</span>
+                    </button>
+                </div>
+                
+                <!-- Catalog Tab -->
+                <div id="mto-tab-catalog" class="mto-tab-content active">
+                    <div class="search-bar" style="margin-bottom: 16px;">
+                        <input type="text" class="search-input" id="mtoCatalogSearch" placeholder="ค้นหาสินค้าสั่งผลิต..." oninput="searchMtoCatalog()">
+                    </div>
+                    <div class="mto-products-grid" id="mtoCatalogGrid">
+                        <div class="empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path></svg>
+                            <h3>กำลังโหลดสินค้า...</h3>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quotes Tab -->
+                <div id="mto-tab-quotes" class="mto-tab-content" style="display: none;">
+                    <div class="filter-bar" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <button class="filter-btn active" data-filter="all" onclick="filterResellerMtoQuotes('all')">ทั้งหมด</button>
+                        <button class="filter-btn" data-filter="pending" onclick="filterResellerMtoQuotes('pending')">รอใบเสนอราคา</button>
+                        <button class="filter-btn" data-filter="quoted" onclick="filterResellerMtoQuotes('quoted')">ได้รับใบเสนอราคา</button>
+                        <button class="filter-btn" data-filter="accepted" onclick="filterResellerMtoQuotes('accepted')">ตอบรับแล้ว</button>
+                    </div>
+                    <div class="mto-quotes-list" id="mtoQuotesList">
+                        <div class="empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
+                            <h3>ยังไม่มีใบเสนอราคา</h3>
+                            <p>เลือกสินค้าจากแคตตาล็อกเพื่อขอใบเสนอราคา</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- MTO Orders Tab -->
+                <div id="mto-tab-mto-orders" class="mto-tab-content" style="display: none;">
+                    <div class="filter-bar" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <button class="filter-btn active" data-filter="all" onclick="filterResellerMtoOrders('all')">ทั้งหมด</button>
+                        <button class="filter-btn" data-filter="awaiting_deposit" onclick="filterResellerMtoOrders('awaiting_deposit')">รอชำระมัดจำ</button>
+                        <button class="filter-btn" data-filter="production" onclick="filterResellerMtoOrders('production')">กำลังผลิต</button>
+                        <button class="filter-btn" data-filter="balance_requested" onclick="filterResellerMtoOrders('balance_requested')">รอชำระยอดเหลือ</button>
+                        <button class="filter-btn" data-filter="shipped" onclick="filterResellerMtoOrders('shipped')">จัดส่งแล้ว</button>
+                    </div>
+                    <div class="mto-orders-list" id="resellerMtoOrdersList">
+                        <div class="empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            <h3>ยังไม่มีออเดอร์สั่งผลิต</h3>
+                            <p>ตอบรับใบเสนอราคาเพื่อเริ่มกระบวนการผลิต</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -2379,6 +2688,86 @@
                 </svg>
                 <span>โปรไฟล์</span>
             </a>
+        </div>
+    </div>
+
+    <!-- MTO Request Quote Modal -->
+    <div class="modal" id="mtoRequestModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>ขอใบเสนอราคา</h2>
+                <button class="modal-close" onclick="closeMtoRequestModal()">&times;</button>
+            </div>
+            <form id="mtoRequestForm" onsubmit="handleSubmitMtoRequest(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="mtoProductId">
+                    <div class="mto-product-preview" id="mtoProductPreview" style="display: flex; gap: 16px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 20px;">
+                        <img id="mtoPreviewImage" src="" alt="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
+                        <div>
+                            <h4 id="mtoPreviewName" style="margin: 0 0 4px 0; color: white;"></h4>
+                            <p id="mtoPreviewMeta" style="margin: 0; font-size: 12px; color: rgba(255,255,255,0.7);"></p>
+                        </div>
+                    </div>
+                    
+                    <div id="mtoSkuSelection" style="margin-bottom: 20px;"></div>
+                    
+                    <div class="form-group">
+                        <label>หมายเหตุ (ถ้ามี)</label>
+                        <textarea id="mtoRequestNotes" rows="3" placeholder="รายละเอียดเพิ่มเติม เช่น สี/ขนาดที่ต้องการ, ความต้องการพิเศษ"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeMtoRequestModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary">ส่งคำขอใบเสนอราคา</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MTO Payment Modal -->
+    <div class="modal" id="mtoPaymentModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="mtoPaymentTitle">ชำระเงิน</h2>
+                <button class="modal-close" onclick="closeMtoPaymentModal()">&times;</button>
+            </div>
+            <form id="mtoPaymentForm" onsubmit="handleSubmitMtoPayment(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="mtoPaymentOrderId">
+                    <input type="hidden" id="mtoPaymentType">
+                    
+                    <div class="payment-info" style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="color: rgba(255,255,255,0.7);">ยอดที่ต้องชำระ</span>
+                            <span id="mtoPaymentAmount" style="font-size: 24px; font-weight: 700; color: #22c55e;">฿0</span>
+                        </div>
+                    </div>
+                    
+                    <div id="mtoQrCode" style="text-align: center; padding: 20px; background: white; border-radius: 12px; margin-bottom: 20px;"></div>
+                    
+                    <div class="form-group">
+                        <label>อัปโหลดหลักฐานการโอน *</label>
+                        <input type="file" id="mtoPaymentSlip" accept="image/*" required style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeMtoPaymentModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary">ยืนยันการชำระเงิน</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MTO Order Detail Modal -->
+    <div class="modal" id="mtoOrderDetailModal">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2>รายละเอียดคำสั่งซื้อสั่งผลิต</h2>
+                <button class="modal-close" onclick="closeMtoOrderDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="mtoOrderDetailContent">
+                <!-- Dynamic content -->
+            </div>
         </div>
     </div>
 

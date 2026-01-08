@@ -6071,6 +6071,446 @@ def get_cart_count():
         if conn:
             conn.close()
 
+# ==================== RESELLER MTO API ====================
+
+@app.route('/api/reseller/mto/products', methods=['GET'])
+@login_required
+def get_reseller_mto_products():
+    """Get MTO products for reseller catalog"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT p.id, p.name, p.description, p.product_type, p.production_days, 
+                   p.min_order_qty, p.deposit_percent, p.status,
+                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
+            FROM products p
+            WHERE p.product_type = 'made_to_order' AND p.status = 'active'
+            ORDER BY p.created_at DESC
+        ''')
+        products = cursor.fetchall()
+        
+        return jsonify([dict(p) for p in products]), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/products/<int:product_id>/skus', methods=['GET'])
+@login_required
+def get_reseller_mto_product_skus(product_id):
+    """Get SKUs for MTO product"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT s.id, s.sku_code, 
+                   COALESCE((
+                       SELECT string_agg(ov.value, ' / ' ORDER BY o.sort_order)
+                       FROM sku_values_map svm
+                       JOIN option_values ov ON ov.id = svm.option_value_id
+                       JOIN options o ON o.id = ov.option_id
+                       WHERE svm.sku_id = s.id
+                   ), '') as variant_name
+            FROM skus s
+            WHERE s.product_id = %s
+            ORDER BY s.sku_code
+        ''', (product_id,))
+        skus = cursor.fetchall()
+        
+        return jsonify([dict(s) for s in skus]), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/quotation-requests', methods=['POST'])
+@login_required
+def create_reseller_quotation_request():
+    """Create a new quotation request"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        
+        product_id = data.get('product_id')
+        items = data.get('items', [])
+        notes = data.get('notes', '')
+        
+        if not product_id:
+            return jsonify({'error': 'Product ID required'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get product info
+        cursor.execute('SELECT id, name, production_days, min_order_qty, deposit_percent FROM products WHERE id = %s', (product_id,))
+        product = cursor.fetchone()
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        # Create quotation request
+        cursor.execute('''
+            INSERT INTO quotation_requests (reseller_id, product_id, notes, status, created_at)
+            VALUES (%s, %s, %s, 'pending', NOW())
+            RETURNING id
+        ''', (user_id, product_id, notes))
+        request_id = cursor.fetchone()['id']
+        
+        # Insert request items
+        for item in items:
+            sku_id = item.get('sku_id')
+            quantity = item.get('quantity', 1)
+            
+            cursor.execute('''
+                INSERT INTO quotation_request_items (request_id, sku_id, quantity)
+                VALUES (%s, %s, %s)
+            ''', (request_id, sku_id, quantity))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'request_id': request_id}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/quotations', methods=['GET'])
+@login_required
+def get_reseller_quotations():
+    """Get quotations for current reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        status_filter = request.args.get('status')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        query = '''
+            SELECT qr.id, qr.product_id, p.name as product_name, qr.notes, 
+                   qr.status, qr.created_at,
+                   q.id as quotation_id, q.total_amount, q.valid_until
+            FROM quotation_requests qr
+            JOIN products p ON p.id = qr.product_id
+            LEFT JOIN quotations q ON q.request_id = qr.id
+            WHERE qr.reseller_id = %s
+        '''
+        params = [user_id]
+        
+        if status_filter and status_filter != 'all':
+            query += ' AND qr.status = %s'
+            params.append(status_filter)
+        
+        query += ' ORDER BY qr.created_at DESC'
+        
+        cursor.execute(query, params)
+        quotations = cursor.fetchall()
+        
+        # Get items for each quotation
+        result = []
+        for q in quotations:
+            q_dict = dict(q)
+            
+            cursor.execute('''
+                SELECT qri.sku_id, qri.quantity, s.sku_code,
+                       COALESCE((
+                           SELECT string_agg(ov.value, ' / ' ORDER BY o.sort_order)
+                           FROM sku_values_map svm
+                           JOIN option_values ov ON ov.id = svm.option_value_id
+                           JOIN options o ON o.id = ov.option_id
+                           WHERE svm.sku_id = s.id
+                       ), '') as variant_name
+                FROM quotation_request_items qri
+                LEFT JOIN skus s ON s.id = qri.sku_id
+                WHERE qri.request_id = %s
+            ''', (q['id'],))
+            q_dict['items'] = [dict(i) for i in cursor.fetchall()]
+            result.append(q_dict)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/quotations/<int:quotation_id>/accept', methods=['POST'])
+@login_required
+def accept_reseller_quotation(quotation_id):
+    """Accept a quotation and create MTO order"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify quotation belongs to user
+        cursor.execute('''
+            SELECT qr.id as request_id, qr.product_id, q.total_amount, p.deposit_percent, p.production_days
+            FROM quotation_requests qr
+            JOIN quotations q ON q.request_id = qr.id
+            JOIN products p ON p.id = qr.product_id
+            WHERE qr.id = %s AND qr.reseller_id = %s AND qr.status = 'quoted'
+        ''', (quotation_id, user_id))
+        
+        quotation = cursor.fetchone()
+        if not quotation:
+            return jsonify({'error': 'Quotation not found or not available'}), 404
+        
+        deposit_percent = quotation['deposit_percent'] or 50
+        total_amount = quotation['total_amount']
+        deposit_amount = round(total_amount * deposit_percent / 100, 2)
+        balance_amount = round(total_amount - deposit_amount, 2)
+        
+        # Create MTO order
+        cursor.execute('''
+            INSERT INTO mto_orders (
+                quotation_id, reseller_id, total_amount, deposit_percent, 
+                deposit_amount, balance_amount, status, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, 'awaiting_deposit', NOW())
+            RETURNING id
+        ''', (quotation_id, user_id, total_amount, deposit_percent, deposit_amount, balance_amount))
+        order_id = cursor.fetchone()['id']
+        
+        # Update quotation request status
+        cursor.execute("UPDATE quotation_requests SET status = 'accepted' WHERE id = %s", (quotation_id,))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'order_id': order_id}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/quotations/<int:quotation_id>/reject', methods=['POST'])
+@login_required
+def reject_reseller_quotation(quotation_id):
+    """Reject a quotation"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            UPDATE quotation_requests 
+            SET status = 'rejected'
+            WHERE id = %s AND reseller_id = %s AND status = 'quoted'
+            RETURNING id
+        ''', (quotation_id, user_id))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Quotation not found'}), 404
+        
+        conn.commit()
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/orders', methods=['GET'])
+@login_required
+def get_reseller_mto_orders():
+    """Get MTO orders for current reseller"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        status_filter = request.args.get('status')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        query = '''
+            SELECT mo.*, 
+                   p.name as product_name, p.production_days,
+                   CONCAT('MTO-', LPAD(mo.id::text, 6, '0')) as mto_order_number
+            FROM mto_orders mo
+            JOIN quotation_requests qr ON qr.id = mo.quotation_id
+            JOIN products p ON p.id = qr.product_id
+            WHERE mo.reseller_id = %s
+        '''
+        params = [user_id]
+        
+        if status_filter and status_filter != 'all':
+            query += ' AND mo.status = %s'
+            params.append(status_filter)
+        
+        query += ' ORDER BY mo.created_at DESC'
+        
+        cursor.execute(query, params)
+        orders = cursor.fetchall()
+        
+        return jsonify([dict(o) for o in orders]), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/orders/<int:order_id>/qr-code', methods=['GET'])
+@login_required
+def get_mto_order_qr_code(order_id):
+    """Generate PromptPay QR code for MTO payment"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        payment_type = request.args.get('payment_type', 'deposit')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT deposit_amount, balance_amount
+            FROM mto_orders
+            WHERE id = %s AND reseller_id = %s
+        ''', (order_id, user_id))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        amount = order['deposit_amount'] if payment_type == 'deposit' else order['balance_amount']
+        
+        # Generate PromptPay QR (using existing function if available)
+        import qrcode
+        import io
+        import base64
+        
+        qr_data = f"00020101021129370016A000000677010111011300669000000005802TH530376454{len(str(int(amount * 100)))}{int(amount * 100)}6304"
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return jsonify({'qr_code': f'data:image/png;base64,{img_str}'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/reseller/mto/orders/<int:order_id>/payment', methods=['POST'])
+@login_required
+def reseller_submit_mto_payment(order_id):
+    """Submit payment slip for MTO order (Reseller)"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        payment_type = request.form.get('payment_type', 'deposit')
+        
+        if 'slip' not in request.files:
+            return jsonify({'error': 'No slip file uploaded'}), 400
+        
+        slip_file = request.files['slip']
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Verify order belongs to user
+        cursor.execute('SELECT id, status FROM mto_orders WHERE id = %s AND reseller_id = %s', (order_id, user_id))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'Order not found'}), 404
+        
+        # Upload slip (using object storage or save locally)
+        import uuid
+        import os
+        filename = f"mto_slip_{order_id}_{payment_type}_{uuid.uuid4().hex[:8]}.png"
+        upload_folder = 'static/uploads/mto_slips'
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, filename)
+        slip_file.save(filepath)
+        slip_url = f'/static/uploads/mto_slips/{filename}'
+        
+        # Create payment record
+        amount = 0
+        cursor.execute('SELECT deposit_amount, balance_amount FROM mto_orders WHERE id = %s', (order_id,))
+        amounts = cursor.fetchone()
+        amount = amounts['deposit_amount'] if payment_type == 'deposit' else amounts['balance_amount']
+        
+        cursor.execute('''
+            INSERT INTO mto_payments (mto_order_id, payment_type, amount, slip_image_url, status, created_at)
+            VALUES (%s, %s, %s, %s, 'pending', NOW())
+            RETURNING id
+        ''', (order_id, payment_type, amount, slip_url))
+        
+        # Update order status
+        new_status = 'deposit_pending' if payment_type == 'deposit' else 'balance_pending'
+        cursor.execute('UPDATE mto_orders SET status = %s WHERE id = %s', (new_status, order_id))
+        
+        conn.commit()
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== RESELLER PAGES ====================
 
 @app.route('/reseller/dashboard')
@@ -9837,6 +10277,1235 @@ def get_low_stock_items():
         items = [dict(row) for row in cursor.fetchall()]
         
         return jsonify(items), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==========================================
+# Made-to-Order (สินค้าสั่งผลิต) APIs
+# ==========================================
+
+# Generate quotation request number
+def generate_request_number():
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM quotation_requests")
+        count = cursor.fetchone()[0] + 1
+        return f"REQ-{datetime.now().strftime('%y%m')}-{count:04d}"
+    finally:
+        cursor.close()
+        conn.close()
+
+# Generate quote number
+def generate_quote_number():
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM quotations")
+        count = cursor.fetchone()[0] + 1
+        return f"QT-{datetime.now().strftime('%y%m')}-{count:04d}"
+    finally:
+        cursor.close()
+        conn.close()
+
+# Generate MTO order number
+def generate_mto_order_number():
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM mto_orders")
+        count = cursor.fetchone()[0] + 1
+        return f"MTO-{datetime.now().strftime('%y%m')}-{count:04d}"
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/mto/products', methods=['GET'])
+@login_required
+def get_mto_products():
+    """Get made-to-order products for reseller"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        # Get user's tier
+        cursor.execute('''
+            SELECT t.id as tier_id, t.name as tier_name
+            FROM users u
+            LEFT JOIN reseller_tiers t ON u.reseller_tier_id = t.id
+            WHERE u.id = %s
+        ''', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['tier_id'] if user else None
+        
+        # Get MTO products with tier pricing
+        cursor.execute('''
+            SELECT p.id, p.name, p.parent_sku, p.description, 
+                   p.production_days, p.deposit_percent, p.product_type,
+                   b.name as brand_name,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT MIN(COALESCE(tp.adjusted_price, s.price)) 
+                    FROM skus s 
+                    LEFT JOIN product_tier_pricing tp ON tp.sku_id = s.id AND tp.tier_id = %s
+                    WHERE s.product_id = p.id) as min_price,
+                   (SELECT MAX(COALESCE(tp.adjusted_price, s.price)) 
+                    FROM skus s 
+                    LEFT JOIN product_tier_pricing tp ON tp.sku_id = s.id AND tp.tier_id = %s
+                    WHERE s.product_id = p.id) as max_price
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.product_type = 'made_to_order' AND p.status = 'active'
+            ORDER BY p.created_at DESC
+        ''', (tier_id, tier_id))
+        products = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(products), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/products/<int:product_id>', methods=['GET'])
+@login_required
+def get_mto_product_detail(product_id):
+    """Get MTO product details with SKUs and MOQ"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        # Get user's tier
+        cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (user_id,))
+        user = cursor.fetchone()
+        tier_id = user['reseller_tier_id'] if user else None
+        
+        # Get product
+        cursor.execute('''
+            SELECT p.*, b.name as brand_name
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.id = %s AND p.product_type = 'made_to_order'
+        ''', (product_id,))
+        product = cursor.fetchone()
+        
+        if not product:
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
+        
+        # Get SKUs with tier pricing and MOQ
+        cursor.execute('''
+            SELECT s.*, 
+                   COALESCE(tp.adjusted_price, s.price) as final_price,
+                   COALESCE(s.min_order_qty, 1) as min_order_qty
+            FROM skus s
+            LEFT JOIN product_tier_pricing tp ON tp.sku_id = s.id AND tp.tier_id = %s
+            WHERE s.product_id = %s
+            ORDER BY s.id
+        ''', (tier_id, product_id))
+        skus = [dict(row) for row in cursor.fetchall()]
+        
+        # Get option values for each SKU
+        for sku in skus:
+            cursor.execute('''
+                SELECT o.name as option_name, ov.value as option_value
+                FROM sku_values_map svm
+                JOIN option_values ov ON svm.option_value_id = ov.id
+                JOIN options o ON ov.option_id = o.id
+                WHERE svm.sku_id = %s
+                ORDER BY o.sort_order
+            ''', (sku['id'],))
+            sku['options'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get images
+        cursor.execute('''
+            SELECT id, image_url, sort_order FROM product_images
+            WHERE product_id = %s ORDER BY sort_order
+        ''', (product_id,))
+        images = [dict(row) for row in cursor.fetchall()]
+        
+        product = dict(product)
+        product['skus'] = skus
+        product['images'] = images
+        
+        return jsonify(product), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/quotation-requests', methods=['POST'])
+@login_required
+@csrf_protect
+def create_quotation_request():
+    """Create new quotation request from reseller"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        data = request.get_json()
+        user_id = session['user_id']
+        items = data.get('items', [])
+        notes = data.get('notes', '')
+        
+        if not items:
+            return jsonify({'error': 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ'}), 400
+        
+        # Generate request number
+        request_number = generate_request_number()
+        
+        # Create request
+        cursor.execute('''
+            INSERT INTO quotation_requests (request_number, reseller_id, notes, status)
+            VALUES (%s, %s, %s, 'pending')
+            RETURNING id
+        ''', (request_number, user_id, notes))
+        request_id = cursor.fetchone()['id']
+        
+        # Add items
+        for item in items:
+            cursor.execute('''
+                INSERT INTO quotation_request_items 
+                (request_id, product_id, sku_id, sku_code, option_snapshot, quantity)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (request_id, item['product_id'], item.get('sku_id'), 
+                  item.get('sku_code'), json.dumps(item.get('options', {})), item['quantity']))
+        
+        conn.commit()
+        
+        # Send notification to admin (optional - can add email later)
+        
+        return jsonify({
+            'success': True,
+            'request_id': request_id,
+            'request_number': request_number,
+            'message': 'ส่งคำขอใบเสนอราคาสำเร็จ'
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/quotation-requests', methods=['GET'])
+@login_required
+def get_my_quotation_requests():
+    """Get reseller's quotation requests"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT qr.*, 
+                   (SELECT COUNT(*) FROM quotation_request_items WHERE request_id = qr.id) as item_count,
+                   (SELECT SUM(quantity) FROM quotation_request_items WHERE request_id = qr.id) as total_qty
+            FROM quotation_requests qr
+            WHERE qr.reseller_id = %s
+        '''
+        params = [user_id]
+        
+        if status:
+            query += ' AND qr.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY qr.created_at DESC'
+        
+        cursor.execute(query, params)
+        requests = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(requests), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/quotations', methods=['GET'])
+@login_required
+def get_my_quotations():
+    """Get reseller's quotations"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT q.*, 
+                   (SELECT COUNT(*) FROM quotation_items WHERE quotation_id = q.id) as item_count
+            FROM quotations q
+            WHERE q.reseller_id = %s
+        '''
+        params = [user_id]
+        
+        if status:
+            query += ' AND q.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY q.created_at DESC'
+        
+        cursor.execute(query, params)
+        quotations = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(quotations), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/quotations/<int:quote_id>', methods=['GET'])
+@login_required
+def get_quotation_detail(quote_id):
+    """Get quotation details"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        role = session.get('role')
+        
+        # Get quotation
+        cursor.execute('''
+            SELECT q.*, u.full_name as reseller_name, u.email as reseller_email
+            FROM quotations q
+            JOIN users u ON q.reseller_id = u.id
+            WHERE q.id = %s
+        ''', (quote_id,))
+        quotation = cursor.fetchone()
+        
+        if not quotation:
+            return jsonify({'error': 'ไม่พบใบเสนอราคา'}), 404
+        
+        # Check access (reseller can only see their own, admin can see all)
+        if role not in ['Super Admin', 'Assistant Admin'] and quotation['reseller_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+        
+        # Get items
+        cursor.execute('''
+            SELECT qi.*, p.name as product_name,
+                   (SELECT image_url FROM product_images WHERE product_id = qi.product_id ORDER BY sort_order LIMIT 1) as image_url
+            FROM quotation_items qi
+            JOIN products p ON qi.product_id = p.id
+            WHERE qi.quotation_id = %s
+        ''', (quote_id,))
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        result = dict(quotation)
+        result['items'] = items
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/orders', methods=['GET'])
+@login_required
+def get_my_mto_orders():
+    """Get reseller's MTO orders"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT mo.*, q.quote_number,
+                   (SELECT COUNT(*) FROM mto_order_items WHERE mto_order_id = mo.id) as item_count
+            FROM mto_orders mo
+            LEFT JOIN quotations q ON mo.quotation_id = q.id
+            WHERE mo.reseller_id = %s
+        '''
+        params = [user_id]
+        
+        if status:
+            query += ' AND mo.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY mo.created_at DESC'
+        
+        cursor.execute(query, params)
+        orders = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(orders), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/orders/<int:order_id>', methods=['GET'])
+@login_required
+def get_mto_order_detail(order_id):
+    """Get MTO order details with timeline"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        role = session.get('role')
+        
+        # Get order
+        cursor.execute('''
+            SELECT mo.*, q.quote_number, u.full_name as reseller_name
+            FROM mto_orders mo
+            LEFT JOIN quotations q ON mo.quotation_id = q.id
+            JOIN users u ON mo.reseller_id = u.id
+            WHERE mo.id = %s
+        ''', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        # Check access
+        if role not in ['Super Admin', 'Assistant Admin'] and order['reseller_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+        
+        # Get items
+        cursor.execute('''
+            SELECT oi.*, 
+                   (SELECT image_url FROM product_images WHERE product_id = oi.product_id ORDER BY sort_order LIMIT 1) as image_url
+            FROM mto_order_items oi
+            WHERE oi.mto_order_id = %s
+        ''', (order_id,))
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        # Get payments
+        cursor.execute('''
+            SELECT * FROM mto_payments
+            WHERE mto_order_id = %s
+            ORDER BY created_at
+        ''', (order_id,))
+        payments = [dict(row) for row in cursor.fetchall()]
+        
+        # Build timeline
+        timeline = []
+        order_dict = dict(order)
+        
+        timeline.append({
+            'status': 'created',
+            'label': 'สร้างคำสั่งซื้อ',
+            'date': order_dict['created_at'].isoformat() if order_dict['created_at'] else None,
+            'completed': True
+        })
+        
+        if order_dict['payment_confirmed_at']:
+            timeline.append({
+                'status': 'deposit_paid',
+                'label': f"ชำระมัดจำ ฿{order_dict['deposit_paid']:,.0f}",
+                'date': order_dict['payment_confirmed_at'].isoformat(),
+                'completed': True
+            })
+        
+        if order_dict['production_started_at']:
+            timeline.append({
+                'status': 'production',
+                'label': f"กำลังผลิต ({order_dict['production_days']} วัน)",
+                'date': order_dict['production_started_at'].isoformat(),
+                'completed': order_dict['production_completed_at'] is not None
+            })
+        
+        if order_dict['balance_requested_at']:
+            timeline.append({
+                'status': 'balance_requested',
+                'label': f"เรียกเก็บยอดคงเหลือ ฿{order_dict['balance_amount']:,.0f}",
+                'date': order_dict['balance_requested_at'].isoformat(),
+                'completed': order_dict['balance_paid_at'] is not None
+            })
+        
+        if order_dict['shipped_at']:
+            timeline.append({
+                'status': 'shipped',
+                'label': 'จัดส่งแล้ว',
+                'date': order_dict['shipped_at'].isoformat(),
+                'completed': True,
+                'tracking': order_dict['tracking_number'],
+                'provider': order_dict['shipping_provider']
+            })
+        
+        order_dict['items'] = items
+        order_dict['payments'] = payments
+        order_dict['timeline'] = timeline
+        
+        return jsonify(order_dict), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/mto/orders/<int:order_id>/pay', methods=['POST'])
+@login_required
+@csrf_protect
+def submit_mto_payment(order_id):
+    """Submit payment for MTO order (deposit or balance)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        
+        # Get order
+        cursor.execute('SELECT * FROM mto_orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        if order['reseller_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์'}), 403
+        
+        data = request.get_json()
+        payment_type = data.get('payment_type')  # deposit or balance
+        amount = data.get('amount')
+        slip_image_url = data.get('slip_image_url')
+        payment_method = data.get('payment_method', 'bank_transfer')
+        
+        if payment_type not in ['deposit', 'balance']:
+            return jsonify({'error': 'ประเภทการชำระไม่ถูกต้อง'}), 400
+        
+        # Create payment record
+        cursor.execute('''
+            INSERT INTO mto_payments (mto_order_id, payment_type, amount, payment_method, slip_image_url, status)
+            VALUES (%s, %s, %s, %s, %s, 'pending')
+            RETURNING id
+        ''', (order_id, payment_type, amount, payment_method, slip_image_url))
+        payment_id = cursor.fetchone()['id']
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'payment_id': payment_id,
+            'message': 'ส่งหลักฐานการชำระเงินสำเร็จ รอการตรวจสอบ'
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==========================================
+# Admin MTO Management APIs
+# ==========================================
+
+@app.route('/api/admin/mto/quotation-requests', methods=['GET'])
+@admin_required
+def admin_get_quotation_requests():
+    """Get all quotation requests for admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT qr.*, u.full_name as reseller_name, u.email,
+                   (SELECT COUNT(*) FROM quotation_request_items WHERE request_id = qr.id) as item_count,
+                   (SELECT SUM(quantity) FROM quotation_request_items WHERE request_id = qr.id) as total_qty
+            FROM quotation_requests qr
+            JOIN users u ON qr.reseller_id = u.id
+        '''
+        params = []
+        
+        if status:
+            query += ' WHERE qr.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY qr.created_at DESC'
+        
+        cursor.execute(query, params)
+        requests = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(requests), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/quotation-requests/<int:request_id>', methods=['GET'])
+@admin_required
+def admin_get_quotation_request_detail(request_id):
+    """Get quotation request details"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get request
+        cursor.execute('''
+            SELECT qr.*, u.full_name as reseller_name, u.email, u.phone,
+                   t.name as tier_name
+            FROM quotation_requests qr
+            JOIN users u ON qr.reseller_id = u.id
+            LEFT JOIN reseller_tiers t ON u.reseller_tier_id = t.id
+            WHERE qr.id = %s
+        ''', (request_id,))
+        req = cursor.fetchone()
+        
+        if not req:
+            return jsonify({'error': 'ไม่พบคำขอ'}), 404
+        
+        # Get items
+        cursor.execute('''
+            SELECT qri.*, p.name as product_name, p.production_days, p.deposit_percent,
+                   s.sku_code, s.price as base_price,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
+            FROM quotation_request_items qri
+            JOIN products p ON qri.product_id = p.id
+            LEFT JOIN skus s ON qri.sku_id = s.id
+            WHERE qri.request_id = %s
+        ''', (request_id,))
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        result = dict(req)
+        result['items'] = items
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/quotations', methods=['POST'])
+@admin_required
+@csrf_protect
+def admin_create_quotation():
+    """Create quotation from request or directly"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        data = request.get_json()
+        admin_id = session['user_id']
+        request_id = data.get('request_id')
+        reseller_id = data.get('reseller_id')
+        items = data.get('items', [])
+        discount_amount = data.get('discount_amount', 0)
+        deposit_percent = data.get('deposit_percent', 50)
+        production_days = data.get('production_days', 14)
+        valid_days = data.get('valid_days', 7)
+        admin_notes = data.get('admin_notes', '')
+        
+        if not reseller_id:
+            return jsonify({'error': 'กรุณาระบุ Reseller'}), 400
+        
+        if not items:
+            return jsonify({'error': 'กรุณาเพิ่มรายการสินค้า'}), 400
+        
+        # Calculate totals
+        subtotal = sum(item['final_price'] * item['quantity'] for item in items)
+        total_amount = subtotal - discount_amount
+        deposit_amount = total_amount * deposit_percent / 100
+        balance_amount = total_amount - deposit_amount
+        
+        # Calculate expected completion date
+        from datetime import date, timedelta
+        expected_date = date.today() + timedelta(days=production_days + 7)  # +7 for payment processing
+        valid_until = date.today() + timedelta(days=valid_days)
+        
+        # Generate quote number
+        quote_number = generate_quote_number()
+        
+        # Create quotation
+        cursor.execute('''
+            INSERT INTO quotations (
+                quote_number, request_id, reseller_id, admin_id, status,
+                subtotal, discount_amount, total_amount,
+                deposit_percent, deposit_amount, balance_amount,
+                production_days, expected_completion_date, valid_until,
+                admin_notes
+            ) VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (quote_number, request_id, reseller_id, admin_id,
+              subtotal, discount_amount, total_amount,
+              deposit_percent, deposit_amount, balance_amount,
+              production_days, expected_date, valid_until, admin_notes))
+        quote_id = cursor.fetchone()['id']
+        
+        # Add items
+        for item in items:
+            line_total = item['final_price'] * item['quantity']
+            cursor.execute('''
+                INSERT INTO quotation_items (
+                    quotation_id, product_id, sku_id, sku_code, product_name,
+                    option_text, quantity, original_price, final_price, line_total, notes
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (quote_id, item['product_id'], item.get('sku_id'), item.get('sku_code'),
+                  item['product_name'], item.get('option_text', ''), item['quantity'],
+                  item.get('original_price', item['final_price']), item['final_price'],
+                  line_total, item.get('notes', '')))
+        
+        # Update request status if from request
+        if request_id:
+            cursor.execute('''
+                UPDATE quotation_requests SET status = 'quoted', updated_at = NOW()
+                WHERE id = %s
+            ''', (request_id,))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'quotation_id': quote_id,
+            'quote_number': quote_number,
+            'message': 'สร้างใบเสนอราคาสำเร็จ'
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/quotations', methods=['GET'])
+@admin_required
+def admin_get_quotations():
+    """Get all quotations for admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT q.*, u.full_name as reseller_name, u.email,
+                   (SELECT COUNT(*) FROM quotation_items WHERE quotation_id = q.id) as item_count
+            FROM quotations q
+            JOIN users u ON q.reseller_id = u.id
+        '''
+        params = []
+        
+        if status:
+            query += ' WHERE q.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY q.created_at DESC'
+        
+        cursor.execute(query, params)
+        quotations = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(quotations), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/quotations/<int:quote_id>/send', methods=['POST'])
+@admin_required
+@csrf_protect
+def admin_send_quotation(quote_id):
+    """Send quotation to reseller"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get quotation and reseller info
+        cursor.execute('''
+            SELECT q.*, u.email, u.full_name as reseller_name
+            FROM quotations q
+            JOIN users u ON q.reseller_id = u.id
+            WHERE q.id = %s
+        ''', (quote_id,))
+        quote = cursor.fetchone()
+        
+        if not quote:
+            return jsonify({'error': 'ไม่พบใบเสนอราคา'}), 404
+        
+        # Update status
+        cursor.execute('''
+            UPDATE quotations SET status = 'sent', sent_at = NOW(), updated_at = NOW()
+            WHERE id = %s
+        ''', (quote_id,))
+        
+        # Update request status if exists
+        if quote['request_id']:
+            cursor.execute('''
+                UPDATE quotation_requests SET status = 'quoted', updated_at = NOW()
+                WHERE id = %s
+            ''', (quote['request_id'],))
+        
+        conn.commit()
+        
+        # Send email notification (optional)
+        try:
+            send_quotation_email(quote)
+        except:
+            pass  # Don't fail if email fails
+        
+        return jsonify({
+            'success': True,
+            'message': 'ส่งใบเสนอราคาสำเร็จ'
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_quotation_email(quote):
+    """Send quotation email to reseller"""
+    try:
+        gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+        if not gmail_password:
+            return
+        
+        sender_email = "ekgshops@gmail.com"
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[EKG Shops] ใบเสนอราคา {quote['quote_number']}"
+        msg['From'] = sender_email
+        msg['To'] = quote['email']
+        
+        html = f"""
+        <html>
+        <body style="font-family: 'Sarabun', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0;">EKG Shops</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">ใบเสนอราคาสินค้าสั่งผลิต</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>สวัสดีคุณ {quote['reseller_name']},</p>
+                <p>ใบเสนอราคาของคุณพร้อมแล้ว:</p>
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>เลขที่:</strong> {quote['quote_number']}</p>
+                    <p><strong>ยอดรวม:</strong> ฿{quote['total_amount']:,.2f}</p>
+                    <p><strong>มัดจำ ({quote['deposit_percent']}%):</strong> ฿{quote['deposit_amount']:,.2f}</p>
+                    <p><strong>ระยะเวลาผลิต:</strong> {quote['production_days']} วัน</p>
+                    <p><strong>ใช้ได้ถึง:</strong> {quote['valid_until']}</p>
+                </div>
+                <p>กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดและชำระมัดจำ</p>
+                <a href="https://ekgshops.com" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; margin-top: 10px;">เข้าสู่ระบบ</a>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html, 'html'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, gmail_password)
+            server.send_message(msg)
+            
+    except Exception as e:
+        print(f"Email error: {e}")
+
+@app.route('/api/admin/mto/orders', methods=['GET'])
+@admin_required
+def admin_get_mto_orders():
+    """Get all MTO orders for admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT mo.*, q.quote_number, u.full_name as reseller_name,
+                   (SELECT COUNT(*) FROM mto_order_items WHERE mto_order_id = mo.id) as item_count
+            FROM mto_orders mo
+            LEFT JOIN quotations q ON mo.quotation_id = q.id
+            JOIN users u ON mo.reseller_id = u.id
+        '''
+        params = []
+        
+        if status:
+            query += ' WHERE mo.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY mo.created_at DESC'
+        
+        cursor.execute(query, params)
+        orders = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(orders), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/payments', methods=['GET'])
+@admin_required
+def admin_get_mto_payments():
+    """Get pending MTO payments for admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        status = request.args.get('status', 'pending')
+        
+        cursor.execute('''
+            SELECT p.*, mo.order_number, u.full_name as reseller_name
+            FROM mto_payments p
+            JOIN mto_orders mo ON p.mto_order_id = mo.id
+            JOIN users u ON mo.reseller_id = u.id
+            WHERE p.status = %s
+            ORDER BY p.created_at DESC
+        ''', (status,))
+        payments = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(payments), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/payments/<int:payment_id>/confirm', methods=['POST'])
+@admin_required
+@csrf_protect
+def admin_confirm_mto_payment(payment_id):
+    """Confirm MTO payment"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        admin_id = session['user_id']
+        
+        # Get payment
+        cursor.execute('SELECT * FROM mto_payments WHERE id = %s', (payment_id,))
+        payment = cursor.fetchone()
+        
+        if not payment:
+            return jsonify({'error': 'ไม่พบการชำระเงิน'}), 404
+        
+        # Update payment
+        cursor.execute('''
+            UPDATE mto_payments SET status = 'confirmed', confirmed_by = %s, confirmed_at = NOW()
+            WHERE id = %s
+        ''', (admin_id, payment_id))
+        
+        # Get order
+        cursor.execute('SELECT * FROM mto_orders WHERE id = %s', (payment['mto_order_id'],))
+        order = cursor.fetchone()
+        
+        # Update order based on payment type
+        if payment['payment_type'] == 'deposit':
+            new_deposit_paid = float(order['deposit_paid'] or 0) + float(payment['amount'])
+            new_status = 'deposit_paid' if new_deposit_paid >= float(order['deposit_amount']) else order['status']
+            
+            # Calculate expected completion date
+            from datetime import date, timedelta
+            expected_date = date.today() + timedelta(days=order['production_days'])
+            
+            cursor.execute('''
+                UPDATE mto_orders SET 
+                    deposit_paid = %s, status = %s, 
+                    payment_confirmed_at = NOW(), 
+                    production_started_at = NOW(),
+                    expected_completion_date = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            ''', (new_deposit_paid, new_status, expected_date, order['id']))
+            
+        elif payment['payment_type'] == 'balance':
+            new_balance_paid = float(order['balance_paid'] or 0) + float(payment['amount'])
+            new_status = 'balance_paid' if new_balance_paid >= float(order['balance_amount']) else order['status']
+            
+            cursor.execute('''
+                UPDATE mto_orders SET balance_paid = %s, status = %s, balance_paid_at = NOW(), updated_at = NOW()
+                WHERE id = %s
+            ''', (new_balance_paid, new_status, order['id']))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'ยืนยันการชำระเงินสำเร็จ'
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/orders/<int:order_id>/update-status', methods=['POST'])
+@admin_required
+@csrf_protect
+def admin_update_mto_order_status(order_id):
+    """Update MTO order status"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        valid_statuses = ['awaiting_deposit', 'deposit_paid', 'production', 
+                          'balance_requested', 'balance_paid', 'ready_to_ship', 'shipped', 'fulfilled']
+        
+        if new_status not in valid_statuses:
+            return jsonify({'error': 'สถานะไม่ถูกต้อง'}), 400
+        
+        # Get order
+        cursor.execute('SELECT * FROM mto_orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        
+        update_fields = ['status = %s', 'updated_at = NOW()']
+        params = [new_status]
+        
+        # Set timestamps based on status
+        if new_status == 'production' and not order['production_started_at']:
+            update_fields.append('production_started_at = NOW()')
+        elif new_status == 'balance_requested':
+            update_fields.append('production_completed_at = NOW()')
+            update_fields.append('balance_requested_at = NOW()')
+        elif new_status == 'shipped':
+            tracking = data.get('tracking_number')
+            provider = data.get('shipping_provider')
+            update_fields.append('shipped_at = NOW()')
+            if tracking:
+                update_fields.append('tracking_number = %s')
+                params.append(tracking)
+            if provider:
+                update_fields.append('shipping_provider = %s')
+                params.append(provider)
+        
+        params.append(order_id)
+        
+        cursor.execute(f'''
+            UPDATE mto_orders SET {', '.join(update_fields)} WHERE id = %s
+        ''', params)
+        
+        conn.commit()
+        
+        # Send email notification if balance requested
+        if new_status == 'balance_requested':
+            try:
+                send_balance_request_email(order)
+            except:
+                pass
+        
+        return jsonify({
+            'success': True,
+            'message': 'อัปเดตสถานะสำเร็จ'
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_balance_request_email(order):
+    """Send balance payment request email"""
+    try:
+        gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+        if not gmail_password:
+            return
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT email, full_name FROM users WHERE id = %s', (order['reseller_id'],))
+        reseller = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not reseller:
+            return
+        
+        sender_email = "ekgshops@gmail.com"
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[EKG Shops] เรียกเก็บยอดคงเหลือ {order['order_number']}"
+        msg['From'] = sender_email
+        msg['To'] = reseller['email']
+        
+        html = f"""
+        <html>
+        <body style="font-family: 'Sarabun', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0;">EKG Shops</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">สินค้าผลิตเสร็จแล้ว!</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>สวัสดีคุณ {reseller['full_name']},</p>
+                <p>สินค้าสั่งผลิตของคุณผลิตเสร็จเรียบร้อยแล้ว กรุณาชำระยอดคงเหลือเพื่อจัดส่ง</p>
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>เลขที่:</strong> {order['order_number']}</p>
+                    <p><strong>ยอดคงเหลือ:</strong> ฿{float(order['balance_amount']):,.2f}</p>
+                </div>
+                <a href="https://ekgshops.com" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; margin-top: 10px;">ชำระเงิน</a>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html, 'html'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, gmail_password)
+            server.send_message(msg)
+            
+    except Exception as e:
+        print(f"Email error: {e}")
+
+@app.route('/api/admin/mto/stats', methods=['GET'])
+@admin_required
+def admin_get_mto_stats():
+    """Get MTO dashboard statistics"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Count by status
+        cursor.execute('''
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'pending') as pending_requests,
+                COUNT(*) FILTER (WHERE status = 'quoted') as quoted_requests
+            FROM quotation_requests
+        ''')
+        request_stats = cursor.fetchone()
+        
+        cursor.execute('''
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'draft') as draft_quotes,
+                COUNT(*) FILTER (WHERE status = 'sent') as sent_quotes
+            FROM quotations
+        ''')
+        quote_stats = cursor.fetchone()
+        
+        cursor.execute('''
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'awaiting_deposit') as awaiting_deposit,
+                COUNT(*) FILTER (WHERE status = 'deposit_paid') as deposit_paid,
+                COUNT(*) FILTER (WHERE status = 'production') as in_production,
+                COUNT(*) FILTER (WHERE status = 'balance_requested') as balance_requested,
+                COUNT(*) FILTER (WHERE status = 'balance_paid') as balance_paid,
+                COUNT(*) FILTER (WHERE status = 'ready_to_ship') as ready_to_ship,
+                COUNT(*) FILTER (WHERE status = 'shipped') as shipped
+            FROM mto_orders
+        ''')
+        order_stats = cursor.fetchone()
+        
+        cursor.execute('SELECT COUNT(*) as count FROM mto_payments WHERE status = %s', ('pending',))
+        pending_payments = cursor.fetchone()['count']
+        
+        return jsonify({
+            'requests': dict(request_stats) if request_stats else {},
+            'quotations': dict(quote_stats) if quote_stats else {},
+            'orders': dict(order_stats) if order_stats else {},
+            'pending_payments': pending_payments
+        }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
