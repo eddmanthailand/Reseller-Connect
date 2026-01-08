@@ -11769,8 +11769,8 @@ def admin_update_mto_order_status(order_id):
             UPDATE mto_orders SET {', '.join(update_fields)} WHERE id = %s
         ''', params)
         
-        # Update total_purchases when order is fulfilled
-        if new_status == 'fulfilled':
+        # Update total_purchases when order transitions to fulfilled (first time only)
+        if new_status == 'fulfilled' and order['status'] != 'fulfilled':
             reseller_id = order['reseller_id']
             order_total = float(order['total_amount'] or 0)
             
@@ -11780,15 +11780,15 @@ def admin_update_mto_order_status(order_id):
                 WHERE id = %s
             ''', (order_total, reseller_id))
             
-            # Check for tier upgrade
+            # Check for tier upgrade using updated total (no double-count)
             cursor.execute('''
                 SELECT u.id, u.reseller_tier_id, u.total_purchases, u.tier_manual_override,
                        (SELECT id FROM reseller_tiers 
-                        WHERE upgrade_threshold <= u.total_purchases + %s
+                        WHERE upgrade_threshold <= u.total_purchases
                         AND is_manual_only = FALSE
                         ORDER BY level_rank DESC LIMIT 1) as eligible_tier_id
                 FROM users u WHERE u.id = %s
-            ''', (order_total, reseller_id))
+            ''', (reseller_id,))
             user = cursor.fetchone()
             
             if user and not user['tier_manual_override']:
