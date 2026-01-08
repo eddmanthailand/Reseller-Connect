@@ -55,14 +55,17 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 - **Shipping Label Printing:** A4 format with horizontal split design. Top half displays shipping info (sender, recipient, tracking number, provider). Bottom half displays packing list with checkboxes, SKU codes, quantities, and signature fields. Print per shipment from order detail modal. No weight displayed. Tracking URLs auto-generated from shipping provider templates.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 - **Made-to-Order (MTO) System:** Complete workflow for custom production orders:
-    - Admin: Create MTO products with production_days, min_order_qty, deposit_percent settings.
+    - Admin: Create MTO products with production_days, min_order_qty (per primary option value), deposit_percent settings.
+    - Admin: Full CRUD for MTO products with options builder, SKU preview, and image upload.
     - Admin: 4-page management (Quotation Requests, Quotations, MTO Orders, Payment Verification).
     - Admin: Timeline tracking, status updates, payment confirmation with slip review.
-    - Reseller: MTO product catalog with request quote functionality.
+    - Reseller: MTO product catalog with Matrix Grid ordering UI (primary option as rows, secondary as columns).
+    - Reseller: Real-time minimum quantity validation per primary option value with inline error display.
     - Reseller: View/accept/reject quotations, track order status and production progress.
     - Reseller: Upload payment slips for deposit and balance payments.
-    - Workflow: Request → Quote → Accept → Deposit → Production → Balance → Ship → Complete.
+    - Workflow: Request → Quote → Accept → Deposit → Production → Balance → Ship → Fulfilled.
     - Payment structure: Configurable deposit % (default 50%), balance payment gate before shipping.
+    - Revenue tracking: MTO order total_amount added to reseller's total_purchases upon fulfillment status (guards against duplicate credits), triggers automatic tier upgrade eligibility check.
 
 ### System Design Choices
 - **Backend Framework:** Flask (lightweight, flexible).
