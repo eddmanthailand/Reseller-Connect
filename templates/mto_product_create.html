@@ -545,7 +545,7 @@
         </header>
 
         <main class="full-page-content">
-            <form id="mtoProductForm" onkeydown="return event.key !== 'Enter' || event.target.tagName === 'TEXTAREA';">
+            <form id="mtoProductForm">
                 <div class="section-card">
                     <h2 class="section-title">1. ข้อมูลสินค้าหลัก</h2>
                     
@@ -1348,10 +1348,55 @@
             return skus;
         }
 
+        // Global addTag function for option values
+        function addTag(sortableList, value) {
+            const tag = document.createElement('span');
+            tag.className = 'option-value-tag';
+            tag.innerHTML = `
+                ${value}
+                <span class="remove-tag-btn" onclick="this.closest('.option-value-tag').remove()">✕</span>
+            `;
+            const tagInput = sortableList.querySelector('.tag-input');
+            sortableList.insertBefore(tag, tagInput);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             loadBrands();
             loadCategories();
             loadCurrentUser();
+            
+            // Use event delegation for Enter key handling (works for dynamically added elements)
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+                    const form = e.target.closest('#mtoProductForm');
+                    if (!form) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // If Enter on option name input, focus to tag input
+                    if (e.target.classList.contains('option-name-input')) {
+                        const optionBlock = e.target.closest('.option-block');
+                        const tagInput = optionBlock ? optionBlock.querySelector('.tag-input') : null;
+                        if (tagInput) {
+                            tagInput.focus();
+                        }
+                    }
+                    // If Enter on tag input, add tag
+                    else if (e.target.classList.contains('tag-input')) {
+                        const value = e.target.value.trim();
+                        if (value) {
+                            const sortableList = e.target.closest('.sortable-list');
+                            if (sortableList) {
+                                addTag(sortableList, value);
+                                e.target.value = '';
+                                e.target.focus();
+                            }
+                        }
+                    }
+                    return false;
+                }
+            });
         });
     </script>
     <script src="/static/js/global-alert.js"></script>
