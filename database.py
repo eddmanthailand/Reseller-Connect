@@ -830,6 +830,16 @@ def init_db():
             END $$;
         ''')
         
+        # Migration: Add min_order_qty to option_values table (MOQ per primary option value like color)
+        cursor.execute('''
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'option_values' AND column_name = 'min_order_qty') THEN
+                    ALTER TABLE option_values ADD COLUMN min_order_qty INTEGER DEFAULT 0;
+                END IF;
+            END $$;
+        ''')
+        
         # Create quotation_requests table (คำขอใบเสนอราคาจาก Reseller)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS quotation_requests (

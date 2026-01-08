@@ -560,6 +560,8 @@ function switchPage(pageName) {
         loadApplicationsPage();
     } else if (pageName === 'activity-logs') {
         loadActivityLogs();
+    } else if (pageName === 'mto-products') {
+        loadMtoProducts();
     } else if (pageName === 'mto-requests') {
         loadMtoRequests();
         loadMtoStats();
@@ -7182,6 +7184,418 @@ async function loadMtoStats() {
             mtoRequestsBadge.style.display = pendingRequests > 0 ? 'inline-block' : 'none';
         }
     } catch (error) { console.error('Error loading MTO stats:', error); }
+}
+
+// ==========================================
+// MTO Products Management Functions
+// ==========================================
+
+let mtoProductOptions = [];
+let mtoProductImages = [];
+
+async function loadMtoProducts(status = null) {
+    const tbody = document.getElementById('mtoProductsTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>';
+    
+    try {
+        let url = '/api/admin/mto/products';
+        if (status && status !== 'all') url += `?status=${status}`;
+        
+        const response = await fetch(url, { credentials: 'include' });
+        const products = await response.json();
+        
+        if (!products.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: rgba(255,255,255,0.5);">ไม่มีสินค้าสั่งผลิต</td></tr>';
+            return;
+        }
+        
+        const countBadge = document.getElementById('mtoProductAllCount');
+        if (countBadge) countBadge.textContent = products.length;
+        
+        tbody.innerHTML = products.map(p => `
+            <tr>
+                <td>
+                    <img src="${p.image_url || '/static/images/no-image.png'}" 
+                         style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.1);"
+                         onerror="this.src='/static/images/no-image.png'">
+                </td>
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td style="font-size: 12px; color: rgba(255,255,255,0.7);">${escapeHtml(p.parent_sku)}</td>
+                <td>${escapeHtml(p.brand_name || '-')}</td>
+                <td>${p.production_days || 0} วัน</td>
+                <td>${p.deposit_percent || 50}%</td>
+                <td>
+                    <span class="status-badge status-${p.status}">
+                        ${p.status === 'active' ? 'เปิดใช้งาน' : p.status === 'inactive' ? 'ปิดใช้งาน' : 'แบบร่าง'}
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-icon" onclick="editMtoProduct(${p.id})" title="แก้ไข">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-icon btn-danger" onclick="deleteMtoProduct(${p.id}, '${escapeHtml(p.name)}')" title="ลบ">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #f87171;">เกิดข้อผิดพลาด: ' + error.message + '</td></tr>';
+    }
+}
+
+function filterMtoProducts(status) {
+    document.querySelectorAll('#page-mto-products .status-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    loadMtoProducts(status);
+}
+
+async function showCreateMtoProductModal() {
+    mtoProductOptions = [];
+    mtoProductImages = [];
+    
+    document.getElementById('mtoProductId').value = '';
+    document.getElementById('mtoProductName').value = '';
+    document.getElementById('mtoProductSpu').value = '';
+    document.getElementById('mtoProductDescription').value = '';
+    document.getElementById('mtoProductionDays').value = '7';
+    document.getElementById('mtoDepositPercent').value = '50';
+    document.getElementById('mtoProductStatus').value = 'draft';
+    document.getElementById('mtoOptionsContainer').innerHTML = '';
+    document.getElementById('mtoSkuPreview').innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">เพิ่มตัวเลือกสินค้าเพื่อสร้าง SKU</p>';
+    document.getElementById('mtoImagePreview').innerHTML = '';
+    document.getElementById('mtoProductModalTitle').textContent = 'สร้างสินค้าสั่งผลิต';
+    
+    await loadBrandsForMtoProduct();
+    
+    document.getElementById('mtoProductModal').style.display = 'flex';
+}
+
+async function loadBrandsForMtoProduct() {
+    try {
+        const response = await fetch('/api/brands', { credentials: 'include' });
+        const brands = await response.json();
+        
+        const select = document.getElementById('mtoProductBrand');
+        select.innerHTML = '<option value="">-- เลือกแบรนด์ --</option>' + 
+            brands.map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading brands:', error);
+    }
+}
+
+function closeMtoProductModal() {
+    document.getElementById('mtoProductModal').style.display = 'none';
+}
+
+function addMtoOption() {
+    const container = document.getElementById('mtoOptionsContainer');
+    const optIndex = container.children.length;
+    const isFirstOption = optIndex === 0;
+    
+    const optionHtml = `
+        <div class="mto-option-row" data-index="${optIndex}" style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 12px; color: rgba(255,255,255,0.7);">ชื่อตัวเลือก ${isFirstOption ? '(เช่น สี) *' : ''}</label>
+                    <input type="text" class="form-input mto-option-name" placeholder="${isFirstOption ? 'เช่น สี' : 'เช่น ขนาด'}" onchange="updateMtoSkuPreview()">
+                </div>
+                <button type="button" class="btn btn-danger" onclick="removeMtoOption(this)" style="align-self: flex-end; padding: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="mto-option-values" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <!-- Values will be added here -->
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="addMtoOptionValue(this, ${isFirstOption})" style="margin-top: 8px; font-size: 11px; padding: 4px 10px;">
+                + เพิ่มค่า
+            </button>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', optionHtml);
+}
+
+function removeMtoOption(btn) {
+    btn.closest('.mto-option-row').remove();
+    updateMtoSkuPreview();
+}
+
+function addMtoOptionValue(btn, showMinQty = false) {
+    const valuesContainer = btn.previousElementSibling;
+    const valueHtml = `
+        <div class="mto-value-chip" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(168,85,247,0.2); padding: 6px 10px; border-radius: 6px;">
+            <input type="text" class="mto-value-input" placeholder="ค่า" style="width: 80px; background: transparent; border: none; color: #fff; font-size: 12px;" onchange="updateMtoSkuPreview()">
+            ${showMinQty ? '<input type="number" class="mto-min-qty" placeholder="ขั้นต่ำ" min="0" value="1" style="width: 60px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; font-size: 11px; padding: 2px 4px;" title="จำนวนขั้นต่ำ">' : ''}
+            <button type="button" onclick="this.parentElement.remove(); updateMtoSkuPreview();" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; padding: 2px;">&times;</button>
+        </div>
+    `;
+    valuesContainer.insertAdjacentHTML('beforeend', valueHtml);
+}
+
+function updateMtoSkuPreview() {
+    const container = document.getElementById('mtoSkuPreview');
+    const optionRows = document.querySelectorAll('.mto-option-row');
+    
+    if (optionRows.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">เพิ่มตัวเลือกสินค้าเพื่อสร้าง SKU</p>';
+        return;
+    }
+    
+    const options = [];
+    optionRows.forEach((row, idx) => {
+        const name = row.querySelector('.mto-option-name').value || `ตัวเลือก ${idx + 1}`;
+        const valueInputs = row.querySelectorAll('.mto-value-input');
+        const values = [];
+        valueInputs.forEach(input => {
+            if (input.value.trim()) {
+                const minQtyInput = input.nextElementSibling;
+                values.push({
+                    value: input.value.trim(),
+                    min_order_qty: minQtyInput && minQtyInput.classList.contains('mto-min-qty') ? parseInt(minQtyInput.value) || 0 : 0
+                });
+            }
+        });
+        if (values.length > 0) {
+            options.push({ name, values });
+        }
+    });
+    
+    if (options.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">กรุณาเพิ่มค่าตัวเลือก</p>';
+        return;
+    }
+    
+    // Generate combinations
+    const combinations = cartesianProduct(options.map(o => o.values.map(v => v.value)));
+    const spu = document.getElementById('mtoProductSpu').value || 'SPU';
+    
+    let html = `<table class="data-table" style="font-size: 12px;">
+        <thead>
+            <tr>
+                <th>SKU Code</th>
+                ${options.map(o => `<th>${escapeHtml(o.name)}</th>`).join('')}
+                <th>ราคา (บาท)</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    
+    combinations.forEach((combo, idx) => {
+        const skuCode = `${spu}-${idx + 1}`;
+        html += `<tr>
+            <td>${skuCode}</td>
+            ${combo.map(v => `<td>${escapeHtml(v)}</td>`).join('')}
+            <td><input type="number" class="sku-price-input form-input" data-idx="${idx}" value="0" min="0" step="0.01" style="width: 100px;"></td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function cartesianProduct(arrays) {
+    if (arrays.length === 0) return [[]];
+    return arrays.reduce((acc, curr) => 
+        acc.flatMap(a => curr.map(c => [...a, c])), [[]]
+    );
+}
+
+function handleMtoProductImages(input) {
+    const preview = document.getElementById('mtoImagePreview');
+    const files = input.files;
+    
+    for (let file of files) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            mtoProductImages.push(e.target.result);
+            renderMtoImagePreview();
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function renderMtoImagePreview() {
+    const preview = document.getElementById('mtoImagePreview');
+    preview.innerHTML = mtoProductImages.map((img, idx) => `
+        <div style="position: relative; display: inline-block;">
+            <img src="${img}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
+            <button type="button" onclick="removeMtoImage(${idx})" style="position: absolute; top: -6px; right: -6px; background: #ef4444; border: none; border-radius: 50%; width: 18px; height: 18px; color: #fff; font-size: 12px; cursor: pointer;">&times;</button>
+        </div>
+    `).join('');
+}
+
+function removeMtoImage(idx) {
+    mtoProductImages.splice(idx, 1);
+    renderMtoImagePreview();
+}
+
+async function saveMtoProduct() {
+    const productId = document.getElementById('mtoProductId').value;
+    const name = document.getElementById('mtoProductName').value.trim();
+    const parentSku = document.getElementById('mtoProductSpu').value.trim();
+    const brandId = document.getElementById('mtoProductBrand').value;
+    const description = document.getElementById('mtoProductDescription').value.trim();
+    const productionDays = parseInt(document.getElementById('mtoProductionDays').value) || 7;
+    const depositPercent = parseInt(document.getElementById('mtoDepositPercent').value) || 50;
+    const status = document.getElementById('mtoProductStatus').value;
+    
+    if (!name || !parentSku || !brandId) {
+        showAlert('error', 'กรุณากรอกข้อมูลที่จำเป็น');
+        return;
+    }
+    
+    // Collect options
+    const options = [];
+    document.querySelectorAll('.mto-option-row').forEach((row, idx) => {
+        const optName = row.querySelector('.mto-option-name').value.trim();
+        if (!optName) return;
+        
+        const values = [];
+        row.querySelectorAll('.mto-value-chip').forEach(chip => {
+            const valInput = chip.querySelector('.mto-value-input');
+            const minQtyInput = chip.querySelector('.mto-min-qty');
+            if (valInput && valInput.value.trim()) {
+                values.push({
+                    value: valInput.value.trim(),
+                    min_order_qty: minQtyInput ? parseInt(minQtyInput.value) || 0 : 0
+                });
+            }
+        });
+        
+        if (values.length > 0) {
+            options.push({ name: optName, values });
+        }
+    });
+    
+    const data = {
+        name, parent_sku: parentSku, brand_id: parseInt(brandId),
+        description, production_days: productionDays, deposit_percent: depositPercent,
+        status, options, images: mtoProductImages
+    };
+    
+    try {
+        const url = productId ? `/api/admin/mto/products/${productId}` : '/api/admin/mto/products';
+        const method = productId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('success', result.message || 'บันทึกสำเร็จ');
+            closeMtoProductModal();
+            loadMtoProducts();
+        } else {
+            showAlert('error', result.error || 'เกิดข้อผิดพลาด');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function editMtoProduct(productId) {
+    try {
+        const response = await fetch(`/api/admin/mto/products/${productId}`, { credentials: 'include' });
+        const product = await response.json();
+        
+        if (!response.ok) {
+            showAlert('error', product.error || 'ไม่พบสินค้า');
+            return;
+        }
+        
+        await loadBrandsForMtoProduct();
+        
+        document.getElementById('mtoProductId').value = product.id;
+        document.getElementById('mtoProductName').value = product.name;
+        document.getElementById('mtoProductSpu').value = product.parent_sku;
+        document.getElementById('mtoProductBrand').value = product.brand_id;
+        document.getElementById('mtoProductDescription').value = product.description || '';
+        document.getElementById('mtoProductionDays').value = product.production_days || 7;
+        document.getElementById('mtoDepositPercent').value = product.deposit_percent || 50;
+        document.getElementById('mtoProductStatus').value = product.status || 'draft';
+        document.getElementById('mtoProductModalTitle').textContent = 'แก้ไขสินค้าสั่งผลิต';
+        
+        // Load images
+        mtoProductImages = (product.images || []).map(img => img.image_url);
+        renderMtoImagePreview();
+        
+        // Load options
+        const container = document.getElementById('mtoOptionsContainer');
+        container.innerHTML = '';
+        
+        (product.options || []).forEach((opt, optIdx) => {
+            const isFirst = optIdx === 0;
+            let valuesHtml = '';
+            (opt.values || []).forEach(val => {
+                valuesHtml += `
+                    <div class="mto-value-chip" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(168,85,247,0.2); padding: 6px 10px; border-radius: 6px;">
+                        <input type="text" class="mto-value-input" value="${escapeHtml(val.value)}" style="width: 80px; background: transparent; border: none; color: #fff; font-size: 12px;" onchange="updateMtoSkuPreview()">
+                        ${isFirst ? `<input type="number" class="mto-min-qty" value="${val.min_order_qty || 0}" min="0" style="width: 60px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; font-size: 11px; padding: 2px 4px;" title="จำนวนขั้นต่ำ">` : ''}
+                        <button type="button" onclick="this.parentElement.remove(); updateMtoSkuPreview();" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; padding: 2px;">&times;</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML += `
+                <div class="mto-option-row" data-index="${optIdx}" style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.7);">ชื่อตัวเลือก ${isFirst ? '(เช่น สี) *' : ''}</label>
+                            <input type="text" class="form-input mto-option-name" value="${escapeHtml(opt.name)}" onchange="updateMtoSkuPreview()">
+                        </div>
+                        <button type="button" class="btn btn-danger" onclick="removeMtoOption(this)" style="align-self: flex-end; padding: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div class="mto-option-values" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${valuesHtml}
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addMtoOptionValue(this, ${isFirst})" style="margin-top: 8px; font-size: 11px; padding: 4px 10px;">
+                        + เพิ่มค่า
+                    </button>
+                </div>
+            `;
+        });
+        
+        updateMtoSkuPreview();
+        document.getElementById('mtoProductModal').style.display = 'flex';
+        
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function deleteMtoProduct(productId, productName) {
+    if (!confirm(`ต้องการลบสินค้า "${productName}" หรือไม่?`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/mto/products/${productId}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('success', result.message || 'ลบสำเร็จ');
+            loadMtoProducts();
+        } else {
+            showAlert('error', result.error || 'เกิดข้อผิดพลาด');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
 }
 
 // Initialize on page load

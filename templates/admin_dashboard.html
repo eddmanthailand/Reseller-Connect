@@ -227,6 +227,16 @@
                     <span class="pending-badge" id="mtoRequestsCount" style="display: none;">0</span>
                 </a>
                 <div class="submenu" id="mto-management-submenu">
+                    <a href="#" class="submenu-item" data-page="mto-products">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                                <path d="m3.3 7 8.7 5 8.7-5"/>
+                                <path d="M12 22V12"/>
+                            </svg>
+                        </span>
+                        <span class="sidebar-text">จัดการสินค้าสั่งผลิต</span>
+                    </a>
                     <a href="#" class="submenu-item" data-page="mto-requests">
                         <span class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -277,7 +287,7 @@
                             <path d="M12 22V12"/>
                         </svg>
                     </span>
-                    <span class="sidebar-text">จัดการสินค้า</span>
+                    <span class="sidebar-text">สินค้าสำเร็จรูป</span>
                 </a>
                 <div class="submenu" id="products-submenu" data-role="Super Admin">
                     <a href="#" class="submenu-item" data-page="brands">
@@ -1856,9 +1866,9 @@
                                     <path d="m3.3 7 8.7 5 8.7-5"/>
                                     <path d="M12 22V12"/>
                                 </svg>
-                                จัดการสินค้า
+                                สินค้าสำเร็จรูป
                             </h1>
-                            <p style="font-size: 12px;">จัดการสินค้าและ SKU Variants</p>
+                            <p style="font-size: 12px;">จัดการสินค้าพร้อมสต็อกและ SKU Variants</p>
                         </div>
                         <a href="/admin/products/create" class="btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; font-size: 13px; width: auto;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2316,6 +2326,57 @@
                 </div>
             </div>
 
+            <!-- MTO Products Page -->
+            <div id="page-mto-products" class="page-content">
+                <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h1>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                                <path d="m3.3 7 8.7 5 8.7-5"/>
+                                <path d="M12 22V12"/>
+                            </svg>
+                            จัดการสินค้าสั่งผลิต
+                        </h1>
+                        <p style="font-size: 12px;">สร้างและจัดการสินค้าสั่งผลิต (Made-to-Order)</p>
+                    </div>
+                    <button class="btn" onclick="showCreateMtoProductModal()" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; font-size: 13px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        สร้างสินค้าสั่งผลิต
+                    </button>
+                </div>
+                
+                <div class="status-tabs" style="margin-bottom: 20px;">
+                    <button class="status-tab active" data-status="all" onclick="filterMtoProducts('all')">ทั้งหมด <span id="mtoProductAllCount" class="tab-badge">0</span></button>
+                    <button class="status-tab" data-status="active" onclick="filterMtoProducts('active')">เปิดใช้งาน</button>
+                    <button class="status-tab" data-status="inactive" onclick="filterMtoProducts('inactive')">ปิดใช้งาน</button>
+                    <button class="status-tab" data-status="draft" onclick="filterMtoProducts('draft')">แบบร่าง</button>
+                </div>
+                
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">รูป</th>
+                                <th>ชื่อสินค้า</th>
+                                <th>รหัส SPU</th>
+                                <th>แบรนด์</th>
+                                <th>ระยะผลิต</th>
+                                <th>มัดจำ %</th>
+                                <th>สถานะ</th>
+                                <th style="width: 120px;">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtoProductsTableBody">
+                            <tr><td colspan="8" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
             <!-- MTO Requests Page -->
             <div id="page-mto-requests" class="page-content">
                 <div class="page-header">
@@ -2843,9 +2904,107 @@
         </div>
     </div>
 
+    <!-- MTO Product Modal -->
+    <div id="mtoProductModal" class="modal">
+        <div class="modal-content modal-xl" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="mtoProductModalTitle">สร้างสินค้าสั่งผลิต</h2>
+                <button class="modal-close" onclick="closeMtoProductModal()">&times;</button>
+            </div>
+            <form id="mtoProductForm" onsubmit="event.preventDefault(); saveMtoProduct();">
+                <input type="hidden" id="mtoProductId" value="">
+                
+                <div class="form-row" style="display: flex; gap: 20px;">
+                    <div style="flex: 1;">
+                        <div class="form-group">
+                            <label for="mtoProductName">ชื่อสินค้า *</label>
+                            <input type="text" id="mtoProductName" class="form-input" required placeholder="เช่น เสื้อยืดพิมพ์ลาย">
+                        </div>
+                        <div class="form-group">
+                            <label for="mtoProductSpu">รหัส SPU *</label>
+                            <input type="text" id="mtoProductSpu" class="form-input" required placeholder="เช่น MTO-TSH-001">
+                        </div>
+                        <div class="form-group">
+                            <label for="mtoProductBrand">แบรนด์ *</label>
+                            <select id="mtoProductBrand" class="form-input" required>
+                                <option value="">-- เลือกแบรนด์ --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="mtoProductDescription">รายละเอียดสินค้า</label>
+                            <textarea id="mtoProductDescription" class="form-input" rows="3" placeholder="อธิบายรายละเอียดสินค้า..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <div style="flex: 1;">
+                        <div class="form-row" style="display: flex; gap: 12px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="mtoProductionDays">ระยะเวลาผลิต (วัน) *</label>
+                                <input type="number" id="mtoProductionDays" class="form-input" value="7" min="1" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="mtoDepositPercent">เปอร์เซ็นต์มัดจำ (%) *</label>
+                                <input type="number" id="mtoDepositPercent" class="form-input" value="50" min="0" max="100" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>สถานะ</label>
+                            <select id="mtoProductStatus" class="form-input">
+                                <option value="draft">แบบร่าง</option>
+                                <option value="active">เปิดใช้งาน</option>
+                                <option value="inactive">ปิดใช้งาน</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>รูปภาพสินค้า</label>
+                            <div id="mtoProductImages" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; padding: 20px; text-align: center; min-height: 100px;">
+                                <input type="file" id="mtoProductImageInput" accept="image/*" multiple style="display: none;" onchange="handleMtoProductImages(this)">
+                                <button type="button" class="btn btn-secondary" onclick="document.getElementById('mtoProductImageInput').click()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                    เลือกรูปภาพ
+                                </button>
+                                <div id="mtoImagePreview" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Options Section -->
+                <div class="card" style="margin-top: 20px; background: rgba(255,255,255,0.05); padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0; font-size: 14px; color: #fff;">ตัวเลือกสินค้า (Options)</h3>
+                        <button type="button" class="btn btn-secondary" onclick="addMtoOption()" style="font-size: 12px; padding: 6px 12px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            เพิ่มตัวเลือก
+                        </button>
+                    </div>
+                    <div id="mtoOptionsContainer">
+                        <!-- Options will be added here -->
+                    </div>
+                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px;">
+                        * ตัวเลือกแรก (เช่น สี) จะใช้ตั้งจำนวนขั้นต่ำต่อค่า
+                    </p>
+                </div>
+                
+                <!-- SKU Preview -->
+                <div class="card" style="margin-top: 20px; background: rgba(255,255,255,0.05); padding: 16px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; color: #fff;">รายการ SKU</h3>
+                    <div id="mtoSkuPreview" style="max-height: 300px; overflow-y: auto;">
+                        <p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">เพิ่มตัวเลือกสินค้าเพื่อสร้าง SKU</p>
+                    </div>
+                </div>
+                
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeMtoProductModal()">ยกเลิก</button>
+                    <button type="submit" class="btn">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/static/js/global-alert.js?v=20241214"></script>
     <script src="/static/js/thai-address.js?v=20241214"></script>
-    <script src="/static/js/dashboard.js?v=20241214f"></script>
+    <script src="/static/js/dashboard.js?v=20250108"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             initWarehouseAddressCascade();

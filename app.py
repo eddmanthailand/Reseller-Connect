@@ -10850,6 +10850,331 @@ def submit_mto_payment(order_id):
 # Admin MTO Management APIs
 # ==========================================
 
+@app.route('/api/admin/mto/products', methods=['GET'])
+@admin_required
+def admin_get_mto_products():
+    """Get all MTO products for admin"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        status = request.args.get('status')
+        
+        query = '''
+            SELECT p.*, b.name as brand_name,
+                   (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url,
+                   (SELECT COUNT(*) FROM skus WHERE product_id = p.id) as sku_count
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.product_type = 'made_to_order'
+        '''
+        params = []
+        
+        if status:
+            query += ' AND p.status = %s'
+            params.append(status)
+        
+        query += ' ORDER BY p.created_at DESC'
+        
+        cursor.execute(query, params)
+        products = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify(products), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/products', methods=['POST'])
+@admin_required
+def admin_create_mto_product():
+    """Create a new MTO product"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        name = data.get('name')
+        parent_sku = data.get('parent_sku')
+        brand_id = data.get('brand_id')
+        description = data.get('description', '')
+        production_days = data.get('production_days', 7)
+        deposit_percent = data.get('deposit_percent', 50)
+        status = data.get('status', 'draft')
+        options = data.get('options', [])
+        images = data.get('images', [])
+        
+        if not name or not parent_sku or not brand_id:
+            return jsonify({'error': 'กรุณากรอกข้อมูลที่จำเป็น'}), 400
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if SPU exists
+        cursor.execute('SELECT id FROM products WHERE parent_sku = %s', (parent_sku,))
+        if cursor.fetchone():
+            return jsonify({'error': 'รหัส SPU นี้มีอยู่แล้ว'}), 400
+        
+        # Create product
+        cursor.execute('''
+            INSERT INTO products (name, parent_sku, brand_id, description, product_type, production_days, deposit_percent, status)
+            VALUES (%s, %s, %s, %s, 'made_to_order', %s, %s, %s)
+            RETURNING id
+        ''', (name, parent_sku, brand_id, description, production_days, deposit_percent, status))
+        product_id = cursor.fetchone()['id']
+        
+        # Save images
+        for i, img_url in enumerate(images):
+            cursor.execute('''
+                INSERT INTO product_images (product_id, image_url, sort_order)
+                VALUES (%s, %s, %s)
+            ''', (product_id, img_url, i))
+        
+        # Create options and generate SKUs
+        option_values_map = []
+        for opt_idx, opt in enumerate(options):
+            opt_name = opt.get('name')
+            values = opt.get('values', [])
+            
+            cursor.execute('''
+                INSERT INTO options (product_id, name)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (product_id, opt_name))
+            option_id = cursor.fetchone()['id']
+            
+            opt_value_ids = []
+            for val_idx, val in enumerate(values):
+                val_name = val.get('value')
+                min_qty = val.get('min_order_qty', 0) if opt_idx == 0 else 0
+                
+                cursor.execute('''
+                    INSERT INTO option_values (option_id, value, sort_order, min_order_qty)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                ''', (option_id, val_name, val_idx, min_qty))
+                opt_value_ids.append(cursor.fetchone()['id'])
+            
+            option_values_map.append(opt_value_ids)
+        
+        # Generate SKU combinations
+        if option_values_map:
+            from itertools import product as cartesian
+            combinations = list(cartesian(*option_values_map))
+            
+            for combo in combinations:
+                sku_suffix = '-'.join([str(v) for v in combo])
+                sku_code = f"{parent_sku}-{sku_suffix}"
+                
+                cursor.execute('''
+                    INSERT INTO skus (product_id, sku_code, price, stock)
+                    VALUES (%s, %s, 0, 0)
+                    RETURNING id
+                ''', (product_id, sku_code))
+                sku_id = cursor.fetchone()['id']
+                
+                for ov_id in combo:
+                    cursor.execute('''
+                        INSERT INTO sku_values_map (sku_id, option_value_id)
+                        VALUES (%s, %s)
+                    ''', (sku_id, ov_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'message': 'สร้างสินค้าสั่งผลิตสำเร็จ'
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/products/<int:product_id>', methods=['GET'])
+@admin_required
+def admin_get_mto_product(product_id):
+    """Get single MTO product with details"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get product
+        cursor.execute('''
+            SELECT p.*, b.name as brand_name
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.id = %s AND p.product_type = 'made_to_order'
+        ''', (product_id,))
+        product = cursor.fetchone()
+        
+        if not product:
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
+        
+        product = dict(product)
+        
+        # Get images
+        cursor.execute('SELECT * FROM product_images WHERE product_id = %s ORDER BY sort_order', (product_id,))
+        product['images'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get options with values
+        cursor.execute('SELECT * FROM options WHERE product_id = %s ORDER BY id', (product_id,))
+        options = [dict(row) for row in cursor.fetchall()]
+        
+        for opt in options:
+            cursor.execute('SELECT * FROM option_values WHERE option_id = %s ORDER BY sort_order', (opt['id'],))
+            opt['values'] = [dict(row) for row in cursor.fetchall()]
+        
+        product['options'] = options
+        
+        # Get SKUs
+        cursor.execute('SELECT * FROM skus WHERE product_id = %s ORDER BY id', (product_id,))
+        skus = [dict(row) for row in cursor.fetchall()]
+        
+        for sku in skus:
+            cursor.execute('''
+                SELECT ov.id, ov.value, o.name as option_name
+                FROM sku_values_map svm
+                JOIN option_values ov ON svm.option_value_id = ov.id
+                JOIN options o ON ov.option_id = o.id
+                WHERE svm.sku_id = %s
+            ''', (sku['id'],))
+            sku['option_values'] = [dict(row) for row in cursor.fetchall()]
+        
+        product['skus'] = skus
+        
+        return jsonify(product), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/products/<int:product_id>', methods=['PUT'])
+@admin_required
+def admin_update_mto_product(product_id):
+    """Update MTO product"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s AND product_type = %s', (product_id, 'made_to_order'))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
+        
+        # Update product fields
+        update_fields = []
+        params = []
+        
+        if 'name' in data:
+            update_fields.append('name = %s')
+            params.append(data['name'])
+        if 'description' in data:
+            update_fields.append('description = %s')
+            params.append(data['description'])
+        if 'production_days' in data:
+            update_fields.append('production_days = %s')
+            params.append(data['production_days'])
+        if 'deposit_percent' in data:
+            update_fields.append('deposit_percent = %s')
+            params.append(data['deposit_percent'])
+        if 'status' in data:
+            update_fields.append('status = %s')
+            params.append(data['status'])
+        
+        if update_fields:
+            update_fields.append('updated_at = CURRENT_TIMESTAMP')
+            params.append(product_id)
+            cursor.execute(f'''
+                UPDATE products SET {', '.join(update_fields)}
+                WHERE id = %s
+            ''', params)
+        
+        # Update SKU prices if provided
+        if 'skus' in data:
+            for sku_data in data['skus']:
+                if 'id' in sku_data and 'price' in sku_data:
+                    cursor.execute('UPDATE skus SET price = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s',
+                                   (sku_data['price'], sku_data['id']))
+        
+        # Update option value min_order_qty if provided
+        if 'option_values' in data:
+            for ov in data['option_values']:
+                if 'id' in ov and 'min_order_qty' in ov:
+                    cursor.execute('UPDATE option_values SET min_order_qty = %s WHERE id = %s',
+                                   (ov['min_order_qty'], ov['id']))
+        
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'อัปเดตสินค้าสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/mto/products/<int:product_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_mto_product(product_id):
+    """Delete MTO product"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if product exists
+        cursor.execute('SELECT id FROM products WHERE id = %s AND product_type = %s', (product_id, 'made_to_order'))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
+        
+        # Check if product is used in quotations
+        cursor.execute('SELECT id FROM quotation_request_items WHERE product_id = %s LIMIT 1', (product_id,))
+        if cursor.fetchone():
+            return jsonify({'error': 'ไม่สามารถลบได้ เนื่องจากมีการใช้ในคำขอใบเสนอราคา'}), 400
+        
+        cursor.execute('DELETE FROM products WHERE id = %s', (product_id,))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': 'ลบสินค้าสำเร็จ'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/admin/mto/quotation-requests', methods=['GET'])
 @admin_required
 def admin_get_quotation_requests():
