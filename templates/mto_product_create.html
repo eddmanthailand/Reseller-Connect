@@ -1348,16 +1348,26 @@
             return skus;
         }
 
-        // Global addTag function for option values
+        // Global addTag function for option values (used by Enter key handler)
         function addTag(sortableList, value) {
+            // Get option block info
+            const optionBlock = sortableList.closest('.option-block');
+            const optionId = optionBlock ? optionBlock.id.replace('option-', '') : null;
+            const container = document.getElementById('options-container');
+            const isFirstOption = container && optionBlock === container.children[0];
+            
             const tag = document.createElement('span');
             tag.className = 'option-value-tag';
-            tag.innerHTML = `
-                ${value}
-                <span class="remove-tag-btn" onclick="this.closest('.option-value-tag').remove()">✕</span>
-            `;
+            tag.dataset.value = value;
+            tag.innerHTML = `${value}<span class="remove-tag-btn" onclick="removeValue(this, ${optionId}, ${isFirstOption})">&times;</span>`;
+            
             const tagInput = sortableList.querySelector('.tag-input');
             sortableList.insertBefore(tag, tagInput);
+            
+            // Update min qty list for first option
+            if (isFirstOption && optionId !== null) {
+                updateMinQtyList(parseInt(optionId));
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
