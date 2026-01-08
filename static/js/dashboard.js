@@ -7144,9 +7144,31 @@ function showMtoOrderStatusModal(orderId, currentStatus) {
     ];
     const optionsHtml = statuses.map(s => `<option value="${s.value}" ${s.value === currentStatus ? 'selected' : ''}>${s.label}</option>`).join('');
     
-    const modalHtml = `<div class="modal-overlay active" id="mtoStatusModal" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width: 400px;"><div class="modal-header"><h3>อัปเดตสถานะ</h3><button class="modal-close" onclick="document.getElementById('mtoStatusModal').remove()">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">สถานะใหม่</label><select id="mtoNewStatus" class="form-control">${optionsHtml}</select></div><div id="shippingFields" style="display: none;"><div class="form-group"><label class="form-label">บริษัทขนส่ง</label><input type="text" id="mtoShippingProvider" class="form-control" placeholder="เช่น Kerry, Flash"></div><div class="form-group"><label class="form-label">เลขพัสดุ</label><input type="text" id="mtoTrackingNumber" class="form-control"></div></div></div><div class="modal-footer"><button class="btn-primary" onclick="updateMtoOrderStatus(${orderId})">บันทึก</button><button class="btn-secondary" onclick="document.getElementById('mtoStatusModal').remove()">ยกเลิก</button></div></div></div>`;
+    // Show modal immediately with loading state for providers
+    const modalHtml = `<div class="modal-overlay active" id="mtoStatusModal" onclick="if(event.target===this)this.remove()"><div class="modal" style="max-width: 400px;"><div class="modal-header"><h3>อัปเดตสถานะ</h3><button class="modal-close" onclick="document.getElementById('mtoStatusModal').remove()">&times;</button></div><div class="modal-body"><div class="form-group"><label class="form-label">สถานะใหม่</label><select id="mtoNewStatus" class="form-control">${optionsHtml}</select></div><div id="shippingFields" style="display: none;"><div class="form-group"><label class="form-label">บริษัทขนส่ง</label><select id="mtoShippingProvider" class="form-control"><option value="">กำลังโหลด...</option></select></div><div class="form-group"><label class="form-label">เลขพัสดุ</label><input type="text" id="mtoTrackingNumber" class="form-control"></div></div></div><div class="modal-footer"><button class="btn-primary" onclick="updateMtoOrderStatus(${orderId})">บันทึก</button><button class="btn-secondary" onclick="document.getElementById('mtoStatusModal').remove()">ยกเลิก</button></div></div></div>`;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.getElementById('mtoNewStatus').addEventListener('change', function() { document.getElementById('shippingFields').style.display = this.value === 'shipped' ? 'block' : 'none'; });
+    
+    // Show shipping fields if current status is already shipped
+    if (currentStatus === 'shipped') {
+        document.getElementById('shippingFields').style.display = 'block';
+    }
+    
+    // Load shipping providers asynchronously
+    fetch('/api/shipping-providers', { credentials: 'include' })
+        .then(res => res.ok ? res.json() : [])
+        .then(providers => {
+            const select = document.getElementById('mtoShippingProvider');
+            if (select) {
+                let html = '<option value="">-- เลือกบริษัทขนส่ง --</option>';
+                html += providers.filter(p => p.is_active).map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+                select.innerHTML = html;
+            }
+        })
+        .catch(() => {
+            const select = document.getElementById('mtoShippingProvider');
+            if (select) select.innerHTML = '<option value="">-- เลือกบริษัทขนส่ง --</option>';
+        });
 }
 
 async function updateMtoOrderStatus(orderId) {

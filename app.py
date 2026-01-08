@@ -11788,6 +11788,12 @@ def admin_confirm_mto_payment(payment_id):
         
         conn.commit()
         
+        # Send payment confirmation email
+        try:
+            send_mto_payment_confirmed_email(order, payment)
+        except:
+            pass
+        
         return jsonify({
             'success': True,
             'message': 'ยืนยันการชำระเงินสำเร็จ'
@@ -11797,6 +11803,51 @@ def admin_confirm_mto_payment(payment_id):
         if conn:
             conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_mto_payment_confirmed_email(order, payment):
+    """Send payment confirmation email to reseller"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT email, full_name FROM users WHERE id = %s', (order['reseller_id'],))
+        reseller = cursor.fetchone()
+        
+        if not reseller or not reseller.get('email'):
+            return
+        
+        payment_type_text = "มัดจำ" if payment['payment_type'] == 'deposit' else "ยอดคงเหลือ"
+        next_step = 'สินค้าของคุณจะเข้าสู่กระบวนการผลิต' if payment['payment_type'] == 'deposit' else 'สินค้าจะถูกจัดส่งให้คุณเร็วๆ นี้'
+        
+        html = f"""
+        <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0;">EKG Shops</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">ยืนยันการชำระเงินสำเร็จ</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>สวัสดีคุณ {reseller['full_name']},</p>
+                <p>เราได้รับและยืนยันการชำระ{payment_type_text}ของคุณเรียบร้อยแล้ว</p>
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>เลขที่คำสั่งซื้อ:</strong> {order['order_number']}</p>
+                    <p><strong>ประเภท:</strong> {payment_type_text}</p>
+                    <p><strong>จำนวนเงิน:</strong> ฿{float(payment['amount']):,.2f}</p>
+                </div>
+                <p>{next_step}</p>
+                <a href="https://ekgshops.com" style="display: inline-block; background: #10b981; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; margin-top: 10px;">ติดตามสถานะ</a>
+            </div>
+        </div>
+        """
+        
+        send_email(reseller['email'], f"[EKG Shops] ยืนยันการชำระ{payment_type_text} {order['order_number']}", html)
+    except Exception as e:
+        print(f"Error sending payment confirmed email: {e}")
     finally:
         if cursor:
             cursor.close()
@@ -11886,10 +11937,17 @@ def admin_update_mto_order_status(order_id):
         
         conn.commit()
         
-        # Send email notification if balance requested
+        # Send email notifications based on status
         if new_status == 'balance_requested':
             try:
                 send_balance_request_email(order)
+            except:
+                pass
+        elif new_status == 'shipped':
+            try:
+                tracking = data.get('tracking_number', '')
+                provider = data.get('shipping_provider', '')
+                send_mto_shipped_email(order, tracking, provider)
             except:
                 pass
         
@@ -11902,6 +11960,65 @@ def admin_update_mto_order_status(order_id):
         if conn:
             conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_mto_shipped_email(order, tracking_number, shipping_provider):
+    """Send shipment notification email with tracking info"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT email, full_name FROM users WHERE id = %s', (order['reseller_id'],))
+        reseller = cursor.fetchone()
+        
+        # Get tracking URL from shipping provider
+        tracking_url = ''
+        if shipping_provider and tracking_number:
+            cursor.execute('SELECT tracking_url FROM shipping_providers WHERE name = %s', (shipping_provider,))
+            provider = cursor.fetchone()
+            if provider and provider.get('tracking_url'):
+                # Handle both {tracking} placeholder and base URL formats
+                base_url = provider['tracking_url']
+                if '{tracking}' in base_url:
+                    tracking_url = base_url.replace('{tracking}', tracking_number)
+                elif base_url:
+                    # Append tracking number if no placeholder
+                    tracking_url = base_url + tracking_number if not base_url.endswith('/') else base_url + tracking_number
+        
+        if not reseller or not reseller.get('email'):
+            return
+        
+        tracking_link_html = ''
+        if tracking_url:
+            tracking_link_html = f'<a href="{tracking_url}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; margin-top: 10px;">ติดตามพัสดุ</a>'
+        
+        html = f"""
+        <div style="font-family: 'Sarabun', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0;">EKG Shops</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">จัดส่งสินค้าแล้ว!</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p>สวัสดีคุณ {reseller['full_name']},</p>
+                <p>สินค้าสั่งผลิตของคุณได้จัดส่งเรียบร้อยแล้ว</p>
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>เลขที่คำสั่งซื้อ:</strong> {order['order_number']}</p>
+                    <p><strong>บริษัทขนส่ง:</strong> {shipping_provider or '-'}</p>
+                    <p><strong>เลขพัสดุ:</strong> {tracking_number or '-'}</p>
+                </div>
+                {tracking_link_html}
+            </div>
+        </div>
+        """
+        
+        send_email(reseller['email'], f"[EKG Shops] จัดส่งสินค้าแล้ว {order['order_number']}", html)
+    except Exception as e:
+        print(f"Error sending shipped email: {e}")
     finally:
         if cursor:
             cursor.close()
