@@ -145,7 +145,7 @@
                 <p>กำลังโหลดข้อมูลสินค้า...</p>
             </div>
             
-            <form id="mtoProductForm" style="display: none;">
+            <form id="mtoProductForm" style="display: none;" onkeydown="return event.key !== 'Enter' || event.target.tagName === 'TEXTAREA';">
                 <input type="hidden" id="productId">
                 
                 <div class="section-card">

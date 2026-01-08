@@ -545,7 +545,7 @@
         </header>
 
         <main class="full-page-content">
-            <form id="mtoProductForm">
+            <form id="mtoProductForm" onkeydown="return event.key !== 'Enter' || event.target.tagName === 'TEXTAREA';">
                 <div class="section-card">
                     <h2 class="section-title">1. ข้อมูลสินค้าหลัก</h2>
                     
