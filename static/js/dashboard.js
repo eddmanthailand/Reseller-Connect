@@ -426,9 +426,10 @@ function setupEventListeners() {
         item.addEventListener('click', (e) => {
             // Allow external links to navigate normally
             if (item.classList.contains('nav-link-external')) {
+                e.preventDefault();
                 e.stopPropagation();
                 window.open(item.href, '_blank');
-                return;
+                return false;
             }
             
             e.preventDefault();
