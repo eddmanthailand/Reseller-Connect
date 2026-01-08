@@ -808,14 +808,13 @@
                 const data = await response.json();
                 const select = document.getElementById('category_id');
                 
-                if (data.categories) {
-                    data.categories.forEach(cat => {
-                        const option = document.createElement('option');
-                        option.value = cat.id;
-                        option.textContent = cat.name;
-                        select.appendChild(option);
-                    });
-                }
+                const categories = Array.isArray(data) ? data : (data.categories || []);
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat.id;
+                    option.textContent = cat.name;
+                    select.appendChild(option);
+                });
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
