@@ -506,6 +506,128 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_page_visits_source ON page_visits(source)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_page_visits_created_at ON page_visits(created_at)')
         
+        # ==================== IN-APP CHAT SYSTEM ====================
+        
+        # Chat threads table (1-to-1 conversation between admin and reseller)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_threads (
+                id SERIAL PRIMARY KEY,
+                reseller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                last_message_at TIMESTAMP,
+                last_message_preview TEXT,
+                is_archived BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(reseller_id)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_threads_reseller ON chat_threads(reseller_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_threads_last_message ON chat_threads(last_message_at DESC)')
+        
+        # Chat messages table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id SERIAL PRIMARY KEY,
+                thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+                sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                sender_type VARCHAR(20) NOT NULL,
+                content TEXT,
+                is_broadcast BOOLEAN DEFAULT FALSE,
+                broadcast_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_id)')
+        
+        # Chat message attachments table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_attachments (
+                id SERIAL PRIMARY KEY,
+                message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+                file_url TEXT NOT NULL,
+                file_name VARCHAR(255),
+                file_type VARCHAR(50),
+                file_size INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_attachments(message_id)')
+        
+        # Chat read status table (tracks last read message per user per thread)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_read_status (
+                id SERIAL PRIMARY KEY,
+                thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                last_read_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
+                last_read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(thread_id, user_id)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_read_status_thread_user ON chat_read_status(thread_id, user_id)')
+        
+        # Quick reply templates table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_quick_replies (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(100) NOT NULL,
+                content TEXT NOT NULL,
+                shortcut VARCHAR(50),
+                sort_order INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # User notification settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_notification_settings (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                email_enabled BOOLEAN DEFAULT TRUE,
+                email_frequency VARCHAR(20) DEFAULT 'smart',
+                email_delay_minutes INTEGER DEFAULT 10,
+                in_app_enabled BOOLEAN DEFAULT TRUE,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id)
+            )
+        ''')
+        
+        # Broadcast messages table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_broadcasts (
+                id SERIAL PRIMARY KEY,
+                sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(255),
+                content TEXT NOT NULL,
+                target_type VARCHAR(20) DEFAULT 'all',
+                target_tier_id INTEGER REFERENCES reseller_tiers(id),
+                sent_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_broadcasts_sender ON chat_broadcasts(sender_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_broadcasts_created ON chat_broadcasts(created_at DESC)')
+        
+        # Pending email notifications table (for smart email scheduling)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chat_pending_emails (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+                message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+                scheduled_at TIMESTAMP NOT NULL,
+                sent_at TIMESTAMP,
+                is_sent BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_pending_emails_scheduled ON chat_pending_emails(scheduled_at) WHERE is_sent = FALSE')
+        
+        # ==================== END CHAT SYSTEM ====================
+        
         # Insert default sales channels
         default_channels = [
             ('ระบบออนไลน์', 'การสั่งซื้อผ่านระบบตะกร้าสินค้า', 1),

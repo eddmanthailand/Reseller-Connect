@@ -12466,5 +12466,738 @@ def admin_get_mto_stats():
         if conn:
             conn.close()
 
+# ==================== IN-APP CHAT SYSTEM ====================
+
+@app.route('/api/chat/threads', methods=['GET'])
+@login_required
+def get_chat_threads():
+    """Get chat threads for current user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        
+        if role_name == 'Reseller':
+            # Reseller sees only their own thread
+            cursor.execute('''
+                SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
+                       u.full_name as reseller_name,
+                       (SELECT COUNT(*) FROM chat_messages cm 
+                        WHERE cm.thread_id = ct.id 
+                        AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                              WHERE thread_id = ct.id AND user_id = %s), 0)) as unread_count
+                FROM chat_threads ct
+                JOIN users u ON u.id = ct.reseller_id
+                WHERE ct.reseller_id = %s AND ct.is_archived = FALSE
+                ORDER BY ct.last_message_at DESC NULLS LAST
+            ''', (user_id, user_id))
+        else:
+            # Admin sees all threads
+            cursor.execute('''
+                SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
+                       u.full_name as reseller_name, u.username,
+                       rt.name as tier_name,
+                       (SELECT COUNT(*) FROM chat_messages cm 
+                        WHERE cm.thread_id = ct.id 
+                        AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                              WHERE thread_id = ct.id AND user_id = %s), 0)) as unread_count
+                FROM chat_threads ct
+                JOIN users u ON u.id = ct.reseller_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.tier_id
+                WHERE ct.is_archived = FALSE
+                ORDER BY ct.last_message_at DESC NULLS LAST
+            ''', (user_id,))
+        
+        threads = [dict(row) for row in cursor.fetchall()]
+        return jsonify(threads), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/threads/<int:thread_id>/messages', methods=['GET'])
+@login_required
+def get_chat_messages(thread_id):
+    """Get messages for a thread"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        
+        # Verify access
+        cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({'error': 'Thread not found'}), 404
+        
+        if role_name == 'Reseller' and thread['reseller_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        since_id = request.args.get('since_id', 0, type=int)
+        limit = request.args.get('limit', 50, type=int)
+        
+        cursor.execute('''
+            SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at,
+                   u.full_name as sender_name,
+                   (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
+                    'file_name', ca.file_name, 'file_type', ca.file_type))
+                    FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
+            FROM chat_messages cm
+            JOIN users u ON u.id = cm.sender_id
+            WHERE cm.thread_id = %s AND cm.id > %s
+            ORDER BY cm.created_at ASC
+            LIMIT %s
+        ''', (thread_id, since_id, limit))
+        
+        messages = [dict(row) for row in cursor.fetchall()]
+        
+        # Mark as read
+        if messages:
+            last_message_id = messages[-1]['id']
+            cursor.execute('''
+                INSERT INTO chat_read_status (thread_id, user_id, last_read_message_id, last_read_at)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (thread_id, user_id) 
+                DO UPDATE SET last_read_message_id = GREATEST(chat_read_status.last_read_message_id, %s),
+                              last_read_at = CURRENT_TIMESTAMP
+            ''', (thread_id, user_id, last_message_id, last_message_id))
+            conn.commit()
+        
+        return jsonify(messages), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/threads/<int:thread_id>/messages', methods=['POST'])
+@login_required
+def send_chat_message(thread_id):
+    """Send a message to a thread"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        
+        # Verify access
+        cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({'error': 'Thread not found'}), 404
+        
+        if role_name == 'Reseller' and thread['reseller_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        attachments = data.get('attachments', [])
+        
+        if not content and not attachments:
+            return jsonify({'error': 'Message content or attachments required'}), 400
+        
+        sender_type = 'reseller' if role_name == 'Reseller' else 'admin'
+        
+        # Insert message
+        cursor.execute('''
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content)
+            VALUES (%s, %s, %s, %s) RETURNING id, created_at
+        ''', (thread_id, user_id, sender_type, content))
+        result = cursor.fetchone()
+        message_id = result['id']
+        
+        # Insert attachments
+        for attachment in attachments:
+            cursor.execute('''
+                INSERT INTO chat_attachments (message_id, file_url, file_name, file_type, file_size)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (message_id, attachment.get('file_url'), attachment.get('file_name'),
+                  attachment.get('file_type'), attachment.get('file_size')))
+        
+        # Update thread last message
+        preview = content[:100] if content else '[รูปภาพ]'
+        cursor.execute('''
+            UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s
+            WHERE id = %s
+        ''', (preview, thread_id))
+        
+        # Schedule email notification for recipient
+        recipient_id = thread['reseller_id'] if sender_type == 'admin' else None
+        if recipient_id is None and sender_type == 'reseller':
+            # Get any admin to notify (in real system, notify all admins or assigned admin)
+            cursor.execute("SELECT id FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'Super Admin') LIMIT 1")
+            admin = cursor.fetchone()
+            if admin:
+                recipient_id = admin['id']
+        
+        if recipient_id:
+            # Check user notification settings
+            cursor.execute('''
+                SELECT email_enabled, email_delay_minutes 
+                FROM chat_notification_settings WHERE user_id = %s
+            ''', (recipient_id,))
+            settings = cursor.fetchone()
+            
+            if settings is None or settings['email_enabled']:
+                delay_minutes = settings['email_delay_minutes'] if settings else 10
+                cursor.execute('''
+                    INSERT INTO chat_pending_emails (user_id, thread_id, message_id, scheduled_at)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP + INTERVAL '%s minutes')
+                ''', (recipient_id, thread_id, message_id, delay_minutes))
+        
+        conn.commit()
+        
+        return jsonify({
+            'id': message_id,
+            'created_at': result['created_at'].isoformat()
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/unread-count', methods=['GET'])
+@login_required
+def get_chat_unread_count():
+    """Get total unread message count for current user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        
+        if role_name == 'Reseller':
+            cursor.execute('''
+                SELECT COALESCE(SUM(
+                    (SELECT COUNT(*) FROM chat_messages cm 
+                     WHERE cm.thread_id = ct.id 
+                     AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                           WHERE thread_id = ct.id AND user_id = %s), 0))
+                ), 0) as total_unread
+                FROM chat_threads ct
+                WHERE ct.reseller_id = %s AND ct.is_archived = FALSE
+            ''', (user_id, user_id))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(SUM(
+                    (SELECT COUNT(*) FROM chat_messages cm 
+                     WHERE cm.thread_id = ct.id 
+                     AND cm.sender_type = 'reseller'
+                     AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                           WHERE thread_id = ct.id AND user_id = %s), 0))
+                ), 0) as total_unread
+                FROM chat_threads ct
+                WHERE ct.is_archived = FALSE
+            ''', (user_id,))
+        
+        result = cursor.fetchone()
+        return jsonify({'unread_count': result['total_unread']}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/start/<int:reseller_id>', methods=['POST'])
+@login_required
+def start_chat_thread(reseller_id):
+    """Start or get existing chat thread with a reseller"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        
+        # Reseller can only start chat for themselves
+        if role_name == 'Reseller' and reseller_id != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Check if thread exists
+        cursor.execute('SELECT id FROM chat_threads WHERE reseller_id = %s', (reseller_id,))
+        thread = cursor.fetchone()
+        
+        if thread:
+            return jsonify({'thread_id': thread['id'], 'is_new': False}), 200
+        
+        # Create new thread
+        cursor.execute('''
+            INSERT INTO chat_threads (reseller_id) VALUES (%s) RETURNING id
+        ''', (reseller_id,))
+        new_thread = cursor.fetchone()
+        conn.commit()
+        
+        return jsonify({'thread_id': new_thread['id'], 'is_new': True}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Quick Replies Management
+@app.route('/api/chat/quick-replies', methods=['GET'])
+@login_required
+def get_quick_replies():
+    """Get all quick reply templates"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, title, content, shortcut, sort_order
+            FROM chat_quick_replies
+            WHERE is_active = TRUE
+            ORDER BY sort_order, title
+        ''')
+        
+        replies = [dict(row) for row in cursor.fetchall()]
+        return jsonify(replies), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/quick-replies', methods=['POST'])
+@admin_required
+def create_quick_reply():
+    """Create a quick reply template"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        content = data.get('content', '').strip()
+        shortcut = data.get('shortcut', '').strip()
+        
+        if not title or not content:
+            return jsonify({'error': 'Title and content required'}), 400
+        
+        cursor.execute('''
+            INSERT INTO chat_quick_replies (title, content, shortcut, created_by)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        ''', (title, content, shortcut, session['user_id']))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        
+        return jsonify({'id': result['id'], 'message': 'Quick reply created'}), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/quick-replies/<int:reply_id>', methods=['PUT'])
+@admin_required
+def update_quick_reply(reply_id):
+    """Update a quick reply template"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        content = data.get('content', '').strip()
+        shortcut = data.get('shortcut', '').strip()
+        
+        cursor.execute('''
+            UPDATE chat_quick_replies 
+            SET title = %s, content = %s, shortcut = %s
+            WHERE id = %s
+        ''', (title, content, shortcut, reply_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Quick reply updated'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/quick-replies/<int:reply_id>', methods=['DELETE'])
+@admin_required
+def delete_quick_reply(reply_id):
+    """Delete a quick reply template"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('UPDATE chat_quick_replies SET is_active = FALSE WHERE id = %s', (reply_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Quick reply deleted'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Broadcast Messages
+@app.route('/api/chat/broadcast', methods=['POST'])
+@admin_required
+def send_broadcast_message():
+    """Send broadcast message to all or selected resellers"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        title = data.get('title', '').strip()
+        target_type = data.get('target_type', 'all')  # all, tier
+        target_tier_id = data.get('target_tier_id')
+        
+        if not content:
+            return jsonify({'error': 'Content required'}), 400
+        
+        user_id = session['user_id']
+        
+        # Create broadcast record
+        cursor.execute('''
+            INSERT INTO chat_broadcasts (sender_id, title, content, target_type, target_tier_id)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        ''', (user_id, title, content, target_type, target_tier_id))
+        broadcast = cursor.fetchone()
+        broadcast_id = broadcast['id']
+        
+        # Get target resellers
+        if target_type == 'tier' and target_tier_id:
+            cursor.execute('''
+                SELECT id FROM users 
+                WHERE role_id = (SELECT id FROM roles WHERE name = 'Reseller')
+                AND tier_id = %s
+            ''', (target_tier_id,))
+        else:
+            cursor.execute('''
+                SELECT id FROM users 
+                WHERE role_id = (SELECT id FROM roles WHERE name = 'Reseller')
+            ''')
+        
+        resellers = cursor.fetchall()
+        sent_count = 0
+        
+        for reseller in resellers:
+            reseller_id = reseller['id']
+            
+            # Get or create thread
+            cursor.execute('SELECT id FROM chat_threads WHERE reseller_id = %s', (reseller_id,))
+            thread = cursor.fetchone()
+            
+            if not thread:
+                cursor.execute('INSERT INTO chat_threads (reseller_id) VALUES (%s) RETURNING id', (reseller_id,))
+                thread = cursor.fetchone()
+            
+            thread_id = thread['id']
+            
+            # Insert broadcast message
+            cursor.execute('''
+                INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, is_broadcast, broadcast_id)
+                VALUES (%s, %s, 'admin', %s, TRUE, %s)
+            ''', (thread_id, user_id, content, broadcast_id))
+            
+            # Update thread
+            preview = content[:100]
+            cursor.execute('''
+                UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s
+                WHERE id = %s
+            ''', (preview, thread_id))
+            
+            sent_count += 1
+        
+        # Update broadcast sent count
+        cursor.execute('UPDATE chat_broadcasts SET sent_count = %s WHERE id = %s', (sent_count, broadcast_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'message': f'Broadcast sent to {sent_count} resellers',
+            'broadcast_id': broadcast_id,
+            'sent_count': sent_count
+        }), 201
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/broadcasts', methods=['GET'])
+@admin_required
+def get_broadcast_history():
+    """Get broadcast message history"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT cb.id, cb.title, cb.content, cb.target_type, cb.sent_count, cb.created_at,
+                   u.full_name as sender_name,
+                   rt.name as target_tier_name
+            FROM chat_broadcasts cb
+            JOIN users u ON u.id = cb.sender_id
+            LEFT JOIN reseller_tiers rt ON rt.id = cb.target_tier_id
+            ORDER BY cb.created_at DESC
+            LIMIT 50
+        ''')
+        
+        broadcasts = [dict(row) for row in cursor.fetchall()]
+        return jsonify(broadcasts), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Notification Settings
+@app.route('/api/chat/notification-settings', methods=['GET'])
+@login_required
+def get_notification_settings():
+    """Get notification settings for current user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        
+        cursor.execute('SELECT * FROM chat_notification_settings WHERE user_id = %s', (user_id,))
+        settings = cursor.fetchone()
+        
+        if not settings:
+            # Return defaults
+            return jsonify({
+                'email_enabled': True,
+                'email_frequency': 'smart',
+                'email_delay_minutes': 10,
+                'in_app_enabled': True
+            }), 200
+        
+        return jsonify(dict(settings)), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/notification-settings', methods=['PUT'])
+@login_required
+def update_notification_settings():
+    """Update notification settings for current user"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        user_id = session['user_id']
+        data = request.get_json()
+        
+        email_enabled = data.get('email_enabled', True)
+        email_frequency = data.get('email_frequency', 'smart')
+        email_delay_minutes = data.get('email_delay_minutes', 10)
+        in_app_enabled = data.get('in_app_enabled', True)
+        
+        cursor.execute('''
+            INSERT INTO chat_notification_settings (user_id, email_enabled, email_frequency, email_delay_minutes, in_app_enabled)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id) 
+            DO UPDATE SET email_enabled = %s, email_frequency = %s, email_delay_minutes = %s, 
+                          in_app_enabled = %s, updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, email_enabled, email_frequency, email_delay_minutes, in_app_enabled,
+              email_enabled, email_frequency, email_delay_minutes, in_app_enabled))
+        
+        conn.commit()
+        return jsonify({'message': 'Settings updated'}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Chat attachment upload
+@app.route('/api/chat/upload', methods=['POST'])
+@login_required
+def upload_chat_attachment():
+    """Upload file for chat message"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file type
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 
+                         'application/pdf', 'application/msword',
+                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        
+        if file.content_type not in allowed_types:
+            return jsonify({'error': 'File type not allowed'}), 400
+        
+        # Generate unique filename
+        import uuid
+        ext = file.filename.rsplit('.', 1)[-1] if '.' in file.filename else ''
+        unique_filename = f"chat_{uuid.uuid4().hex}.{ext}"
+        
+        # Save to object storage or static folder
+        upload_folder = 'static/uploads/chat'
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, unique_filename)
+        file.save(file_path)
+        
+        file_url = f'/static/uploads/chat/{unique_filename}'
+        
+        return jsonify({
+            'file_url': file_url,
+            'file_name': file.filename,
+            'file_type': file.content_type,
+            'file_size': os.path.getsize(file_path)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Search messages
+@app.route('/api/chat/search', methods=['GET'])
+@login_required
+def search_chat_messages():
+    """Search chat messages"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        query = request.args.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return jsonify([]), 200
+        
+        search_pattern = f'%{query}%'
+        
+        if role_name == 'Reseller':
+            cursor.execute('''
+                SELECT cm.id, cm.content, cm.created_at, ct.id as thread_id,
+                       u.full_name as sender_name
+                FROM chat_messages cm
+                JOIN chat_threads ct ON ct.id = cm.thread_id
+                JOIN users u ON u.id = cm.sender_id
+                WHERE ct.reseller_id = %s AND cm.content ILIKE %s
+                ORDER BY cm.created_at DESC
+                LIMIT 50
+            ''', (user_id, search_pattern))
+        else:
+            cursor.execute('''
+                SELECT cm.id, cm.content, cm.created_at, ct.id as thread_id,
+                       u.full_name as sender_name,
+                       r.full_name as reseller_name
+                FROM chat_messages cm
+                JOIN chat_threads ct ON ct.id = cm.thread_id
+                JOIN users u ON u.id = cm.sender_id
+                JOIN users r ON r.id = ct.reseller_id
+                WHERE cm.content ILIKE %s
+                ORDER BY cm.created_at DESC
+                LIMIT 50
+            ''', (search_pattern,))
+        
+        results = [dict(row) for row in cursor.fetchall()]
+        return jsonify(results), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
