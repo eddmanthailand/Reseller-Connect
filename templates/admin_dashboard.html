@@ -214,6 +214,16 @@
                     <span class="sidebar-text">ขายด่วน</span>
                 </a>
                 
+                <a href="#" class="nav-item" data-page="chat">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">แชทกับตัวแทน</span>
+                    <span class="pending-badge" id="chatUnreadCount" style="display: none;">0</span>
+                </a>
+                
                 <a href="#" class="nav-item has-submenu" data-page="mto-management">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2540,6 +2550,152 @@
                             <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Chat Page -->
+            <div id="page-chat" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        แชทกับตัวแทน
+                    </h1>
+                    <p>สื่อสารกับตัวแทนจำหน่ายทั้งหมด</p>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 200px); min-height: 500px;">
+                    <!-- Thread List -->
+                    <div class="card" style="display: flex; flex-direction: column; overflow: hidden;">
+                        <div style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                                <input type="text" id="chatSearchInput" placeholder="ค้นหาข้อความ..." style="flex: 1; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white; font-size: 13px;">
+                                <button onclick="searchChatMessages()" class="btn btn-sm" style="padding: 8px 12px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                </button>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="openBroadcastModal()" class="btn btn-primary btn-sm" style="flex: 1; font-size: 12px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                                    Broadcast
+                                </button>
+                                <button onclick="openQuickRepliesModal()" class="btn btn-sm" style="flex: 1; font-size: 12px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                    Quick Replies
+                                </button>
+                            </div>
+                        </div>
+                        <div id="chatThreadsList" style="flex: 1; overflow-y: auto; padding: 8px;">
+                            <div style="text-align: center; padding: 40px 16px; color: rgba(255,255,255,0.5);">กำลังโหลด...</div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Window -->
+                    <div class="card" style="display: flex; flex-direction: column; overflow: hidden;">
+                        <div id="chatHeader" style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: none;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;" id="chatAvatarInitial">?</div>
+                                <div>
+                                    <div style="font-weight: 600;" id="chatResellerName">-</div>
+                                    <div style="font-size: 12px; opacity: 0.6;" id="chatResellerTier">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="chatMessagesContainer" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div style="text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.4);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 16px; opacity: 0.3;">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                </svg>
+                                <p>เลือกการสนทนาจากรายการทางซ้าย</p>
+                            </div>
+                        </div>
+                        <div id="chatInputArea" style="padding: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: none;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;" id="quickReplyButtons"></div>
+                            <div style="display: flex; gap: 8px;">
+                                <label style="cursor: pointer; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center;">
+                                    <input type="file" id="chatFileInput" accept="image/*,.pdf,.doc,.docx" style="display: none;" onchange="handleChatFileUpload(event)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                </label>
+                                <input type="text" id="chatMessageInput" placeholder="พิมพ์ข้อความ..." style="flex: 1; padding: 10px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white;" onkeydown="if(event.key==='Enter')sendChatMessage()">
+                                <button onclick="sendChatMessage()" class="btn btn-primary" style="padding: 10px 20px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                </button>
+                            </div>
+                            <div id="chatAttachmentPreview" style="margin-top: 8px; display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Broadcast Modal -->
+            <div id="broadcastModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>ส่ง Broadcast</h3>
+                        <button onclick="closeBroadcastModal()" class="btn-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>หัวข้อ (ไม่บังคับ)</label>
+                            <input type="text" id="broadcastTitle" placeholder="หัวข้อข้อความ" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>เลือกกลุ่มเป้าหมาย</label>
+                            <select id="broadcastTarget" class="form-control" onchange="toggleBroadcastTier()">
+                                <option value="all">ตัวแทนทั้งหมด</option>
+                                <option value="tier">เลือกตาม Tier</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="broadcastTierSelect" style="display: none;">
+                            <label>เลือก Tier</label>
+                            <select id="broadcastTierId" class="form-control">
+                                <option value="">เลือก Tier</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>ข้อความ</label>
+                            <textarea id="broadcastContent" rows="4" placeholder="พิมพ์ข้อความที่ต้องการส่ง..." class="form-control"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button onclick="closeBroadcastModal()" class="btn">ยกเลิก</button>
+                        <button onclick="sendBroadcast()" class="btn btn-primary">ส่ง Broadcast</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Replies Modal -->
+            <div id="quickRepliesModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 600px;">
+                    <div class="modal-header">
+                        <h3>จัดการ Quick Replies</h3>
+                        <button onclick="closeQuickRepliesModal()" class="btn-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 16px;">
+                            <button onclick="showAddQuickReplyForm()" class="btn btn-primary btn-sm">+ เพิ่ม Quick Reply</button>
+                        </div>
+                        <div id="addQuickReplyForm" style="display: none; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 16px;">
+                            <div class="form-group">
+                                <label>ชื่อ</label>
+                                <input type="text" id="newQuickReplyTitle" placeholder="ชื่อ Quick Reply" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Shortcut (เช่น /hi)</label>
+                                <input type="text" id="newQuickReplyShortcut" placeholder="/hi" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>ข้อความ</label>
+                                <textarea id="newQuickReplyContent" rows="3" placeholder="ข้อความตอบกลับ" class="form-control"></textarea>
+                            </div>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button onclick="hideAddQuickReplyForm()" class="btn btn-sm">ยกเลิก</button>
+                                <button onclick="saveQuickReply()" class="btn btn-primary btn-sm">บันทึก</button>
+                            </div>
+                        </div>
+                        <div id="quickRepliesList"></div>
+                    </div>
                 </div>
             </div>
 

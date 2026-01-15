@@ -576,6 +576,10 @@ function switchPage(pageName) {
         loadMtoOrders();
     } else if (pageName === 'mto-payments') {
         loadMtoPayments();
+    } else if (pageName === 'chat') {
+        loadChatThreads();
+        loadChatUnreadCount();
+        startChatPolling();
     }
 }
 
@@ -7834,6 +7838,496 @@ async function deleteMtoProduct(productId, productName) {
         } else {
             showAlert('error', result.error || 'เกิดข้อผิดพลาด');
         }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+// ==================== CHAT SYSTEM ====================
+
+let currentChatThreadId = null;
+let chatPollingInterval = null;
+let lastMessageId = 0;
+let chatQuickReplies = [];
+let pendingChatAttachments = [];
+
+async function loadChatThreads() {
+    try {
+        const response = await fetch('/api/chat/threads', {
+            credentials: 'include'
+        });
+        const threads = await response.json();
+        
+        const container = document.getElementById('chatThreadsList');
+        if (!container) return;
+        
+        if (threads.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px 16px; color: rgba(255,255,255,0.5);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 12px; opacity: 0.3;">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <p>ยังไม่มีการสนทนา</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = threads.map(thread => `
+            <div class="chat-thread-item ${currentChatThreadId === thread.id ? 'active' : ''}" 
+                 onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}')"
+                 style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; background: ${currentChatThreadId === thread.id ? 'rgba(102,126,234,0.2)' : 'transparent'}; transition: background 0.2s;">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">
+                    ${thread.reseller_name.charAt(0).toUpperCase()}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; font-size: 14px;">${escapeHtml(thread.reseller_name)}</span>
+                        ${thread.unread_count > 0 ? `<span style="background: #ef4444; color: white; font-size: 11px; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center;">${thread.unread_count}</span>` : ''}
+                    </div>
+                    <div style="font-size: 12px; opacity: 0.6; margin-top: 2px;">${thread.tier_name || 'ไม่ระบุ Tier'}</div>
+                    <div style="font-size: 12px; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px;">${escapeHtml(thread.last_message_preview || 'ยังไม่มีข้อความ')}</div>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading chat threads:', error);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function selectChatThread(threadId, resellerName, tierName) {
+    currentChatThreadId = threadId;
+    lastMessageId = 0;
+    
+    document.getElementById('chatHeader').style.display = 'block';
+    document.getElementById('chatInputArea').style.display = 'block';
+    document.getElementById('chatAvatarInitial').textContent = resellerName.charAt(0).toUpperCase();
+    document.getElementById('chatResellerName').textContent = resellerName;
+    document.getElementById('chatResellerTier').textContent = tierName || 'ไม่ระบุ Tier';
+    
+    await loadChatMessages(threadId);
+    loadChatThreads();
+    loadQuickReplyButtons();
+    startChatPolling();
+}
+
+async function loadChatMessages(threadId) {
+    try {
+        const response = await fetch(`/api/chat/threads/${threadId}/messages?since_id=${lastMessageId}`, {
+            credentials: 'include'
+        });
+        const messages = await response.json();
+        
+        const container = document.getElementById('chatMessagesContainer');
+        if (!container) return;
+        
+        if (lastMessageId === 0) {
+            container.innerHTML = '';
+        }
+        
+        messages.forEach(msg => {
+            const isAdmin = msg.sender_type === 'admin';
+            const msgHtml = `
+                <div style="display: flex; ${isAdmin ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
+                    <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isAdmin ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
+                        ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
+                        <div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>
+                        ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
+                            att.file_type && att.file_type.startsWith('image/') 
+                                ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
+                                : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtml(att.file_name)}</a>`
+                        ).join('') : ''}
+                        <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;">${formatChatTime(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', msgHtml);
+            lastMessageId = Math.max(lastMessageId, msg.id);
+        });
+        
+        container.scrollTop = container.scrollHeight;
+        
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
+}
+
+function formatChatTime(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+        return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        return 'เมื่อวาน ' + date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    } else {
+        return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    }
+}
+
+async function sendChatMessage() {
+    if (!currentChatThreadId) return;
+    
+    const input = document.getElementById('chatMessageInput');
+    const content = input.value.trim();
+    
+    if (!content && pendingChatAttachments.length === 0) return;
+    
+    try {
+        const response = await fetch(`/api/chat/threads/${currentChatThreadId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                content: content,
+                attachments: pendingChatAttachments
+            })
+        });
+        
+        if (response.ok) {
+            input.value = '';
+            pendingChatAttachments = [];
+            document.getElementById('chatAttachmentPreview').style.display = 'none';
+            document.getElementById('chatAttachmentPreview').innerHTML = '';
+            await loadChatMessages(currentChatThreadId);
+            loadChatThreads();
+        } else {
+            const error = await response.json();
+            showAlert('error', error.error || 'ไม่สามารถส่งข้อความได้');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function handleChatFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/chat/upload', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            pendingChatAttachments.push(result);
+            updateChatAttachmentPreview();
+        } else {
+            showAlert('error', result.error || 'อัปโหลดไม่สำเร็จ');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+    
+    event.target.value = '';
+}
+
+function updateChatAttachmentPreview() {
+    const container = document.getElementById('chatAttachmentPreview');
+    if (pendingChatAttachments.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    container.style.gap = '8px';
+    container.style.flexWrap = 'wrap';
+    
+    container.innerHTML = pendingChatAttachments.map((att, i) => `
+        <div style="position: relative; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 12px;">
+            ${att.file_type && att.file_type.startsWith('image/') ? '🖼️' : '📎'} ${escapeHtml(att.file_name)}
+            <button onclick="removeChatAttachment(${i})" style="position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: #ef4444; border: none; color: white; cursor: pointer; font-size: 12px; line-height: 1;">×</button>
+        </div>
+    `).join('');
+}
+
+function removeChatAttachment(index) {
+    pendingChatAttachments.splice(index, 1);
+    updateChatAttachmentPreview();
+}
+
+function startChatPolling() {
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
+    chatPollingInterval = setInterval(() => {
+        if (currentChatThreadId) {
+            loadChatMessages(currentChatThreadId);
+        }
+        loadChatUnreadCount();
+    }, 5000);
+}
+
+function stopChatPolling() {
+    if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+        chatPollingInterval = null;
+    }
+}
+
+async function loadChatUnreadCount() {
+    try {
+        const response = await fetch('/api/chat/unread-count', { credentials: 'include' });
+        const data = await response.json();
+        
+        const badge = document.getElementById('chatUnreadCount');
+        if (badge) {
+            if (data.unread_count > 0) {
+                badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading unread count:', error);
+    }
+}
+
+// Quick Replies
+async function loadQuickReplyButtons() {
+    try {
+        const response = await fetch('/api/chat/quick-replies', { credentials: 'include' });
+        chatQuickReplies = await response.json();
+        
+        const container = document.getElementById('quickReplyButtons');
+        if (!container) return;
+        
+        container.innerHTML = chatQuickReplies.slice(0, 5).map(qr => `
+            <button onclick="insertQuickReply('${escapeHtml(qr.content)}')" class="btn btn-sm" style="font-size: 11px; padding: 4px 8px;">
+                ${escapeHtml(qr.title)}
+            </button>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading quick replies:', error);
+    }
+}
+
+function insertQuickReply(content) {
+    const input = document.getElementById('chatMessageInput');
+    input.value = content;
+    input.focus();
+}
+
+// Broadcast Modal
+function openBroadcastModal() {
+    document.getElementById('broadcastModal').style.display = 'flex';
+    loadTiersForBroadcast();
+}
+
+function closeBroadcastModal() {
+    document.getElementById('broadcastModal').style.display = 'none';
+    document.getElementById('broadcastTitle').value = '';
+    document.getElementById('broadcastContent').value = '';
+}
+
+function toggleBroadcastTier() {
+    const target = document.getElementById('broadcastTarget').value;
+    document.getElementById('broadcastTierSelect').style.display = target === 'tier' ? 'block' : 'none';
+}
+
+async function loadTiersForBroadcast() {
+    try {
+        const response = await fetch('/api/tiers', { credentials: 'include' });
+        const tiers = await response.json();
+        
+        const select = document.getElementById('broadcastTierId');
+        select.innerHTML = '<option value="">เลือก Tier</option>' + 
+            tiers.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading tiers:', error);
+    }
+}
+
+async function sendBroadcast() {
+    const title = document.getElementById('broadcastTitle').value.trim();
+    const content = document.getElementById('broadcastContent').value.trim();
+    const targetType = document.getElementById('broadcastTarget').value;
+    const targetTierId = document.getElementById('broadcastTierId').value || null;
+    
+    if (!content) {
+        showAlert('error', 'กรุณากรอกข้อความ');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/chat/broadcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                title,
+                content,
+                target_type: targetType,
+                target_tier_id: targetTierId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('success', result.message || 'ส่ง Broadcast สำเร็จ');
+            closeBroadcastModal();
+            loadChatThreads();
+        } else {
+            showAlert('error', result.error || 'ไม่สามารถส่ง Broadcast ได้');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+// Quick Replies Management Modal
+function openQuickRepliesModal() {
+    document.getElementById('quickRepliesModal').style.display = 'flex';
+    loadQuickRepliesList();
+}
+
+function closeQuickRepliesModal() {
+    document.getElementById('quickRepliesModal').style.display = 'none';
+}
+
+async function loadQuickRepliesList() {
+    try {
+        const response = await fetch('/api/chat/quick-replies', { credentials: 'include' });
+        const replies = await response.json();
+        
+        const container = document.getElementById('quickRepliesList');
+        
+        if (replies.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">ยังไม่มี Quick Reply</div>';
+            return;
+        }
+        
+        container.innerHTML = replies.map(qr => `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;">${escapeHtml(qr.title)}</div>
+                    <div style="font-size: 12px; opacity: 0.6;">${qr.shortcut ? 'Shortcut: ' + escapeHtml(qr.shortcut) : ''}</div>
+                    <div style="font-size: 13px; margin-top: 4px; opacity: 0.8;">${escapeHtml(qr.content.substring(0, 100))}${qr.content.length > 100 ? '...' : ''}</div>
+                </div>
+                <button onclick="deleteQuickReply(${qr.id})" class="btn btn-sm" style="color: #ef4444;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading quick replies:', error);
+    }
+}
+
+function showAddQuickReplyForm() {
+    document.getElementById('addQuickReplyForm').style.display = 'block';
+}
+
+function hideAddQuickReplyForm() {
+    document.getElementById('addQuickReplyForm').style.display = 'none';
+    document.getElementById('newQuickReplyTitle').value = '';
+    document.getElementById('newQuickReplyShortcut').value = '';
+    document.getElementById('newQuickReplyContent').value = '';
+}
+
+async function saveQuickReply() {
+    const title = document.getElementById('newQuickReplyTitle').value.trim();
+    const shortcut = document.getElementById('newQuickReplyShortcut').value.trim();
+    const content = document.getElementById('newQuickReplyContent').value.trim();
+    
+    if (!title || !content) {
+        showAlert('error', 'กรุณากรอกชื่อและข้อความ');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/chat/quick-replies', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({ title, shortcut, content })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('success', 'เพิ่ม Quick Reply สำเร็จ');
+            hideAddQuickReplyForm();
+            loadQuickRepliesList();
+            loadQuickReplyButtons();
+        } else {
+            showAlert('error', result.error || 'ไม่สามารถบันทึกได้');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function deleteQuickReply(replyId) {
+    if (!confirm('ต้องการลบ Quick Reply นี้หรือไม่?')) return;
+    
+    try {
+        const response = await fetch(`/api/chat/quick-replies/${replyId}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            showAlert('success', 'ลบสำเร็จ');
+            loadQuickRepliesList();
+            loadQuickReplyButtons();
+        } else {
+            const error = await response.json();
+            showAlert('error', error.error || 'ไม่สามารถลบได้');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function searchChatMessages() {
+    const query = document.getElementById('chatSearchInput').value.trim();
+    if (!query || query.length < 2) {
+        showAlert('error', 'กรุณากรอกคำค้นอย่างน้อย 2 ตัวอักษร');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/chat/search?q=${encodeURIComponent(query)}`, {
+            credentials: 'include'
+        });
+        const results = await response.json();
+        
+        if (results.length === 0) {
+            showAlert('info', 'ไม่พบข้อความที่ค้นหา');
+            return;
+        }
+        
+        const firstResult = results[0];
+        selectChatThread(firstResult.thread_id, firstResult.reseller_name || firstResult.sender_name, '');
+        
+        showAlert('success', `พบ ${results.length} ข้อความ`);
     } catch (error) {
         showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
     }
