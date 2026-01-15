@@ -55,6 +55,20 @@
             } catch (error) {
                 console.log('Facebook Pixel not configured');
             }
+            
+            // Track page visit for internal analytics
+            try {
+                await fetch('/api/track-visit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page_name: 'become-reseller',
+                        source: 'facebook'
+                    })
+                });
+            } catch (e) {
+                console.log('Visit tracking failed');
+            }
         })();
     </script>
     <noscript>

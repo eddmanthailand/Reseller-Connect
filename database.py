@@ -476,6 +476,36 @@ def init_db():
             )
         ''')
         
+        # Create Facebook Pixel settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS facebook_pixel_settings (
+                id SERIAL PRIMARY KEY,
+                pixel_id VARCHAR(50),
+                access_token TEXT,
+                is_active BOOLEAN DEFAULT FALSE,
+                track_page_view BOOLEAN DEFAULT TRUE,
+                track_lead BOOLEAN DEFAULT TRUE,
+                track_complete_registration BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create page visits tracking table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS page_visits (
+                id SERIAL PRIMARY KEY,
+                page_name VARCHAR(100) NOT NULL,
+                source VARCHAR(50),
+                visitor_ip VARCHAR(45),
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_page_visits_page_name ON page_visits(page_name)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_page_visits_source ON page_visits(source)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_page_visits_created_at ON page_visits(created_at)')
+        
         # Insert default sales channels
         default_channels = [
             ('ระบบออนไลน์', 'การสั่งซื้อผ่านระบบตะกร้าสินค้า', 1),

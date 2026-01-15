@@ -150,7 +150,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName] = fullHash.split('?');
-        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings'];
+        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings', 'facebook-ads'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
         }
@@ -537,6 +537,8 @@ function switchPage(pageName) {
         loadResellers();
     } else if (pageName === 'settings') {
         loadSettings();
+    } else if (pageName === 'facebook-ads') {
+        loadFacebookAdsPage();
     } else if (pageName === 'brands') {
         loadBrandsPage();
     } else if (pageName === 'categories') {
@@ -2816,6 +2818,221 @@ async function saveFacebookPixelSettings() {
     } catch (error) {
         console.error('Error saving Facebook Pixel settings:', error);
         showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+// ==================== FACEBOOK ADS PAGE ====================
+
+let fbAdsChart = null;
+
+async function loadFacebookAdsPage() {
+    // Set Landing Page URL
+    const urlInput = document.getElementById('fbLandingUrl');
+    if (urlInput) {
+        urlInput.value = window.location.origin + '/become-reseller';
+    }
+    
+    // Load Pixel settings
+    loadFbAdsPixelSettings();
+    
+    // Load stats
+    loadFacebookAdsStats();
+}
+
+async function loadFbAdsPixelSettings() {
+    try {
+        const response = await fetch(`${API_URL}/facebook-pixel-settings`, {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.pixel_id) {
+                const pixelInput = document.getElementById('fbAdsPixelId');
+                if (pixelInput) pixelInput.value = data.pixel_id;
+            }
+            if (data.is_active !== undefined) {
+                const activeCheck = document.getElementById('fbAdsPixelActive');
+                if (activeCheck) activeCheck.checked = data.is_active;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading Facebook Pixel settings:', error);
+    }
+}
+
+async function saveFbAdsPixelSettings() {
+    const pixelId = document.getElementById('fbAdsPixelId').value.trim();
+    const accessToken = document.getElementById('fbAdsAccessToken').value.trim();
+    const isActive = document.getElementById('fbAdsPixelActive').checked;
+    
+    if (isActive && !pixelId) {
+        showAlert('กรุณากรอก Pixel ID ก่อนเปิดใช้งาน', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/facebook-pixel-settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                pixel_id: pixelId,
+                access_token: accessToken,
+                is_active: isActive,
+                track_page_view: true,
+                track_lead: true,
+                track_complete_registration: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('บันทึกการตั้งค่า Facebook Pixel สำเร็จ', 'success');
+            document.getElementById('fbAdsAccessToken').value = '';
+        } else {
+            showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving Facebook Pixel settings:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+}
+
+async function loadFacebookAdsStats() {
+    try {
+        const response = await fetch(`${API_URL}/facebook-ads/stats`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to load Facebook Ads stats');
+            return;
+        }
+        
+        const data = await response.json();
+        
+        // Update stats cards
+        document.getElementById('fbStatsTodayVisits').textContent = data.today.visits;
+        document.getElementById('fbStatsTodayRegs').textContent = data.today.registrations;
+        document.getElementById('fbStatsTodayConv').textContent = data.today.conversion + '%';
+        
+        document.getElementById('fbStatsWeekVisits').textContent = data.week.visits;
+        document.getElementById('fbStatsWeekRegs').textContent = data.week.registrations;
+        document.getElementById('fbStatsWeekConv').textContent = data.week.conversion + '%';
+        
+        document.getElementById('fbStatsMonthVisits').textContent = data.month.visits;
+        document.getElementById('fbStatsMonthRegs').textContent = data.month.registrations;
+        document.getElementById('fbStatsMonthConv').textContent = data.month.conversion + '%';
+        
+        document.getElementById('fbStatsTotalVisits').textContent = data.total.visits;
+        document.getElementById('fbStatsTotalRegs').textContent = data.total.registrations;
+        document.getElementById('fbStatsTotalConv').textContent = data.total.conversion + '%';
+        
+        // Update chart
+        renderFbAdsChart(data.chart);
+        
+        // Update recent registrations table
+        renderFbRecentRegistrations(data.recent_registrations);
+        
+    } catch (error) {
+        console.error('Error loading Facebook Ads stats:', error);
+    }
+}
+
+function renderFbAdsChart(chartData) {
+    const ctx = document.getElementById('fbAdsChart');
+    if (!ctx) return;
+    
+    if (fbAdsChart) {
+        fbAdsChart.destroy();
+    }
+    
+    fbAdsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: 'ผู้เข้าชม',
+                    data: chartData.visits,
+                    borderColor: '#1877f2',
+                    backgroundColor: 'rgba(24, 119, 242, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'สมัคร',
+                    data: chartData.registrations,
+                    borderColor: '#42b72a',
+                    backgroundColor: 'rgba(66, 183, 42, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: 'rgba(255,255,255,0.7)' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: 'rgba(255,255,255,0.5)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                },
+                x: {
+                    ticks: { color: 'rgba(255,255,255,0.5)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function renderFbRecentRegistrations(registrations) {
+    const tbody = document.getElementById('fbRecentRegistrations');
+    if (!tbody) return;
+    
+    if (!registrations || registrations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; opacity: 0.5;">ยังไม่มีผู้สมัครจาก Facebook Ads</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = registrations.map(reg => {
+        const date = new Date(reg.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+        const statusBadge = reg.is_approved 
+            ? '<span style="background: rgba(34,197,94,0.2); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: 11px;">อนุมัติแล้ว</span>'
+            : '<span style="background: rgba(251,191,36,0.2); color: #fbbf24; padding: 2px 8px; border-radius: 4px; font-size: 11px;">รออนุมัติ</span>';
+        
+        return `<tr>
+            <td>${reg.full_name || '-'}</td>
+            <td>${reg.username}</td>
+            <td>${date}</td>
+            <td>${statusBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+function copyLandingUrl() {
+    const urlInput = document.getElementById('fbLandingUrl');
+    if (urlInput) {
+        urlInput.select();
+        navigator.clipboard.writeText(urlInput.value).then(() => {
+            showAlert('คัดลอก URL สำเร็จ', 'success');
+        }).catch(() => {
+            document.execCommand('copy');
+            showAlert('คัดลอก URL สำเร็จ', 'success');
+        });
     }
 }
 

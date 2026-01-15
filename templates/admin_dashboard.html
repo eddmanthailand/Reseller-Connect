@@ -431,7 +431,7 @@
             </nav>
 
             <div class="sidebar-footer">
-                <a href="/become-reseller" target="_blank" id="fbAdsBtn" data-role="Super Admin" class="btn-logout" style="background: linear-gradient(135deg, #1877f2, #42b72a); margin-bottom: 8px; text-decoration: none;">
+                <a href="#" class="nav-item" data-page="facebook-ads" data-role="Super Admin" id="fbAdsBtn" style="background: linear-gradient(135deg, rgba(24,119,242,0.3), rgba(66,183,42,0.2)); border: 1px solid rgba(24,119,242,0.4); margin-bottom: 8px;">
                     <span class="icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
@@ -2540,6 +2540,231 @@
                             <tr><td colspan="7" style="text-align: center; color: rgba(255,255,255,0.5);">กำลังโหลด...</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Facebook Ads Page -->
+            <div id="page-facebook-ads" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                        </svg>
+                        Facebook Ads
+                    </h1>
+                    <p>ตั้งค่าและติดตามผลโฆษณา Facebook</p>
+                </div>
+
+                <!-- Stats Cards Row -->
+                <div class="stats-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                    <div class="stat-card" style="background: linear-gradient(135deg, rgba(24,119,242,0.2), rgba(66,183,42,0.1)); border: 1px solid rgba(24,119,242,0.3); border-radius: 12px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 4px;">วันนี้</div>
+                                <div style="font-size: 24px; font-weight: 700;" id="fbStatsTodayVisits">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">ผู้เข้าชม</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: 600; color: #42b72a;" id="fbStatsTodayRegs">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">สมัคร</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <span style="font-size: 12px; color: #60a5fa;">Conversion: <strong id="fbStatsTodayConv">0%</strong></span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 4px;">7 วันล่าสุด</div>
+                                <div style="font-size: 24px; font-weight: 700;" id="fbStatsWeekVisits">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">ผู้เข้าชม</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: 600; color: #42b72a;" id="fbStatsWeekRegs">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">สมัคร</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <span style="font-size: 12px; color: #60a5fa;">Conversion: <strong id="fbStatsWeekConv">0%</strong></span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 4px;">เดือนนี้</div>
+                                <div style="font-size: 24px; font-weight: 700;" id="fbStatsMonthVisits">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">ผู้เข้าชม</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: 600; color: #42b72a;" id="fbStatsMonthRegs">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">สมัคร</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <span style="font-size: 12px; color: #60a5fa;">Conversion: <strong id="fbStatsMonthConv">0%</strong></span>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 4px;">รวมทั้งหมด</div>
+                                <div style="font-size: 24px; font-weight: 700;" id="fbStatsTotalVisits">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">ผู้เข้าชม</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: 600; color: #42b72a;" id="fbStatsTotalRegs">0</div>
+                                <div style="font-size: 11px; opacity: 0.6;">สมัคร</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <span style="font-size: 12px; color: #60a5fa;">Conversion: <strong id="fbStatsTotalConv">0%</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                    <!-- Left Column: Chart + Recent Registrations -->
+                    <div style="display: flex; flex-direction: column; gap: 24px;">
+                        <!-- Chart Card -->
+                        <div class="settings-card">
+                            <h3>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="20" x2="18" y2="10"/>
+                                    <line x1="12" y1="20" x2="12" y2="4"/>
+                                    <line x1="6" y1="20" x2="6" y2="14"/>
+                                </svg>
+                                แนวโน้ม 7 วันล่าสุด
+                            </h3>
+                            <div style="height: 250px;">
+                                <canvas id="fbAdsChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Recent Registrations -->
+                        <div class="settings-card">
+                            <h3>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <line x1="19" y1="8" x2="19" y2="14"/>
+                                    <line x1="22" y1="11" x2="16" y2="11"/>
+                                </svg>
+                                ผู้สมัครล่าสุดจาก Facebook Ads
+                            </h3>
+                            <table class="data-table" style="font-size: 13px;">
+                                <thead>
+                                    <tr>
+                                        <th>ชื่อ</th>
+                                        <th>Email</th>
+                                        <th>วันที่สมัคร</th>
+                                        <th>สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fbRecentRegistrations">
+                                    <tr><td colspan="4" style="text-align: center; opacity: 0.5;">กำลังโหลด...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Settings + Landing Page Link -->
+                    <div style="display: flex; flex-direction: column; gap: 24px;">
+                        <!-- Facebook Pixel Settings -->
+                        <div class="settings-card">
+                            <h3>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                                ตั้งค่า Facebook Pixel
+                            </h3>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Pixel ID</label>
+                                <input type="text" id="fbAdsPixelId" class="form-input" placeholder="เช่น 1234567890123456">
+                                <small style="opacity: 0.6; font-size: 11px;">หาได้จาก Facebook Events Manager</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Access Token (ถ้ามี)</label>
+                                <input type="password" id="fbAdsAccessToken" class="form-input" placeholder="สำหรับ Conversions API">
+                                <small style="opacity: 0.6; font-size: 11px;">ไม่บังคับ - Server-Side Tracking</small>
+                            </div>
+                            
+                            <div class="form-group" style="display: flex; align-items: center; gap: 12px;">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="fbAdsPixelActive">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span style="font-size: 13px;">เปิดใช้งาน Pixel</span>
+                            </div>
+                            
+                            <div style="background: rgba(24,119,242,0.1); padding: 12px; border-radius: 8px; margin: 16px 0; border-left: 3px solid #1877f2;">
+                                <div style="font-size: 11px; opacity: 0.9;">
+                                    <strong>Events ที่ Track:</strong><br>
+                                    <span style="color: #60a5fa;">PageView</span> - เข้าหน้า Landing<br>
+                                    <span style="color: #60a5fa;">Lead</span> - กรอกฟอร์มสมัคร<br>
+                                    <span style="color: #60a5fa;">CompleteRegistration</span> - ส่งใบสมัครสำเร็จ
+                                </div>
+                            </div>
+                            
+                            <button type="button" onclick="saveFbAdsPixelSettings()" class="btn-primary" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #1877f2, #42b72a);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                บันทึกการตั้งค่า
+                            </button>
+                        </div>
+                        
+                        <!-- Landing Page Link -->
+                        <div class="settings-card">
+                            <h3>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                                </svg>
+                                Landing Page สำหรับโฆษณา
+                            </h3>
+                            
+                            <div style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                                <div style="font-size: 11px; opacity: 0.6; margin-bottom: 4px;">URL สำหรับใช้ใน Facebook Ads</div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="text" id="fbLandingUrl" class="form-input" style="font-family: monospace; font-size: 12px;" readonly>
+                                    <button type="button" onclick="copyLandingUrl()" class="btn-secondary" style="padding: 8px 12px; white-space: nowrap;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <a href="/become-reseller" target="_blank" class="btn-primary" style="width: 100%; justify-content: center; text-decoration: none;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                    <polyline points="15 3 21 3 21 9"/>
+                                    <line x1="10" y1="14" x2="21" y2="3"/>
+                                </svg>
+                                เปิดดู Landing Page
+                            </a>
+                            
+                            <div style="margin-top: 16px; padding: 12px; background: rgba(139,92,246,0.1); border-radius: 8px; border-left: 3px solid #8b5cf6;">
+                                <div style="font-size: 11px; opacity: 0.9;">
+                                    <strong>วิธีใช้งาน:</strong><br>
+                                    1. Copy URL ด้านบน<br>
+                                    2. นำไปใส่ใน Facebook Ads Manager<br>
+                                    3. ระบบจะ Track ผู้เข้าชมและผู้สมัครอัตโนมัติ
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

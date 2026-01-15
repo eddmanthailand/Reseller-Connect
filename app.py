@@ -4625,6 +4625,200 @@ def get_facebook_pixel_public():
         if conn:
             conn.close()
 
+# ==================== PAGE VISITS TRACKING API ====================
+
+@app.route('/api/track-visit', methods=['POST'])
+def track_page_visit():
+    """Track a page visit (public endpoint for landing pages)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json() or {}
+        page_name = data.get('page_name', 'unknown')
+        source = data.get('source', 'direct')
+        
+        # Get visitor info
+        visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if visitor_ip:
+            visitor_ip = visitor_ip.split(',')[0].strip()
+        user_agent = request.headers.get('User-Agent', '')[:500]
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent)
+            VALUES (%s, %s, %s, %s)
+        ''', (page_name, source, visitor_ip, user_agent))
+        
+        conn.commit()
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/facebook-ads/stats', methods=['GET'])
+@login_required
+@admin_required
+def get_facebook_ads_stats():
+    """Get Facebook Ads statistics for admin dashboard"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Get today's stats
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM page_visits 
+            WHERE page_name = 'become-reseller' 
+            AND source = 'facebook'
+            AND DATE(created_at) = CURRENT_DATE
+        ''')
+        today_visits = cursor.fetchone()['count']
+        
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM users 
+            WHERE notes LIKE '%[source: facebook]%'
+            AND DATE(created_at) = CURRENT_DATE
+        ''')
+        today_registrations = cursor.fetchone()['count']
+        
+        # Get this week's stats
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM page_visits 
+            WHERE page_name = 'become-reseller' 
+            AND source = 'facebook'
+            AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+        ''')
+        week_visits = cursor.fetchone()['count']
+        
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM users 
+            WHERE notes LIKE '%[source: facebook]%'
+            AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+        ''')
+        week_registrations = cursor.fetchone()['count']
+        
+        # Get this month's stats
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM page_visits 
+            WHERE page_name = 'become-reseller' 
+            AND source = 'facebook'
+            AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+        ''')
+        month_visits = cursor.fetchone()['count']
+        
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM users 
+            WHERE notes LIKE '%[source: facebook]%'
+            AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+        ''')
+        month_registrations = cursor.fetchone()['count']
+        
+        # Get total stats
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM page_visits 
+            WHERE page_name = 'become-reseller' 
+            AND source = 'facebook'
+        ''')
+        total_visits = cursor.fetchone()['count']
+        
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM users 
+            WHERE notes LIKE '%[source: facebook]%'
+        ''')
+        total_registrations = cursor.fetchone()['count']
+        
+        # Get daily stats for chart (last 7 days)
+        cursor.execute('''
+            SELECT DATE(created_at) as date, COUNT(*) as visits
+            FROM page_visits 
+            WHERE page_name = 'become-reseller' 
+            AND source = 'facebook'
+            AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        ''')
+        daily_visits = {str(row['date']): row['visits'] for row in cursor.fetchall()}
+        
+        cursor.execute('''
+            SELECT DATE(created_at) as date, COUNT(*) as registrations
+            FROM users 
+            WHERE notes LIKE '%[source: facebook]%'
+            AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        ''')
+        daily_registrations = {str(row['date']): row['registrations'] for row in cursor.fetchall()}
+        
+        # Build chart data for last 7 days
+        from datetime import datetime, timedelta
+        chart_labels = []
+        chart_visits = []
+        chart_registrations = []
+        for i in range(6, -1, -1):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            chart_labels.append((datetime.now() - timedelta(days=i)).strftime('%d/%m'))
+            chart_visits.append(daily_visits.get(date, 0))
+            chart_registrations.append(daily_registrations.get(date, 0))
+        
+        # Get recent registrations from Facebook
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.created_at, u.is_approved,
+                   rt.name as tier_name
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON u.tier_id = rt.id
+            WHERE u.notes LIKE '%[source: facebook]%'
+            ORDER BY u.created_at DESC
+            LIMIT 10
+        ''')
+        recent_registrations = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'today': {
+                'visits': today_visits,
+                'registrations': today_registrations,
+                'conversion': round((today_registrations / today_visits * 100) if today_visits > 0 else 0, 1)
+            },
+            'week': {
+                'visits': week_visits,
+                'registrations': week_registrations,
+                'conversion': round((week_registrations / week_visits * 100) if week_visits > 0 else 0, 1)
+            },
+            'month': {
+                'visits': month_visits,
+                'registrations': month_registrations,
+                'conversion': round((month_registrations / month_visits * 100) if month_visits > 0 else 0, 1)
+            },
+            'total': {
+                'visits': total_visits,
+                'registrations': total_registrations,
+                'conversion': round((total_registrations / total_visits * 100) if total_visits > 0 else 0, 1)
+            },
+            'chart': {
+                'labels': chart_labels,
+                'visits': chart_visits,
+                'registrations': chart_registrations
+            },
+            'recent_registrations': recent_registrations
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== NOTIFICATIONS API ====================
 
 @app.route('/api/notifications', methods=['GET'])
