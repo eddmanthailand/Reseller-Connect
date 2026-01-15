@@ -1,7 +1,7 @@
 # Admin User Management & Product Management System
 
 ## Overview
-This full-stack reseller/distributor application, built with Flask and Neon PostgreSQL, empowers Super Admins to manage users (Super Admin, Assistant Admin, Reseller) and their respective tiers, alongside comprehensive product management. Key capabilities include advanced SPU/SKU variant handling, multiple image uploads with drag-and-drop ordering, and optional size charts. It features a modern glassmorphism UI, real-time API integration, and aims to provide a professional, secure business management solution. The system supports dynamic pricing based on a 4-tier reseller system with configurable auto-upgrade logic, role-based access control for Assistant Admins, and a robust order management system with configurable order numbering and sales analytics.
+This full-stack reseller/distributor application, built with Flask and Neon PostgreSQL, is designed for Super Admins to manage users (Super Admin, Assistant Admin, Reseller) and their tiers, alongside comprehensive product management. Key capabilities include advanced SPU/SKU variant handling, multiple image uploads with drag-and-drop ordering, optional size charts, and dynamic pricing based on a 4-tier reseller system with configurable auto-upgrade logic. It features role-based access control, a robust order management system with configurable numbering, sales analytics, and a complete Made-to-Order (MTO) system with production tracking and payment verification. The system also includes an in-app chat for real-time communication between Admins and Resellers. The overarching goal is to provide a professional, secure business management solution with a modern UI and real-time API integration.
 
 ## User Preferences
 - **Communication Style:** Simple, everyday language (Thai/English)
@@ -16,79 +16,26 @@ This full-stack reseller/distributor application, built with Flask and Neon Post
 ## System Architecture
 
 ### UI/UX Decisions
-The system employs a modern, responsive glassmorphism design featuring frosted glass effects, animated gradient backgrounds, smooth transitions, and a consistent purple-to-pink gradient color scheme. It utilizes the Inter font family with compact sizing for dense data displays and modern line-style SVG icons. The multi-page dashboard includes a collapsible sidebar (state persisted in localStorage). The product management UI is inspired by Lazada, offering compact font sizes, status tabs with live counts, an advanced filter bar, bulk action toolbar, toggle switches for status changes, collapsible SKU variants, and inline editing for SKU price and stock. A global alert system ensures consistent user feedback.
+The system features a modern, responsive glassmorphism design with frosted glass effects, animated gradient backgrounds, and smooth transitions, adhering to a consistent purple-to-pink gradient color scheme. It uses the Inter font, compact sizing for data, and modern line-style SVG icons. The multi-page dashboard includes a collapsible sidebar. Product management UI is inspired by e-commerce platforms, offering compact font sizes, status tabs, an advanced filter bar, bulk actions, toggle switches, collapsible SKU variants, and inline editing. A global alert system provides consistent user feedback. Both Admin and Reseller interfaces are structured as Single Page Applications (SPAs) using hash-based navigation.
 
 ### Technical Implementations
-The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon PostgreSQL database. It features a custom session-based authentication system with bcrypt for password hashing and role-based access control. All admin routes are protected with input validation on API endpoints. The frontend uses Jinja2 templates, vanilla JavaScript, and CSS Grid for responsiveness, making asynchronous Fetch API requests. The product update logic uses a diff-based approach to preserve SKU IDs and maintain referential integrity.
+The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon PostgreSQL database. It employs a custom session-based authentication system with bcrypt for password hashing and role-based access control, ensuring all admin routes are protected with input validation. The frontend uses Jinja2 templates, vanilla JavaScript, CSS Grid for responsiveness, and asynchronous Fetch API requests. Product updates use a diff-based approach to maintain SKU ID integrity. The system also includes a comprehensive warehouse management system with stock transfers, adjustments, and an audit log, as well as an order shipment system with automatic splitting and label printing.
 
 ### Feature Specifications
-- **Authentication:** Custom session management, bcrypt hashing, role-based access control.
-- **Public Landing Page:** Beautiful landing page for visitors (non-logged in users) featuring hero section, benefits highlights, tier system preview, and product showcase with blurred reseller prices. Built with Tailwind CSS and responsive design.
-- **Admin Dashboard:** Multi-page layout, real-time statistics, user management (CRUD, role assignment, tier assignment), product management, settings.
-- **Reseller Dashboard:** Dedicated view showing user info, tier level, and products with tier-specific pricing.
-- **User Management:** Create/edit/delete users, assign roles (Super Admin, Assistant Admin, Reseller), assign reseller tiers with manual override. Role-based brand access control for Assistant Admins.
-- **Brand Management:** Full CRUD for brands, required for products. Assistant Admins see only assigned brands.
-- **Product Management (SPU/SKU System):**
-    - Create products with SPU and brand.
-    - Dynamic options/attributes with drag-and-drop ordering (SortableJS).
-    - Auto-generation of SKU variants.
-    - Bulk actions for master price/stock.
-    - Multi-image upload with drag-and-drop reordering, optional size chart.
-    - Diff-based product update logic protecting SKU IDs.
-    - Low stock indicators and filters (out-of-stock, low stock).
-    - Product status system (active, inactive, draft) with PATCH endpoint.
-    - Product shipping fields (weight, dimensions) and `cost_price` for SKUs.
-- **Category System:** Full CRUD for categories, normalized database structure.
-- **Product Customization Options:** Non-SKU variations with optional pricing, managed via dedicated tables and APIs.
-- **4-Tier Reseller Pricing System:** Bronze, Silver, Gold, Platinum tiers with `product_tier_pricing` for product-specific discounts.
-- **Tier Settings & Auto-Upgrade System:** Configurable upgrade thresholds, `total_purchases` tracking, automatic tier upgrades (unless manually overridden). Batch check for upgrades.
-- **Order Number Settings:** Configurable order number format (prefix, digit count, monthly reset).
-- **Dashboard Home Page:** Sales statistics widgets (today, month, pending, low stock), 7-day sales chart (Chart.js), recent orders, top-selling products.
-- **Sales History & Brand Sales Analytics:** Sales history table with advanced filters (date range, channel, status, keyword), summary stats. Brand sales grid with revenue, items, orders per brand.
-- **Customer Database (Reseller):** Resellers can manage their own customer database for direct shipping with reseller branding. Full CRUD for customers with shipping info (name, phone, email, address, province, district, subdistrict, postal_code).
-- **Reseller Profile Management:** Resellers can edit their shipping information and brand name for label printing.
-- **Warehouse Management:** Full CRUD for warehouses (name, address, contact info). Multi-warehouse stock tracking per SKU via `sku_warehouse_stock` table.
-- **Stock Transfer System:** Move stock between warehouses with automatic audit logging. API validates source stock availability before transfer.
-- **Stock Adjustment System:** Adjust stock for external sales channels (Shopee, Lazada, TikTok, Facebook, LINE, offline stores) and other reasons (damaged, lost, expired, miscount, stock-in, returns). All adjustments automatically update total SKU stock and create audit log entries.
-- **Stock Audit Log:** Complete history of all stock changes with before/after quantities, change type, reference to source transaction, user who made the change, and timestamps. Supports filtering by date, warehouse, change type.
-- **Order Shipment System:** Automatic shipment splitting by warehouse during order creation. Each shipment tracks warehouse source, tracking number, shipping provider, and status (pending/shipped/delivered).
-- **Shipping Label Printing:** A4 format with horizontal split design. Top half displays shipping info (sender, recipient, tracking number, provider). Bottom half displays packing list with checkboxes, SKU codes, quantities, and signature fields. Print per shipment from order detail modal. No weight displayed. Tracking URLs auto-generated from shipping provider templates.
+- **User & Role Management:** Super Admin, Assistant Admin, Reseller roles; 4-tier reseller system with auto-upgrade logic and manual override; role-based brand access.
+- **Product Management (SPU/SKU):** Full CRUD for products, brands, and categories; dynamic options/attributes; auto-generation of SKU variants; multi-image upload with drag-and-drop; low stock indicators; product status management; shipping fields. Made-to-Order (MTO) system with production days, minimum order quantity, deposit settings, custom product creation, and a 4-page management workflow (Quotation Requests, Quotations, MTO Orders, Payment Verification) with timeline tracking.
+- **Order & Sales Management:** Configurable order numbering; sales statistics, 7-day sales charts, recent orders, top-selling products; sales history with filters; brand sales analytics.
+- **Warehouse & Stock Management:** Full CRUD for warehouses; multi-warehouse stock tracking per SKU; stock transfer system with audit logging; stock adjustment system for various reasons and channels; comprehensive stock audit log.
+- **Reseller Features:** Dedicated dashboard; tier-specific pricing; customer database management for direct shipping; profile management for shipping info and branding.
+- **Communication:** In-app chat system between Admin and Resellers with real-time messaging, broadcast capabilities, quick reply templates, file attachments, unread badges, and smart email notifications.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
-- **Made-to-Order (MTO) System:** Complete workflow for custom production orders:
-    - Admin: Create MTO products with production_days, min_order_qty (per primary option value), deposit_percent settings.
-    - Admin: Full CRUD for MTO products with options builder, SKU preview, and image upload.
-    - Admin: Full-page MTO product create/edit UI (`mto_product_create.html`, `mto_product_edit.html`) matching ready-stock product design with glassmorphism, section cards, drag-drop image sorting, size chart upload with Cropper.js.
-    - Admin: 4-page management (Quotation Requests, Quotations, MTO Orders, Payment Verification).
-    - Admin: Timeline tracking, status updates, payment confirmation with slip review.
-    - Reseller: MTO product catalog with Matrix Grid ordering UI (primary option as rows, secondary as columns).
-    - Reseller: Real-time minimum quantity validation per primary option value with inline error display.
-    - Reseller: View/accept/reject quotations, track order status and production progress.
-    - Reseller: Upload payment slips for deposit and balance payments.
-    - Workflow: Request → Quote → Accept → Deposit → Production → Balance → Ship → Fulfilled.
-    - Payment structure: Configurable deposit % (default 50%), balance payment gate before shipping.
-    - Revenue tracking: MTO order total_amount added to reseller's total_purchases upon fulfillment status (guards against duplicate credits), triggers automatic tier upgrade eligibility check.
 
 ### System Design Choices
 - **Backend Framework:** Flask (lightweight, flexible).
 - **Database:** Neon PostgreSQL (reliability, scalability, Replit integration).
 - **Authentication:** Custom session-based for granular control.
-- **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API.
+- **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
 - **Deployment:** Gunicorn production server.
-- **API Design:** RESTful.
-- **SPA Conversion:** Both Admin and Reseller interfaces converted to Single Page Applications using hash-based navigation (`admin_dashboard.html` and `reseller_spa.html`).
-
-### Database Schema
-- **User Management:** `roles`, `reseller_tiers` (with `level_rank`, `upgrade_threshold`, `description`, `is_manual_only`), `users` (with `tier_manual_override`, `total_purchases`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `brand_name`, `logo_url`).
-- **Brand Management:** `brands`, `admin_brand_access`.
-- **Product Management:** `products` (with `brand_id`, `size_chart_image_url`, `status`, `weight`, `length`, `width`, `height`, `low_stock_threshold`), `product_images`, `options`, `option_values`, `skus` (with `cost_price`), `sku_values_map`.
-- **Category Management:** `categories`, `product_categories`.
-- **Product Customizations:** `product_customizations`, `customization_choices`.
-- **Tier Pricing:** `product_tier_pricing`.
-- **Order Settings:** `order_number_settings`.
-- **Reseller Customer Database:** `reseller_customers` (with `reseller_id`, `full_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`, `postal_code`, `notes`).
-- **Warehouse System:** `warehouses` (id, name, address, province, district, subdistrict, postal_code, phone, contact_name, is_active), `sku_warehouse_stock` (sku_id, warehouse_id, stock), `order_shipments` (order_id, warehouse_id, tracking_number, shipping_provider, status, shipped_at, delivered_at), `order_shipment_items` (shipment_id, order_item_id, quantity).
-- **Stock Management:** `stock_transfers` (id, sku_id, from_warehouse_id, to_warehouse_id, quantity, notes, created_at, created_by), `stock_adjustments` (id, sku_id, warehouse_id, quantity_change, adjustment_type, sales_channel, notes, created_at, created_by), `stock_audit_log` (id, sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_at, created_by).
-- **MTO System:** `quotation_requests` (reseller_id, product_id, notes, status, created_at), `quotation_request_items` (request_id, sku_id, quantity), `quotations` (request_id, total_amount, valid_until, notes, created_at), `quotation_items` (quotation_id, sku_id, quantity, unit_price), `mto_orders` (quotation_id, reseller_id, total_amount, deposit_percent, deposit_amount, balance_amount, status, expected_completion_date, created_at), `mto_order_items` (mto_order_id, sku_id, quantity, unit_price), `mto_payments` (mto_order_id, payment_type, amount, slip_image_url, status, confirmed_at, created_at), `mto_status_history` (mto_order_id, old_status, new_status, notes, created_at, created_by). Products table extended with `product_type`, `production_days`, `min_order_qty`, `deposit_percent`.
 
 ## External Dependencies
 
@@ -103,7 +50,7 @@ The backend is a Flask 3.1.2 application with Flask-CORS, utilizing a Neon Postg
 ### Database Service
 - **Replit PostgreSQL (Neon-backed)**: Auto-provisioned, accessed via `DATABASE_URL`.
 
-### Frontend
+### Frontend Libraries
 - **Vanilla JavaScript**: For client-side logic.
 - **CSS Grid**: For responsive layouts.
 - **Fetch API**: For HTTP requests.
