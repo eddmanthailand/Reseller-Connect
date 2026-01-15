@@ -81,6 +81,8 @@ function setupNavigation() {
     });
 }
 
+let previousPageBeforeChat = 'home';
+
 function switchPage(pageName) {
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === pageName);
@@ -100,6 +102,19 @@ function switchPage(pageName) {
         sidebar.classList.remove('active');
         const overlay = document.querySelector('.sidebar-overlay');
         if (overlay) overlay.classList.remove('active');
+        
+        // Chat fullscreen mode on mobile
+        if (pageName === 'chat') {
+            // Store previous page for back navigation
+            const currentHash = window.location.hash.substring(1);
+            if (currentHash && currentHash !== 'chat') {
+                previousPageBeforeChat = currentHash;
+            }
+            document.body.classList.add('chat-fullscreen-mode');
+            setupChatFullscreenBackButton();
+        } else {
+            document.body.classList.remove('chat-fullscreen-mode');
+        }
     }
 
     switch (pageName) {
@@ -132,6 +147,27 @@ function switchPage(pageName) {
             loadResellerChatUnreadCount();
             break;
     }
+}
+
+function setupChatFullscreenBackButton() {
+    const pageHeader = document.querySelector('#page-chat .page-header');
+    if (!pageHeader) return;
+    
+    // Add back button if not exists
+    let backBtn = pageHeader.querySelector('.chat-back-btn');
+    if (!backBtn) {
+        backBtn = document.createElement('button');
+        backBtn.className = 'chat-back-btn';
+        backBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>';
+        backBtn.style.cssText = 'background: none; border: none; color: white; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 50%;';
+        backBtn.onclick = exitChatFullscreen;
+        pageHeader.insertBefore(backBtn, pageHeader.firstChild);
+    }
+}
+
+function exitChatFullscreen() {
+    document.body.classList.remove('chat-fullscreen-mode');
+    window.location.hash = previousPageBeforeChat || 'home';
 }
 
 function toggleSidebar() {
@@ -3474,12 +3510,18 @@ async function loadResellerChatUnreadCount() {
         const data = await response.json();
         
         const badge = document.getElementById('resellerChatBadge');
+        const chatNavItem = document.querySelector('.nav-item[data-page="chat"]');
+        
         if (badge) {
             if (data.unread_count > 0) {
                 badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
                 badge.style.display = 'flex';
+                badge.classList.add('chat-badge-animated');
+                if (chatNavItem) chatNavItem.classList.add('chat-nav-active');
             } else {
                 badge.style.display = 'none';
+                badge.classList.remove('chat-badge-animated');
+                if (chatNavItem) chatNavItem.classList.remove('chat-nav-active');
             }
         }
     } catch (error) {

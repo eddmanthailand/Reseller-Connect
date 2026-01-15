@@ -8088,12 +8088,18 @@ async function loadChatUnreadCount() {
         const data = await response.json();
         
         const badge = document.getElementById('chatUnreadCount');
+        const chatNavItem = document.querySelector('.nav-item[data-page="chat"]');
+        
         if (badge) {
             if (data.unread_count > 0) {
                 badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
                 badge.style.display = 'inline';
+                badge.classList.add('chat-badge-animated');
+                if (chatNavItem) chatNavItem.classList.add('chat-nav-active');
             } else {
                 badge.style.display = 'none';
+                badge.classList.remove('chat-badge-animated');
+                if (chatNavItem) chatNavItem.classList.remove('chat-nav-active');
             }
         }
     } catch (error) {
@@ -8332,6 +8338,115 @@ async function searchChatMessages() {
         showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
     }
 }
+
+// Reseller Search/Picker for Chat
+let allResellersForChat = [];
+
+async function loadAllResellersForChat() {
+    try {
+        const response = await fetch('/api/resellers?limit=1000', { credentials: 'include' });
+        const data = await response.json();
+        allResellersForChat = data.resellers || data;
+        return allResellersForChat;
+    } catch (error) {
+        console.error('Error loading resellers:', error);
+        return [];
+    }
+}
+
+function toggleResellerPickerDropdown() {
+    const dropdown = document.getElementById('resellerPickerDropdown');
+    if (dropdown.style.display === 'none') {
+        showResellerPickerDropdown();
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+async function showResellerPickerDropdown(searchTerm = '') {
+    const dropdown = document.getElementById('resellerPickerDropdown');
+    dropdown.style.display = 'block';
+    dropdown.innerHTML = '<div style="padding: 12px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">กำลังโหลด...</div>';
+    
+    if (allResellersForChat.length === 0) {
+        await loadAllResellersForChat();
+    }
+    
+    let filtered = allResellersForChat;
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = allResellersForChat.filter(r => 
+            (r.full_name && r.full_name.toLowerCase().includes(term)) ||
+            (r.email && r.email.toLowerCase().includes(term)) ||
+            (r.phone && r.phone.includes(term))
+        );
+    }
+    
+    if (filtered.length === 0) {
+        dropdown.innerHTML = '<div style="padding: 12px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">ไม่พบตัวแทน</div>';
+        return;
+    }
+    
+    const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
+    
+    dropdown.innerHTML = filtered.slice(0, 50).map(r => `
+        <div onclick="startChatWithReseller(${r.id}, '${escapeHtml(r.full_name || '')}', '${escapeHtml(r.tier_name || 'Bronze')}')" 
+             style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px; transition: background 0.2s;"
+             onmouseover="this.style.background='rgba(168,85,247,0.2)'" onmouseout="this.style.background='transparent'">
+            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: white;">
+                ${escapeHtml((r.full_name || '?').charAt(0).toUpperCase())}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 500; font-size: 13px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(r.full_name || 'ไม่ระบุชื่อ')}</div>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">${tierIcons[r.tier_name] || '🏷️'} ${escapeHtml(r.tier_name || 'Bronze')}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function searchResellersForChat(searchTerm) {
+    if (searchTerm.length >= 1) {
+        showResellerPickerDropdown(searchTerm);
+    } else {
+        document.getElementById('resellerPickerDropdown').style.display = 'none';
+    }
+}
+
+async function startChatWithReseller(resellerId, resellerName, tierName) {
+    document.getElementById('resellerPickerDropdown').style.display = 'none';
+    document.getElementById('chatResellerSearchInput').value = '';
+    
+    try {
+        const response = await fetch(`/api/chat/start/${resellerId}`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            selectChatThread(data.thread_id, resellerName, tierName);
+            loadChatThreads();
+        } else {
+            const error = await response.json();
+            showAlert('error', error.error || 'ไม่สามารถเริ่มแชทได้');
+        }
+    } catch (error) {
+        showAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('resellerPickerDropdown');
+    const searchInput = document.getElementById('chatResellerSearchInput');
+    const pickerBtn = e.target.closest('button[onclick*="toggleResellerPickerDropdown"]');
+    
+    if (dropdown && dropdown.style.display !== 'none') {
+        if (!dropdown.contains(e.target) && e.target !== searchInput && !pickerBtn) {
+            dropdown.style.display = 'none';
+        }
+    }
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
