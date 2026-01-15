@@ -2826,10 +2826,10 @@ async function saveFacebookPixelSettings() {
 let fbAdsChart = null;
 
 async function loadFacebookAdsPage() {
-    // Set Landing Page URL
+    // Set Landing Page URL - use custom domain
     const urlInput = document.getElementById('fbLandingUrl');
     if (urlInput) {
-        urlInput.value = window.location.origin + '/become-reseller';
+        urlInput.value = 'https://ekgshops.com/become-reseller';
     }
     
     // Load Pixel settings
