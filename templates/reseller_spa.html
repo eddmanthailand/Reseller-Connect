@@ -2916,6 +2916,10 @@
     </div>
 
     <script src="/static/js/global-alert.js"></script>
+    <script>
+        // Set current user ID for chat functionality
+        const currentUserId = {{ session.get('user_id', 0) }};
+    </script>
     <script src="/static/js/reseller-spa.js"></script>
 </body>
 </html>
