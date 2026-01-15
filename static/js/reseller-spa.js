@@ -51,6 +51,10 @@ async function init() {
         
         loadDashboardData();
         loadCartBadge();
+        loadResellerChatUnreadCount();
+        
+        // Start periodic unread check (every 30 seconds)
+        setInterval(loadResellerChatUnreadCount, 30000);
     } catch (error) {
         console.error('Initialization error:', error);
         window.location.href = '/login';
@@ -59,7 +63,7 @@ async function init() {
 
 function handleHashNavigation() {
     const hash = window.location.hash.substring(1) || 'home';
-    const validPages = ['home', 'catalog', 'cart', 'checkout', 'orders', 'customers', 'profile', 'mto-catalog'];
+    const validPages = ['home', 'catalog', 'cart', 'checkout', 'orders', 'customers', 'profile', 'mto-catalog', 'chat'];
     if (validPages.includes(hash)) {
         switchPage(hash);
     }
