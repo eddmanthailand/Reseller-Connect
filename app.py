@@ -4501,6 +4501,130 @@ def save_order_number_settings():
         if conn:
             conn.close()
 
+# ==================== FACEBOOK PIXEL SETTINGS API ====================
+
+@app.route('/api/facebook-pixel-settings', methods=['GET'])
+@admin_required
+def get_facebook_pixel_settings():
+    """Get Facebook Pixel settings"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT id, pixel_id, access_token, is_active, 
+                   track_page_view, track_lead, track_complete_registration, updated_at
+            FROM facebook_pixel_settings
+            LIMIT 1
+        ''')
+        settings = cursor.fetchone()
+        
+        if settings:
+            # Mask access token for security
+            if settings.get('access_token'):
+                settings['access_token_masked'] = settings['access_token'][:10] + '...' if len(settings['access_token']) > 10 else settings['access_token']
+            return jsonify(dict(settings)), 200
+        return jsonify({}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/facebook-pixel-settings', methods=['POST'])
+@admin_required
+def save_facebook_pixel_settings():
+    """Save Facebook Pixel settings"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        pixel_id = data.get('pixel_id', '').strip()
+        access_token = data.get('access_token', '').strip()
+        is_active = data.get('is_active', False)
+        track_page_view = data.get('track_page_view', True)
+        track_lead = data.get('track_lead', True)
+        track_complete_registration = data.get('track_complete_registration', True)
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Check if settings exist
+        cursor.execute('SELECT id, access_token FROM facebook_pixel_settings LIMIT 1')
+        existing = cursor.fetchone()
+        
+        # If access_token is not provided, keep existing one
+        if not access_token and existing and existing.get('access_token'):
+            access_token = existing['access_token']
+        
+        if existing:
+            cursor.execute('''
+                UPDATE facebook_pixel_settings
+                SET pixel_id = %s, access_token = %s, is_active = %s,
+                    track_page_view = %s, track_lead = %s, track_complete_registration = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id, pixel_id, is_active, track_page_view, track_lead, track_complete_registration
+            ''', (pixel_id, access_token, is_active, track_page_view, track_lead, track_complete_registration, existing['id']))
+        else:
+            cursor.execute('''
+                INSERT INTO facebook_pixel_settings (pixel_id, access_token, is_active, track_page_view, track_lead, track_complete_registration)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, pixel_id, is_active, track_page_view, track_lead, track_complete_registration
+            ''', (pixel_id, access_token, is_active, track_page_view, track_lead, track_complete_registration))
+        
+        settings = dict(cursor.fetchone())
+        conn.commit()
+        
+        return jsonify({
+            'message': 'บันทึกการตั้งค่า Facebook Pixel สำเร็จ',
+            'settings': settings
+        }), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/facebook-pixel-settings/public', methods=['GET'])
+def get_facebook_pixel_public():
+    """Get Facebook Pixel ID for frontend (public endpoint)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT pixel_id, track_page_view, track_lead, track_complete_registration
+            FROM facebook_pixel_settings
+            WHERE is_active = TRUE
+            LIMIT 1
+        ''')
+        settings = cursor.fetchone()
+        
+        if settings and settings.get('pixel_id'):
+            return jsonify(dict(settings)), 200
+        return jsonify({}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 # ==================== NOTIFICATIONS API ====================
 
 @app.route('/api/notifications', methods=['GET'])
