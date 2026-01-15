@@ -2669,6 +2669,56 @@
                         </div>
                     </div>
                     
+                    <!-- Facebook Pixel Settings -->
+                    <div class="settings-card">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                            </svg>
+                            Facebook Pixel
+                        </h3>
+                        
+                        <div id="facebookPixelForm">
+                            <div class="form-group">
+                                <label class="form-label">Pixel ID</label>
+                                <input type="text" id="fbPixelId" class="form-input" placeholder="เช่น 1234567890123456">
+                                <small style="opacity: 0.6; font-size: 11px;">หาได้จาก Facebook Events Manager</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Access Token (ถ้ามี)</label>
+                                <input type="password" id="fbAccessToken" class="form-input" placeholder="สำหรับ Conversions API">
+                                <small style="opacity: 0.6; font-size: 11px;">ไม่บังคับ - ใช้สำหรับ Server-Side Tracking</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" style="margin-bottom: 12px;">เปิดใช้งาน Pixel</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="fbPixelActive">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div style="background: rgba(24,119,242,0.1); padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid #1877f2;">
+                                <div style="font-size: 12px; opacity: 0.9;">
+                                    <strong>Events ที่จะ Track:</strong><br>
+                                    <span style="color: #60a5fa;">PageView</span> - เมื่อเข้าหน้า Landing Page<br>
+                                    <span style="color: #60a5fa;">Lead</span> - เมื่อกรอกฟอร์มสมัคร<br>
+                                    <span style="color: #60a5fa;">CompleteRegistration</span> - เมื่อส่งใบสมัครสำเร็จ
+                                </div>
+                            </div>
+                            
+                            <button type="button" onclick="saveFacebookPixelSettings()" class="btn-primary" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #1877f2, #42b72a);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                บันทึกการตั้งค่า Facebook Pixel
+                            </button>
+                        </div>
+                    </div>
+                    
                     <!-- Sales Channels -->
                     <div class="settings-card">
                         <h3>

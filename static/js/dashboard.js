@@ -2749,7 +2749,74 @@ let salesChannels = [];
 async function loadSettings() {
     loadPromptPaySettings();
     loadOrderNumberSettings();
+    loadFacebookPixelSettings();
     loadChannels();
+}
+
+// ==================== FACEBOOK PIXEL SETTINGS ====================
+
+async function loadFacebookPixelSettings() {
+    try {
+        const response = await fetch(`${API_URL}/facebook-pixel-settings`, {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Loaded Facebook Pixel settings:', data);
+            
+            if (data.pixel_id) {
+                document.getElementById('fbPixelId').value = data.pixel_id;
+            }
+            if (data.is_active !== undefined) {
+                document.getElementById('fbPixelActive').checked = data.is_active;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading Facebook Pixel settings:', error);
+    }
+}
+
+async function saveFacebookPixelSettings() {
+    const pixelId = document.getElementById('fbPixelId').value.trim();
+    const accessToken = document.getElementById('fbAccessToken').value.trim();
+    const isActive = document.getElementById('fbPixelActive').checked;
+    
+    if (isActive && !pixelId) {
+        showAlert('กรุณากรอก Pixel ID ก่อนเปิดใช้งาน', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/facebook-pixel-settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                pixel_id: pixelId,
+                access_token: accessToken,
+                is_active: isActive,
+                track_page_view: true,
+                track_lead: true,
+                track_complete_registration: true
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('บันทึกการตั้งค่า Facebook Pixel สำเร็จ', 'success');
+            // Clear access token field after save for security
+            document.getElementById('fbAccessToken').value = '';
+        } else {
+            showAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving Facebook Pixel settings:', error);
+        showAlert('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
 }
 
 async function loadPromptPaySettings() {

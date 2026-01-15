@@ -23,6 +23,43 @@
         .pulse-btn { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
     </style>
+    <!-- Facebook Pixel - Dynamic Loading -->
+    <script>
+        // Load Facebook Pixel dynamically based on settings
+        (async function() {
+            try {
+                const response = await fetch('/api/facebook-pixel-settings/public');
+                const data = await response.json();
+                
+                if (data.pixel_id) {
+                    // Initialize Facebook Pixel
+                    !function(f,b,e,v,n,t,s)
+                    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                    n.queue=[];t=b.createElement(e);t.async=!0;
+                    t.src=v;s=b.getElementsByTagName(e)[0];
+                    s.parentNode.insertBefore(t,s)}(window, document,'script',
+                    'https://connect.facebook.net/en_US/fbevents.js');
+                    
+                    fbq('init', data.pixel_id);
+                    
+                    if (data.track_page_view) {
+                        fbq('track', 'PageView');
+                    }
+                    
+                    // Store settings for later use
+                    window.fbPixelSettings = data;
+                    console.log('Facebook Pixel initialized:', data.pixel_id);
+                }
+            } catch (error) {
+                console.log('Facebook Pixel not configured');
+            }
+        })();
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none" id="fbPixelNoscript"/>
+    </noscript>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
@@ -283,6 +320,14 @@
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่ง...';
             
+            // Track Lead event when form is submitted
+            if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_lead) {
+                fbq('track', 'Lead', {
+                    content_name: 'Reseller Application',
+                    content_category: 'Registration'
+                });
+            }
+            
             try {
                 const response = await fetch('/api/register', {
                     method: 'POST',
@@ -293,6 +338,14 @@
                 const result = await response.json();
                 
                 if (response.ok) {
+                    // Track CompleteRegistration event on success
+                    if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_complete_registration) {
+                        fbq('track', 'CompleteRegistration', {
+                            content_name: 'Reseller Application',
+                            status: 'submitted'
+                        });
+                    }
+                    
                     showAlert('success', 'ส่งใบสมัครสำเร็จ! รอ Admin อนุมัติภายใน 1-2 วันทำการ');
                     this.reset();
                     setTimeout(() => {
