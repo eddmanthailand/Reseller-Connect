@@ -1980,6 +1980,11 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     ข้อมูลของฉัน
                 </a>
+                <a href="#" class="nav-item" data-page="chat">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    แชทกับแอดมิน
+                    <span class="nav-badge" id="resellerChatBadge" style="display: none;">0</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -2488,6 +2493,39 @@
                             บันทึกข้อมูล
                         </button>
                     </form>
+                </div>
+            </div>
+
+            <!-- Chat Page -->
+            <div id="page-chat" class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">แชทกับแอดมิน</h1>
+                        <p class="page-subtitle">สอบถามข้อมูลหรือแจ้งปัญหา</p>
+                    </div>
+                </div>
+                <div class="chat-container" style="background: rgba(255,255,255,0.05); border-radius: 12px; height: calc(100vh - 250px); min-height: 400px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="resellerChatMessages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                        <div style="text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.4);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 16px; opacity: 0.3;">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <p>กำลังโหลดข้อความ...</p>
+                        </div>
+                    </div>
+                    <div style="padding: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; gap: 8px;">
+                            <label style="cursor: pointer; padding: 12px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center;">
+                                <input type="file" id="resellerChatFileInput" accept="image/*,.pdf,.doc,.docx" style="display: none;" onchange="handleResellerChatFileUpload(event)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </label>
+                            <input type="text" id="resellerChatInput" placeholder="พิมพ์ข้อความ..." style="flex: 1; padding: 12px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white; font-size: 14px;" onkeydown="if(event.key==='Enter')sendResellerChatMessage()">
+                            <button onclick="sendResellerChatMessage()" class="btn-primary" style="padding: 12px 24px; border-radius: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                        </div>
+                        <div id="resellerChatAttachmentPreview" style="margin-top: 8px; display: none;"></div>
+                    </div>
                 </div>
             </div>
 

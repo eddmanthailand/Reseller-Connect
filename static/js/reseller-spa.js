@@ -123,6 +123,10 @@ function switchPage(pageName) {
         case 'mto-catalog':
             loadMtoCatalog();
             break;
+        case 'chat':
+            initResellerChat();
+            loadResellerChatUnreadCount();
+            break;
     }
 }
 
@@ -3250,4 +3254,231 @@ function formatDate(dateStr) {
 
 function formatNumber(num) {
     return new Intl.NumberFormat('th-TH').format(num || 0);
+}
+
+// ==================== RESELLER CHAT SYSTEM ====================
+
+let resellerChatThreadId = null;
+let resellerChatPollingInterval = null;
+let resellerLastMessageId = 0;
+let resellerPendingAttachments = [];
+
+async function initResellerChat() {
+    try {
+        const response = await fetch(`/api/chat/start/${currentUserId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            resellerChatThreadId = data.thread_id;
+            await loadResellerChatMessages();
+            startResellerChatPolling();
+        }
+    } catch (error) {
+        console.error('Error initializing chat:', error);
+    }
+}
+
+async function loadResellerChatMessages() {
+    if (!resellerChatThreadId) return;
+    
+    try {
+        const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages?since_id=${resellerLastMessageId}`, {
+            credentials: 'include'
+        });
+        const messages = await response.json();
+        
+        const container = document.getElementById('resellerChatMessages');
+        if (!container) return;
+        
+        if (resellerLastMessageId === 0) {
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.4);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 16px; opacity: 0.3;">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <p>ยังไม่มีข้อความ</p>
+                        <p style="font-size: 13px; margin-top: 8px;">เริ่มสนทนากับแอดมินได้เลย!</p>
+                    </div>
+                `;
+                return;
+            } else {
+                container.innerHTML = '';
+            }
+        }
+        
+        messages.forEach(msg => {
+            const isReseller = msg.sender_type === 'reseller';
+            const msgHtml = `
+                <div style="display: flex; ${isReseller ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
+                    <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isReseller ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
+                        ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
+                        <div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>
+                        ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
+                            att.file_type && att.file_type.startsWith('image/') 
+                                ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
+                                : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtmlChat(att.file_name)}</a>`
+                        ).join('') : ''}
+                        <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;">${formatChatTimestamp(msg.created_at)}</div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', msgHtml);
+            resellerLastMessageId = Math.max(resellerLastMessageId, msg.id);
+        });
+        
+        container.scrollTop = container.scrollHeight;
+        
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
+}
+
+function escapeHtmlChat(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatChatTimestamp(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+        return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        return 'เมื่อวาน ' + date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    } else {
+        return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    }
+}
+
+async function sendResellerChatMessage() {
+    if (!resellerChatThreadId) {
+        await initResellerChat();
+    }
+    
+    const input = document.getElementById('resellerChatInput');
+    const content = input.value.trim();
+    
+    if (!content && resellerPendingAttachments.length === 0) return;
+    
+    try {
+        const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                content: content,
+                attachments: resellerPendingAttachments
+            })
+        });
+        
+        if (response.ok) {
+            input.value = '';
+            resellerPendingAttachments = [];
+            document.getElementById('resellerChatAttachmentPreview').style.display = 'none';
+            document.getElementById('resellerChatAttachmentPreview').innerHTML = '';
+            await loadResellerChatMessages();
+        } else {
+            const error = await response.json();
+            showGlobalAlert('error', error.error || 'ไม่สามารถส่งข้อความได้');
+        }
+    } catch (error) {
+        showGlobalAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function handleResellerChatFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/chat/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            resellerPendingAttachments.push(result);
+            updateResellerChatAttachmentPreview();
+        } else {
+            showGlobalAlert('error', result.error || 'อัปโหลดไม่สำเร็จ');
+        }
+    } catch (error) {
+        showGlobalAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+    
+    event.target.value = '';
+}
+
+function updateResellerChatAttachmentPreview() {
+    const container = document.getElementById('resellerChatAttachmentPreview');
+    if (resellerPendingAttachments.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    container.style.gap = '8px';
+    container.style.flexWrap = 'wrap';
+    
+    container.innerHTML = resellerPendingAttachments.map((att, i) => `
+        <div style="position: relative; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 12px;">
+            ${att.file_type && att.file_type.startsWith('image/') ? '🖼️' : '📎'} ${escapeHtmlChat(att.file_name)}
+            <button onclick="removeResellerChatAttachment(${i})" style="position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: #ef4444; border: none; color: white; cursor: pointer; font-size: 12px; line-height: 1;">×</button>
+        </div>
+    `).join('');
+}
+
+function removeResellerChatAttachment(index) {
+    resellerPendingAttachments.splice(index, 1);
+    updateResellerChatAttachmentPreview();
+}
+
+function startResellerChatPolling() {
+    if (resellerChatPollingInterval) clearInterval(resellerChatPollingInterval);
+    resellerChatPollingInterval = setInterval(() => {
+        if (resellerChatThreadId) {
+            loadResellerChatMessages();
+        }
+        loadResellerChatUnreadCount();
+    }, 5000);
+}
+
+function stopResellerChatPolling() {
+    if (resellerChatPollingInterval) {
+        clearInterval(resellerChatPollingInterval);
+        resellerChatPollingInterval = null;
+    }
+}
+
+async function loadResellerChatUnreadCount() {
+    try {
+        const response = await fetch('/api/chat/unread-count', { credentials: 'include' });
+        const data = await response.json();
+        
+        const badge = document.getElementById('resellerChatBadge');
+        if (badge) {
+            if (data.unread_count > 0) {
+                badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading unread count:', error);
+    }
 }
