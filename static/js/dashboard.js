@@ -7856,12 +7856,18 @@ async function loadChatThreads() {
         const response = await fetch('/api/chat/threads', {
             credentials: 'include'
         });
+        
+        if (!response.ok) {
+            console.error('Chat threads API error:', response.status);
+            return;
+        }
+        
         const threads = await response.json();
         
         const container = document.getElementById('chatThreadsList');
         if (!container) return;
         
-        if (threads.length === 0) {
+        if (!Array.isArray(threads) || threads.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 40px 16px; color: rgba(255,255,255,0.5);">
                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 12px; opacity: 0.3;">
