@@ -12551,11 +12551,13 @@ def get_chat_messages(thread_id):
         cursor.execute('''
             SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at,
                    u.full_name as sender_name,
+                   r.name as sender_role,
                    (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
                     'file_name', ca.file_name, 'file_type', ca.file_type))
                     FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
             FROM chat_messages cm
             JOIN users u ON u.id = cm.sender_id
+            LEFT JOIN roles r ON r.id = u.role_id
             WHERE cm.thread_id = %s AND cm.id > %s
             ORDER BY cm.created_at ASC
             LIMIT %s

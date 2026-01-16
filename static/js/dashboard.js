@@ -7933,10 +7933,18 @@ async function loadChatMessages(threadId) {
         
         messages.forEach(msg => {
             const isAdmin = msg.sender_type === 'admin';
+            // Show sender name with role for admin messages
+            let senderLabel = '';
+            if (isAdmin && msg.sender_name) {
+                const roleLabel = msg.sender_role === 'Super Admin' ? 'Super Admin' : 
+                                  msg.sender_role === 'Assistant Admin' ? 'ผู้ช่วย' : 'Admin';
+                senderLabel = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 500;">${escapeHtml(msg.sender_name)} (${roleLabel})</div>`;
+            }
             const msgHtml = `
                 <div style="display: flex; ${isAdmin ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
                     <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isAdmin ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
                         ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
+                        ${senderLabel}
                         <div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>
                         ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                             att.file_type && att.file_type.startsWith('image/') 
