@@ -7958,12 +7958,13 @@ async function loadChatMessages(threadId) {
         
         messages.forEach(msg => {
             const isAdmin = msg.sender_type === 'admin';
-            // Show sender name with role for admin messages
             let senderLabel = '';
             if (isAdmin && msg.sender_name) {
                 const roleLabel = msg.sender_role === 'Super Admin' ? 'Super Admin' : 
                                   msg.sender_role === 'Assistant Admin' ? 'ผู้ช่วย' : 'Admin';
                 senderLabel = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 500;">${escapeHtml(msg.sender_name)} (${roleLabel})</div>`;
+            } else if (!isAdmin && msg.sender_name) {
+                senderLabel = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 500;">${escapeHtml(msg.sender_name)}</div>`;
             }
             const msgHtml = `
                 <div style="display: flex; ${isAdmin ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
