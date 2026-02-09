@@ -4775,7 +4775,7 @@ def get_facebook_ads_stats():
             SELECT u.id, u.full_name, u.username, u.created_at, u.is_approved,
                    rt.name as tier_name
             FROM users u
-            LEFT JOIN reseller_tiers rt ON u.tier_id = rt.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
             WHERE u.notes LIKE '%[source: facebook]%'
             ORDER BY u.created_at DESC
             LIMIT 10
@@ -12507,7 +12507,7 @@ def get_chat_threads():
                                               WHERE thread_id = ct.id AND user_id = %s), 0)) as unread_count
                 FROM chat_threads ct
                 JOIN users u ON u.id = ct.reseller_id
-                LEFT JOIN reseller_tiers rt ON rt.id = u.tier_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
                 WHERE ct.is_archived = FALSE
                 ORDER BY ct.last_message_at DESC NULLS LAST
             ''', (user_id,))

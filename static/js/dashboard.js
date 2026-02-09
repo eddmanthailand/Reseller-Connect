@@ -577,7 +577,7 @@ function switchPage(pageName) {
     } else if (pageName === 'mto-payments') {
         loadMtoPayments();
     } else if (pageName === 'chat') {
-        loadChatThreads();
+        loadChatThreadsAndAutoSelect();
         loadChatUnreadCount();
         startChatPolling();
     }
@@ -7851,6 +7851,14 @@ let lastMessageId = 0;
 let chatQuickReplies = [];
 let pendingChatAttachments = [];
 
+async function loadChatThreadsAndAutoSelect() {
+    const threads = await loadChatThreads();
+    if (threads && threads.length > 0 && !currentChatThreadId) {
+        const firstThread = threads.find(t => t.unread_count > 0) || threads[0];
+        selectChatThread(firstThread.id, firstThread.reseller_name, firstThread.tier_name || '');
+    }
+}
+
 async function loadChatThreads() {
     try {
         const response = await fetch('/api/chat/threads', {
@@ -7859,13 +7867,21 @@ async function loadChatThreads() {
         
         if (!response.ok) {
             console.error('Chat threads API error:', response.status);
-            return;
+            const container = document.getElementById('chatThreadsList');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 16px; color: rgba(255,255,255,0.5);">
+                        <p>ไม่สามารถโหลดข้อมูลได้</p>
+                    </div>
+                `;
+            }
+            return [];
         }
         
         const threads = await response.json();
         
         const container = document.getElementById('chatThreadsList');
-        if (!container) return;
+        if (!container) return [];
         
         if (!Array.isArray(threads) || threads.length === 0) {
             container.innerHTML = `
@@ -7876,7 +7892,7 @@ async function loadChatThreads() {
                     <p>ยังไม่มีการสนทนา</p>
                 </div>
             `;
-            return;
+            return [];
         }
         
         container.innerHTML = threads.map(thread => `
@@ -7897,8 +7913,11 @@ async function loadChatThreads() {
             </div>
         `).join('');
         
+        return threads;
+        
     } catch (error) {
         console.error('Error loading chat threads:', error);
+        return [];
     }
 }
 
