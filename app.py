@@ -12500,7 +12500,7 @@ def get_chat_threads():
             cursor.execute('''
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
                        u.full_name as reseller_name, u.username,
-                       rt.name as tier_name,
+                       rt.name as tier_name, u.reseller_tier_id,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
@@ -12514,6 +12514,83 @@ def get_chat_threads():
         
         threads = [dict(row) for row in cursor.fetchall()]
         return jsonify(threads), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/chat/products/search', methods=['GET'])
+@login_required
+def search_chat_products():
+    """Search products for attaching to chat messages"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        q = request.args.get('q', '').strip()
+        reseller_tier_id = request.args.get('tier_id', None, type=int)
+        
+        # Auto-detect tier for resellers
+        if not reseller_tier_id and session.get('role_name') == 'Reseller':
+            cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (session['user_id'],))
+            user_row = cursor.fetchone()
+            if user_row:
+                reseller_tier_id = user_row['reseller_tier_id']
+        
+        cursor.execute('''
+            SELECT p.id, p.name, p.status,
+                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url,
+                   MIN(s.price) as min_price, MAX(s.price) as max_price,
+                   b.name as brand_name
+            FROM products p
+            LEFT JOIN skus s ON s.product_id = p.id
+            LEFT JOIN brands b ON b.id = p.brand_id
+            WHERE p.status = 'active'
+            AND (p.name ILIKE %s OR EXISTS (SELECT 1 FROM skus sk WHERE sk.product_id = p.id AND sk.sku_code ILIKE %s))
+            GROUP BY p.id, p.name, p.status, b.name
+            ORDER BY p.name
+            LIMIT 20
+        ''', (f'%{q}%', f'%{q}%'))
+        
+        products = [dict(row) for row in cursor.fetchall()]
+        
+        if reseller_tier_id:
+            for product in products:
+                cursor.execute('''
+                    SELECT discount_percent FROM product_tier_pricing 
+                    WHERE product_id = %s AND tier_id = %s
+                ''', (product['id'], reseller_tier_id))
+                tier_price = cursor.fetchone()
+                if tier_price and tier_price['discount_percent']:
+                    discount = float(tier_price['discount_percent'])
+                    product['discount_percent'] = discount
+                    if product['min_price']:
+                        product['tier_min_price'] = round(float(product['min_price']) * (1 - discount/100), 2)
+                    if product['max_price']:
+                        product['tier_max_price'] = round(float(product['max_price']) * (1 - discount/100), 2)
+                else:
+                    product['discount_percent'] = 0
+                    product['tier_min_price'] = float(product['min_price']) if product['min_price'] else 0
+                    product['tier_max_price'] = float(product['max_price']) if product['max_price'] else 0
+                
+                if product['min_price']:
+                    product['min_price'] = float(product['min_price'])
+                if product['max_price']:
+                    product['max_price'] = float(product['max_price'])
+        else:
+            for product in products:
+                if product['min_price']:
+                    product['min_price'] = float(product['min_price'])
+                if product['max_price']:
+                    product['max_price'] = float(product['max_price'])
+        
+        return jsonify(products), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -12549,7 +12626,7 @@ def get_chat_messages(thread_id):
         limit = request.args.get('limit', 50, type=int)
         
         cursor.execute('''
-            SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at,
+            SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
                    u.full_name as sender_name,
                    r.name as sender_role,
                    (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
@@ -12564,6 +12641,50 @@ def get_chat_messages(thread_id):
         ''', (thread_id, since_id, limit))
         
         messages = [dict(row) for row in cursor.fetchall()]
+        
+        thread_reseller_id = thread['reseller_id']
+        cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (thread_reseller_id,))
+        reseller_user = cursor.fetchone()
+        reseller_tier_id = reseller_user['reseller_tier_id'] if reseller_user else None
+        
+        for msg in messages:
+            if msg.get('product_id'):
+                cursor.execute('''
+                    SELECT p.id, p.name,
+                           (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url,
+                           MIN(s.price) as min_price, MAX(s.price) as max_price
+                    FROM products p
+                    LEFT JOIN skus s ON s.product_id = p.id
+                    WHERE p.id = %s
+                    GROUP BY p.id, p.name
+                ''', (msg['product_id'],))
+                product = cursor.fetchone()
+                if product:
+                    product_data = dict(product)
+                    if product_data['min_price']:
+                        product_data['min_price'] = float(product_data['min_price'])
+                    if product_data['max_price']:
+                        product_data['max_price'] = float(product_data['max_price'])
+                    
+                    product_data['discount_percent'] = 0
+                    product_data['tier_min_price'] = product_data.get('min_price') or 0
+                    product_data['tier_max_price'] = product_data.get('max_price') or 0
+                    
+                    if reseller_tier_id:
+                        cursor.execute('''
+                            SELECT discount_percent FROM product_tier_pricing
+                            WHERE product_id = %s AND tier_id = %s
+                        ''', (msg['product_id'], reseller_tier_id))
+                        tier_info = cursor.fetchone()
+                        if tier_info and tier_info['discount_percent'] and float(tier_info['discount_percent']) > 0:
+                            discount = float(tier_info['discount_percent'])
+                            product_data['discount_percent'] = discount
+                            if product_data['min_price']:
+                                product_data['tier_min_price'] = round(product_data['min_price'] * (1 - discount/100), 2)
+                            if product_data['max_price']:
+                                product_data['tier_max_price'] = round(product_data['max_price'] * (1 - discount/100), 2)
+                    
+                    msg['product'] = product_data
         
         # Mark as read
         if messages:
@@ -12612,17 +12733,18 @@ def send_chat_message(thread_id):
         data = request.get_json()
         content = data.get('content', '').strip()
         attachments = data.get('attachments', [])
+        product_id = data.get('product_id', None)
         
-        if not content and not attachments:
-            return jsonify({'error': 'Message content or attachments required'}), 400
+        if not content and not attachments and not product_id:
+            return jsonify({'error': 'Message content, attachments or product required'}), 400
         
         sender_type = 'reseller' if role_name == 'Reseller' else 'admin'
         
         # Insert message
         cursor.execute('''
-            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content)
-            VALUES (%s, %s, %s, %s) RETURNING id, created_at
-        ''', (thread_id, user_id, sender_type, content))
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at
+        ''', (thread_id, user_id, sender_type, content, product_id))
         result = cursor.fetchone()
         message_id = result['id']
         
@@ -12635,7 +12757,7 @@ def send_chat_message(thread_id):
                   attachment.get('file_type'), attachment.get('file_size')))
         
         # Update thread last message
-        preview = content[:100] if content else '[รูปภาพ]'
+        preview = content[:100] if content else ('[📦 สินค้า]' if product_id else '[รูปภาพ]')
         cursor.execute('''
             UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s
             WHERE id = %s

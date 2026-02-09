@@ -7850,12 +7850,15 @@ let chatPollingInterval = null;
 let lastMessageId = 0;
 let chatQuickReplies = [];
 let pendingChatAttachments = [];
+let selectedChatProduct = null;
+let chatProductSearchTimeout = null;
+let currentChatResellerTierId = null;
 
 async function loadChatThreadsAndAutoSelect() {
     const threads = await loadChatThreads();
     if (threads && threads.length > 0 && !currentChatThreadId) {
         const firstThread = threads.find(t => t.unread_count > 0) || threads[0];
-        selectChatThread(firstThread.id, firstThread.reseller_name, firstThread.tier_name || '');
+        selectChatThread(firstThread.id, firstThread.reseller_name, firstThread.tier_name || '', firstThread.reseller_tier_id || null);
     }
 }
 
@@ -7897,7 +7900,7 @@ async function loadChatThreads() {
         
         container.innerHTML = threads.map(thread => `
             <div class="chat-thread-item ${currentChatThreadId === thread.id ? 'active' : ''}" 
-                 onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}')"
+                 onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}', ${thread.reseller_tier_id || 'null'})"
                  style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; background: ${currentChatThreadId === thread.id ? 'rgba(102,126,234,0.2)' : 'transparent'}; transition: background 0.2s;">
                 <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">
                     ${thread.reseller_name.charAt(0).toUpperCase()}
@@ -7926,9 +7929,13 @@ function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function selectChatThread(threadId, resellerName, tierName) {
+async function selectChatThread(threadId, resellerName, tierName, resellerTierId) {
     currentChatThreadId = threadId;
     lastMessageId = 0;
+    currentChatResellerTierId = resellerTierId || null;
+    selectedChatProduct = null;
+    const productPreview = document.getElementById('chatProductPreview');
+    if (productPreview) productPreview.style.display = 'none';
     
     document.getElementById('chatHeader').style.display = 'block';
     document.getElementById('chatInputArea').style.display = 'block';
@@ -7966,12 +7973,37 @@ async function loadChatMessages(threadId) {
             } else if (!isAdmin && msg.sender_name) {
                 senderLabel = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 500;">${escapeHtml(msg.sender_name)}</div>`;
             }
+            
+            let productCardHtml = '';
+            if (msg.product) {
+                const p = msg.product;
+                const hasDiscount = p.discount_percent && p.discount_percent > 0;
+                const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${formatNumber(p.tier_min_price)}` : `฿${formatNumber(p.tier_min_price)} - ฿${formatNumber(p.tier_max_price)}`) : '';
+                const originalPrice = p.min_price === p.max_price ? `฿${formatNumber(p.min_price)}` : `฿${formatNumber(p.min_price)} - ฿${formatNumber(p.max_price)}`;
+                productCardHtml = `
+                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="window.location.hash='products'">
+                        ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
+                        <div style="padding: 10px;">
+                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
+                            ${hasDiscount ? `
+                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                                <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
+                                <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
+                            ` : `
+                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }
+            
             const msgHtml = `
                 <div style="display: flex; ${isAdmin ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
                     <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isAdmin ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
                         ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
                         ${senderLabel}
-                        <div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>
+                        ${productCardHtml}
+                        ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>` : ''}
                         ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                             att.file_type && att.file_type.startsWith('image/') 
                                 ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
@@ -8012,9 +8044,17 @@ async function sendChatMessage() {
     const input = document.getElementById('chatMessageInput');
     const content = input.value.trim();
     
-    if (!content && pendingChatAttachments.length === 0) return;
+    if (!content && pendingChatAttachments.length === 0 && !selectedChatProduct) return;
     
     try {
+        const body = {
+            content: content,
+            attachments: pendingChatAttachments
+        };
+        if (selectedChatProduct) {
+            body.product_id = selectedChatProduct.id;
+        }
+        
         const response = await fetch(`/api/chat/threads/${currentChatThreadId}/messages`, {
             method: 'POST',
             headers: {
@@ -8022,17 +8062,16 @@ async function sendChatMessage() {
                 'X-CSRF-Token': csrfToken
             },
             credentials: 'include',
-            body: JSON.stringify({
-                content: content,
-                attachments: pendingChatAttachments
-            })
+            body: JSON.stringify(body)
         });
         
         if (response.ok) {
             input.value = '';
             pendingChatAttachments = [];
+            selectedChatProduct = null;
             document.getElementById('chatAttachmentPreview').style.display = 'none';
             document.getElementById('chatAttachmentPreview').innerHTML = '';
+            document.getElementById('chatProductPreview').style.display = 'none';
             await loadChatMessages(currentChatThreadId);
             loadChatThreads();
         } else {
@@ -8097,6 +8136,99 @@ function updateChatAttachmentPreview() {
 function removeChatAttachment(index) {
     pendingChatAttachments.splice(index, 1);
     updateChatAttachmentPreview();
+}
+
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return Number(num).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function openChatProductSearch() {
+    document.getElementById('chatProductModal').style.display = 'flex';
+    document.getElementById('chatProductSearchInput').value = '';
+    document.getElementById('chatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+    setTimeout(() => document.getElementById('chatProductSearchInput').focus(), 100);
+}
+
+function closeChatProductModal() {
+    document.getElementById('chatProductModal').style.display = 'none';
+}
+
+function searchChatProducts() {
+    clearTimeout(chatProductSearchTimeout);
+    const q = document.getElementById('chatProductSearchInput').value.trim();
+    if (q.length < 1) {
+        document.getElementById('chatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+        return;
+    }
+    chatProductSearchTimeout = setTimeout(async () => {
+        try {
+            let url = `/api/chat/products/search?q=${encodeURIComponent(q)}`;
+            if (currentChatResellerTierId) {
+                url += `&tier_id=${currentChatResellerTierId}`;
+            }
+            const response = await fetch(url, { credentials: 'include' });
+            const products = await response.json();
+            const container = document.getElementById('chatProductSearchResults');
+            
+            if (!Array.isArray(products) || products.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">ไม่พบสินค้า</div>';
+                return;
+            }
+            
+            container.innerHTML = products.map(p => {
+                const hasDiscount = p.discount_percent && p.discount_percent > 0;
+                const priceDisplay = hasDiscount
+                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.5; font-size: 12px;">฿${formatNumber(p.min_price)}</span>`
+                    : `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.min_price)}</span>`;
+                return `
+                    <div onclick="selectChatProduct(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.image_url || ''}', ${p.min_price || 0}, ${hasDiscount ? p.tier_min_price : p.min_price || 0}, ${p.discount_percent || 0})"
+                         style="display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid rgba(255,255,255,0.05);"
+                         onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+                        ${p.image_url ? `<img src="${p.image_url}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">` : '<div style="width: 50px; height: 50px; background: rgba(255,255,255,0.05); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: rgba(255,255,255,0.2); font-size: 20px;">📦</div>'}
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
+                            <div style="font-size: 12px; opacity: 0.5; margin-top: 2px;">${p.brand_name || ''}</div>
+                            <div style="font-size: 13px; margin-top: 4px;">${priceDisplay}${hasDiscount ? ` <span style="color: #34d399; font-size: 11px;">-${p.discount_percent}%</span>` : ''}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error('Error searching products:', error);
+        }
+    }, 300);
+}
+
+function selectChatProduct(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {
+    selectedChatProduct = { id, name, imageUrl, originalPrice, tierPrice, discountPercent };
+    
+    const preview = document.getElementById('chatProductPreview');
+    const img = document.getElementById('chatProductPreviewImg');
+    const nameEl = document.getElementById('chatProductPreviewName');
+    const priceEl = document.getElementById('chatProductPreviewPrice');
+    
+    if (imageUrl) {
+        img.src = imageUrl;
+        img.style.display = 'block';
+    } else {
+        img.style.display = 'none';
+    }
+    nameEl.textContent = name;
+    
+    if (discountPercent > 0) {
+        priceEl.innerHTML = `฿${formatNumber(tierPrice)} <span style="text-decoration: line-through; opacity: 0.5; font-size: 11px;">฿${formatNumber(originalPrice)}</span>`;
+    } else {
+        priceEl.textContent = `฿${formatNumber(originalPrice)}`;
+    }
+    
+    preview.style.display = 'block';
+    closeChatProductModal();
+}
+
+function removeChatProduct() {
+    selectedChatProduct = null;
+    document.getElementById('chatProductPreview').style.display = 'none';
 }
 
 function startChatPolling() {

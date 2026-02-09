@@ -533,6 +533,7 @@ def init_db():
                 content TEXT,
                 is_broadcast BOOLEAN DEFAULT FALSE,
                 broadcast_id INTEGER,
+                product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')

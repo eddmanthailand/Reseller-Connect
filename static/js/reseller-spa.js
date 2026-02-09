@@ -3353,11 +3353,35 @@ async function loadResellerChatMessages() {
         
         messages.forEach(msg => {
             const isReseller = msg.sender_type === 'reseller';
+            
+            let productCardHtml = '';
+            if (msg.product) {
+                const p = msg.product;
+                const hasDiscount = p.discount_percent && p.discount_percent > 0;
+                const fmtNum = (n) => n != null ? Number(n).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : '0';
+                const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${fmtNum(p.tier_min_price)}` : `฿${fmtNum(p.tier_min_price)} - ฿${fmtNum(p.tier_max_price)}`) : '';
+                const originalPrice = p.min_price === p.max_price ? `฿${fmtNum(p.min_price)}` : `฿${fmtNum(p.min_price)} - ฿${fmtNum(p.max_price)}`;
+                productCardHtml = `
+                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1);">
+                        ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
+                        <div style="padding: 10px;">
+                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>
+                            ${hasDiscount ? `
+                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                                <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
+                                <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
+                            ` : `<div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>`}
+                        </div>
+                    </div>
+                `;
+            }
+            
             const msgHtml = `
                 <div style="display: flex; ${isReseller ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
                     <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isReseller ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
                         ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
-                        <div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>
+                        ${productCardHtml}
+                        ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>` : ''}
                         ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                             att.file_type && att.file_type.startsWith('image/') 
                                 ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
@@ -3397,6 +3421,9 @@ function formatChatTimestamp(dateStr) {
     }
 }
 
+let resellerSelectedChatProduct = null;
+let resellerChatProductSearchTimeout = null;
+
 async function sendResellerChatMessage() {
     if (!resellerChatThreadId) {
         await initResellerChat();
@@ -3405,24 +3432,31 @@ async function sendResellerChatMessage() {
     const input = document.getElementById('resellerChatInput');
     const content = input.value.trim();
     
-    if (!content && resellerPendingAttachments.length === 0) return;
+    if (!content && resellerPendingAttachments.length === 0 && !resellerSelectedChatProduct) return;
     
     try {
+        const body = {
+            content: content,
+            attachments: resellerPendingAttachments
+        };
+        if (resellerSelectedChatProduct) {
+            body.product_id = resellerSelectedChatProduct.id;
+        }
+        
         const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({
-                content: content,
-                attachments: resellerPendingAttachments
-            })
+            body: JSON.stringify(body)
         });
         
         if (response.ok) {
             input.value = '';
             resellerPendingAttachments = [];
+            resellerSelectedChatProduct = null;
             document.getElementById('resellerChatAttachmentPreview').style.display = 'none';
             document.getElementById('resellerChatAttachmentPreview').innerHTML = '';
+            document.getElementById('resellerChatProductPreview').style.display = 'none';
             await loadResellerChatMessages();
         } else {
             const error = await response.json();
@@ -3431,6 +3465,93 @@ async function sendResellerChatMessage() {
     } catch (error) {
         showGlobalAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
     }
+}
+
+function openResellerChatProductSearch() {
+    document.getElementById('resellerChatProductModal').style.display = 'flex';
+    document.getElementById('resellerChatProductSearchInput').value = '';
+    document.getElementById('resellerChatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+    setTimeout(() => document.getElementById('resellerChatProductSearchInput').focus(), 100);
+}
+
+function closeResellerChatProductModal() {
+    document.getElementById('resellerChatProductModal').style.display = 'none';
+}
+
+function searchResellerChatProducts() {
+    clearTimeout(resellerChatProductSearchTimeout);
+    const q = document.getElementById('resellerChatProductSearchInput').value.trim();
+    if (q.length < 1) {
+        document.getElementById('resellerChatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+        return;
+    }
+    resellerChatProductSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/chat/products/search?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+            const products = await response.json();
+            const container = document.getElementById('resellerChatProductSearchResults');
+            
+            if (!Array.isArray(products) || products.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">ไม่พบสินค้า</div>';
+                return;
+            }
+            
+            const fmtNum = (n) => n != null ? Number(n).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : '0';
+            
+            container.innerHTML = products.map(p => {
+                const hasDiscount = p.discount_percent && p.discount_percent > 0;
+                const priceDisplay = hasDiscount
+                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${fmtNum(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.5; font-size: 12px;">฿${fmtNum(p.min_price)}</span>`
+                    : `<span style="color: #fbbf24; font-weight: 600;">฿${fmtNum(p.min_price)}</span>`;
+                return `
+                    <div onclick="selectResellerChatProduct(${p.id}, '${escapeHtmlChat(p.name).replace(/'/g, "\\'")}', '${p.image_url || ''}', ${p.min_price || 0}, ${hasDiscount ? p.tier_min_price : p.min_price || 0}, ${p.discount_percent || 0})"
+                         style="display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid rgba(255,255,255,0.05);"
+                         onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+                        ${p.image_url ? `<img src="${p.image_url}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">` : '<div style="width: 50px; height: 50px; background: rgba(255,255,255,0.05); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: rgba(255,255,255,0.2); font-size: 20px;">📦</div>'}
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtmlChat(p.name)}</div>
+                            <div style="font-size: 12px; opacity: 0.5; margin-top: 2px;">${p.brand_name || ''}</div>
+                            <div style="font-size: 13px; margin-top: 4px;">${priceDisplay}${hasDiscount ? ` <span style="color: #34d399; font-size: 11px;">-${p.discount_percent}%</span>` : ''}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error('Error searching products:', error);
+        }
+    }, 300);
+}
+
+function selectResellerChatProduct(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {
+    resellerSelectedChatProduct = { id, name, imageUrl, originalPrice, tierPrice, discountPercent };
+    
+    const preview = document.getElementById('resellerChatProductPreview');
+    const img = document.getElementById('resellerChatProductImg');
+    const nameEl = document.getElementById('resellerChatProductName');
+    const priceEl = document.getElementById('resellerChatProductPrice');
+    const fmtNum = (n) => n != null ? Number(n).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : '0';
+    
+    if (imageUrl) {
+        img.src = imageUrl;
+        img.style.display = 'block';
+    } else {
+        img.style.display = 'none';
+    }
+    nameEl.textContent = name;
+    
+    if (discountPercent > 0) {
+        priceEl.innerHTML = `฿${fmtNum(tierPrice)} <span style="text-decoration: line-through; opacity: 0.5; font-size: 11px;">฿${fmtNum(originalPrice)}</span>`;
+    } else {
+        priceEl.textContent = `฿${fmtNum(originalPrice)}`;
+    }
+    
+    preview.style.display = 'block';
+    closeResellerChatProductModal();
+}
+
+function removeResellerChatProduct() {
+    resellerSelectedChatProduct = null;
+    document.getElementById('resellerChatProductPreview').style.display = 'none';
 }
 
 async function handleResellerChatFileUpload(event) {

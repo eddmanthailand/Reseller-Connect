@@ -2647,11 +2647,24 @@
                         </div>
                         <div id="chatInputArea" style="padding: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: none;">
                             <div style="display: flex; gap: 8px; margin-bottom: 8px;" id="quickReplyButtons"></div>
+                            <div id="chatProductPreview" style="display: none; margin-bottom: 8px; padding: 10px; background: rgba(255,255,255,0.08); border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);">
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <img id="chatProductPreviewImg" src="" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div id="chatProductPreviewName" style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                                        <div id="chatProductPreviewPrice" style="font-size: 12px; color: #fbbf24;"></div>
+                                    </div>
+                                    <button onclick="removeChatProduct()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 18px; padding: 4px;">&times;</button>
+                                </div>
+                            </div>
                             <div style="display: flex; gap: 8px;">
                                 <label style="cursor: pointer; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center;">
                                     <input type="file" id="chatFileInput" accept="image/*,.pdf,.doc,.docx" style="display: none;" onchange="handleChatFileUpload(event)">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                 </label>
+                                <button onclick="openChatProductSearch()" style="cursor: pointer; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; border: none; color: white;" title="แนบสินค้า">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                                </button>
                                 <input type="text" id="chatMessageInput" placeholder="พิมพ์ข้อความ..." style="flex: 1; padding: 10px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white;" onkeydown="if(event.key==='Enter')sendChatMessage()">
                                 <button onclick="sendChatMessage()" class="btn btn-primary" style="padding: 10px 20px;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -2696,6 +2709,26 @@
                     <div class="modal-footer">
                         <button onclick="closeBroadcastModal()" class="btn">ยกเลิก</button>
                         <button onclick="sendBroadcast()" class="btn btn-primary">ส่ง Broadcast</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Product Search Modal -->
+            <div id="chatProductModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>เลือกสินค้า</h3>
+                        <button onclick="closeChatProductModal()" class="btn-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 16px;">
+                            <input type="text" id="chatProductSearchInput" placeholder="ค้นหาชื่อสินค้าหรือ SKU..." class="form-control" oninput="searchChatProducts()" style="width: 100%;">
+                        </div>
+                        <div id="chatProductSearchResults" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">
+                                พิมพ์เพื่อค้นหาสินค้า
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
