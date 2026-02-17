@@ -627,6 +627,21 @@ def init_db():
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_pending_emails_scheduled ON chat_pending_emails(scheduled_at) WHERE is_sent = FALSE')
         
+        # Push notification subscriptions table (PWA Web Push)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, endpoint)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)')
+        
         # ==================== END CHAT SYSTEM ====================
         
         # Insert default sales channels

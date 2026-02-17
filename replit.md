@@ -27,7 +27,8 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Order & Sales Management:** Configurable order numbering; sales statistics, 7-day sales charts, recent orders, top-selling products; sales history with filters; brand sales analytics.
 - **Warehouse & Stock Management:** Full CRUD for warehouses; multi-warehouse stock tracking per SKU; stock transfer system with audit logging; stock adjustment system for various reasons and channels; comprehensive stock audit log.
 - **Reseller Features:** Dedicated dashboard; tier-specific pricing; customer database management for direct shipping; profile management for shipping info and branding.
-- **Communication:** In-app chat system between Admin and Resellers with real-time messaging, broadcast capabilities, quick reply templates, file attachments, unread badges, and smart email notifications.
+- **Communication:** In-app chat system between Admin and Resellers with real-time messaging, broadcast capabilities, quick reply templates, file attachments, product attachment with tier pricing, unread badges, and smart email notifications.
+- **PWA & Push Notifications:** Progressive Web App with installable app icon, Service Worker for caching, Web Push Notifications (VAPID-based) for real-time alerts on chat messages, new orders, and broadcasts. Push subscription management via `/api/push/*` endpoints.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
@@ -46,6 +47,8 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **python-dotenv**: Environment variable management.
 - **bcrypt**: Password hashing.
 - **gunicorn**: Production WSGI server.
+- **pywebpush**: Web Push notification sending.
+- **py-vapid**: VAPID key management for Web Push.
 
 ### Database Service
 - **Replit PostgreSQL (Neon-backed)**: Auto-provisioned, accessed via `DATABASE_URL`.

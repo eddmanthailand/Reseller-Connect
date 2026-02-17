@@ -13,6 +13,7 @@ from replit.object_storage import Client
 from datetime import timedelta, datetime
 import time
 import secrets
+from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
 
@@ -7210,6 +7211,18 @@ def create_order():
             len(items)
         )
         
+        # Send push notification to admins
+        try:
+            fmt_amount = f"{float(order['final_amount']):,.0f}"
+            send_push_to_admins(
+                '🛒 ออเดอร์ใหม่!',
+                f'{reseller_name} สั่งซื้อ {order["order_number"]} (฿{fmt_amount})',
+                url='/admin#orders',
+                tag=f'order-{order["id"]}'
+            )
+        except Exception:
+            pass
+        
         return jsonify({
             'message': 'Order created successfully',
             'order': order
@@ -12789,6 +12802,51 @@ def send_chat_message(thread_id):
         
         conn.commit()
         
+        # Send push notification to recipient
+        if recipient_id:
+            cursor.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
+            sender_info = cursor.fetchone()
+            sender_name = sender_info['full_name'] if sender_info else 'ผู้ใช้'
+            push_body = content[:100] if content else ('ส่งสินค้ามาให้ดู' if product_id else 'ส่งไฟล์แนบ')
+            push_url = '/admin#chat' if sender_type == 'reseller' else '/reseller#chat'
+            try:
+                send_push_notification(
+                    recipient_id,
+                    f'💬 {sender_name}',
+                    push_body,
+                    url=push_url,
+                    tag=f'chat-{thread_id}',
+                    notification_type='chat'
+                )
+            except Exception:
+                pass
+        
+        if sender_type == 'reseller':
+            try:
+                cursor2 = conn.cursor()
+                cursor2.execute('''
+                    SELECT DISTINCT ps.user_id FROM push_subscriptions ps
+                    JOIN users u ON u.id = ps.user_id
+                    JOIN roles r ON r.id = u.role_id
+                    WHERE r.name IN ('Super Admin', 'Assistant Admin') AND ps.user_id != %s
+                ''', (recipient_id if recipient_id else 0,))
+                other_admins = [row[0] for row in cursor2.fetchall()]
+                cursor2.close()
+                
+                cursor3 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cursor3.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
+                rinfo = cursor3.fetchone()
+                cursor3.close()
+                rname = rinfo['full_name'] if rinfo else 'รีเซลเลอร์'
+                
+                for admin_id in other_admins:
+                    try:
+                        send_push_notification(admin_id, f'💬 {rname}', content[:100] if content else 'ส่งข้อความใหม่', url='/admin#chat', tag=f'chat-{thread_id}')
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        
         return jsonify({
             'id': message_id,
             'created_at': result['created_at'].isoformat()
@@ -13100,6 +13158,21 @@ def send_broadcast_message():
         
         conn.commit()
         
+        # Send push notifications to all target resellers
+        broadcast_title = title if title else 'ประกาศจากแอดมิน'
+        for reseller in resellers:
+            try:
+                send_push_notification(
+                    reseller['id'],
+                    f'📢 {broadcast_title}',
+                    content[:100],
+                    url='/reseller#chat',
+                    tag=f'broadcast-{broadcast_id}',
+                    notification_type='broadcast'
+                )
+            except Exception:
+                pass
+        
         return jsonify({
             'message': f'Broadcast sent to {sent_count} resellers',
             'broadcast_id': broadcast_id,
@@ -13322,6 +13395,199 @@ def search_chat_messages():
             cursor.close()
         if conn:
             conn.close()
+
+# ==================== PWA & PUSH NOTIFICATIONS ====================
+
+@app.route('/sw.js')
+def service_worker():
+    return send_file('static/sw.js', mimetype='application/javascript')
+
+@app.route('/manifest.json')
+def manifest():
+    return send_file('static/manifest.json', mimetype='application/manifest+json')
+
+@app.route('/api/push/vapid-public-key', methods=['GET'])
+@login_required
+def get_vapid_public_key():
+    public_key = os.environ.get('VAPID_PUBLIC_KEY', '')
+    return jsonify({'publicKey': public_key}), 200
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def push_subscribe():
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        subscription = data.get('subscription', {})
+        endpoint = subscription.get('endpoint', '')
+        keys = subscription.get('keys', {})
+        p256dh = keys.get('p256dh', '')
+        auth = keys.get('auth', '')
+        
+        if not endpoint or not p256dh or not auth:
+            return jsonify({'error': 'Invalid subscription data'}), 400
+        
+        user_id = session['user_id']
+        user_agent = request.headers.get('User-Agent', '')
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, endpoint) DO UPDATE SET
+                p256dh = EXCLUDED.p256dh,
+                auth = EXCLUDED.auth,
+                user_agent = EXCLUDED.user_agent,
+                created_at = CURRENT_TIMESTAMP
+        ''', (user_id, endpoint, p256dh, auth, user_agent))
+        conn.commit()
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+def push_unsubscribe():
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        endpoint = data.get('endpoint', '')
+        user_id = session['user_id']
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM push_subscriptions WHERE user_id = %s AND endpoint = %s', (user_id, endpoint))
+        conn.commit()
+        
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/push/status', methods=['GET'])
+@login_required
+def push_status():
+    conn = None
+    cursor = None
+    try:
+        user_id = session['user_id']
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT COUNT(*) FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        count = cursor.fetchone()[0]
+        
+        return jsonify({'subscribed': count > 0, 'count': count}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_push_notification(user_id, title, body, url='/', tag='ekg-notification', notification_type='general'):
+    conn = None
+    cursor = None
+    try:
+        vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY', '')
+        vapid_subject = os.environ.get('VAPID_SUBJECT', 'mailto:admin@ekgshops.com')
+        
+        if not vapid_private_key:
+            return
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        subscriptions = cursor.fetchall()
+        
+        payload = json.dumps({
+            'title': title,
+            'body': body,
+            'icon': '/static/icons/icon-192x192.png',
+            'url': url,
+            'tag': tag,
+            'type': notification_type
+        })
+        
+        expired_ids = []
+        for sub in subscriptions:
+            try:
+                webpush(
+                    subscription_info={
+                        'endpoint': sub['endpoint'],
+                        'keys': {
+                            'p256dh': sub['p256dh'],
+                            'auth': sub['auth']
+                        }
+                    },
+                    data=payload,
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims={'sub': vapid_subject}
+                )
+            except WebPushException as e:
+                if e.response and e.response.status_code in (404, 410):
+                    expired_ids.append(sub['id'])
+            except Exception:
+                pass
+        
+        if expired_ids:
+            cursor.execute('DELETE FROM push_subscriptions WHERE id = ANY(%s)', (expired_ids,))
+            conn.commit()
+            
+    except Exception:
+        pass
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def send_push_to_admins(title, body, url='/', tag='admin-notification'):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT DISTINCT ps.user_id FROM push_subscriptions ps
+            JOIN users u ON u.id = ps.user_id
+            JOIN roles r ON r.id = u.role_id
+            WHERE r.name IN ('Super Admin', 'Assistant Admin')
+        ''')
+        admin_ids = [row[0] for row in cursor.fetchall()]
+        
+        for admin_id in admin_ids:
+            send_push_notification(admin_id, title, body, url, tag)
+            
+    except Exception:
+        pass
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== END PWA & PUSH NOTIFICATIONS ====================
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
