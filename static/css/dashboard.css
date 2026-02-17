@@ -303,6 +303,9 @@ body.sidebar-collapsed .sidebar-toggle {
 .sidebar-nav {
     flex: 1;
     padding: 24px 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .nav-item {
@@ -361,7 +364,7 @@ body.sidebar-collapsed .sidebar-toggle {
 }
 
 .submenu.open {
-    max-height: 200px;
+    max-height: 500px;
 }
 
 .submenu-item {
