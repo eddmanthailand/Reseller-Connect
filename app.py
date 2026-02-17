@@ -6920,6 +6920,12 @@ def reseller_submit_mto_payment(order_id):
 
 # ==================== RESELLER PAGES ====================
 
+@app.route('/reseller')
+@login_required
+def reseller_spa_root():
+    """Reseller SPA root"""
+    return render_template('reseller_spa.html')
+
 @app.route('/reseller/dashboard')
 @login_required
 def reseller_dashboard_page():
