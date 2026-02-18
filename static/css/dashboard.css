@@ -3363,16 +3363,21 @@ tr:hover td {
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 14px;
     overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .slip-card-top {
     display: flex;
     gap: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 .slip-card-img {
     width: 140px;
     min-width: 140px;
     max-width: 140px;
-    min-height: 180px;
+    height: 200px;
+    max-height: 200px;
     background: rgba(0,0,0,0.25);
     display: flex;
     flex-direction: column;
@@ -3381,12 +3386,14 @@ tr:hover td {
     cursor: pointer;
     overflow: hidden;
     position: relative;
+    flex-shrink: 0;
 }
 .slip-card-img img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.2s;
+    display: block;
 }
 .slip-card-img img:hover {
     transform: scale(1.03);
@@ -3541,10 +3548,11 @@ tr:hover td {
         flex-direction: row;
     }
     .slip-card-img {
-        width: 110px;
-        min-width: 110px;
-        max-width: 110px;
-        min-height: 150px;
+        width: 100px;
+        min-width: 100px;
+        max-width: 100px;
+        height: 170px;
+        max-height: 170px;
     }
     .slip-card-info {
         padding: 10px 12px;
