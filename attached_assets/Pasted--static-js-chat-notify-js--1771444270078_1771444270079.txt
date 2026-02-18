@@ -1,0 +1,446 @@
+จากการตรวจสอบโค้ด static/js/chat-notify.js พบว่าโครงสร้างการทำงานภาพรวมออกแบบมาได้ดีมากครับ มีการแบ่งส่วนทั้ง In-App Banner (พร้อมฟังก์ชันเลื่อนปัด Swipe) และ OS Push Notification ครบถ้วน
+
+อย่างไรก็ตาม มี จุดบั๊ก (Bug) เชิงตรรกะที่สำคัญ 1 จุด และจุดที่สามารถปรับปรุงเพื่อให้ระบบทำงานได้ถูกต้องและเสถียรขึ้นดังนี้ครับ:
+
+🔴 จุดที่ต้องแก้ไข (Issues Found)
+1. បั๊กตอนสลับแท็บ/พับจอ (Visibility Change Logic Flaw)
+ในบรรทัดล่างสุด เมื่อคุณพับจอไปหน้าอื่น (visibilitychange) ระบบจะรัน stopPolling() และเมื่อเปิดกลับมาระบบจะรัน startPolling() ซึ่งฟังก์ชันนี้ดันไปเรียก initLastSeenId() ทุกครั้ง
+ผลลัพธ์ที่ตามมา: ระบบจะไปอัปเดตค่า lastSeenMessageId เป็น ID ของข้อความล่าสุดแบบเงียบๆ ทำให้ข้อความแชทที่ถูกส่งมาในระหว่างที่คุณ "พับจอไปหน้าอื่น" จะไม่แจ้งเตือนเลย เมื่อคุณกลับมาที่หน้าเว็บ
+
+2. การคลิกแจ้งเตือนของ Desktop ไม่ตรงกับ Banner
+ในฟังก์ชัน showDesktopNotification ลอจิกตอนคลิกแจ้งเตือน (notif.onclick) ไม่ได้ตรวจเช็ค Path แบบที่ทำใน showChatBanner ทำให้หากหน้าปัจจุบันไม่ใช่หน้าสำหรับแชท (เช่น แอดมินอยู่หน้า Dashboard หลัก) ตัว Push Notification อาจจะไม่ได้พาผู้ใช้ข้ามหน้าเว็บไปที่ URL ที่ถูกต้อง
+
+3. แบนเนอร์อาจโดนรอยบากมือถือบัง (UI/UX)
+คลาส .chat-notify-container ใช้ padding-top: 12px; บนมือถือที่มี Notch หรือ Dynamic Island (iPhone) แบนเนอร์มีโอกาสไปซ้อนทับกับนาฬิกาของระบบ
+
+✅ วิธีแก้ไข (Solution)
+ผมได้ทำการปรับปรุงโค้ดของคุณ โดยรวมลอจิกการกดเปิดแชทให้เป็นฟังก์ชันเดียวกัน (MapsToChat) และแก้บั๊กการอัปเดต ID ตอนสลับหน้าจอแล้ว คุณสามารถนำโค้ดด้านล่างนี้ไปทับโค้ดเดิมได้เลยครับ:
+
+JavaScript
+(function() {
+  let lastSeenMessageId = 0;
+  let pollInterval = null;
+  const POLL_DELAY = 5000;
+  const SWIPE_COOLDOWN = 5 * 60 * 1000;
+
+  let activeBanners = new Map();
+  let swipedMessages = new Map();
+  let chatNavUrl = '#chat';
+
+  function createNotifyStyles() {
+    if (document.getElementById('chatNotifyStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'chatNotifyStyles';
+    style.textContent = `
+      .chat-notify-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+        /* รองรับรอยบากมือถือ/Dynamic Island */
+        padding-top: max(12px, env(safe-area-inset-top)); 
+        gap: 8px;
+      }
+      .chat-notify-banner {
+        pointer-events: auto;
+        width: calc(100% - 24px);
+        max-width: 420px;
+        background: rgba(15, 10, 30, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,58,237,0.2);
+        padding: 14px 16px;
+        cursor: pointer;
+        animation: chatNotifySlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        touch-action: pan-y;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        will-change: transform;
+      }
+      .chat-notify-banner.swiping {
+        transition: none;
+      }
+      .chat-notify-banner.dismissing {
+        transform: translateX(120%) !important;
+        opacity: 0;
+      }
+      .chat-notify-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .chat-notify-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed, #ec4899);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: white;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .chat-notify-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .chat-notify-sender {
+        font-size: 14px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 2px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .chat-notify-app {
+        font-size: 10px;
+        color: rgba(255,255,255,0.4);
+        font-weight: 400;
+      }
+      .chat-notify-text {
+        font-size: 13px;
+        color: rgba(255,255,255,0.75);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-notify-time {
+        font-size: 11px;
+        color: rgba(255,255,255,0.35);
+        flex-shrink: 0;
+        align-self: flex-start;
+        margin-top: 2px;
+      }
+      @keyframes chatNotifySlideDown {
+        from { transform: translateY(-100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function getContainer() {
+    let container = document.getElementById('chatNotifyContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'chatNotifyContainer';
+      container.className = 'chat-notify-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  function getInitial(name) {
+    if (!name) return '?';
+    return name.charAt(0).toUpperCase();
+  }
+
+  function timeAgo(dateStr) {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diff = Math.floor((now - date) / 1000);
+    if (diff < 60) return 'เมื่อสักครู่';
+    if (diff < 3600) return Math.floor(diff / 60) + ' นาทีที่แล้ว';
+    return Math.floor(diff / 3600) + ' ชม.ที่แล้ว';
+  }
+
+  function removeBanner(msgId) {
+    const banner = activeBanners.get(msgId);
+    if (banner && banner.parentNode) {
+      banner.classList.add('dismissing');
+      setTimeout(() => {
+        if (banner.parentNode) banner.remove();
+      }, 250);
+    }
+    activeBanners.delete(msgId);
+  }
+
+  function setupSwipeToDismiss(banner, msgId) {
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
+
+    banner.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      currentX = 0;
+      isDragging = true;
+      banner.classList.add('swiping');
+    }, { passive: true });
+
+    banner.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      currentX = e.touches[0].clientX - startX;
+      if (currentX > 0) {
+        banner.style.transform = `translateX(${currentX}px)`;
+        banner.style.opacity = Math.max(0, 1 - (currentX / 200));
+      }
+    }, { passive: true });
+
+    banner.addEventListener('touchend', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      banner.classList.remove('swiping');
+
+      if (currentX > 80) {
+        swipedMessages.set(msgId, Date.now());
+        banner.classList.add('dismissing');
+        setTimeout(() => {
+          if (banner.parentNode) banner.remove();
+        }, 250);
+        activeBanners.delete(msgId);
+      } else {
+        banner.style.transform = '';
+        banner.style.opacity = '';
+      }
+    });
+  }
+
+  // แยก Logic นำทางเวลาถูกคลิกแจ้งเตือน เพื่อให้รันได้เหมือนกันทั้ง In-App Banner และ Push
+  function navigateToChat(msg) {
+    const currentPath = window.location.pathname;
+    let targetUrl = chatNavUrl || '#chat';
+    let targetPath = '';
+    let targetHash = '#chat';
+
+    if (targetUrl.includes('#')) {
+      const parts = targetUrl.split('#');
+      targetPath = parts[0];
+      targetHash = '#' + parts[1];
+    } else {
+      targetPath = targetUrl;
+    }
+
+    if (targetPath && !currentPath.startsWith(targetPath)) {
+      // ไปยัง URL ใหม่ และเก็บค่า Thread ID (ถ้าจำเป็นต้องเขียนเพิ่มเพื่อ auto-open ข้ามหน้า)
+      window.location.href = targetUrl;
+      return;
+    }
+
+    if (window.location.hash === targetHash) {
+      if (typeof window.openChatThread === 'function') {
+        window.openChatThread(msg.thread_id);
+      }
+    } else {
+      window.location.hash = targetHash.substring(1);
+      if (typeof switchPage === 'function') {
+        switchPage(targetHash.substring(1));
+      }
+      setTimeout(() => {
+        if (typeof window.openChatThread === 'function') {
+          window.openChatThread(msg.thread_id);
+        }
+      }, 500);
+    }
+  }
+
+  function showChatBanner(msg) {
+    if (activeBanners.has(msg.id)) return;
+
+    const swipedAt = swipedMessages.get(msg.id);
+    if (swipedAt && (Date.now() - swipedAt) < SWIPE_COOLDOWN) return;
+
+    if (swipedAt) {
+      swipedMessages.delete(msg.id);
+    }
+
+    createNotifyStyles();
+    const container = getContainer();
+
+    const banner = document.createElement('div');
+    banner.className = 'chat-notify-banner';
+    banner.dataset.msgId = msg.id;
+    banner.innerHTML = `
+      <div class="chat-notify-header">
+        <div class="chat-notify-avatar">${getInitial(msg.sender_name)}</div>
+        <div class="chat-notify-content">
+          <div class="chat-notify-sender">
+            ${msg.sender_name}
+            <span class="chat-notify-app">EKG Shops</span>
+          </div>
+          <div class="chat-notify-text">${msg.preview}</div>
+        </div>
+        <div class="chat-notify-time">${timeAgo(msg.created_at)}</div>
+      </div>
+    `;
+
+    banner.addEventListener('click', () => {
+      removeBanner(msg.id);
+      navigateToChat(msg);
+    });
+
+    setupSwipeToDismiss(banner, msg.id);
+    activeBanners.set(msg.id, banner);
+    container.appendChild(banner);
+
+    const maxBanners = 3;
+    while (container.children.length > maxBanners) {
+      const oldest = container.firstChild;
+      const oldId = parseInt(oldest.dataset.msgId);
+      activeBanners.delete(oldId);
+      container.removeChild(oldest);
+    }
+  }
+
+  async function showDesktopNotification(msg) {
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      if (document.hasFocus() && isChatPageOpen()) return;
+
+      const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
+
+      if (isMobile && 'serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification('💬 ' + (msg.sender_name || 'ข้อความใหม่'), {
+          body: msg.preview || 'ส่งข้อความใหม่',
+          icon: '/static/icons/icon-192x192.png',
+          badge: '/static/icons/icon-72x72.png',
+          tag: 'chat-direct-' + msg.id,
+          renotify: true,
+          vibrate: [100, 50, 100],
+          data: {
+            url: chatNavUrl || '#chat',
+            type: 'chat',
+            thread_id: msg.thread_id
+          }
+        });
+      } else {
+        const notif = new Notification('💬 ' + (msg.sender_name || 'ข้อความใหม่'), {
+          body: msg.preview || 'ส่งข้อความใหม่',
+          icon: '/static/icons/icon-192x192.png',
+          tag: 'chat-direct-' + msg.id,
+          renotify: true
+        });
+
+        notif.onclick = function() {
+          window.focus();
+          notif.close();
+          navigateToChat(msg); // ใช้ Navigate Logic ตัวเดียวกัน
+        };
+
+        setTimeout(() => notif.close(), 8000);
+      }
+    } catch(e) {
+      console.log('Notification fallback error:', e);
+    }
+  }
+
+  function isChatPageOpen() {
+    return window.location.hash === '#chat';
+  }
+
+  async function pollNewMessages() {
+    if (isChatPageOpen()) {
+      clearAllBanners();
+      return;
+    }
+
+    try {
+      const resp = await fetch(`/api/chat/new-messages?since_id=${lastSeenMessageId}`, {
+        credentials: 'include'
+      });
+
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      if (data.chat_url) {
+        chatNavUrl = data.chat_url;
+      }
+      if (data.messages && data.messages.length > 0) {
+        const sorted = data.messages.sort((a, b) => a.id - b.id);
+        for (const msg of sorted) {
+          if (msg.id > lastSeenMessageId) {
+            lastSeenMessageId = msg.id;
+            showDesktopNotification(msg);
+          }
+          showChatBanner(msg);
+        }
+      } else {
+        clearAllBanners();
+      }
+    } catch (e) {
+    }
+  }
+
+  function clearAllBanners() {
+    for (const [msgId, banner] of activeBanners) {
+      if (banner.parentNode) banner.remove();
+    }
+    activeBanners.clear();
+    swipedMessages.clear();
+  }
+
+  async function initLastSeenId() {
+    try {
+      const resp = await fetch('/api/chat/new-messages?since_id=0', {
+        credentials: 'include'
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.messages && data.messages.length > 0) {
+        for (const msg of data.messages) {
+          if (msg.id > lastSeenMessageId) {
+            lastSeenMessageId = msg.id;
+          }
+        }
+      }
+    } catch(e) {
+    }
+  }
+
+  function startPolling() {
+    if (pollInterval) return;
+    
+    // ตรวจสอบว่าถ้ายังไม่เคยดึง ID มาก่อน (Load หน้าแรกสุด) ให้ดึง ID ก่อน 
+    // แต่ถ้ามี ID เดิมอยู่แล้ว (แค่พับหน้าจอ) ให้ทำงาน poll ทันที เพื่อไม่ให้ข้ามข้อความที่ตกหล่น
+    if (lastSeenMessageId === 0) {
+      initLastSeenId().then(() => {
+        pollInterval = setInterval(pollNewMessages, POLL_DELAY);
+      });
+    } else {
+      pollNewMessages(); // ดึงข้อความตกหล่นก่อน
+      pollInterval = setInterval(pollNewMessages, POLL_DELAY);
+    }
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(startPolling, 3000);
+  });
+
+  window.addEventListener('hashchange', () => {
+    if (isChatPageOpen()) {
+      clearAllBanners();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopPolling();
+    } else {
+      startPolling();
+    }
+  });
+})();
+สรุปการแก้ไข:
+
+เพิ่มคลาส env(safe-area-inset-top) กันรอยบากให้แบนเนอร์
+
+รวมศูนย์ลอจิกการเปลี่ยนหน้า (Routing) ไว้ใน MapsToChat(msg) เพื่อให้ Push Desktop/Mobile และ Banner In-App เด้งไปหน้าแชทได้แม่นยำเหมือนกันทั้งหมด
+
+แก้ลอจิก startPolling() ให้จำค่า ID เดิมและดึงข้อความย้อนหลังเสมอเวลาพับหน้าจอไปเปิด App อื่น แล้วกลับเข้ามาที่ Browser ครับ
