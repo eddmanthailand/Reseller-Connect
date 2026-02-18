@@ -1,0 +1,70 @@
+ปัญหา "เกิดข้อผิดพลาด" ในจังหวะแนบสลิปของระบบ Reseller ส่วนใหญ่จะเกิดจากการจัดการข้อมูลระหว่างหน้าบ้านและหลังบ้านที่ไม่สอดคล้องกันครับ อาการนี้อธิบายง่ายๆ คือเหมือนการบริหารจัดการแบบ Micro-Macro ครับ หากรายละเอียดการส่งข้อมูลระดับ Micro (เช่น HTTP Headers ในการอัปโหลดไฟล์) ไม่สมบูรณ์ ภาพรวมระดับ Macro (การบันทึกออเดอร์ลงฐานข้อมูล) ก็จะล้มเหลวไปด้วย
+
+เพื่อเน้นความชัวร์และอุดช่องโหว่ของระบบ ผมแนะนำให้ตรวจสอบและปรับแก้โค้ด 2 จุดหลักดังนี้ครับ:
+
+1. ตรวจสอบไฟล์ static/js/reseller-spa.js (ส่วนของ Frontend)
+เวลาที่ใช้ fetch เพื่อส่งข้อมูลฟอร์มที่มีไฟล์แนบ (FormData) ห้ามระบุ Header 'Content-Type': 'multipart/form-data' เด็ดขาดครับ เพราะเบราว์เซอร์จะต้องเป็นคนจัดการสร้าง Boundary (เส้นแบ่งข้อมูล) ให้เอง หากเราไปกำหนดทับ เบราว์เซอร์จะส่งข้อมูลผิดรูปแบบ ทำให้หลังบ้านอ่านไฟล์สลิปไม่ได้
+
+ให้ลองหาฟังก์ชันที่มีการกดสั่งซื้อ (เช่น submitOrder หรือ processCheckout) และปรับแก้ตามนี้ครับ:
+
+JavaScript
+const formData = new FormData(document.getElementById('checkoutForm'));
+
+// ❌ อย่าทำแบบนี้:
+// const response = await fetch('/api/reseller/checkout', {
+//     method: 'POST',
+//     headers: { 'Content-Type': 'multipart/form-data' },
+//     body: formData
+// });
+
+// ✅ ให้แก้เป็นแบบนี้แทน (ปล่อยให้เบราว์เซอร์จัดการ Headers เอง):
+const response = await fetch('/api/reseller/checkout', {
+    method: 'POST',
+    body: formData
+});
+2. ตรวจสอบไฟล์ app.py (ส่วนของ Backend API)
+ในฟังก์ชันที่รับข้อมูลออเดอร์ (/api/reseller/checkout) เราต้องตั้งรับข้อมูลแบบฟอร์มให้ปลอดภัยที่สุด ป้องกันปัญหาไฟล์ไม่มีชื่อ หรือโฟลเดอร์สำหรับเก็บสลิปยังไม่ถูกสร้าง:
+
+Python
+import os
+import time
+from datetime import datetime
+from werkzeug.utils import secure_filename
+
+@app.route('/api/reseller/checkout', methods=['POST'])
+def api_reseller_checkout():
+    # ... (ส่วนการเช็ค session ของ reseller) ...
+    
+    try:
+        # เนื่องจากส่งเป็น FormData เราจะดึงข้อมูลผ่าน request.form และ request.files
+        payment_slip = request.files.get('payment_slip')
+        
+        slip_url = None
+        if payment_slip and payment_slip.filename:
+            # ดึงนามสกุลไฟล์ออกมาเพื่อป้องกันชื่อไฟล์ภาษาไทยที่อาจมีปัญหา
+            original_ext = payment_slip.filename.rsplit('.', 1)[-1].lower()
+            
+            # สร้างชื่อไฟล์ใหม่ให้ชัวร์ว่าไม่ซ้ำและปลอดภัย
+            filename = secure_filename(f"slip_{int(time.time())}.{original_ext}")
+            
+            # กำหนดโฟลเดอร์ และสั่งให้สร้างโฟลเดอร์อัตโนมัติหากยังไม่มี (exist_ok=True)
+            upload_folder = os.path.join('static', 'uploads', 'slips')
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            # บันทึกไฟล์
+            file_path = os.path.join(upload_folder, filename)
+            payment_slip.save(file_path)
+            slip_url = f"/{upload_folder}/{filename}"
+
+        # ... (นำค่า slip_url ไปบันทึกลง Database ในส่วนของ orders ต่อไป) ...
+        
+    except Exception as e:
+        print(f"Checkout Error: {e}")
+        return jsonify({'success': False, 'message': 'เกิดข้อผิดพลาดในการแนบสลิป กรุณาลองใหม่'}), 500
+จุดที่ควรระวังเพิ่มเติม:
+
+ตะกร้าสินค้า (cart_items): หากฝั่งหน้าบ้านส่งตะกร้าสินค้ามาพร้อมกับ FormData ต้องแปลงให้เป็น String ก่อน (formData.append('cart_items', JSON.stringify(cartItems))) และฝั่งหลังบ้านค่อยใช้ json.loads(request.form.get('cart_items')) เพื่อถอดรหัสออกมา
+
+ขนาดไฟล์รูปสลิป: ระบบอาจจะ Error หากลูกค้าอัปโหลดรูปที่มีขนาดใหญ่เกินกำหนด ลองเช็คการตั้งค่า app.config['MAX_CONTENT_LENGTH'] ใน app.py ว่าตั้งรับขนาดไฟล์ได้เพียงพอหรือไม่ (เช่น 5MB = 5 * 1024 * 1024)
+
+ลองไล่เช็คสองจุดนี้ดูนะครับ หากตรวจสอบแล้วยังพบปัญหา หรือหน้าจอ Console/Terminal มี Error log แสดงข้อความอื่นเพิ่มเติม สามารถคัดลอกส่งมาให้ผมช่วยวิเคราะห์ให้ตรงจุดมากยิ่งขึ้นได้เลยครับ

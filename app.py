@@ -31,6 +31,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Rate limiting storage (in-memory for simplicity)
 login_attempts = {}
@@ -7742,45 +7743,67 @@ def update_shipment(order_id, shipment_id):
             conn.close()
 
 @app.route('/api/orders/<int:order_id>/payment-slip', methods=['POST'])
+@app.route('/api/orders/<int:order_id>/payment-slips', methods=['POST'])
 @login_required
 def upload_payment_slip(order_id):
-    """Upload payment slip for order"""
+    """Upload payment slip for order (supports both file upload and JSON URL)"""
     conn = None
     cursor = None
     try:
         user_id = session.get('user_id')
-        data = request.get_json()
         
-        slip_image_url = data.get('slip_image_url')
-        amount = data.get('amount')
+        slip_image_url = None
+        amount = None
+        
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            slip_file = request.files.get('slip_image')
+            amount = request.form.get('amount')
+            
+            if slip_file and slip_file.filename:
+                allowed_ext = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'}
+                original_ext = slip_file.filename.rsplit('.', 1)[-1].lower() if '.' in slip_file.filename else 'jpg'
+                if original_ext not in allowed_ext:
+                    return jsonify({'error': 'ไฟล์ไม่รองรับ กรุณาอัปโหลดรูปภาพ'}), 400
+                
+                upload_folder = os.path.join('static', 'uploads', 'slips')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                import time as time_module
+                filename = f"slip_{order_id}_{int(time_module.time())}_{user_id}.{original_ext}"
+                file_path = os.path.join(upload_folder, filename)
+                slip_file.save(file_path)
+                slip_image_url = f'/{file_path}'
+            else:
+                return jsonify({'error': 'กรุณาเลือกรูปสลิป'}), 400
+        else:
+            data = request.get_json() or {}
+            slip_image_url = data.get('slip_image_url')
+            amount = data.get('amount')
         
         if not slip_image_url:
-            return jsonify({'error': 'Slip image URL is required'}), 400
+            return jsonify({'error': 'กรุณาแนบรูปสลิปการชำระเงิน'}), 400
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Verify order belongs to user and is pending payment
         cursor.execute('''
-            SELECT id, status, final_amount FROM orders
+            SELECT id, status, final_amount, order_number FROM orders
             WHERE id = %s AND user_id = %s
         ''', (order_id, user_id))
         order = cursor.fetchone()
         
         if not order:
-            return jsonify({'error': 'Order not found'}), 404
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
         
         if order['status'] not in ['pending_payment', 'rejected']:
-            return jsonify({'error': 'Cannot upload slip for this order status'}), 400
+            return jsonify({'error': 'ไม่สามารถอัปโหลดสลิปสำหรับสถานะนี้ได้'}), 400
         
-        # Create payment slip
         cursor.execute('''
             INSERT INTO payment_slips (order_id, slip_image_url, amount, status)
             VALUES (%s, %s, %s, 'pending')
             RETURNING id
         ''', (order_id, slip_image_url, amount or order['final_amount']))
         
-        # Update order status
         cursor.execute('''
             UPDATE orders SET status = 'under_review', updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
@@ -7788,7 +7811,6 @@ def upload_payment_slip(order_id):
         
         conn.commit()
         
-        # Notify admins
         cursor.execute("SELECT id FROM users WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Super Admin', 'Assistant Admin'))")
         admins = cursor.fetchall()
         for admin in admins:
@@ -7801,12 +7823,13 @@ def upload_payment_slip(order_id):
                 order_id
             )
         
-        return jsonify({'message': 'Payment slip uploaded successfully'}), 200
+        return jsonify({'message': 'อัปโหลดสลิปสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        print(f"[SLIP] Error uploading payment slip: {e}")
+        return jsonify({'error': 'เกิดข้อผิดพลาดในการอัปโหลดสลิป กรุณาลองใหม่'}), 500
     finally:
         if cursor:
             cursor.close()
