@@ -13505,7 +13505,20 @@ def service_worker():
 
 @app.route('/manifest.json')
 def manifest():
-    response = send_file('static/manifest.json', mimetype='application/manifest+json')
+    import json
+    with open('static/manifest.json', 'r') as f:
+        data = json.load(f)
+    
+    role_name = session.get('role_name', '')
+    if role_name in ('Super Admin', 'Assistant Admin'):
+        data['start_url'] = '/admin'
+        data['name'] = 'EKG Shops - Admin'
+        data['short_name'] = 'EKG Admin'
+    else:
+        data['start_url'] = '/reseller'
+    
+    response = make_response(json.dumps(data, ensure_ascii=False))
+    response.headers['Content-Type'] = 'application/manifest+json'
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
