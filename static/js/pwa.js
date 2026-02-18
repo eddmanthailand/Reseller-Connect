@@ -172,25 +172,64 @@ async function refreshPushSubscription() {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
 
+    const keyResponse = await fetch('/api/push/vapid-public-key', { credentials: 'include' });
+    if (!keyResponse.ok) return false;
+    const { publicKey } = await keyResponse.json();
+    if (!publicKey) return false;
+
+    const serverKeyBytes = urlBase64ToUint8Array(publicKey);
+    let needResubscribe = false;
+
     if (subscription) {
+      const subKey = subscription.options && subscription.options.applicationServerKey;
+      if (subKey) {
+        const subKeyArray = new Uint8Array(subKey);
+        if (subKeyArray.length !== serverKeyBytes.length || 
+            !subKeyArray.every((v, i) => v === serverKeyBytes[i])) {
+          console.log('VAPID key mismatch, re-subscribing');
+          needResubscribe = true;
+        }
+      } else {
+        needResubscribe = true;
+      }
+
+      if (!needResubscribe) {
+        const subResponse = await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ subscription: subscription.toJSON() })
+        });
+        
+        if (subResponse.ok) {
+          console.log('Push subscription refreshed');
+          return true;
+        } else if (subResponse.status === 401) {
+          return false;
+        }
+      }
+    }
+
+    if (!subscription || needResubscribe) {
+      if (subscription) {
+        try { await subscription.unsubscribe(); } catch(e) {}
+      }
+      const newSub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: serverKeyBytes
+      });
       const subResponse = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ subscription: subscription.toJSON() })
+        body: JSON.stringify({ subscription: newSub.toJSON() })
       });
-      
       if (subResponse.ok) {
-        console.log('Push subscription refreshed');
+        console.log('Push subscription re-created with current VAPID key');
         return true;
-      } else if (subResponse.status === 401) {
-        console.log('Not logged in, skipping push refresh');
-        return false;
       }
-    } else {
-      console.log('No push subscription found, creating new one');
-      return await subscribeToPush();
     }
+    return false;
   } catch (error) {
     console.log('Push refresh error:', error);
     return false;
