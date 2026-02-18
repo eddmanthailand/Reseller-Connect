@@ -1390,6 +1390,15 @@
             body.chat-fullscreen-mode #page-chat .chat-container > div:last-child {
                 padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
             }
+            #page-chat .chat-container label,
+            #page-chat .chat-container button[onclick*="openResellerChatProductSearch"] {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 12px !important;
+            }
+            #page-chat .chat-container input[type="text"] {
+                font-size: 16px !important;
+            }
         }
 
         @media (min-width: 769px) {

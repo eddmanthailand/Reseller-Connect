@@ -7943,10 +7943,18 @@ async function selectChatThread(threadId, resellerName, tierName, resellerTierId
     document.getElementById('chatResellerName').textContent = resellerName;
     document.getElementById('chatResellerTier').textContent = tierName || 'ไม่ระบุ Tier';
     
+    const chatGrid = document.querySelector('.admin-chat-grid');
+    if (chatGrid) chatGrid.classList.add('chat-thread-open');
+    
     await loadChatMessages(threadId);
     loadChatThreads();
     loadQuickReplyButtons();
     startChatPolling();
+}
+
+function adminChatGoBack() {
+    const chatGrid = document.querySelector('.admin-chat-grid');
+    if (chatGrid) chatGrid.classList.remove('chat-thread-open');
 }
 
 async function loadChatMessages(threadId) {
@@ -7964,9 +7972,10 @@ async function loadChatMessages(threadId) {
         }
         
         messages.forEach(msg => {
+            const isMine = Number(msg.sender_id) === Number(currentUserId);
             const isAdmin = msg.sender_type === 'admin';
             let senderLabel = '';
-            if (isAdmin && msg.sender_name) {
+            if (!isMine && isAdmin && msg.sender_name) {
                 const roleLabel = msg.sender_role === 'Super Admin' ? 'Super Admin' : 
                                   msg.sender_role === 'Assistant Admin' ? 'ผู้ช่วย' : 'Admin';
                 senderLabel = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 4px; font-weight: 500;">${escapeHtml(msg.sender_name)} (${roleLabel})</div>`;
@@ -7998,8 +8007,8 @@ async function loadChatMessages(threadId) {
             }
             
             const msgHtml = `
-                <div style="display: flex; ${isAdmin ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
-                    <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isAdmin ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
+                <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
+                    <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
                         ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
                         ${senderLabel}
                         ${productCardHtml}

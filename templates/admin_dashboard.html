@@ -2597,9 +2597,9 @@
                     <p>สื่อสารกับตัวแทนจำหน่ายทั้งหมด</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 200px); min-height: 500px;">
+                <div class="admin-chat-grid" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 200px); min-height: 500px;">
                     <!-- Thread List -->
-                    <div class="card" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <div class="card admin-chat-threads" style="display: flex; flex-direction: column; overflow: hidden;">
                         <div style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); position: relative;">
                             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                                 <input type="text" id="chatResellerSearchInput" placeholder="ค้นหาตัวแทน..." style="flex: 1; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white; font-size: 13px;" oninput="searchResellersForChat(this.value)">
@@ -2633,9 +2633,12 @@
                     </div>
 
                     <!-- Chat Window -->
-                    <div class="card" style="display: flex; flex-direction: column; overflow: hidden;">
+                    <div class="card admin-chat-window" style="display: flex; flex-direction: column; overflow: hidden;">
                         <div id="chatHeader" style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: none;">
                             <div style="display: flex; align-items: center; gap: 12px;">
+                                <button class="admin-chat-back-btn" onclick="adminChatGoBack()" style="display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: rgba(255,255,255,0.1); border-radius: 50%; color: white; cursor: pointer; flex-shrink: 0;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
                                 <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;" id="chatAvatarInitial">?</div>
                                 <div>
                                     <div style="font-weight: 600;" id="chatResellerName">-</div>
@@ -3515,6 +3518,9 @@
         </div>
     </div>
 
+    <script>
+        const currentUserId = {{ session.get('user_id', 0) }};
+    </script>
     <script src="/static/js/global-alert.js?v=20241214"></script>
     <script src="/static/js/thai-address.js?v=20241214"></script>
     <script src="/static/js/dashboard.js?v=20250108"></script>

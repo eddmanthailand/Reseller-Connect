@@ -3352,7 +3352,7 @@ async function loadResellerChatMessages() {
         }
         
         messages.forEach(msg => {
-            const isReseller = msg.sender_type === 'reseller';
+            const isMine = Number(msg.sender_id) === Number(currentUserId);
             
             let productCardHtml = '';
             if (msg.product) {
@@ -3377,8 +3377,8 @@ async function loadResellerChatMessages() {
             }
             
             const msgHtml = `
-                <div style="display: flex; ${isReseller ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
-                    <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isReseller ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
+                <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
+                    <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px;'}">
                         ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
                         ${productCardHtml}
                         ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>` : ''}
