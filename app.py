@@ -12993,7 +12993,8 @@ def get_chat_new_messages():
                 'created_at': msg['created_at'].isoformat()
             })
         
-        return jsonify({'messages': result}), 200
+        chat_url = '/reseller#chat' if role_name == 'Reseller' else '/admin#chat'
+        return jsonify({'messages': result, 'chat_url': chat_url}), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

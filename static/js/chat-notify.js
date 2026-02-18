@@ -6,6 +6,7 @@
 
   let activeBanners = new Map();
   let swipedMessages = new Map();
+  let chatNavUrl = '#chat';
 
   function createNotifyStyles() {
     if (document.getElementById('chatNotifyStyles')) return;
@@ -215,12 +216,18 @@
 
     banner.addEventListener('click', () => {
       removeBanner(msg.id);
-      if (window.location.hash === '#chat') {
+      const currentPath = window.location.pathname;
+      const targetPath = chatNavUrl.split('#')[0];
+      const targetHash = '#' + chatNavUrl.split('#')[1];
+      
+      if (targetPath && currentPath !== targetPath) {
+        window.location.href = chatNavUrl;
+      } else if (window.location.hash === targetHash) {
         if (typeof window.openChatThread === 'function') {
           window.openChatThread(msg.thread_id);
         }
       } else {
-        window.location.hash = '#chat';
+        window.location.hash = targetHash;
       }
     });
 
@@ -255,6 +262,9 @@
       if (!resp.ok) return;
 
       const data = await resp.json();
+      if (data.chat_url) {
+        chatNavUrl = data.chat_url;
+      }
       if (data.messages && data.messages.length > 0) {
         const sorted = data.messages.sort((a, b) => a.id - b.id);
         for (const msg of sorted) {
