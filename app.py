@@ -13509,8 +13509,10 @@ def manifest():
     with open('static/manifest.json', 'r') as f:
         data = json.load(f)
     
+    ref = request.referrer or ''
     role_name = session.get('role_name', '')
-    if role_name in ('Super Admin', 'Assistant Admin'):
+    
+    if '/admin' in ref or role_name in ('Super Admin', 'Assistant Admin'):
         data['start_url'] = '/admin'
         data['name'] = 'EKG Shops - Admin'
         data['short_name'] = 'EKG Admin'
@@ -13519,7 +13521,23 @@ def manifest():
     
     response = make_response(json.dumps(data, ensure_ascii=False))
     response.headers['Content-Type'] = 'application/manifest+json'
-    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
+@app.route('/manifest-admin.json')
+def manifest_admin():
+    import json
+    with open('static/manifest.json', 'r') as f:
+        data = json.load(f)
+    
+    data['start_url'] = '/admin'
+    data['name'] = 'EKG Shops - Admin'
+    data['short_name'] = 'EKG Admin'
+    data['scope'] = '/admin'
+    
+    response = make_response(json.dumps(data, ensure_ascii=False))
+    response.headers['Content-Type'] = 'application/manifest+json'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 
 @app.route('/api/push/vapid-public-key', methods=['GET'])
