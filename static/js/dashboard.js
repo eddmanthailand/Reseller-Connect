@@ -5482,21 +5482,13 @@ async function loadSlipReviewPage() {
     const container = document.getElementById('slipReviewContent');
     if (!container) return;
     
-    container.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>';
-    
-    await loadSlipReviewOrders();
-}
-
-async function loadSlipReviewOrders() {
-    const container = document.getElementById('slipReviewContent');
-    if (!container) return;
+    container.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p style="color: rgba(255,255,255,0.6); margin-top: 12px;">กำลังโหลด...</p></div>';
     
     try {
         const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
         if (!response.ok) throw new Error('Failed to load orders');
         const orders = await response.json();
         
-        // Update badge count
         const badge = document.getElementById('slipReviewCount');
         if (badge) {
             if (orders.length > 0) {
@@ -5509,26 +5501,31 @@ async function loadSlipReviewOrders() {
         
         if (orders.length === 0) {
             container.innerHTML = `
-                <div class="card" style="text-align: center; padding: 60px;">
+                <div style="text-align: center; padding: 60px;">
                     <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 16px;">
                         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <h3 style="color: #fff; font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
-                    <p style="color: rgba(255,255,255,0.5); font-size: 14px;">สลิปทั้งหมดถูกตรวจสอบแล้ว</p>
+                    <h3 style="color: rgba(255,255,255,0.6); font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 14px;">สลิปทั้งหมดถูกตรวจสอบแล้ว</p>
                 </div>
             `;
             return;
         }
         
         container.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px;">
+            <div class="slip-review-grid">
                 ${orders.map(order => renderSlipReviewCard(order)).join('')}
             </div>
         `;
         
     } catch (error) {
-        console.error('Error loading slip review orders:', error);
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #f87171;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
+        console.error('Error loading slip review:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                <button onclick="loadSlipReviewPage()" style="margin-top: 12px; padding: 8px 16px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 8px; cursor: pointer;">ลองใหม่</button>
+            </div>
+        `;
     }
 }
 
@@ -5537,40 +5534,59 @@ function renderSlipReviewCard(order) {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
     });
     
-    const slipUrl = order.payment_slips && order.payment_slips.length > 0 
-        ? order.payment_slips[order.payment_slips.length - 1].slip_image_url 
-        : null;
+    const slipUrl = order.slip_image_url || null;
+    const slipAmount = order.slip_amount ? parseFloat(order.slip_amount) : null;
+    const finalAmount = parseFloat(order.final_amount || order.total_amount || 0);
+    
+    const slipImgHtml = slipUrl 
+        ? `<img src="${slipUrl}" alt="Payment Slip" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+           <div class="slip-no-image" style="display:none;">
+               <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+               <span>โหลดไม่ได้</span>
+           </div>`
+        : `<div class="slip-no-image">
+               <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+               <span>ไม่มีสลิป</span>
+           </div>`;
     
     return `
-        <div class="card slip-review-card" style="padding: 0; overflow: hidden;">
-            <div class="slip-card-header" style="padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                    <span style="font-weight: 700; color: #fff; font-size: 14px; white-space: nowrap;">${escapeHtml(order.order_number || 'ORD-' + order.id)}</span>
-                    <span style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; white-space: nowrap;">รอตรวจสอบ</span>
+        <div class="slip-card">
+            <div class="slip-card-top">
+                <div class="slip-card-img" onclick="${slipUrl ? `viewSlipFullscreen('${slipUrl}')` : ''}">
+                    ${slipImgHtml}
+                    ${slipUrl ? '<div class="slip-card-zoom">คลิกเพื่อขยาย</div>' : ''}
                 </div>
-                <div style="font-size: 11px; color: rgba(255,255,255,0.4); white-space: nowrap; margin-left: 8px;">${orderDate}</div>
-            </div>
-            <div class="slip-card-body" style="display: flex; gap: 0;">
-                <div class="slip-image-area" style="width: 120px; min-width: 120px; max-width: 120px; height: 160px; max-height: 160px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden;" onclick="viewSlipFullscreen('${slipUrl}')">
-                    ${slipUrl 
-                        ? `<img src="${slipUrl}" alt="Slip" style="max-width: 100%; max-height: 100%; object-fit: contain;">`
-                        : `<div style="color: rgba(255,255,255,0.3); text-align: center; padding: 12px; font-size: 12px;">ไม่มีสลิป</div>`
-                    }
-                </div>
-                <div style="flex: 1; padding: 14px; display: flex; flex-direction: column; min-width: 0;">
-                    <div style="font-size: 13px; color: #fff; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <strong>${escapeHtml(order.reseller_name || 'ไม่ระบุ')}</strong>
+                <div class="slip-card-info">
+                    <div class="slip-card-header-row">
+                        <span class="slip-card-order-num">${escapeHtml(order.order_number || 'ORD-' + order.id)}</span>
+                        <span class="slip-card-badge">รอตรวจสอบ</span>
                     </div>
-                    ${order.reseller_tier_name ? `<div style="font-size: 11px; color: rgba(255,255,255,0.45); margin-bottom: 8px;">${escapeHtml(order.reseller_tier_name)}</div>` : '<div style="margin-bottom: 8px;"></div>'}
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">${order.item_count || '-'} รายการ</div>
-                    <div style="font-size: 18px; font-weight: 700; color: #22c55e; margin-top: auto;">฿${parseFloat(order.total_amount).toLocaleString('th-TH', {minimumFractionDigits: 2})}</div>
+                    <div class="slip-card-date">${orderDate}</div>
+                    <div class="slip-card-detail-row">
+                        <div class="slip-card-detail-item">
+                            <div class="slip-card-label">ผู้สั่ง</div>
+                            <div class="slip-card-value">${escapeHtml(order.reseller_name || order.customer_name || '-')}</div>
+                            ${order.reseller_tier_name ? `<div class="slip-card-tier">${escapeHtml(order.reseller_tier_name)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="slip-card-amounts">
+                        <div><span class="slip-card-label">สินค้า:</span> <strong>${order.item_count || 0} ชิ้น</strong></div>
+                        <div><span class="slip-card-label">ยอดรวม:</span> <strong class="slip-amount-green">฿${finalAmount.toLocaleString('th-TH', {minimumFractionDigits: 2})}</strong></div>
+                        ${slipAmount ? `<div><span class="slip-card-label">ยอดสลิป:</span> <strong class="slip-amount-yellow">฿${slipAmount.toLocaleString('th-TH', {minimumFractionDigits: 2})}</strong></div>` : ''}
+                    </div>
                 </div>
             </div>
-            <div style="padding: 10px 14px 14px; display: flex; gap: 8px;">
-                <button onclick="approveSlip(${order.id})" style="flex: 1; padding: 10px 0; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">อนุมัติ</button>
-                <button onclick="requestNewSlip(${order.id})" style="flex: 1; padding: 10px 0; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">ขอสลิปใหม่</button>
-                <button onclick="viewOrderDetails(${order.id})" style="padding: 10px 12px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border: none; border-radius: 8px; font-size: 12px; cursor: pointer; white-space: nowrap;" title="ดูรายละเอียด">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <div class="slip-card-actions">
+                <button onclick="approveSlip(${order.id})" class="slip-btn-approve">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                    ยืนยัน
+                </button>
+                <button onclick="requestNewSlip(${order.id})" class="slip-btn-request">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    ขอสลิปใหม่
+                </button>
+                <button onclick="viewOrderDetails(${order.id})" class="slip-btn-view" title="ดูรายละเอียด">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
             </div>
         </div>
@@ -5874,133 +5890,8 @@ document.addEventListener('change', function(e) {
 });
 
 // =====================================================
-// SLIP REVIEW PAGE FUNCTIONS
+// SLIP REVIEW HELPER FUNCTIONS
 // =====================================================
-
-async function loadSlipReviewPage() {
-    const container = document.getElementById('slipReviewContent');
-    if (!container) return;
-    
-    container.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p>กำลังโหลด...</p></div>';
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
-        if (!response.ok) throw new Error('Failed to load orders');
-        
-        const orders = await response.json();
-        
-        if (orders.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 60px;">
-                    <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 16px;">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <h3 style="color: rgba(255,255,255,0.6); font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
-                    <p style="color: rgba(255,255,255,0.4); font-size: 14px;">สลิปทั้งหมดได้รับการตรวจสอบแล้ว</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Fetch full details for each order
-        const orderDetails = await Promise.all(orders.map(async (order) => {
-            const detailRes = await fetch(`${API_URL}/orders/${order.id}`);
-            return await detailRes.json();
-        }));
-        
-        container.innerHTML = `
-            <div style="display: grid; gap: 20px;">
-                ${orderDetails.map(order => {
-                    const slip = order.payment_slips && order.payment_slips.length > 0 ? order.payment_slips[0] : null;
-                    const customerName = order.customer ? order.customer.full_name : order.reseller_name;
-                    const itemCount = order.items ? order.items.reduce((sum, i) => sum + i.quantity, 0) : 0;
-                    
-                    return `
-                    <div class="slip-review-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; max-width: 100%; box-sizing: border-box;">
-                        <div class="slip-review-layout">
-                            <div class="slip-review-image" onclick="${slip ? `showSlipFullscreen('${slip.slip_image_url}')` : ''}">
-                                ${slip ? `
-                                    <img src="${slip.slip_image_url}" alt="Payment Slip">
-                                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px; text-align: center;">คลิกเพื่อขยาย</p>
-                                ` : `
-                                    <div style="color: rgba(255,255,255,0.4); text-align: center;">
-                                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                        </svg>
-                                        <p style="margin-top: 8px;">ไม่มีสลิป</p>
-                                    </div>
-                                `}
-                            </div>
-                            
-                            <div class="slip-review-info">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                                    <div style="min-width: 0;">
-                                        <h3 style="color: #fff; font-size: 16px; font-weight: 600; margin: 0 0 4px 0;">${order.order_number || '#' + order.id}</h3>
-                                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
-                                    </div>
-                                    <span style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap;">รอตรวจสอบ</span>
-                                </div>
-                                
-                                <div class="slip-review-details">
-                                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; min-width: 0;">
-                                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้สั่ง</div>
-                                        <div style="font-size: 13px; color: #fff; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(order.reseller_name || '-')}</div>
-                                        <div style="font-size: 11px; color: rgba(255,255,255,0.6);">${escapeHtml(order.reseller_tier_name || '')}</div>
-                                    </div>
-                                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; min-width: 0;">
-                                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้รับ</div>
-                                        <div style="font-size: 13px; color: #fff; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(customerName || '-')}</div>
-                                    </div>
-                                </div>
-                                
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; font-size: 13px;">
-                                    <div><span style="color: rgba(255,255,255,0.5);">สินค้า:</span> <strong style="color: #fff;">${itemCount} ชิ้น</strong></div>
-                                    <div><span style="color: rgba(255,255,255,0.5);">ยอดรวม:</span> <strong style="color: #22c55e;">฿${parseFloat(order.final_amount || 0).toLocaleString('th-TH')}</strong></div>
-                                    ${slip && slip.amount ? `<div><span style="color: rgba(255,255,255,0.5);">ยอดสลิป:</span> <strong style="color: #fbbf24;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></div>` : ''}
-                                </div>
-                                
-                                <div class="slip-review-actions">
-                                    <button onclick="approveSlip(${order.id})" class="slip-btn-approve">
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
-                                        ยืนยัน
-                                    </button>
-                                    <button onclick="requestNewSlip(${order.id})" class="slip-btn-request">
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                        ขอสลิปใหม่
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-        
-    } catch (error) {
-        console.error('Error loading slip review:', error);
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #ef4444;">
-                <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
-                <button onclick="loadSlipReviewPage()" style="margin-top: 12px; padding: 8px 16px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 8px; cursor: pointer;">ลองใหม่</button>
-            </div>
-        `;
-    }
-}
-
-function showSlipFullscreen(imageUrl) {
-    const overlay = document.createElement('div');
-    overlay.id = 'slipFullscreenOverlay';
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: pointer;';
-    overlay.onclick = () => overlay.remove();
-    
-    overlay.innerHTML = `
-        <img src="${imageUrl}" style="max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
-        <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: none; color: #fff; width: 48px; height: 48px; border-radius: 50%; cursor: pointer; font-size: 24px;">×</button>
-    `;
-    
-    document.body.appendChild(overlay);
-}
 
 async function approveSlip(orderId) {
     if (!confirm('ยืนยันการชำระเงินและอนุมัติคำสั่งซื้อนี้?')) return;

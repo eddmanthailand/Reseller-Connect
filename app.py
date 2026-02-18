@@ -8751,15 +8751,19 @@ def get_all_orders():
             query = '''
                 SELECT DISTINCT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
                        o.final_amount, o.notes, o.created_at, o.updated_at,
-                       u.full_name as customer_name, u.username,
+                       u.full_name as reseller_name, u.username,
                        sc.name as channel_name,
+                       rt.name as reseller_tier_name,
                        (SELECT COUNT(*) FROM order_items oi2 
                         JOIN skus s2 ON s2.id = oi2.sku_id 
                         JOIN products p2 ON p2.id = s2.product_id 
                         WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count,
-                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips,
+                       (SELECT ps.slip_image_url FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_image_url,
+                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
                 LEFT JOIN sales_channels sc ON sc.id = o.channel_id
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
@@ -8775,12 +8779,16 @@ def get_all_orders():
             query = '''
                 SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
                        o.final_amount, o.notes, o.created_at, o.updated_at,
-                       u.full_name as customer_name, u.username,
+                       u.full_name as reseller_name, u.username,
                        sc.name as channel_name,
+                       rt.name as reseller_tier_name,
                        (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
-                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips
+                       (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips,
+                       (SELECT ps.slip_image_url FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_image_url,
+                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
                 LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             '''
             params = []
@@ -8798,6 +8806,8 @@ def get_all_orders():
             order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
             order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
             order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+            if order.get('slip_amount'):
+                order['slip_amount'] = float(order['slip_amount'])
             orders.append(order)
         
         return jsonify(orders), 200
