@@ -217,17 +217,35 @@
     banner.addEventListener('click', () => {
       removeBanner(msg.id);
       const currentPath = window.location.pathname;
-      const targetPath = chatNavUrl.split('#')[0];
-      const targetHash = '#' + chatNavUrl.split('#')[1];
-      
-      if (targetPath && currentPath !== targetPath) {
-        window.location.href = chatNavUrl;
-      } else if (window.location.hash === targetHash) {
+      let targetUrl = chatNavUrl || '#chat';
+      let targetPath = '';
+      let targetHash = '#chat';
+
+      if (targetUrl.includes('#')) {
+        const parts = targetUrl.split('#');
+        targetPath = parts[0];
+        targetHash = '#' + parts[1];
+      }
+
+      if (targetPath && !currentPath.startsWith(targetPath)) {
+        window.location.href = targetUrl;
+        return;
+      }
+
+      if (window.location.hash === targetHash) {
         if (typeof window.openChatThread === 'function') {
           window.openChatThread(msg.thread_id);
         }
       } else {
-        window.location.hash = targetHash;
+        window.location.hash = targetHash.substring(1);
+        if (typeof switchPage === 'function') {
+          switchPage(targetHash.substring(1));
+        }
+        setTimeout(() => {
+          if (typeof window.openChatThread === 'function') {
+            window.openChatThread(msg.thread_id);
+          }
+        }, 500);
       }
     });
 
