@@ -1,0 +1,180 @@
+การทำหน้าแชทบนเว็บไซต์มือถือให้มีความรู้สึกลื่นไหลและใช้งานง่ายเหมือนแอปพลิเคชันแบบ Native (เช่น LINE) หัวใจสำคัญคือ การจัดการพื้นที่หน้าจอ (Screen Real Estate), การสไลด์เปลี่ยนหน้า (Slide Animation) และ การจัดการแป้นพิมพ์ (Keyboard Handling) ครับ
+
+จากโค้ดที่คุณให้มา ผมได้ออกแบบ CSS และลอจิกใหม่เพื่อเปลี่ยนให้หน้าแชทในมือถือของคุณทำงานเหมือนแอป LINE โดยมีจุดเด่นคือ:
+
+ซ่อน Header ทั่วไปทิ้งเมื่อเข้าหน้าแชท เพื่อเพิ่มพื้นที่อ่านข้อความ
+
+เมื่อกดเปิดแชท หน้าต่างแชทจะ สไลด์เข้ามาบังเต็มหน้าจอ (Full Screen) แทนการซ่อน/โชว์แบบแข็งๆ
+
+รองรับ Safe Area (รอยบากและขีดโฮมด้านล่างของ iPhone)
+
+ปรับขนาดปุ่มและช่องพิมพ์ข้อความให้กดง่ายขึ้น
+
+คุณสามารถนำโค้ดไปปรับใช้ได้ตามนี้ครับ:
+
+1. แก้ไขไฟล์ CSS (static/css/dashboard.css)
+ให้เลื่อนไปด้านล่างสุดของไฟล์ หาบล็อก @media (max-width: 768px) เดิมที่เกี่ยวกับแชท แล้ว แทนที่ ด้วยโค้ดชุดนี้ครับ:
+
+CSS
+/* ==========================================
+   MOBILE CHAT UI (LINE APP STYLE)
+   ========================================== */
+@media (max-width: 768px) {
+    /* 1. จัดการพื้นที่หน้าแชทหลัก (หน้ารวมแชท) */
+    #page-chat {
+        padding: 0 !important; /* เอา Padding ออกเพื่อให้เต็มจอ */
+        height: 100dvh; /* ใช้ dvh เพื่อแก้ปัญหาแถบ URL ของ Chrome/Safari */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    /* ซ่อน Header มาตรฐานของระบบเพื่อให้มีพื้นที่แชทมากขึ้น */
+    #page-chat .page-header {
+        display: none !important; 
+    }
+
+    /* 2. โครงสร้าง Grid ของแชท */
+    #page-chat .admin-chat-grid {
+        display: block !important; /* เลิกใช้ Grid บนมือถือ */
+        height: 100% !important;
+        position: relative;
+    }
+
+    /* 3. หน้ารายชื่อคนคุย (Thread List) */
+    #page-chat .admin-chat-threads {
+        height: 100%;
+        border-radius: 0;
+        border: none;
+        padding-top: max(16px, env(safe-area-inset-top)); /* รองรับรอยบาก */
+    }
+
+    /* 4. หน้าต่างแชทสนทนา (Chat Window) - ทำให้เป็น Full Screen ป๊อปอัปสไลด์เข้า */
+    #page-chat .admin-chat-window {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        background: #1a1a1d;
+        z-index: 100000; /* ให้อยู่บนสุดทับ Sidebar และเมนูมือถือ */
+        display: flex !important;
+        flex-direction: column;
+        transform: translateX(100%); /* ซ่อนไว้ทางขวา */
+        transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* แอนิเมชันสไลด์แบบธรรมชาติ */
+        border-radius: 0;
+        border: none;
+    }
+
+    /* เมื่อมีคลาสนี้ หน้าต่างแชทจะสไลด์เข้ามา */
+    #page-chat .admin-chat-grid.chat-thread-open .admin-chat-window {
+        transform: translateX(0);
+    }
+
+    /* 5. Header ของแชท (ส่วนที่มีปุ่ม Back และชื่อลูกค้า) */
+    #chatHeader {
+        padding: max(12px, env(safe-area-inset-top)) 16px 12px !important; /* ดันลงมาหลบรอยบาก iPhone */
+        background: rgba(30, 30, 40, 0.98);
+        backdrop-filter: blur(10px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    /* โชว์ปุ่ม Back */
+    #page-chat .admin-chat-back-btn {
+        display: flex !important;
+        background: transparent !important;
+        padding: 0 8px 0 0 !important;
+    }
+
+    #page-chat .admin-chat-back-btn svg {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* 6. กล่องข้อความแชท */
+    #chatMessagesContainer {
+        flex: 1;
+        padding: 16px 12px !important;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 7. พื้นที่พิมพ์ข้อความ (Input Area) */
+    #chatInputArea {
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) !important; /* ดันขึ้นหลบขีด Home ด้านล่างของ iPhone */
+        background: rgba(35, 35, 45, 0.98);
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* ปรับแต่งปุ่มและช่องพิมพ์ */
+    #chatInputArea .flex {
+        align-items: flex-end; /* ให้ปุ่มอยู่ล่างสุดเวลา Textarea ขยายตัว */
+    }
+
+    #chatInputArea label,
+    #chatInputArea button[onclick*="openChatProductSearch"] {
+        min-width: 40px !important;
+        height: 40px !important;
+        padding: 0 !important;
+        justify-content: center;
+        background: transparent !important; /* ให้ปุ่มแนบไฟล์ดูกลืนไปกับพื้นหลังเหมือน Line */
+    }
+
+    #chatMessageInput {
+        font-size: 15px !important; /* ขนาดฟอนต์ 16px ป้องกันไม่ให้ iOS ซูมหน้าจออัตโนมัติเวลาพิมพ์ */
+        padding: 10px 14px !important;
+        border-radius: 20px !important; /* ขอบมนแบบ Line */
+        background: rgba(255, 255, 255, 0.1) !important;
+        margin: 0 4px;
+    }
+
+    /* ปุ่มส่งข้อความ */
+    #chatInputArea button[onclick="sendChatMessage()"] {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50%;
+        padding: 0 !important;
+    }
+}
+2. ตรวจสอบ JavaScript (การเปิด/ปิดแชท)
+ในไฟล์ JavaScript ของคุณ (dashboard.js หรือหน้าสคริปต์ที่คุมแชท) ตรวจสอบให้แน่ใจว่าฟังก์ชันเปิดและปิดแชทมีลอจิกการเพิ่ม/ลบคลาส .chat-thread-open ดังนี้ครับ:
+
+JavaScript
+// ฟังก์ชันเมื่อกดเลือกแชทจากรายชื่อ
+function openChatThread(threadId) {
+    // ... ลอจิกโหลดข้อมูลแชทของคุณ ...
+
+    // เพิ่มบรรทัดนี้เพื่อเลื่อนหน้าต่างแชทเข้ามาบนมือถือ
+    document.querySelector('.admin-chat-grid').classList.add('chat-thread-open');
+    
+    // ซ่อน Sidebar Overlay ของมือถือ (ถ้าผู้ใช้กดแชทจาก Sidebar)
+    if(document.getElementById('sidebar').classList.contains('active')) {
+        toggleMobileSidebar(); 
+    }
+    
+    // เลื่อนแชทลงล่างสุด
+    setTimeout(() => {
+        const container = document.getElementById('chatMessagesContainer');
+        if(container) container.scrollTop = container.scrollHeight;
+    }, 100);
+}
+
+// ฟังก์ชันสำหรับปุ่ม Back (<) ในหน้าต่างแชท (บนมือถือ)
+function adminChatGoBack() {
+    // ลบคลาสเพื่อให้หน้าต่างแชทสไลด์กลับไปทางขวา
+    document.querySelector('.admin-chat-grid').classList.remove('chat-thread-open');
+    
+    // เคลียร์ค่า Thread ที่เลือกอยู่ (ถ้ามี)
+    currentActiveThreadId = null;
+}
+สรุปสิ่งที่จะเกิดขึ้นหลังจากแก้โค้ด:
+เมื่อเข้าหน้าแชทบนมือถือ: จะเห็นรายชื่อคนคุยเต็มหน้าจอ (เหมือนหน้าแรกของ LINE)
+
+เมื่อกดเลือกคนคุย: หน้าต่างสนทนาจะสไลด์ฟืดเข้ามาจากขอบขวา ทับหน้าจอเดิมทั้งหมด ไร้ขอบ ไม่มี Header มากวนใจ
+
+กล่องพิมพ์ข้อความ: ปุ่มเครื่องหมายบวก (+) จะเป็นไอคอนใสๆ ช่องพิมพ์ข้อความจะขอบมนกลม และปุ่มส่งจะเป็นวงกลมทางขวา (รูปแบบเดียวกับแอปแชทมาตรฐาน)
+
+การพิมพ์: ป้องกันอาการหน้าจอกระตุกเวลาคีย์บอร์ดเด้งขึ้นมาด้วยการใช้ 100dvh และขยายปุ่มหลบขอบจอด้านล่างของมือถือให้กดง่ายขึ้นครับ
