@@ -13568,6 +13568,13 @@ def push_subscribe():
         conn = get_db()
         cursor = conn.cursor()
         
+        cursor.execute('DELETE FROM push_subscriptions WHERE endpoint = %s AND user_id != %s', (endpoint, user_id))
+        
+        cursor.execute('''
+            DELETE FROM push_subscriptions 
+            WHERE user_id = %s AND endpoint != %s AND user_agent = %s
+        ''', (user_id, endpoint, user_agent))
+        
         cursor.execute('''
             INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
             VALUES (%s, %s, %s, %s, %s)
