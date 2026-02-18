@@ -12839,12 +12839,13 @@ def send_chat_message(thread_id):
             push_url = '/admin#chat' if sender_type == 'reseller' else '/reseller#chat'
             try:
                 print(f"[CHAT-PUSH] Sending push to recipient {recipient_id}: {sender_name} -> {push_body[:30]}")
+                import time as _t
                 send_push_notification(
                     recipient_id,
                     f'💬 {sender_name}',
                     push_body,
                     url=push_url,
-                    tag=f'chat-{thread_id}',
+                    tag=f'chat-{thread_id}-{int(_t.time()*1000)}',
                     notification_type='chat'
                 )
             except Exception as e:
@@ -12873,7 +12874,7 @@ def send_chat_message(thread_id):
                 
                 for admin_id in other_admins:
                     try:
-                        send_push_notification(admin_id, f'💬 {rname}', content[:100] if content else 'ส่งข้อความใหม่', url='/admin#chat', tag=f'chat-{thread_id}')
+                        send_push_notification(admin_id, f'💬 {rname}', content[:100] if content else 'ส่งข้อความใหม่', url='/admin#chat', tag=f'chat-{thread_id}-{int(_t.time()*1000)}')
                     except Exception as e:
                         print(f"[CHAT-PUSH] Error notifying admin {admin_id}: {str(e)[:100]}")
             except Exception as e:
@@ -13662,12 +13663,13 @@ def push_test():
         if not subscriptions:
             return jsonify({'success': False, 'error': 'No subscriptions found', 'user_id': user_id}), 200
         
+        import time
         payload = json.dumps({
             'title': '🔔 ทดสอบการแจ้งเตือน',
             'body': 'ถ้าเห็นข้อความนี้ แสดงว่าระบบแจ้งเตือนทำงานปกติ!',
             'icon': '/static/icons/icon-192x192.png',
             'url': '/',
-            'tag': 'test-notification',
+            'tag': f'test-{int(time.time()*1000)}',
             'type': 'test'
         })
         
