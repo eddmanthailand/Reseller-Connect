@@ -3302,9 +3302,26 @@ let resellerChatThreadId = null;
 let resellerChatPollingInterval = null;
 let resellerLastMessageId = 0;
 let resellerPendingAttachments = [];
+let resellerOldestMessageId = 0;
+let resellerHasMoreMessages = true;
+let resellerLoadingOlder = false;
+let resellerAllMessages = [];
 
 async function initResellerChat() {
     try {
+        resellerLastMessageId = 0;
+        resellerOldestMessageId = 0;
+        resellerHasMoreMessages = true;
+        resellerLoadingOlder = false;
+        resellerAllMessages = [];
+        resellerChatOtherLastRead = 0;
+
+        const container = document.getElementById('resellerChatMessages');
+        if (container) {
+            container.innerHTML = '';
+            delete container.dataset.scrollSetup;
+        }
+
         const response = await fetch(`/api/chat/start/${currentUserId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3326,17 +3343,18 @@ async function loadResellerChatMessages() {
     if (!resellerChatThreadId) return;
     
     try {
-        const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages?since_id=${resellerLastMessageId}`, {
-            credentials: 'include'
-        });
-        const data = await response.json();
-        const messages = data.messages || data;
-        const otherLastRead = data.other_last_read || 0;
-        
         const container = document.getElementById('resellerChatMessages');
         if (!container) return;
-        
+
         if (resellerLastMessageId === 0) {
+            const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages?limit=50`, {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            const messages = data.messages || data;
+            resellerHasMoreMessages = data.has_more || false;
+            resellerChatOtherLastRead = data.other_last_read || 0;
+
             if (messages.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.4);">
@@ -3348,61 +3366,205 @@ async function loadResellerChatMessages() {
                     </div>
                 `;
                 return;
-            } else {
-                container.innerHTML = '';
             }
-        }
-        
-        messages.forEach(msg => {
-            const isMine = Number(msg.sender_id) === Number(currentUserId);
-            const isRead = isMine && msg.id <= otherLastRead;
-            
-            let productCardHtml = '';
-            if (msg.product) {
-                const p = msg.product;
-                const hasDiscount = p.discount_percent && p.discount_percent > 0;
-                const fmtNum = (n) => n != null ? Number(n).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : '0';
-                const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${fmtNum(p.tier_min_price)}` : `฿${fmtNum(p.tier_min_price)} - ฿${fmtNum(p.tier_max_price)}`) : '';
-                const originalPrice = p.min_price === p.max_price ? `฿${fmtNum(p.min_price)}` : `฿${fmtNum(p.min_price)} - ฿${fmtNum(p.max_price)}`;
-                productCardHtml = `
-                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="viewProduct(${p.id})">
-                        ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
-                        <div style="padding: 10px;">
-                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>
-                            ${hasDiscount ? `
-                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
-                                <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
-                                <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
-                            ` : `<div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>`}
+
+            resellerAllMessages = messages;
+            resellerOldestMessageId = messages[0].id;
+            messages.forEach(msg => {
+                resellerLastMessageId = Math.max(resellerLastMessageId, msg.id);
+            });
+
+            renderResellerAllMessages();
+            container.scrollTop = container.scrollHeight;
+            setupResellerChatScroll();
+        } else {
+            const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages?since_id=${resellerLastMessageId}`, {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            const messages = data.messages || data;
+            resellerChatOtherLastRead = data.other_last_read || 0;
+
+            if (messages.length === 0) {
+                updateResellerReadReceipts();
+                return;
+            }
+
+            messages.forEach(msg => {
+                resellerAllMessages.push(msg);
+                const isMine = Number(msg.sender_id) === Number(currentUserId);
+                const isRead = isMine && msg.id <= resellerChatOtherLastRead;
+
+                const lastMsg = resellerAllMessages.length >= 2 ? resellerAllMessages[resellerAllMessages.length - 2] : null;
+                const msgDate = new Date(msg.created_at).toDateString();
+                const lastDate = lastMsg ? new Date(lastMsg.created_at).toDateString() : null;
+                if (!lastDate || msgDate !== lastDate) {
+                    const dateLabel = formatResellerChatDateSeparator(msg.created_at);
+                    container.insertAdjacentHTML('beforeend', `
+                        <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
+                            <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
+                            <div style="font-size: 12px; color: rgba(255,255,255,0.4); white-space: nowrap;">${dateLabel}</div>
+                            <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
                         </div>
-                    </div>
-                `;
-            }
-            
-            const msgHtml = `
-                <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
-                    <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
-                        ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
-                        ${productCardHtml}
-                        ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>` : ''}
-                        ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
-                            att.file_type && att.file_type.startsWith('image/') 
-                                ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
-                                : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtmlChat(att.file_name)}</a>`
-                        ).join('') : ''}
-                        <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', msgHtml);
-            resellerLastMessageId = Math.max(resellerLastMessageId, msg.id);
-        });
-        
-        container.scrollTop = container.scrollHeight;
-        
+                    `);
+                }
+
+                container.insertAdjacentHTML('beforeend', buildResellerMessageHtml(msg, isMine, isRead));
+                resellerLastMessageId = Math.max(resellerLastMessageId, msg.id);
+            });
+
+            updateResellerReadReceipts();
+            container.scrollTop = container.scrollHeight;
+        }
     } catch (error) {
         console.error('Error loading messages:', error);
     }
+}
+
+let resellerChatOtherLastRead = 0;
+
+function buildResellerMessageHtml(msg, isMine, isRead) {
+    let productCardHtml = '';
+    if (msg.product) {
+        const p = msg.product;
+        const hasDiscount = p.discount_percent && p.discount_percent > 0;
+        const fmtNum = (n) => n != null ? Number(n).toLocaleString('th-TH', {minimumFractionDigits: 0, maximumFractionDigits: 2}) : '0';
+        const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${fmtNum(p.tier_min_price)}` : `฿${fmtNum(p.tier_min_price)} - ฿${fmtNum(p.tier_max_price)}`) : '';
+        const originalPrice = p.min_price === p.max_price ? `฿${fmtNum(p.min_price)}` : `฿${fmtNum(p.min_price)} - ฿${fmtNum(p.max_price)}`;
+        productCardHtml = `
+            <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="viewProduct(${p.id})">
+                ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
+                <div style="padding: 10px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>
+                    ${hasDiscount ? `
+                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                        <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
+                        <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
+                    ` : `<div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>`}
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
+            <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
+                ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
+                ${productCardHtml}
+                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
+                    att.file_type && att.file_type.startsWith('image/') 
+                        ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
+                        : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtmlChat(att.file_name)}</a>`
+                ).join('') : ''}
+                <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderResellerAllMessages() {
+    const container = document.getElementById('resellerChatMessages');
+    if (!container) return;
+    container.innerHTML = '';
+
+    let lastDateStr = null;
+    resellerAllMessages.forEach(msg => {
+        const msgDate = new Date(msg.created_at).toDateString();
+        if (msgDate !== lastDateStr) {
+            lastDateStr = msgDate;
+            const dateLabel = formatResellerChatDateSeparator(msg.created_at);
+            container.insertAdjacentHTML('beforeend', `
+                <div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.4); white-space: nowrap;">${dateLabel}</div>
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
+                </div>
+            `);
+        }
+
+        const isMine = Number(msg.sender_id) === Number(currentUserId);
+        const isRead = isMine && msg.id <= resellerChatOtherLastRead;
+        container.insertAdjacentHTML('beforeend', buildResellerMessageHtml(msg, isMine, isRead));
+    });
+}
+
+function updateResellerReadReceipts() {
+    const container = document.getElementById('resellerChatMessages');
+    if (!container) return;
+    container.querySelectorAll('[data-msg-id]').forEach(el => {
+        const msgId = parseInt(el.dataset.msgId);
+        const senderId = parseInt(el.dataset.senderId);
+        if (Number(senderId) === Number(currentUserId)) {
+            const metaEl = el.querySelector('.reseller-msg-meta');
+            if (metaEl && !metaEl.querySelector('span') && msgId <= resellerChatOtherLastRead) {
+                metaEl.insertAdjacentHTML('beforeend', ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>');
+            }
+        }
+    });
+}
+
+function formatResellerChatDateSeparator(dateStr) {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'วันนี้';
+    if (date.toDateString() === yesterday.toDateString()) return 'เมื่อวาน';
+
+    const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
+}
+
+async function loadOlderResellerMessages() {
+    if (resellerLoadingOlder || !resellerHasMoreMessages || !resellerChatThreadId || resellerOldestMessageId <= 0) return;
+    resellerLoadingOlder = true;
+
+    const container = document.getElementById('resellerChatMessages');
+    const loadingEl = document.createElement('div');
+    loadingEl.id = 'resellerOlderLoading';
+    loadingEl.style.cssText = 'text-align: center; padding: 12px; color: rgba(255,255,255,0.4); font-size: 13px;';
+    loadingEl.textContent = 'กำลังโหลด...';
+    container.insertBefore(loadingEl, container.firstChild);
+
+    const prevScrollHeight = container.scrollHeight;
+
+    try {
+        const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages?before_id=${resellerOldestMessageId}&limit=50`, { credentials: 'include' });
+        const data = await response.json();
+        const messages = data.messages || data;
+        resellerHasMoreMessages = data.has_more || false;
+
+        const loadEl = document.getElementById('resellerOlderLoading');
+        if (loadEl) loadEl.remove();
+
+        if (messages.length > 0) {
+            resellerOldestMessageId = messages[0].id;
+            resellerAllMessages = [...messages, ...resellerAllMessages];
+
+            renderResellerAllMessages();
+
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = newScrollHeight - prevScrollHeight;
+        }
+    } catch (e) {
+        console.error('Error loading older messages:', e);
+        const loadEl = document.getElementById('resellerOlderLoading');
+        if (loadEl) loadEl.remove();
+    }
+    resellerLoadingOlder = false;
+}
+
+function setupResellerChatScroll() {
+    const container = document.getElementById('resellerChatMessages');
+    if (!container || container.dataset.scrollSetup) return;
+    container.dataset.scrollSetup = 'true';
+    container.addEventListener('scroll', function() {
+        if (container.scrollTop < 50 && !resellerLoadingOlder && resellerHasMoreMessages) {
+            loadOlderResellerMessages();
+        }
+    });
 }
 
 function escapeHtmlChat(str) {

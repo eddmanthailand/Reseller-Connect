@@ -452,6 +452,59 @@ def send_order_status_email(to_email, reseller_name, order_number, status, messa
     subject = f'[{label}] คำสั่งซื้อ {order_number}'
     send_email(to_email, subject, html)
 
+def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
+    """Send order status update as chat message"""
+    status_messages = {
+        'approved': f'✅ คำสั่งซื้อ {order_number} สลิปได้รับการยืนยันแล้ว กำลังเตรียมจัดส่ง',
+        'request_new_slip': f'⚠️ คำสั่งซื้อ {order_number} กรุณาอัปโหลดสลิปใหม่',
+        'shipped': f'🚚 คำสั่งซื้อ {order_number} จัดส่งแล้ว',
+        'delivered': f'📦 คำสั่งซื้อ {order_number} ส่งถึงปลายทางแล้ว',
+        'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก'
+    }
+    message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
+    if extra_info:
+        message += f'\n{extra_info}'
+    
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT id FROM chat_threads WHERE reseller_id = %s', (reseller_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            cursor.execute('INSERT INTO chat_threads (reseller_id) VALUES (%s) RETURNING id', (reseller_id,))
+            thread = cursor.fetchone()
+        
+        thread_id = thread['id']
+        
+        cursor.execute("SELECT id FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'Super Admin') LIMIT 1")
+        admin = cursor.fetchone()
+        admin_id = admin['id'] if admin else 1
+        
+        cursor.execute('''
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content)
+            VALUES (%s, %s, 'admin', %s) RETURNING id
+        ''', (thread_id, admin_id, message))
+        
+        preview = message[:100]
+        cursor.execute('''
+            UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s, is_archived = FALSE
+            WHERE id = %s
+        ''', (preview, thread_id))
+        
+        conn.commit()
+        
+        send_push_notification(reseller_id, '📋 อัปเดตคำสั่งซื้อ', message[:100], url='/reseller#chat', tag=f'order-status-{order_number}')
+        
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"[CHAT] Error sending order status chat: {e}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
 def send_low_stock_alert(admin_email, products):
     """Send email alert for low stock products"""
     items_html = ''
@@ -7637,7 +7690,7 @@ def update_shipment(order_id, shipment_id):
         if data.get('status') in ['shipped', 'delivered']:
             try:
                 cursor.execute('''
-                    SELECT u.full_name, u.email, o.order_number 
+                    SELECT u.full_name, u.email, u.id as user_id, o.order_number 
                     FROM users u 
                     JOIN orders o ON o.user_id = u.id 
                     WHERE o.id = %s
@@ -7654,6 +7707,10 @@ def update_shipment(order_id, shipment_id):
                             'สินค้าของคุณถูกจัดส่งแล้ว',
                             tracking_info
                         )
+                        try:
+                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'shipped', tracking_info)
+                        except Exception as chat_err:
+                            print(f"Chat notification error: {chat_err}")
                     elif data['status'] == 'delivered':
                         send_order_status_email(
                             reseller_info['email'],
@@ -7662,6 +7719,10 @@ def update_shipment(order_id, shipment_id):
                             'delivered',
                             'สินค้าของคุณถูกส่งถึงปลายทางเรียบร้อยแล้ว'
                         )
+                        try:
+                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'delivered')
+                        except Exception as chat_err:
+                            print(f"Chat notification error: {chat_err}")
             except Exception as email_err:
                 print(f"Email notification error: {email_err}")
         
@@ -8825,6 +8886,10 @@ def approve_order(order_id):
                     'approved',
                     'สลิปการชำระเงินของคุณได้รับการยืนยันแล้ว กำลังเตรียมจัดส่งสินค้า'
                 )
+            try:
+                send_order_status_chat(order['user_id'], order_info['order_number'] if order_info else f'#{order_id}', 'approved')
+            except Exception as chat_err:
+                print(f"Chat notification error: {chat_err}")
         except Exception as email_err:
             print(f"Email notification error: {email_err}")
         finally:
@@ -8908,6 +8973,10 @@ def request_new_slip(order_id):
                 'กรุณาอัปโหลดสลิปการชำระเงินใหม่',
                 f'เหตุผล: {reason}'
             )
+        try:
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'request_new_slip', f'เหตุผล: {reason}')
+        except Exception as chat_err:
+            print(f"Chat notification error: {chat_err}")
         
         # Notify user
         create_notification(
@@ -8999,7 +9068,7 @@ def cancel_order(order_id):
         
         # Get reseller info for email and order number
         cursor.execute('''
-            SELECT u.full_name, u.email, o.order_number 
+            SELECT u.full_name, u.email, u.id as user_id, o.order_number 
             FROM users u 
             JOIN orders o ON o.user_id = u.id 
             WHERE o.id = %s
@@ -9014,6 +9083,10 @@ def cancel_order(order_id):
                 'คำสั่งซื้อของคุณถูกยกเลิก',
                 f'เหตุผล: {reason}' if reason else ''
             )
+        try:
+            send_order_status_chat(reseller_info.get('user_id') or order.get('user_id', 0), reseller_info['order_number'] or f'#{order_id}', 'cancelled', f'เหตุผล: {reason}' if reason else '')
+        except Exception as chat_err:
+            print(f"Chat notification error: {chat_err}")
         
         # Notify user
         create_notification(
@@ -12516,6 +12589,7 @@ def get_chat_threads():
             ''', (user_id, user_id))
         else:
             # Admin sees all threads
+            show_archived = request.args.get('archived', 'false') == 'true'
             cursor.execute('''
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
                        u.full_name as reseller_name, u.username,
@@ -12527,9 +12601,9 @@ def get_chat_threads():
                 FROM chat_threads ct
                 JOIN users u ON u.id = ct.reseller_id
                 LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
-                WHERE ct.is_archived = FALSE
+                WHERE ct.is_archived = %s
                 ORDER BY ct.last_message_at DESC NULLS LAST
-            ''', (user_id,))
+            ''', (user_id, show_archived))
         
         threads = [dict(row) for row in cursor.fetchall()]
         return jsonify(threads), 200
@@ -12541,6 +12615,48 @@ def get_chat_threads():
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/chat/threads/<int:thread_id>/archive', methods=['POST'])
+@login_required
+def archive_chat_thread(thread_id):
+    """Archive a chat thread (admin only)"""
+    conn = None
+    cursor = None
+    try:
+        if session.get('role') == 'Reseller':
+            return jsonify({'error': 'Only admin can archive threads'}), 403
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE chat_threads SET is_archived = TRUE WHERE id = %s', (thread_id,))
+        conn.commit()
+        return jsonify({'message': 'Thread archived'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@app.route('/api/chat/threads/<int:thread_id>/unarchive', methods=['POST'])
+@login_required  
+def unarchive_chat_thread(thread_id):
+    """Unarchive a chat thread"""
+    conn = None
+    cursor = None
+    try:
+        if session.get('role') == 'Reseller':
+            return jsonify({'error': 'Only admin can unarchive threads'}), 403
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE chat_threads SET is_archived = FALSE WHERE id = %s', (thread_id,))
+        conn.commit()
+        return jsonify({'message': 'Thread unarchived'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @app.route('/api/chat/products/search', methods=['GET'])
 @login_required
@@ -12646,24 +12762,61 @@ def get_chat_messages(thread_id):
             return jsonify({'error': 'Access denied'}), 403
         
         since_id = request.args.get('since_id', 0, type=int)
+        before_id = request.args.get('before_id', 0, type=int)
         limit = request.args.get('limit', 50, type=int)
         
-        cursor.execute('''
-            SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
-                   u.full_name as sender_name,
-                   r.name as sender_role,
-                   (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
-                    'file_name', ca.file_name, 'file_type', ca.file_type))
-                    FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
-            FROM chat_messages cm
-            JOIN users u ON u.id = cm.sender_id
-            LEFT JOIN roles r ON r.id = u.role_id
-            WHERE cm.thread_id = %s AND cm.id > %s
-            ORDER BY cm.created_at ASC
-            LIMIT %s
-        ''', (thread_id, since_id, limit))
+        if since_id > 0:
+            cursor.execute('''
+                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
+                       u.full_name as sender_name,
+                       r.name as sender_role,
+                       (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
+                        'file_name', ca.file_name, 'file_type', ca.file_type))
+                        FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
+                FROM chat_messages cm
+                JOIN users u ON u.id = cm.sender_id
+                LEFT JOIN roles r ON r.id = u.role_id
+                WHERE cm.thread_id = %s AND cm.id > %s
+                ORDER BY cm.id ASC
+                LIMIT %s
+            ''', (thread_id, since_id, limit))
+            messages = [dict(row) for row in cursor.fetchall()]
+        elif before_id > 0:
+            cursor.execute('''
+                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
+                       u.full_name as sender_name,
+                       r.name as sender_role,
+                       (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
+                        'file_name', ca.file_name, 'file_type', ca.file_type))
+                        FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
+                FROM chat_messages cm
+                JOIN users u ON u.id = cm.sender_id
+                LEFT JOIN roles r ON r.id = u.role_id
+                WHERE cm.thread_id = %s AND cm.id < %s
+                ORDER BY cm.id DESC
+                LIMIT %s
+            ''', (thread_id, before_id, limit))
+            messages = [dict(row) for row in cursor.fetchall()]
+            messages.reverse()
+        else:
+            cursor.execute('''
+                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
+                       u.full_name as sender_name,
+                       r.name as sender_role,
+                       (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
+                        'file_name', ca.file_name, 'file_type', ca.file_type))
+                        FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
+                FROM chat_messages cm
+                JOIN users u ON u.id = cm.sender_id
+                LEFT JOIN roles r ON r.id = u.role_id
+                WHERE cm.thread_id = %s
+                ORDER BY cm.id DESC
+                LIMIT %s
+            ''', (thread_id, limit))
+            messages = [dict(row) for row in cursor.fetchall()]
+            messages.reverse()
         
-        messages = [dict(row) for row in cursor.fetchall()]
+        has_more = len(messages) == limit
         
         thread_reseller_id = thread['reseller_id']
         cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (thread_reseller_id,))
@@ -12738,7 +12891,7 @@ def get_chat_messages(thread_id):
         if read_row:
             other_last_read = read_row['last_read']
         
-        return jsonify({'messages': messages, 'other_last_read': other_last_read}), 200
+        return jsonify({'messages': messages, 'other_last_read': other_last_read, 'has_more': has_more}), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -12802,6 +12955,8 @@ def send_chat_message(thread_id):
             UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s
             WHERE id = %s
         ''', (preview, thread_id))
+        
+        cursor.execute('UPDATE chat_threads SET is_archived = FALSE WHERE id = %s AND is_archived = TRUE', (thread_id,))
         
         # Schedule email notification for recipient
         recipient_id = thread['reseller_id'] if sender_type == 'admin' else None

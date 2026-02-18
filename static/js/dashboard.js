@@ -7870,6 +7870,10 @@ async function deleteMtoProduct(productId, productName) {
 // ==================== CHAT SYSTEM ====================
 
 let currentChatThreadId = null;
+let showingArchivedThreads = false;
+let oldestMessageId = 0;
+let chatHasMore = false;
+let loadingOlderMessages = false;
 let chatPollingInterval = null;
 let lastMessageId = 0;
 let chatQuickReplies = [];
@@ -7888,7 +7892,9 @@ async function loadChatThreadsAndAutoSelect() {
 
 async function loadChatThreads() {
     try {
-        const response = await fetch('/api/chat/threads', {
+        let url = '/api/chat/threads';
+        if (showingArchivedThreads) url += '?archived=true';
+        const response = await fetch(url, {
             credentials: 'include'
         });
         
@@ -7916,12 +7922,13 @@ async function loadChatThreads() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 12px; opacity: 0.3;">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
-                    <p>ยังไม่มีการสนทนา</p>
+                    <p>${showingArchivedThreads ? 'ไม่มีการสนทนาที่ซ่อน' : 'ยังไม่มีการสนทนา'}</p>
                 </div>
             `;
             return [];
         }
         
+        const isAdmin = document.getElementById('btnToggleArchived') !== null;
         container.innerHTML = threads.map(thread => `
             <div class="chat-thread-item ${currentChatThreadId === thread.id ? 'active' : ''}" 
                  onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}', ${thread.reseller_tier_id || 'null'})"
@@ -7937,6 +7944,11 @@ async function loadChatThreads() {
                     <div style="font-size: 12px; opacity: 0.6; margin-top: 2px;">${thread.tier_name || 'ไม่ระบุ Tier'}</div>
                     <div style="font-size: 12px; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px;">${escapeHtml(thread.last_message_preview || 'ยังไม่มีข้อความ')}</div>
                 </div>
+                ${isAdmin ? `<button onclick="${showingArchivedThreads ? `unarchiveChatThread(${thread.id}, event)` : `archiveChatThread(${thread.id}, event)`}" style="flex-shrink: 0; width: 28px; height: 28px; border: none; background: rgba(255,255,255,0.08); border-radius: 6px; color: rgba(255,255,255,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)';this.style.color='rgba(255,255,255,0.8)'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='rgba(255,255,255,0.4)'" title="${showingArchivedThreads ? 'แสดง' : 'ซ่อน'}">
+                    ${showingArchivedThreads
+                        ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+                        : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'}
+                </button>` : ''}
             </div>
         `).join('');
         
@@ -7948,6 +7960,40 @@ async function loadChatThreads() {
     }
 }
 
+async function toggleArchivedThreads() {
+    showingArchivedThreads = !showingArchivedThreads;
+    const btn = document.getElementById('btnToggleArchived');
+    if (btn) btn.textContent = showingArchivedThreads ? '💬 แชททั้งหมด' : '📁 ซ่อนแล้ว';
+    loadChatThreads();
+}
+
+async function archiveChatThread(threadId, event) {
+    event.stopPropagation();
+    if (!confirm('ซ่อนการสนทนานี้? (จะกลับมาเมื่อมีข้อความใหม่)')) return;
+    try {
+        const resp = await fetch(`/api/chat/threads/${threadId}/archive`, {
+            method: 'POST', credentials: 'include'
+        });
+        if (resp.ok) {
+            showAlert('ซ่อนการสนทนาแล้ว', 'success');
+            loadChatThreads();
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function unarchiveChatThread(threadId, event) {
+    event.stopPropagation();
+    try {
+        const resp = await fetch(`/api/chat/threads/${threadId}/unarchive`, {
+            method: 'POST', credentials: 'include'
+        });
+        if (resp.ok) {
+            showAlert('แสดงการสนทนาอีกครั้ง', 'success');
+            loadChatThreads();
+        }
+    } catch(e) { console.error(e); }
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -7956,6 +8002,8 @@ function escapeHtml(str) {
 async function selectChatThread(threadId, resellerName, tierName, resellerTierId) {
     currentChatThreadId = threadId;
     lastMessageId = 0;
+    oldestMessageId = 0;
+    chatHasMore = false;
     currentChatResellerTierId = resellerTierId || null;
     selectedChatProduct = null;
     const productPreview = document.getElementById('chatProductPreview');
@@ -7981,65 +8029,126 @@ function adminChatGoBack() {
     if (chatGrid) chatGrid.classList.remove('chat-thread-open');
 }
 
+function formatChatDateSeparator(dateStr) {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) return 'วันนี้';
+    if (date.toDateString() === yesterday.toDateString()) return 'เมื่อวาน';
+    
+    const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
+}
+
+function renderChatMessageHtml(msg, otherLastRead) {
+    const isMine = Number(msg.sender_id) === Number(currentUserId);
+    const isRead = isMine && msg.id <= otherLastRead;
+    
+    let productCardHtml = '';
+    if (msg.product) {
+        const p = msg.product;
+        const hasDiscount = p.discount_percent && p.discount_percent > 0;
+        const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${formatNumber(p.tier_min_price)}` : `฿${formatNumber(p.tier_min_price)} - ฿${formatNumber(p.tier_max_price)}`) : '';
+        const originalPrice = p.min_price === p.max_price ? `฿${formatNumber(p.min_price)}` : `฿${formatNumber(p.min_price)} - ฿${formatNumber(p.max_price)}`;
+        productCardHtml = `
+            <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="navigateToProduct(${p.id})"
+                ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
+                <div style="padding: 10px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
+                    ${hasDiscount ? `
+                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                        <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
+                        <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
+                    ` : `
+                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+    
+    return `
+        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
+            <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
+                ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
+                ${productCardHtml}
+                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>` : ''}
+                ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
+                    att.file_type && att.file_type.startsWith('image/') 
+                        ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
+                        : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtml(att.file_name)}</a>`
+                ).join('') : ''}
+                <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;">${formatChatTime(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderDateSeparator(dateLabel) {
+    return `<div style="display: flex; align-items: center; gap: 12px; margin: 16px 0;">
+        <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
+        <div style="font-size: 12px; color: rgba(255,255,255,0.4); white-space: nowrap;">${dateLabel}</div>
+        <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.15);"></div>
+    </div>`;
+}
+
+function renderMessagesWithDateSeparators(messages, otherLastRead, existingLastDate) {
+    let html = '';
+    let lastDate = existingLastDate || '';
+    messages.forEach(msg => {
+        const msgDate = new Date(msg.created_at).toDateString();
+        if (msgDate !== lastDate) {
+            lastDate = msgDate;
+            html += renderDateSeparator(formatChatDateSeparator(msg.created_at));
+        }
+        html += renderChatMessageHtml(msg, otherLastRead);
+    });
+    return html;
+}
+
 async function loadChatMessages(threadId) {
     try {
-        const response = await fetch(`/api/chat/threads/${threadId}/messages?since_id=${lastMessageId}`, {
-            credentials: 'include'
-        });
+        let url;
+        if (lastMessageId > 0) {
+            url = `/api/chat/threads/${threadId}/messages?since_id=${lastMessageId}`;
+        } else {
+            url = `/api/chat/threads/${threadId}/messages`;
+        }
+        const response = await fetch(url, { credentials: 'include' });
         const data = await response.json();
         const messages = data.messages || data;
         const otherLastRead = data.other_last_read || 0;
+        chatHasMore = data.has_more || false;
         
         const container = document.getElementById('chatMessagesContainer');
         if (!container) return;
         
         if (lastMessageId === 0) {
             container.innerHTML = '';
+            const html = renderMessagesWithDateSeparators(messages, otherLastRead, '');
+            container.insertAdjacentHTML('beforeend', html);
+            if (messages.length > 0) {
+                oldestMessageId = messages[0].id;
+            }
+            setupChatScrollListener(container, threadId);
+        } else {
+            messages.forEach(msg => {
+                const msgDate = new Date(msg.created_at).toDateString();
+                const lastChild = container.lastElementChild;
+                const lastMsgDateAttr = lastChild ? lastChild.dataset?.msgDate : '';
+                if (msgDate !== lastMsgDateAttr) {
+                    container.insertAdjacentHTML('beforeend', renderDateSeparator(formatChatDateSeparator(msg.created_at)));
+                }
+                const msgEl = document.createElement('div');
+                msgEl.dataset.msgDate = msgDate;
+                msgEl.innerHTML = renderChatMessageHtml(msg, otherLastRead);
+                container.appendChild(msgEl);
+            });
         }
         
         messages.forEach(msg => {
-            const isMine = Number(msg.sender_id) === Number(currentUserId);
-            const isRead = isMine && msg.id <= otherLastRead;
-            
-            let productCardHtml = '';
-            if (msg.product) {
-                const p = msg.product;
-                const hasDiscount = p.discount_percent && p.discount_percent > 0;
-                const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${formatNumber(p.tier_min_price)}` : `฿${formatNumber(p.tier_min_price)} - ฿${formatNumber(p.tier_max_price)}`) : '';
-                const originalPrice = p.min_price === p.max_price ? `฿${formatNumber(p.min_price)}` : `฿${formatNumber(p.min_price)} - ฿${formatNumber(p.max_price)}`;
-                productCardHtml = `
-                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="navigateToProduct(${p.id})"
-                        ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
-                        <div style="padding: 10px;">
-                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
-                            ${hasDiscount ? `
-                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
-                                <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
-                                <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
-                            ` : `
-                                <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>
-                            `}
-                        </div>
-                    </div>
-                `;
-            }
-            
-            const msgHtml = `
-                <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
-                    <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
-                        ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
-                        ${productCardHtml}
-                        ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>` : ''}
-                        ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
-                            att.file_type && att.file_type.startsWith('image/') 
-                                ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
-                                : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtml(att.file_name)}</a>`
-                        ).join('') : ''}
-                        <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;">${formatChatTime(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', msgHtml);
             lastMessageId = Math.max(lastMessageId, msg.id);
         });
         
@@ -8048,6 +8157,53 @@ async function loadChatMessages(threadId) {
     } catch (error) {
         console.error('Error loading messages:', error);
     }
+}
+
+async function loadOlderChatMessages(threadId) {
+    if (loadingOlderMessages || !chatHasMore || oldestMessageId <= 0) return;
+    loadingOlderMessages = true;
+    
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) { loadingOlderMessages = false; return; }
+    
+    const loader = document.createElement('div');
+    loader.id = 'chatLoadingOlder';
+    loader.style.cssText = 'text-align: center; padding: 12px; color: rgba(255,255,255,0.4); font-size: 12px;';
+    loader.textContent = 'กำลังโหลด...';
+    container.prepend(loader);
+    
+    const prevScrollHeight = container.scrollHeight;
+    
+    try {
+        const response = await fetch(`/api/chat/threads/${threadId}/messages?before_id=${oldestMessageId}`, { credentials: 'include' });
+        const data = await response.json();
+        const messages = data.messages || data;
+        chatHasMore = data.has_more || false;
+        
+        const loaderEl = document.getElementById('chatLoadingOlder');
+        if (loaderEl) loaderEl.remove();
+        
+        if (messages.length > 0) {
+            const html = renderMessagesWithDateSeparators(messages, data.other_last_read || 0, '');
+            container.insertAdjacentHTML('afterbegin', html);
+            oldestMessageId = messages[0].id;
+            container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+    } catch (error) {
+        console.error('Error loading older messages:', error);
+        const loaderEl = document.getElementById('chatLoadingOlder');
+        if (loaderEl) loaderEl.remove();
+    }
+    
+    loadingOlderMessages = false;
+}
+
+function setupChatScrollListener(container, threadId) {
+    container.onscroll = function() {
+        if (container.scrollTop < 50 && chatHasMore && !loadingOlderMessages) {
+            loadOlderChatMessages(threadId);
+        }
+    };
 }
 
 function formatChatTime(dateStr) {
