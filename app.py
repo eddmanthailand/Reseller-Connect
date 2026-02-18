@@ -12921,6 +12921,71 @@ def get_chat_unread_count():
         if conn:
             conn.close()
 
+@app.route('/api/chat/new-messages', methods=['GET'])
+@login_required
+def get_chat_new_messages():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        user_id = session['user_id']
+        role_name = session.get('role_name', '')
+        since_id = request.args.get('since_id', 0, type=int)
+        
+        if role_name == 'Reseller':
+            cursor.execute('''
+                SELECT cm.id, cm.content, cm.created_at, cm.thread_id,
+                       u.full_name as sender_name, cm.sender_type, cm.product_id
+                FROM chat_messages cm
+                JOIN chat_threads ct ON ct.id = cm.thread_id
+                JOIN users u ON u.id = cm.sender_id
+                WHERE ct.reseller_id = %s 
+                  AND cm.sender_type = 'admin'
+                  AND cm.id > %s
+                  AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                        WHERE thread_id = cm.thread_id AND user_id = %s), 0)
+                ORDER BY cm.id ASC
+                LIMIT 20
+            ''', (user_id, since_id, user_id))
+        else:
+            cursor.execute('''
+                SELECT cm.id, cm.content, cm.created_at, cm.thread_id,
+                       u.full_name as sender_name, cm.sender_type, cm.product_id
+                FROM chat_messages cm
+                JOIN chat_threads ct ON ct.id = cm.thread_id
+                JOIN users u ON u.id = cm.sender_id
+                WHERE cm.sender_type = 'reseller'
+                  AND cm.id > %s
+                  AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
+                                        WHERE thread_id = cm.thread_id AND user_id = %s), 0)
+                ORDER BY cm.id ASC
+                LIMIT 20
+            ''', (since_id, user_id))
+        
+        messages = cursor.fetchall()
+        result = []
+        for msg in messages:
+            preview = msg['content'][:80] if msg['content'] else ('📦 ส่งสินค้ามาให้ดู' if msg['product_id'] else '📎 ส่งไฟล์แนบ')
+            result.append({
+                'id': msg['id'],
+                'thread_id': msg['thread_id'],
+                'sender_name': msg['sender_name'],
+                'preview': preview,
+                'created_at': msg['created_at'].isoformat()
+            })
+        
+        return jsonify({'messages': result}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 @app.route('/api/chat/start/<int:reseller_id>', methods=['POST'])
 @login_required
 def start_chat_thread(reseller_id):
