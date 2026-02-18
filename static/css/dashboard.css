@@ -3328,3 +3328,24 @@ tr:hover td {
 @keyframes chatSpinAnim {
     to { transform: rotate(360deg); }
 }
+
+@media (max-width: 768px) {
+    .slip-review-card .slip-card-header {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 10px 12px !important;
+    }
+    .slip-review-card .slip-card-body {
+        flex-direction: column !important;
+    }
+    .slip-review-card .slip-image-area {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        min-height: 180px !important;
+        max-height: 220px !important;
+    }
+    .slip-review-card .slip-image-area img {
+        max-height: 220px !important;
+    }
+}
