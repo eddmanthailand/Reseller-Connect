@@ -13647,19 +13647,59 @@ def push_status():
 @app.route('/api/push/test', methods=['POST'])
 @login_required
 def push_test():
+    conn = None
+    cursor = None
     try:
         user_id = session['user_id']
-        send_push_notification(
-            user_id,
-            '🔔 ทดสอบการแจ้งเตือน',
-            'ถ้าเห็นข้อความนี้ แสดงว่าระบบแจ้งเตือนทำงานปกติ!',
-            url='/',
-            tag='test-notification',
-            notification_type='test'
-        )
-        return jsonify({'success': True, 'message': 'Test notification sent'}), 200
+        vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY', '')
+        vapid_subject = os.environ.get('VAPID_SUBJECT', 'mailto:admin@ekgshops.com')
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, endpoint, p256dh, auth, user_agent FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        subscriptions = cursor.fetchall()
+        
+        if not subscriptions:
+            return jsonify({'success': False, 'error': 'No subscriptions found', 'user_id': user_id}), 200
+        
+        payload = json.dumps({
+            'title': '🔔 ทดสอบการแจ้งเตือน',
+            'body': 'ถ้าเห็นข้อความนี้ แสดงว่าระบบแจ้งเตือนทำงานปกติ!',
+            'icon': '/static/icons/icon-192x192.png',
+            'url': '/',
+            'tag': 'test-notification',
+            'type': 'test'
+        })
+        
+        results = []
+        for sub in subscriptions:
+            device = 'Mobile' if 'Mobile' in (sub.get('user_agent') or '') else 'PC'
+            try:
+                webpush(
+                    subscription_info={
+                        'endpoint': sub['endpoint'],
+                        'keys': {'p256dh': sub['p256dh'], 'auth': sub['auth']}
+                    },
+                    data=payload,
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims={'sub': vapid_subject}
+                )
+                results.append({'sub_id': sub['id'], 'device': device, 'status': 'sent'})
+            except WebPushException as e:
+                status_code = e.response.status_code if e.response else 'unknown'
+                results.append({'sub_id': sub['id'], 'device': device, 'status': 'failed', 'code': status_code, 'error': str(e)[:150]})
+                if e.response and e.response.status_code in (404, 410):
+                    cursor.execute('DELETE FROM push_subscriptions WHERE id = %s', (sub['id'],))
+                    conn.commit()
+            except Exception as e:
+                results.append({'sub_id': sub['id'], 'device': device, 'status': 'error', 'error': str(e)[:150]})
+        
+        return jsonify({'success': True, 'user_id': user_id, 'results': results}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 def send_push_notification(user_id, title, body, url='/', tag='ekg-notification', notification_type='general'):
     conn = None
