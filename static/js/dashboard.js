@@ -2195,54 +2195,6 @@ async function approveOrder(orderId) {
     }
 }
 
-async function approveSlip(orderId) {
-    if (!confirm('ยืนยันการชำระเงินและเริ่มเตรียมสินค้า?')) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (response.ok) {
-            showGlobalAlert('อนุมัติสลิปสำเร็จ - เริ่มเตรียมสินค้า', 'success');
-            loadOrders(currentOrdersStatus);
-            loadSlipReviewOrders();
-        } else {
-            const error = await response.json();
-            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
-        }
-    } catch (error) {
-        console.error('Error approving slip:', error);
-        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
-    }
-}
-
-async function requestNewSlip(orderId) {
-    const reason = prompt('เหตุผลที่ต้องขอสลิปใหม่ (เช่น สลิปไม่ชัด, ยอดเงินไม่ตรง):', 'สลิปไม่ชัด กรุณาส่งใหม่');
-    if (!reason) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/orders/${orderId}/request-new-slip`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason })
-        });
-        
-        if (response.ok) {
-            showGlobalAlert('แจ้งขอสลิปใหม่สำเร็จ', 'warning');
-            loadOrders(currentOrdersStatus);
-            loadSlipReviewOrders();
-        } else {
-            const error = await response.json();
-            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
-        }
-    } catch (error) {
-        console.error('Error requesting new slip:', error);
-        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
-    }
-}
-
 async function rejectOrder(orderId) {
     const reason = prompt('เหตุผลในการปฏิเสธ:');
     if (reason === null) return;

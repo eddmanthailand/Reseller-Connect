@@ -6936,15 +6936,16 @@ def reseller_submit_mto_payment(order_id):
         if not order:
             return jsonify({'error': 'Order not found'}), 404
         
-        # Upload slip (using object storage or save locally)
-        import uuid
-        import os
-        filename = f"mto_slip_{order_id}_{payment_type}_{uuid.uuid4().hex[:8]}.png"
-        upload_folder = 'static/uploads/mto_slips'
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, filename)
-        slip_file.save(filepath)
-        slip_url = f'/static/uploads/mto_slips/{filename}'
+        import base64
+        file_data = slip_file.read()
+        max_size = 5 * 1024 * 1024
+        if len(file_data) > max_size:
+            return jsonify({'error': 'ไฟล์ใหญ่เกิน 5MB'}), 400
+        original_ext = slip_file.filename.rsplit('.', 1)[-1].lower() if '.' in slip_file.filename else 'png'
+        mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+        mime_type = mime_map.get(original_ext, 'image/png')
+        b64_data = base64.b64encode(file_data).decode('utf-8')
+        slip_url = f'data:{mime_type};base64,{b64_data}'
         
         # Create payment record
         amount = 0
@@ -7769,14 +7770,17 @@ def upload_payment_slip(order_id):
                 if original_ext not in allowed_ext:
                     return jsonify({'error': 'ไฟล์ไม่รองรับ กรุณาอัปโหลดรูปภาพ'}), 400
                 
-                upload_folder = os.path.join('static', 'uploads', 'slips')
-                os.makedirs(upload_folder, exist_ok=True)
+                import base64
+                file_data = slip_file.read()
                 
-                import time as time_module
-                filename = f"slip_{order_id}_{int(time_module.time())}_{user_id}.{original_ext}"
-                file_path = os.path.join(upload_folder, filename)
-                slip_file.save(file_path)
-                slip_image_url = f'/{file_path}'
+                max_size = 5 * 1024 * 1024
+                if len(file_data) > max_size:
+                    return jsonify({'error': 'ไฟล์ใหญ่เกิน 5MB กรุณาลดขนาดรูป'}), 400
+                
+                mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic'}
+                mime_type = mime_map.get(original_ext, 'image/jpeg')
+                b64_data = base64.b64encode(file_data).decode('utf-8')
+                slip_image_url = f'data:{mime_type};base64,{b64_data}'
             else:
                 return jsonify({'error': 'กรุณาเลือกรูปสลิป'}), 400
         else:
@@ -9005,7 +9009,18 @@ def request_new_slip(order_id):
         if order['status'] != 'under_review':
             return jsonify({'error': 'Order is not under review'}), 400
         
-        # Delete old payment slips for this order
+        cursor.execute('SELECT slip_image_url FROM payment_slips WHERE order_id = %s', (order_id,))
+        old_slips = cursor.fetchall()
+        for old_slip in old_slips:
+            url = old_slip.get('slip_image_url', '')
+            if url and url.startswith('/static/uploads/'):
+                try:
+                    file_path = url.lstrip('/')
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception:
+                    pass
+        
         cursor.execute('DELETE FROM payment_slips WHERE order_id = %s', (order_id,))
         
         # Update order status back to pending_payment
