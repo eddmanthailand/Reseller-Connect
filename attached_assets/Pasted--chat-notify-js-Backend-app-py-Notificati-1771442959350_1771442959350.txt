@@ -1,0 +1,95 @@
+จากโค้ด chat-notify.js และโครงสร้าง Backend (app.py) ที่ทำงานร่วมกัน มีจุดผิดพลาดที่ทำให้ Notification ไม่แสดง หรือแสดงผลข้อความผิดเพี้ยน (เป็น undefined) ครับ โดยมีวิธีแก้ไข 2 ส่วนหลักๆ ดังนี้ครับ:
+
+ส่วนที่ 1: แก้ไขโค้ดใน chat-notify.js
+API ฝั่งหลังบ้านมีการส่งข้อมูลกลับมาเป็น content และ product_id แต่ไม่มีฟิลด์ preview โค้ดเดิมจึงดึงค่า msg.preview มาแสดงไม่ได้ นอกจากนี้ควรจัดการแสดงข้อความกรณีที่มีการส่งเฉพาะรูปภาพหรือสินค้าด้วย
+
+วิธีแก้ไข: ให้เพิ่มการสร้างข้อความ Preview ก่อนที่จะเรียกใช้ฟังก์ชันแสดง Notification ครับ
+
+ให้แก้ไขฟังก์ชัน pollNewMessages() ในไฟล์ chat-notify.js เป็นดังนี้:
+
+JavaScript
+  async function pollNewMessages() {
+    if (isChatPageOpen()) {
+      clearAllBanners();
+      return;
+    }
+
+    try {
+      const resp = await fetch(`/api/chat/new-messages?since_id=${lastSeenMessageId}`, {
+        credentials: 'include'
+      });
+
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      if (data.chat_url) {
+        chatNavUrl = data.chat_url;
+      }
+      if (data.messages && data.messages.length > 0) {
+        const sorted = data.messages.sort((a, b) => a.id - b.id);
+        for (const msg of sorted) {
+          
+          // --- [เพิ่มส่วนนี้] จัดการสร้าง Preview Message ด้วยตัวเอง ---
+          if (!msg.preview) {
+             if (msg.content && msg.content.trim() !== '') {
+                 msg.preview = msg.content;
+             } else if (msg.product_id) {
+                 msg.preview = '📦 ส่งสินค้าให้ดู';
+             } else {
+                 msg.preview = '🖼️ ส่งรูปภาพ/ไฟล์แนบ';
+             }
+          }
+          // ----------------------------------------------------
+
+          if (msg.id > lastSeenMessageId) {
+            lastSeenMessageId = msg.id;
+            showDesktopNotification(msg);
+          }
+          showChatBanner(msg);
+        }
+      } else {
+        clearAllBanners();
+      }
+    } catch (e) {
+      console.error('Poll Error:', e);
+    }
+  }
+และแก้ไขในฟังก์ชัน showChatBanner(msg) ตรงส่วนการ Redirect เพื่อให้ทำงานได้อย่างแม่นยำขึ้นเวลาผู้ใช้กดคลิกที่ Notification:
+
+JavaScript
+      // แก้ไขบล็อกล่างสุดของ event click ใน showChatBanner
+      if (window.location.hash === targetHash) {
+        if (typeof window.openChatThread === 'function') {
+          window.openChatThread(msg.thread_id);
+        }
+      } else {
+        // อัปเดต hash อย่างถูกต้อง (ใส่ # กลับเข้าไปเพื่อให้ isChatPageOpen() ทำงานถูก)
+        window.location.hash = targetHash; 
+        
+        if (typeof switchPage === 'function') {
+          switchPage(targetHash.substring(1)); // ลบ # ออกตอนส่งเข้า switchPage
+        }
+        setTimeout(() => {
+          if (typeof window.openChatThread === 'function') {
+            window.openChatThread(msg.thread_id);
+          }
+        }, 500);
+      }
+ส่วนที่ 2: บั๊กสำคัญในฝั่ง Backend (app.py) ที่ทำให้ฝั่งตัวแทนจำหน่าย (Reseller) แชทไม่เด้ง
+หากระบบแจ้งเตือนยังไม่ทำงาน มีบั๊กที่สำคัญมากใน app.py ครับ ตรงฟังก์ชัน /api/chat/new-messages (รวมถึง API แชทอื่นๆ)
+
+ตอนที่ระบบให้ผู้ใช้งาน Login ระบบตั้งค่าตัวแปร Session ไว้ที่ session['role'] แต่วิธีที่ API แชทดึงสิทธิ์ผู้ใช้ไปเช็คนั้น ดึงผิดชื่อคีย์ครับ:
+
+Python
+# ในโค้ดปัจจุบัน (ดึงผิดชื่อคีย์ ทำให้ role_name เป็นค่าว่างเสมอ)
+role_name = session.get('role_name', '') 
+if role_name == 'Reseller':
+    # ... โค้ดดึงข้อความของ Reseller ...
+else:
+    # ... โค้ดจะตกมาที่ Admin เสมอ ทำให้ Reseller ไม่เคยได้รับข้อความใหม่เลย!
+วิธีแก้ไขใน app.py:
+ค้นหาทุกจุดใน Route /api/chat/new-messages , /api/chat/threads/<int:thread_id>/messages ที่มีการใช้ session.get('role_name', '') ให้เปลี่ยนไปดึงค่าจากตัวแปรที่ถูกต้องคือ:
+
+Python
+role_name = session.get('role', '') # เปลี่ยนจาก 'role_name' เป็น 'role'
+หลังจากอัปเดต 2 ส่วนนี้ ระบบ Notification ทั้งแบบ in-app banner (บนหน้าเว็บ) และแบบ Desktop Notification จะสามารถจับข้อความใหม่ แยกข้อความ รูปภาพ สินค้า และดึงข้อมูลได้ตรงตามสิทธิ์อย่างถูกต้องครับ
