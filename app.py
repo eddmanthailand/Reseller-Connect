@@ -12498,7 +12498,7 @@ def get_chat_threads():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         
         if role_name == 'Reseller':
             # Reseller sees only their own thread
@@ -12556,7 +12556,7 @@ def search_chat_products():
         reseller_tier_id = request.args.get('tier_id', None, type=int)
         
         # Auto-detect tier for resellers
-        if not reseller_tier_id and session.get('role_name') == 'Reseller':
+        if not reseller_tier_id and session.get('role') == 'Reseller':
             cursor.execute('SELECT reseller_tier_id FROM users WHERE id = %s', (session['user_id'],))
             user_row = cursor.fetchone()
             if user_row:
@@ -12634,7 +12634,7 @@ def get_chat_messages(thread_id):
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         
         # Verify access
         cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
@@ -12759,7 +12759,7 @@ def send_chat_message(thread_id):
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         
         # Verify access
         cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
@@ -12906,7 +12906,7 @@ def get_chat_unread_count():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         
         if role_name == 'Reseller':
             cursor.execute('''
@@ -12953,7 +12953,7 @@ def get_chat_new_messages():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         since_id = request.args.get('since_id', 0, type=int)
         
         if role_name == 'Reseller':
@@ -13020,7 +13020,7 @@ def start_chat_thread(reseller_id):
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         
         # Reseller can only start chat for themselves
         if role_name == 'Reseller' and reseller_id != user_id:
@@ -13451,7 +13451,7 @@ def search_chat_messages():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         user_id = session['user_id']
-        role_name = session.get('role_name', '')
+        role_name = session.get('role', '')
         query = request.args.get('q', '').strip()
         
         if not query or len(query) < 2:
@@ -13511,7 +13511,7 @@ def manifest():
         data = json.load(f)
     
     ref = request.referrer or ''
-    role_name = session.get('role_name', '')
+    role_name = session.get('role', '')
     
     if '/admin' in ref or role_name in ('Super Admin', 'Assistant Admin'):
         data['start_url'] = '/admin'
