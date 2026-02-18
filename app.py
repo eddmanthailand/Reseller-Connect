@@ -12809,6 +12809,7 @@ def send_chat_message(thread_id):
         conn.commit()
         
         # Send push notification to recipient
+        print(f"[CHAT-PUSH] sender={user_id} ({sender_type}), recipient={recipient_id}, thread={thread_id}")
         if recipient_id:
             cursor.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
             sender_info = cursor.fetchone()
@@ -12816,6 +12817,7 @@ def send_chat_message(thread_id):
             push_body = content[:100] if content else ('ส่งสินค้ามาให้ดู' if product_id else 'ส่งไฟล์แนบ')
             push_url = '/admin#chat' if sender_type == 'reseller' else '/reseller#chat'
             try:
+                print(f"[CHAT-PUSH] Sending push to recipient {recipient_id}: {sender_name} -> {push_body[:30]}")
                 send_push_notification(
                     recipient_id,
                     f'💬 {sender_name}',
@@ -12824,8 +12826,10 @@ def send_chat_message(thread_id):
                     tag=f'chat-{thread_id}',
                     notification_type='chat'
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[CHAT-PUSH] Error sending to recipient: {str(e)[:200]}")
+        else:
+            print(f"[CHAT-PUSH] No recipient_id found, skipping push")
         
         if sender_type == 'reseller':
             try:
@@ -12838,6 +12842,7 @@ def send_chat_message(thread_id):
                 ''', (recipient_id if recipient_id else 0,))
                 other_admins = [row[0] for row in cursor2.fetchall()]
                 cursor2.close()
+                print(f"[CHAT-PUSH] Also notifying other admins: {other_admins}")
                 
                 cursor3 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor3.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
@@ -12848,10 +12853,10 @@ def send_chat_message(thread_id):
                 for admin_id in other_admins:
                     try:
                         send_push_notification(admin_id, f'💬 {rname}', content[:100] if content else 'ส่งข้อความใหม่', url='/admin#chat', tag=f'chat-{thread_id}')
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    except Exception as e:
+                        print(f"[CHAT-PUSH] Error notifying admin {admin_id}: {str(e)[:100]}")
+            except Exception as e:
+                print(f"[CHAT-PUSH] Error in admin broadcast: {str(e)[:200]}")
         
         return jsonify({
             'id': message_id,
@@ -13406,11 +13411,16 @@ def search_chat_messages():
 
 @app.route('/sw.js')
 def service_worker():
-    return send_file('static/sw.js', mimetype='application/javascript')
+    response = send_file('static/sw.js', mimetype='application/javascript')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 @app.route('/manifest.json')
 def manifest():
-    return send_file('static/manifest.json', mimetype='application/manifest+json')
+    response = send_file('static/manifest.json', mimetype='application/manifest+json')
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 @app.route('/api/push/vapid-public-key', methods=['GET'])
 @login_required
@@ -13509,6 +13519,23 @@ def push_status():
         if conn:
             conn.close()
 
+@app.route('/api/push/test', methods=['POST'])
+@login_required
+def push_test():
+    try:
+        user_id = session['user_id']
+        send_push_notification(
+            user_id,
+            '🔔 ทดสอบการแจ้งเตือน',
+            'ถ้าเห็นข้อความนี้ แสดงว่าระบบแจ้งเตือนทำงานปกติ!',
+            url='/',
+            tag='test-notification',
+            notification_type='test'
+        )
+        return jsonify({'success': True, 'message': 'Test notification sent'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def send_push_notification(user_id, title, body, url='/', tag='ekg-notification', notification_type='general'):
     conn = None
     cursor = None
@@ -13517,6 +13544,7 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         vapid_subject = os.environ.get('VAPID_SUBJECT', 'mailto:admin@ekgshops.com')
         
         if not vapid_private_key:
+            print(f"[PUSH] No VAPID_PRIVATE_KEY set, skipping push for user {user_id}")
             return
         
         conn = get_db()
@@ -13524,6 +13552,10 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         
         cursor.execute('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = %s', (user_id,))
         subscriptions = cursor.fetchall()
+        
+        if not subscriptions:
+            print(f"[PUSH] No subscriptions found for user {user_id}")
+            return
         
         payload = json.dumps({
             'title': title,
@@ -13534,7 +13566,10 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
             'type': notification_type
         })
         
+        print(f"[PUSH] Sending to user {user_id}: {title} - {body[:50]} ({len(subscriptions)} subscriptions)")
+        
         expired_ids = []
+        sent_count = 0
         for sub in subscriptions:
             try:
                 webpush(
@@ -13549,18 +13584,25 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
                     vapid_private_key=vapid_private_key,
                     vapid_claims={'sub': vapid_subject}
                 )
+                sent_count += 1
+                print(f"[PUSH] Sent successfully to subscription {sub['id']}")
             except WebPushException as e:
+                status_code = e.response.status_code if e.response else 'unknown'
+                print(f"[PUSH] WebPushException for sub {sub['id']}: status={status_code}, {str(e)[:200]}")
                 if e.response and e.response.status_code in (404, 410):
                     expired_ids.append(sub['id'])
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[PUSH] Error for sub {sub['id']}: {str(e)[:200]}")
+        
+        print(f"[PUSH] Sent {sent_count}/{len(subscriptions)} to user {user_id}")
         
         if expired_ids:
             cursor.execute('DELETE FROM push_subscriptions WHERE id = ANY(%s)', (expired_ids,))
             conn.commit()
+            print(f"[PUSH] Cleaned up {len(expired_ids)} expired subscriptions")
             
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[PUSH] Fatal error sending to user {user_id}: {str(e)[:300]}")
     finally:
         if cursor:
             cursor.close()
