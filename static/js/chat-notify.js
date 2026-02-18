@@ -23,7 +23,7 @@
         flex-direction: column;
         align-items: center;
         pointer-events: none;
-        padding-top: 12px;
+        padding-top: max(12px, env(safe-area-inset-top));
         gap: 8px;
       }
       .chat-notify-banner {
@@ -184,6 +184,42 @@
     });
   }
 
+  function navigateToChat(msg) {
+    const currentPath = window.location.pathname;
+    let targetUrl = chatNavUrl || '#chat';
+    let targetPath = '';
+    let targetHash = '#chat';
+
+    if (targetUrl.includes('#')) {
+      const parts = targetUrl.split('#');
+      targetPath = parts[0];
+      targetHash = '#' + parts[1];
+    } else {
+      targetPath = targetUrl;
+    }
+
+    if (targetPath && !currentPath.startsWith(targetPath)) {
+      window.location.href = targetUrl;
+      return;
+    }
+
+    if (window.location.hash === targetHash) {
+      if (typeof window.openChatThread === 'function') {
+        window.openChatThread(msg.thread_id);
+      }
+    } else {
+      window.location.hash = targetHash.substring(1);
+      if (typeof switchPage === 'function') {
+        switchPage(targetHash.substring(1));
+      }
+      setTimeout(() => {
+        if (typeof window.openChatThread === 'function') {
+          window.openChatThread(msg.thread_id);
+        }
+      }, 500);
+    }
+  }
+
   function showChatBanner(msg) {
     if (activeBanners.has(msg.id)) return;
 
@@ -216,37 +252,7 @@
 
     banner.addEventListener('click', () => {
       removeBanner(msg.id);
-      const currentPath = window.location.pathname;
-      let targetUrl = chatNavUrl || '#chat';
-      let targetPath = '';
-      let targetHash = '#chat';
-
-      if (targetUrl.includes('#')) {
-        const parts = targetUrl.split('#');
-        targetPath = parts[0];
-        targetHash = '#' + parts[1];
-      }
-
-      if (targetPath && !currentPath.startsWith(targetPath)) {
-        window.location.href = targetUrl;
-        return;
-      }
-
-      if (window.location.hash === targetHash) {
-        if (typeof window.openChatThread === 'function') {
-          window.openChatThread(msg.thread_id);
-        }
-      } else {
-        window.location.hash = targetHash.substring(1);
-        if (typeof switchPage === 'function') {
-          switchPage(targetHash.substring(1));
-        }
-        setTimeout(() => {
-          if (typeof window.openChatThread === 'function') {
-            window.openChatThread(msg.thread_id);
-          }
-        }, 500);
-      }
+      navigateToChat(msg);
     });
 
     setupSwipeToDismiss(banner, msg.id);
@@ -296,15 +302,7 @@
         notif.onclick = function() {
           window.focus();
           notif.close();
-          if (window.location.hash !== '#chat') {
-            window.location.hash = 'chat';
-            if (typeof switchPage === 'function') switchPage('chat');
-          }
-          setTimeout(() => {
-            if (typeof window.openChatThread === 'function') {
-              window.openChatThread(msg.thread_id);
-            }
-          }, 500);
+          navigateToChat(msg);
         };
 
         setTimeout(() => notif.close(), 8000);
@@ -379,9 +377,14 @@
 
   function startPolling() {
     if (pollInterval) return;
-    initLastSeenId().then(() => {
+    if (lastSeenMessageId === 0) {
+      initLastSeenId().then(() => {
+        pollInterval = setInterval(pollNewMessages, POLL_DELAY);
+      });
+    } else {
+      pollNewMessages();
       pollInterval = setInterval(pollNewMessages, POLL_DELAY);
-    });
+    }
   }
 
   function stopPolling() {
