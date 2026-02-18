@@ -2,14 +2,33 @@ let deferredInstallPrompt = null;
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
       .then(reg => {
         console.log('SW registered:', reg.scope);
         reg.update();
+
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated') {
+                console.log('New SW activated');
+              }
+            });
+          }
+        });
+
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
       })
       .catch(err => {
         console.log('SW registration failed:', err);
       });
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('SW controller changed, new SW active');
+    });
   });
 }
 

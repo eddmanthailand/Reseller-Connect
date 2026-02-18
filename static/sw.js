@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v10';
+const CACHE_NAME = 'ekg-shops-v11';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
@@ -11,6 +11,12 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
