@@ -5,6 +5,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         console.log('SW registered:', reg.scope);
+        reg.update();
       })
       .catch(err => {
         console.log('SW registration failed:', err);
@@ -95,6 +96,10 @@ async function subscribeToPush() {
     const registration = await navigator.serviceWorker.ready;
 
     const response = await fetch('/api/push/vapid-public-key', { credentials: 'include' });
+    if (!response.ok) {
+      console.log('Failed to get VAPID key, status:', response.status);
+      return false;
+    }
     const { publicKey } = await response.json();
 
     if (!publicKey) {
@@ -102,10 +107,23 @@ async function subscribeToPush() {
       return false;
     }
 
-    const subscription = await registration.pushManager.subscribe({
+    let subscription = await registration.pushManager.getSubscription();
+    
+    if (subscription) {
+      try {
+        await subscription.unsubscribe();
+        console.log('Unsubscribed old push subscription');
+      } catch(e) {
+        console.log('Error unsubscribing old:', e);
+      }
+    }
+
+    subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey)
     });
+
+    console.log('New push subscription created:', subscription.endpoint.substring(0, 60));
 
     const subResponse = await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -115,12 +133,47 @@ async function subscribeToPush() {
     });
 
     if (subResponse.ok) {
-      console.log('Push subscription successful');
+      console.log('Push subscription saved to server');
+      localStorage.setItem('push_subscribed', Date.now().toString());
       return true;
     }
+    console.log('Failed to save subscription, status:', subResponse.status);
     return false;
   } catch (error) {
     console.error('Push subscription error:', error);
+    return false;
+  }
+}
+
+async function refreshPushSubscription() {
+  try {
+    if (!('Notification' in window) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    if (subscription) {
+      const subResponse = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ subscription: subscription.toJSON() })
+      });
+      
+      if (subResponse.ok) {
+        console.log('Push subscription refreshed');
+        return true;
+      } else if (subResponse.status === 401) {
+        console.log('Not logged in, skipping push refresh');
+        return false;
+      }
+    } else {
+      console.log('No push subscription found, creating new one');
+      return await subscribeToPush();
+    }
+  } catch (error) {
+    console.log('Push refresh error:', error);
     return false;
   }
 }
@@ -172,6 +225,11 @@ async function initPushNotifications() {
   const status = await checkPushStatus();
 
   if (!status.supported) return;
+
+  if (status.permission === 'granted') {
+    await refreshPushSubscription();
+    return;
+  }
 
   if (status.permission === 'default' && !status.subscribed) {
     const dismissed = localStorage.getItem('push_prompt_dismissed');
