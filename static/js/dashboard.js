@@ -8069,6 +8069,7 @@ async function sendChatMessage() {
         
         if (response.ok) {
             input.value = '';
+            input.style.height = 'auto';
             pendingChatAttachments = [];
             selectedChatProduct = null;
             document.getElementById('chatAttachmentPreview').style.display = 'none';
@@ -8297,6 +8298,8 @@ async function loadQuickReplyButtons() {
 function insertQuickReply(content) {
     const input = document.getElementById('chatMessageInput');
     input.value = content;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
     input.focus();
 }
 

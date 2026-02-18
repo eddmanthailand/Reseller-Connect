@@ -3455,6 +3455,7 @@ async function sendResellerChatMessage() {
         
         if (response.ok) {
             input.value = '';
+            input.style.height = 'auto';
             resellerPendingAttachments = [];
             resellerSelectedChatProduct = null;
             document.getElementById('resellerChatAttachmentPreview').style.display = 'none';

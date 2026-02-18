@@ -2674,8 +2674,8 @@
                                 <button onclick="openChatProductSearch()" style="cursor: pointer; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; border: none; color: white;" title="แนบสินค้า">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                                 </button>
-                                <input type="text" id="chatMessageInput" placeholder="พิมพ์ข้อความ..." style="flex: 1; padding: 10px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white;" onkeydown="if(event.key==='Enter')sendChatMessage()">
-                                <button onclick="sendChatMessage()" class="btn btn-primary" style="padding: 10px 20px;">
+                                <textarea id="chatMessageInput" placeholder="พิมพ์ข้อความ..." rows="1" style="flex: 1; min-width: 0; padding: 10px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.05); color: white; resize: none; font-family: inherit; font-size: 14px; line-height: 1.4; max-height: 100px; overflow-y: auto;" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+                                <button onclick="sendChatMessage()" class="btn btn-primary" style="padding: 10px; width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                                 </button>
                             </div>
