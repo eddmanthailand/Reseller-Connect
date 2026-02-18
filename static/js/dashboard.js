@@ -8337,14 +8337,20 @@ async function sendSelectedChatProducts() {
 
 function navigateToProduct(productId) {
     window.location.hash = 'products';
-    setTimeout(() => {
+    let attempts = 0;
+    const maxAttempts = 30;
+    const tryHighlight = () => {
+        attempts++;
         const row = document.querySelector(`tr[data-product-id="${productId}"]`);
         if (row) {
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.classList.add('highlight-flash');
             setTimeout(() => row.classList.remove('highlight-flash'), 15000);
+        } else if (attempts < maxAttempts) {
+            setTimeout(tryHighlight, 500);
         }
-    }, 400);
+    };
+    setTimeout(tryHighlight, 500);
 }
 
 function selectChatProduct(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {
