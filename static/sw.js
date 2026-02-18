@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v9';
+const CACHE_NAME = 'ekg-shops-v10';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
@@ -88,16 +88,35 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const urlToOpen = event.notification.data.url || '/';
+  const fullUrl = new URL(urlToOpen, self.location.origin).href;
+  const targetPath = new URL(fullUrl).pathname;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      let matchingClient = null;
+      let anyClient = null;
+
       for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(urlToOpen);
-          return client.focus();
+        if (!client.url.includes(self.location.origin) || !('focus' in client)) continue;
+        const clientPath = new URL(client.url).pathname;
+        if (clientPath === targetPath) {
+          matchingClient = client;
+          break;
         }
+        if (!anyClient) anyClient = client;
       }
-      return clients.openWindow(urlToOpen);
+
+      if (matchingClient) {
+        matchingClient.navigate(fullUrl);
+        return matchingClient.focus();
+      }
+
+      if (anyClient && targetPath === new URL(anyClient.url).pathname) {
+        anyClient.navigate(fullUrl);
+        return anyClient.focus();
+      }
+
+      return clients.openWindow(fullUrl);
     })
   );
 });
