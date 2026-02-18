@@ -1,8 +1,9 @@
 {
-  "name": "EKG Shops - ระบบตัวแทนจำหน่าย",
+  "name": "EKG Shops",
   "short_name": "EKG Shops",
   "description": "แพลตฟอร์ม Dropship ครบวงจร สำหรับคนอยากขายออนไลน์",
-  "start_url": "/reseller",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#7c3aed",
