@@ -5482,8 +5482,11 @@ async function loadSlipReviewPage() {
 }
 
 function renderSlipReviewCard(order) {
+    const slipDate = order.slip_created_at 
+        ? new Date(order.slip_created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const orderDate = new Date(order.created_at).toLocaleDateString('th-TH', { 
-        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+        day: 'numeric', month: 'short', year: 'numeric'
     });
     
     const slipUrl = order.slip_image_url || null;
@@ -5513,7 +5516,8 @@ function renderSlipReviewCard(order) {
                         <span class="slip-card-order-num">${escapeHtml(order.order_number || 'ORD-' + order.id)}</span>
                         <span class="slip-card-badge">รอตรวจสอบ</span>
                     </div>
-                    <div class="slip-card-date">${orderDate}</div>
+                    <div class="slip-card-date">แนบสลิป: ${slipDate}</div>
+                    <div class="slip-card-date" style="font-size: 11px; opacity: 0.5;">สั่งซื้อ: ${orderDate}</div>
                     <div class="slip-card-detail-row">
                         <div class="slip-card-detail-item">
                             <div class="slip-card-label">ผู้สั่ง</div>

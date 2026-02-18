@@ -8764,7 +8764,8 @@ def get_all_orders():
                         WHERE oi2.order_id = o.id AND p2.brand_id IN %s) as item_count,
                        (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips,
                        (SELECT ps.slip_image_url FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_image_url,
-                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount
+                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount,
+                       (SELECT ps.created_at FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_created_at
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
                 LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
@@ -8789,7 +8790,8 @@ def get_all_orders():
                        (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
                        (SELECT COUNT(*) FROM payment_slips WHERE order_id = o.id AND status = 'pending') as pending_slips,
                        (SELECT ps.slip_image_url FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_image_url,
-                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount
+                       (SELECT ps.amount FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_amount,
+                       (SELECT ps.created_at FROM payment_slips ps WHERE ps.order_id = o.id ORDER BY ps.created_at DESC LIMIT 1) as slip_created_at
                 FROM orders o
                 LEFT JOIN users u ON u.id = o.user_id
                 LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
