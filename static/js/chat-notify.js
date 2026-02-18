@@ -262,6 +262,38 @@
     }
   }
 
+  function showDesktopNotification(msg) {
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      if (document.hasFocus() && isChatPageOpen()) return;
+
+      const notif = new Notification('💬 ' + (msg.sender_name || 'ข้อความใหม่'), {
+        body: msg.preview || 'ส่งข้อความใหม่',
+        icon: '/static/icons/icon-192x192.png',
+        tag: 'chat-direct-' + msg.id,
+        renotify: true
+      });
+
+      notif.onclick = function() {
+        window.focus();
+        notif.close();
+        const targetUrl = chatNavUrl || '#chat';
+        if (window.location.hash !== '#chat') {
+          window.location.hash = 'chat';
+          if (typeof switchPage === 'function') switchPage('chat');
+        }
+        setTimeout(() => {
+          if (typeof window.openChatThread === 'function') {
+            window.openChatThread(msg.thread_id);
+          }
+        }, 500);
+      };
+
+      setTimeout(() => notif.close(), 8000);
+    } catch(e) {}
+  }
+
   function isChatPageOpen() {
     return window.location.hash === '#chat';
   }
@@ -288,6 +320,7 @@
         for (const msg of sorted) {
           if (msg.id > lastSeenMessageId) {
             lastSeenMessageId = msg.id;
+            showDesktopNotification(msg);
           }
           showChatBanner(msg);
         }
