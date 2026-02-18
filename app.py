@@ -12566,7 +12566,11 @@ def search_chat_products():
             SELECT p.id, p.name, p.status,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url,
                    MIN(s.price) as min_price, MAX(s.price) as max_price,
-                   b.name as brand_name
+                   b.name as brand_name,
+                   COUNT(DISTINCT s.id) as sku_count,
+                   COALESCE((SELECT SUM(sws.stock) FROM sku_warehouse_stock sws 
+                             JOIN skus sk2 ON sk2.id = sws.sku_id 
+                             WHERE sk2.product_id = p.id), 0) as total_stock
             FROM products p
             LEFT JOIN skus s ON s.product_id = p.id
             LEFT JOIN brands b ON b.id = p.brand_id

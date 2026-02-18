@@ -8146,10 +8146,19 @@ function formatNumber(num) {
     return Number(num).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+let chatProductSelections = [];
+
 function openChatProductSearch() {
     document.getElementById('chatProductModal').style.display = 'flex';
     document.getElementById('chatProductSearchInput').value = '';
-    document.getElementById('chatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+    document.getElementById('chatProductSearchStatus').style.display = 'none';
+    document.getElementById('chatProductSearchResults').innerHTML = `
+        <div style="text-align: center; padding: 48px 20px; color: rgba(255,255,255,0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <p style="margin: 0; font-size: 14px;">พิมพ์เพื่อค้นหาสินค้า</p>
+        </div>`;
+    chatProductSelections = [];
+    updateChatProductSelectedBar();
     setTimeout(() => document.getElementById('chatProductSearchInput').focus(), 100);
 }
 
@@ -8160,10 +8169,18 @@ function closeChatProductModal() {
 function searchChatProducts() {
     clearTimeout(chatProductSearchTimeout);
     const q = document.getElementById('chatProductSearchInput').value.trim();
+    const statusEl = document.getElementById('chatProductSearchStatus');
     if (q.length < 1) {
-        document.getElementById('chatProductSearchResults').innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">พิมพ์เพื่อค้นหาสินค้า</div>';
+        statusEl.style.display = 'none';
+        document.getElementById('chatProductSearchResults').innerHTML = `
+            <div style="text-align: center; padding: 48px 20px; color: rgba(255,255,255,0.3);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                <p style="margin: 0; font-size: 14px;">พิมพ์เพื่อค้นหาสินค้า</p>
+            </div>`;
         return;
     }
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 6px;"><span class="chat-product-spinner"></span> กำลังค้นหา...</span>';
     chatProductSearchTimeout = setTimeout(async () => {
         try {
             let url = `/api/chat/products/search?q=${encodeURIComponent(q)}`;
@@ -8175,56 +8192,162 @@ function searchChatProducts() {
             const container = document.getElementById('chatProductSearchResults');
             
             if (!Array.isArray(products) || products.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">ไม่พบสินค้า</div>';
+                statusEl.textContent = 'ไม่พบสินค้า';
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 48px 20px; color: rgba(255,255,255,0.3);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 10px; opacity: 0.4;"><path d="M9.172 16.172a4 4 0 015.656 0"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><circle cx="12" cy="12" r="10"/></svg>
+                        <p style="margin: 0; font-size: 14px;">ไม่พบสินค้าที่ตรงกัน</p>
+                    </div>`;
                 return;
             }
             
+            statusEl.textContent = `พบ ${products.length} รายการ`;
             container.innerHTML = products.map(p => {
+                const isSelected = chatProductSelections.some(s => s.id === p.id);
                 const hasDiscount = p.discount_percent && p.discount_percent > 0;
                 const priceDisplay = hasDiscount
-                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.5; font-size: 12px;">฿${formatNumber(p.min_price)}</span>`
+                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.4; font-size: 11px;">฿${formatNumber(p.min_price)}</span>`
                     : `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.min_price)}</span>`;
+                const stockColor = (p.total_stock || 0) > 0 ? '#34d399' : '#f87171';
+                const stockText = (p.total_stock || 0) > 0 ? `${p.total_stock} ชิ้น` : 'หมด';
                 return `
-                    <div onclick="selectChatProduct(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.image_url || ''}', ${p.min_price || 0}, ${hasDiscount ? p.tier_min_price : p.min_price || 0}, ${p.discount_percent || 0})"
-                         style="display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 8px; cursor: pointer; transition: background 0.2s; border-bottom: 1px solid rgba(255,255,255,0.05);"
-                         onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
-                        ${p.image_url ? `<img src="${p.image_url}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">` : '<div style="width: 50px; height: 50px; background: rgba(255,255,255,0.05); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: rgba(255,255,255,0.2); font-size: 20px;">📦</div>'}
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
-                            <div style="font-size: 12px; opacity: 0.5; margin-top: 2px;">${p.brand_name || ''}</div>
-                            <div style="font-size: 13px; margin-top: 4px;">${priceDisplay}${hasDiscount ? ` <span style="color: #34d399; font-size: 11px;">-${p.discount_percent}%</span>` : ''}</div>
+                    <div onclick="toggleChatProductSelect(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.image_url || ''}', ${p.min_price || 0}, ${hasDiscount ? p.tier_min_price : p.min_price || 0}, ${p.discount_percent || 0})"
+                         id="chatProdItem_${p.id}"
+                         style="display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: all 0.2s; margin-bottom: 4px; border: 1.5px solid ${isSelected ? 'rgba(102,126,234,0.5)' : 'transparent'}; background: ${isSelected ? 'rgba(102,126,234,0.1)' : 'transparent'};"
+                         onmouseover="if(!this.classList.contains('selected'))this.style.background='rgba(255,255,255,0.05)'" onmouseout="if(!this.classList.contains('selected'))this.style.background='transparent'">
+                        <div style="position: relative; flex-shrink: 0;">
+                            ${p.image_url ? `<img src="${p.image_url}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 8px;">` : '<div style="width: 52px; height: 52px; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.15); font-size: 22px;">📦</div>'}
+                            <div data-check="1" style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #2a2a2e; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all 0.2s; ${isSelected ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: white;' : 'background: rgba(255,255,255,0.1); color: transparent;'}">${isSelected ? '✓' : ''}</div>
                         </div>
-                    </div>
-                `;
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white;">${escapeHtml(p.name)}</div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-top: 3px;">
+                                <span style="font-size: 11px; opacity: 0.45;">${p.brand_name || ''}</span>
+                                ${p.sku_count ? `<span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5);">${p.sku_count} SKU</span>` : ''}
+                                <span style="font-size: 10px; color: ${stockColor};">● ${stockText}</span>
+                            </div>
+                            <div style="font-size: 13px; margin-top: 4px;">${priceDisplay}${hasDiscount ? ` <span style="color: #34d399; font-size: 11px; font-weight: 500;">-${p.discount_percent}%</span>` : ''}</div>
+                        </div>
+                    </div>`;
             }).join('');
         } catch (error) {
             console.error('Error searching products:', error);
+            statusEl.textContent = 'เกิดข้อผิดพลาด';
         }
     }, 300);
 }
 
+function toggleChatProductSelect(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {
+    const idx = chatProductSelections.findIndex(s => s.id === id);
+    if (idx >= 0) {
+        chatProductSelections.splice(idx, 1);
+    } else {
+        chatProductSelections.push({ id, name, imageUrl, originalPrice, tierPrice, discountPercent });
+    }
+    const item = document.getElementById(`chatProdItem_${id}`);
+    if (item) {
+        const isNowSelected = chatProductSelections.some(s => s.id === id);
+        item.style.border = isNowSelected ? '1.5px solid rgba(102,126,234,0.5)' : '1.5px solid transparent';
+        item.style.background = isNowSelected ? 'rgba(102,126,234,0.1)' : 'transparent';
+        const checkEl = item.querySelector('[data-check]');
+        if (checkEl) {
+            if (isNowSelected) {
+                checkEl.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+                checkEl.style.color = 'white';
+                checkEl.textContent = '✓';
+            } else {
+                checkEl.style.background = 'rgba(255,255,255,0.1)';
+                checkEl.style.color = 'transparent';
+                checkEl.textContent = '';
+            }
+        }
+    }
+    updateChatProductSelectedBar();
+}
+
+function updateChatProductSelectedBar() {
+    const bar = document.getElementById('chatProductSelectedBar');
+    const countEl = document.getElementById('chatProductSelectedCount');
+    const thumbsEl = document.getElementById('chatProductSelectedThumbs');
+    if (chatProductSelections.length === 0) {
+        bar.style.display = 'none';
+        return;
+    }
+    bar.style.display = 'block';
+    countEl.textContent = chatProductSelections.length;
+    thumbsEl.innerHTML = chatProductSelections.map(s => `
+        <div style="position: relative; flex-shrink: 0;" title="${escapeHtml(s.name)}">
+            ${s.imageUrl ? `<img src="${s.imageUrl}" style="width: 28px; height: 28px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);">` : '<div style="width: 28px; height: 28px; background: rgba(255,255,255,0.1); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px;">📦</div>'}
+            <div onclick="event.stopPropagation(); removeChatProductFromSelection(${s.id})" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; background: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; color: white; cursor: pointer; line-height: 1;">×</div>
+        </div>
+    `).join('');
+}
+
+function removeChatProductFromSelection(id) {
+    chatProductSelections = chatProductSelections.filter(s => s.id !== id);
+    const item = document.getElementById(`chatProdItem_${id}`);
+    if (item) {
+        item.style.border = '1.5px solid transparent';
+        item.style.background = 'transparent';
+        const checkEl = item.querySelector('[data-check]');
+        if (checkEl) {
+            checkEl.style.background = 'rgba(255,255,255,0.1)';
+            checkEl.style.color = 'transparent';
+            checkEl.textContent = '';
+        }
+    }
+    updateChatProductSelectedBar();
+}
+
+function clearChatProductSelection() {
+    chatProductSelections.forEach(s => {
+        const item = document.getElementById(`chatProdItem_${s.id}`);
+        if (item) {
+            item.style.border = '1.5px solid transparent';
+            item.style.background = 'transparent';
+            const checkEl = item.querySelector('[data-check]');
+            if (checkEl) {
+                checkEl.style.background = 'rgba(255,255,255,0.1)';
+                checkEl.style.color = 'transparent';
+                checkEl.textContent = '';
+            }
+        }
+    });
+    chatProductSelections = [];
+    updateChatProductSelectedBar();
+}
+
+async function sendSelectedChatProducts() {
+    if (!currentChatThreadId || chatProductSelections.length === 0) return;
+    closeChatProductModal();
+    for (const product of chatProductSelections) {
+        try {
+            await fetch(`/api/chat/threads/${currentChatThreadId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                credentials: 'include',
+                body: JSON.stringify({ content: '', product_id: product.id })
+            });
+        } catch (e) { console.error('Error sending product:', e); }
+    }
+    chatProductSelections = [];
+    updateChatProductSelectedBar();
+    loadChatMessages(currentChatThreadId);
+}
+
 function selectChatProduct(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {
     selectedChatProduct = { id, name, imageUrl, originalPrice, tierPrice, discountPercent };
-    
     const preview = document.getElementById('chatProductPreview');
     const img = document.getElementById('chatProductPreviewImg');
     const nameEl = document.getElementById('chatProductPreviewName');
     const priceEl = document.getElementById('chatProductPreviewPrice');
-    
-    if (imageUrl) {
-        img.src = imageUrl;
-        img.style.display = 'block';
-    } else {
-        img.style.display = 'none';
-    }
+    if (imageUrl) { img.src = imageUrl; img.style.display = 'block'; } else { img.style.display = 'none'; }
     nameEl.textContent = name;
-    
     if (discountPercent > 0) {
         priceEl.innerHTML = `฿${formatNumber(tierPrice)} <span style="text-decoration: line-through; opacity: 0.5; font-size: 11px;">฿${formatNumber(originalPrice)}</span>`;
     } else {
         priceEl.textContent = `฿${formatNumber(originalPrice)}`;
     }
-    
     preview.style.display = 'block';
     closeChatProductModal();
 }
