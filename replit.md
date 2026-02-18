@@ -38,6 +38,25 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
 - **Deployment:** Gunicorn production server.
 
+## Planned Integrations
+
+### iShip (ตัวกลางการขนส่ง) - Pending
+- **Purpose:** Receive shipping status updates via webhook from iShip logistics aggregator
+- **Webhook Endpoint:** `POST /api/webhook/iship`
+- **Payload Fields:** `tracking` (tracking number), `status` (shipped/in_transit/pickup/delivered), `status_desc` (description)
+- **Expected Behavior:**
+  - Match `tracking` to `orders.tracking_number` (or `order_shipments.tracking_number`)
+  - On `delivered` → update order status to 'delivered', send chat notification
+  - On `shipped/in_transit/pickup` → update to 'shipped', send chat notification
+  - Auto-unarchive chat thread and notify reseller via existing `send_order_status_chat()` helper
+- **Integration Notes:**
+  - Use existing `get_db()` (not `get_db_connection()`)
+  - Use existing `send_order_status_chat(reseller_id, order_number, status, extra_info)` for chat notifications
+  - Use existing `send_push_notification()` for push alerts
+  - Tracking number is stored in `order_shipments` table (not directly in `orders`)
+  - May need iShip API key stored as secret `ISHIP_API_KEY`
+  - Webhook should validate request authenticity (e.g., signature or API key header)
+
 ## External Dependencies
 
 ### Python Packages
