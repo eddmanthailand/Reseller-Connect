@@ -461,7 +461,8 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
         'request_new_slip': f'⚠️ คำสั่งซื้อ {order_number} กรุณาอัปโหลดสลิปใหม่',
         'shipped': f'🚚 คำสั่งซื้อ {order_number} จัดส่งแล้ว',
         'delivered': f'📦 คำสั่งซื้อ {order_number} ส่งถึงปลายทางแล้ว',
-        'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก'
+        'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก',
+        'shipping_issue': f'⚠️ คำสั่งซื้อ {order_number} มีปัญหาการจัดส่ง'
     }
     message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
     if extra_info:
@@ -14005,6 +14006,126 @@ def send_push_to_admins(title, body, url='/', tag='admin-notification'):
             conn.close()
 
 # ==================== END PWA & PUSH NOTIFICATIONS ====================
+
+# ==================== iSHIP WEBHOOK ====================
+
+@app.route('/api/webhook/iship', methods=['POST'])
+def iship_webhook():
+    """Receive shipping status updates from iShip logistics aggregator"""
+    iship_key = os.environ.get('ISHIP_API_KEY', '')
+    if iship_key:
+        auth_header = request.headers.get('X-API-Key', '') or request.headers.get('Authorization', '').replace('Bearer ', '')
+        if auth_header != iship_key:
+            print(f"[iSHIP] Unauthorized webhook attempt from {request.remote_addr}")
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    
+    conn = None
+    cursor = None
+    try:
+        payload = request.json
+        if not payload:
+            return jsonify({"status": "error", "message": "No payload"}), 400
+        
+        print(f"[iSHIP] Received webhook: {payload}")
+        
+        tracking_no = payload.get('tracking')
+        status = payload.get('status')
+        status_desc = payload.get('status_desc', '')
+        
+        if not tracking_no:
+            return jsonify({"status": "ignored", "message": "No tracking number"}), 200
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('''
+            SELECT os.id as shipment_id, os.order_id, os.status as shipment_status,
+                   o.order_number, o.user_id, o.status as order_status
+            FROM order_shipments os
+            JOIN orders o ON o.id = os.order_id
+            WHERE os.tracking_number = %s
+        ''', (tracking_no,))
+        shipment = cursor.fetchone()
+        
+        if not shipment:
+            print(f"[iSHIP] No shipment found for tracking: {tracking_no}")
+            return jsonify({"status": "ignored", "message": "Tracking not found"}), 200
+        
+        reseller_id = shipment['user_id']
+        order_number = shipment['order_number'] or f"#{shipment['order_id']}"
+        
+        if status == 'delivered':
+            cursor.execute('''
+                UPDATE order_shipments SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND status != 'delivered'
+            ''', (shipment['shipment_id'],))
+            
+            cursor.execute('''
+                SELECT COUNT(*) as total,
+                       COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_count
+                FROM order_shipments WHERE order_id = %s
+            ''', (shipment['order_id'],))
+            counts = cursor.fetchone()
+            
+            if counts and counts['total'] == counts['delivered_count']:
+                cursor.execute('''
+                    UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND status != 'delivered'
+                ''', (shipment['order_id'],))
+            
+            conn.commit()
+            
+            extra = f"({status_desc})" if status_desc else ""
+            try:
+                send_order_status_chat(reseller_id, order_number, 'delivered', extra)
+            except Exception as ce:
+                print(f"[iSHIP] Chat notification error: {ce}")
+                
+        elif status in ['shipped', 'in_transit', 'pickup']:
+            cursor.execute('''
+                UPDATE order_shipments SET status = 'shipped', shipped_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND status NOT IN ('shipped', 'delivered')
+            ''', (shipment['shipment_id'],))
+            
+            if shipment['order_status'] in ('paid', 'processing'):
+                cursor.execute('''
+                    UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (shipment['order_id'],))
+            
+            conn.commit()
+            
+            extra = f"({status_desc})" if status_desc else ""
+            try:
+                send_order_status_chat(reseller_id, order_number, 'shipped', extra)
+            except Exception as ce:
+                print(f"[iSHIP] Chat notification error: {ce}")
+        elif status in ['returned', 'exception', 'failed']:
+            extra = f"({status_desc})" if status_desc else ""
+            conn.commit()
+            try:
+                send_order_status_chat(reseller_id, order_number, 'shipping_issue', extra)
+            except Exception as ce:
+                print(f"[iSHIP] Chat notification error: {ce}")
+        else:
+            print(f"[iSHIP] Unhandled status '{status}' for tracking {tracking_no}")
+            conn.commit()
+        
+        print(f"[iSHIP] Processed: tracking={tracking_no}, status={status}, order={order_number}")
+        return jsonify({"status": "success", "message": "Webhook processed"}), 200
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"[iSHIP] Webhook error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# ==================== END iSHIP WEBHOOK ====================
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
