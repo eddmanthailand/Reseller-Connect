@@ -1800,7 +1800,9 @@ async function viewResellerOrderDetails(orderId) {
                         const slipColor = slip.status === 'approved' ? '#22c55e' : slip.status === 'rejected' ? '#ef4444' : '#f59e0b';
                         return `
                             <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-                                <img src="${slip.slip_image_url}" style="max-width: 100%; max-height: 200px; border-radius: 6px; cursor: pointer;" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                                <div class="slip-image-frame">
+                                    <img src="${slip.slip_image_url}" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                                </div>
                                 <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
                                     <span style="background: ${slipColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${slipStatus}</span>
                                     ${slip.amount ? `<span style="font-size: 12px;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</span>` : ''}

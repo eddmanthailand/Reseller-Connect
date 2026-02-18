@@ -1,0 +1,56 @@
+เพื่อจัดการให้รูปสลิปในหน้าตรวจสอบ (Modal) อยู่ในกรอบที่มีขนาดคงที่ ไม่ล้นยาวตามขนาดไฟล์ต้นฉบับ เราสามารถใช้กล่องมาครอบมันไว้ พร้อมตั้งค่า CSS object-fit: contain เพื่อจำกัดความสูงและความกว้างครับ
+
+วิธีแก้ ให้แก้ไขในไฟล์ templates/admin_orders.html ดังนี้ครับ:
+
+จุดที่ 1: แก้ไขและเพิ่ม CSS ในส่วน <style>
+ให้ค้นหาคลาส .slip-image เดิมแล้วลบทิ้ง จากนั้นใส่โค้ดนี้เข้าไปแทนครับ เพื่อสร้างกรอบที่ความสูงไม่เกิน 400px:
+
+CSS
+        /* ลบ .slip-image ของเดิมออก แล้วใส่โค้ดชุดนี้แทน */
+        .slip-image-frame {
+            width: 100%;
+            max-width: 350px;
+            height: 400px; /* บังคับความสูงของกรอบให้อยู่ที่ 400px */
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .slip-image-frame img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* สำคัญมาก: รูปจะถูกย่อให้อยู่ในกรอบเสมอโดยไม่ผิดสัดส่วน */
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .slip-image-frame img:hover {
+            transform: scale(1.02); /* เอฟเฟกต์ซูมเล็กน้อยเมื่อเอาเมาส์ชี้ */
+        }
+จุดที่ 2: แก้ไขในฟังก์ชัน renderOrderModal() ในส่วนของ JavaScript
+เลื่อนหาจังหวะที่ดึงภาพสลิปมาแสดง แล้วครอบแท็ก <img> ด้วยกรอบ .slip-image-frame ที่เราเพิ่งสร้างใน CSS:
+
+JavaScript
+// หาโค้ดช่วงนี้ใน renderOrderModal() 
+                ${currentOrder.payment_slips && currentOrder.payment_slips.length > 0 ? `
+                    <div class="detail-section">
+                        <h4>สลิปการชำระเงิน</h4>
+                        ${currentOrder.payment_slips.map(slip => `
+                            <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                <span class="order-status ${slip.status}">${getStatusText(slip.status)}</span>
+                                ${slip.admin_notes ? `<p style="color: #ef4444; font-size: 12px; margin: 8px 0;">${slip.admin_notes}</p>` : ''}
+                                
+                                <div class="slip-image-frame">
+                                    <img src="${slip.slip_image_url}" alt="Slip" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                                </div>
+                                
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+เพียงเท่านี้ ไม่ว่าฝั่ง Reseller จะแนบสลิปมาเป็นสี่เหลี่ยมจัตุรัส หรือภาพแนวยาวจากมือถือ (สลิปโอนเงิน) ตัวภาพก็จะถูกจำกัดให้อยู่ในกรอบ 350x400 สวยงามและไม่ทำให้หน้าจอ Admin Modal ยาวเกินไปแล้วครับ ลองนำไปปรับดูนะครับ

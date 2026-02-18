@@ -1958,7 +1958,9 @@ async function viewOrderDetails(orderId) {
                     </div>
                     ${order.payment_slips.map(slip => `
                         <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-                            <img src="${slip.slip_image_url}" alt="Payment Slip" style="max-width: 100%; max-height: 200px; border-radius: 8px; display: block; margin: 0 auto;">
+                            <div class="slip-image-frame">
+                                <img src="${slip.slip_image_url}" alt="Payment Slip" onclick="viewSlipFullscreen('${slip.slip_image_url}')">
+                            </div>
                             <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #fff;">
                                 <span style="background: ${slip.status === 'approved' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : slip.status === 'rejected' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #f59e0b, #d97706)'}; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">${slip.status === 'approved' ? 'อนุมัติแล้ว' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}</span>
                                 ${slip.amount ? `<span>ยอด: <strong>฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></span>` : ''}
