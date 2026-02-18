@@ -456,6 +456,7 @@ def send_order_status_email(to_email, reseller_name, order_number, status, messa
 def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
     """Send order status update as chat message"""
     status_messages = {
+        'slip_uploaded': f'🧾 คำสั่งซื้อ {order_number} อัปโหลดสลิปแล้ว รอตรวจสอบ',
         'approved': f'✅ คำสั่งซื้อ {order_number} สลิปได้รับการยืนยันแล้ว กำลังเตรียมจัดส่ง',
         'request_new_slip': f'⚠️ คำสั่งซื้อ {order_number} กรุณาอัปโหลดสลิปใหม่',
         'shipped': f'🚚 คำสั่งซื้อ {order_number} จัดส่งแล้ว',
@@ -7822,6 +7823,12 @@ def upload_payment_slip(order_id):
                 'order',
                 order_id
             )
+        
+        try:
+            order_num = order.get('order_number') or f'#{order_id}'
+            send_order_status_chat(user_id, order_num, 'slip_uploaded')
+        except Exception as chat_err:
+            print(f"[CHAT] Slip upload chat notification error: {chat_err}")
         
         return jsonify({'message': 'อัปโหลดสลิปสำเร็จ'}), 200
         
