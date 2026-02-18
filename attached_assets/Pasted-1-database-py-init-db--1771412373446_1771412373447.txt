@@ -1,0 +1,120 @@
+1. ไฟล์ database.py (สร้างตารางเก็บที่อยู่แจ้งเตือน)
+ตำแหน่งที่ต้องวาง: ในฟังก์ชัน init_db() ให้เลื่อนลงไปด้านล่างสุดของกลุ่ม CREATE TABLE (ก่อนถึงบรรทัด conn.commit())
+ก๊อปปี้โค้ดนี้ไปวาง:
+
+Python
+        # Create push_subscriptions table for Web Push Notifications
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                subscription_info JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, subscription_info->>'endpoint')
+            )
+        ''')
+2. ไฟล์ app.py (เพิ่มระบบยิงแจ้งเตือน)
+ส่วนนี้แบ่งเป็น 3 จุดย่อยๆ ในไฟล์เดียวกันครับ:
+
+จุดที่ 2.1 เพิ่ม Import และฟังก์ชันยิงแจ้งเตือน
+ตำแหน่งที่ต้องวาง: ด้านบนสุดของไฟล์ (ต่อจากกลุ่ม import เดิม)
+ก๊อปปี้โค้ดนี้ไปวาง:
+
+Python
+from pywebpush import webpush, WebPushException
+
+def send_web_push(user_id, title, body, url='/'):
+    """Send Web Push Notification to a specific user"""
+    conn = None
+    cursor = None
+    try:
+        vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY')
+        vapid_claim_email = os.environ.get('VAPID_CLAIM_EMAIL')
+        
+        if not vapid_private_key:
+            return False
+            
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        cursor.execute('SELECT subscription_info FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        subs = cursor.fetchall()
+        
+        payload = json.dumps({
+            'title': title,
+            'body': body,
+            'url': url
+        })
+        
+        for sub in subs:
+            try:
+                sub_info = sub['subscription_info']
+                if isinstance(sub_info, str):
+                    sub_info = json.loads(sub_info)
+                    
+                webpush(
+                    subscription_info=sub_info,
+                    data=payload,
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims={"sub": vapid_claim_email}
+                )
+            except WebPushException as ex:
+                print("Web Push Failed:", repr(ex))
+                
+        return True
+    except Exception as e:
+        print(f"Error sending push: {e}")
+        return False
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+จุดที่ 2.2 เพิ่ม API สำหรับรับค่าการกด "อนุญาต" จากมือถือ
+ตำแหน่งที่ต้องวาง: เลื่อนลงไปหาจุดที่มี API ของ Notifications (ค้นหาคำว่า # ==================== NOTIFICATIONS API ====================) แล้ววางต่อท้ายหมวดหมู่นั้นได้เลย
+ก๊อปปี้โค้ดนี้ไปวาง:
+
+Python
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def push_subscribe():
+    """Save Web Push subscription for the current user"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        subscription_info = request.get_json()
+        
+        if not subscription_info or not subscription_info.get('endpoint'):
+            return jsonify({'error': 'Invalid subscription data'}), 400
+            
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO push_subscriptions (user_id, subscription_info)
+            VALUES (%s, %s)
+            ON CONFLICT (user_id, (subscription_info->>'endpoint')) 
+            DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, json.dumps(subscription_info)))
+        
+        conn.commit()
+        return jsonify({'message': 'Subscription saved successfully'}), 200
+        
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+จุดที่ 2.3 ฝังการแจ้งเตือนเข้าไปในระบบแชทเดิม
+ตำแหน่งที่ต้องวาง: ค้นหา API ที่ทำหน้าที่ "ส่งข้อความแชท" ในไฟล์ app.py (เช่น @app.route('/api/chat/messages', methods=['POST'])) ให้มองหาบรรทัดที่บันทึกข้อมูลเสร็จแล้ว (หลัง conn.commit())
+ก๊อปปี้โค้ดนี้ไปแทรก:
+
+Python
+        # Trigger Web Push Notification
+        try:
+            sender_name = session.get('full_name', 'แอดมิน')
+            # เปลี่ยนตัวแปร recipient_id ให้ตรงกับคนรับข้อความในระบบของบอส
+            send_web_push(recipient_id, "มีข้อความแชทใหม่", content, url='/dashboard#chat')
+        except Exception as push_err:
+            print(f"Push notification failed: {push_err}")
