@@ -8337,12 +8337,15 @@ async function sendSelectedChatProducts() {
 
 function navigateToProduct(productId) {
     window.location.hash = 'products';
+    switchPage('products');
     let attempts = 0;
     const maxAttempts = 30;
     const tryHighlight = () => {
         attempts++;
         const row = document.querySelector(`tr[data-product-id="${productId}"]`);
         if (row) {
+            row.classList.remove('highlight-flash');
+            void row.offsetWidth;
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.classList.add('highlight-flash');
             setTimeout(() => row.classList.remove('highlight-flash'), 15000);
