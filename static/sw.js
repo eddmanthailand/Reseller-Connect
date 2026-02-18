@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v11';
+const CACHE_NAME = 'ekg-shops-v12';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
