@@ -8342,7 +8342,7 @@ function navigateToProduct(productId) {
         if (row) {
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.classList.add('highlight-flash');
-            setTimeout(() => row.classList.remove('highlight-flash'), 2500);
+            setTimeout(() => row.classList.remove('highlight-flash'), 15000);
         }
     }, 400);
 }
