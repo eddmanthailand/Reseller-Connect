@@ -3365,7 +3365,7 @@ async function loadResellerChatMessages() {
                 const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${fmtNum(p.tier_min_price)}` : `฿${fmtNum(p.tier_min_price)} - ฿${fmtNum(p.tier_max_price)}`) : '';
                 const originalPrice = p.min_price === p.max_price ? `฿${fmtNum(p.min_price)}` : `฿${fmtNum(p.min_price)} - ฿${fmtNum(p.max_price)}`;
                 productCardHtml = `
-                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="viewProduct(${p.id})">
                         ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
                         <div style="padding: 10px;">
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>

@@ -7984,7 +7984,7 @@ async function loadChatMessages(threadId) {
                 const tierPrice = hasDiscount ? (p.tier_min_price === p.tier_max_price ? `฿${formatNumber(p.tier_min_price)}` : `฿${formatNumber(p.tier_min_price)} - ฿${formatNumber(p.tier_max_price)}`) : '';
                 const originalPrice = p.min_price === p.max_price ? `฿${formatNumber(p.min_price)}` : `฿${formatNumber(p.min_price)} - ฿${formatNumber(p.max_price)}`;
                 productCardHtml = `
-                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="window.location.hash='products'">
+                    <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;" onclick="navigateToProduct(${p.id})"
                         ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; height: 140px; object-fit: cover;">` : '<div style="width: 100%; height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">ไม่มีรูป</div>'}
                         <div style="padding: 10px;">
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
@@ -8333,6 +8333,18 @@ async function sendSelectedChatProducts() {
     chatProductSelections = [];
     updateChatProductSelectedBar();
     loadChatMessages(currentChatThreadId);
+}
+
+function navigateToProduct(productId) {
+    window.location.hash = 'products';
+    setTimeout(() => {
+        const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+        if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('highlight-flash');
+            setTimeout(() => row.classList.remove('highlight-flash'), 2500);
+        }
+    }, 400);
 }
 
 function selectChatProduct(id, name, imageUrl, originalPrice, tierPrice, discountPercent) {

@@ -3214,6 +3214,18 @@ tr:hover td {
     }
 }
 
+.highlight-flash {
+    animation: highlightFlash 2.5s ease-out;
+}
+@keyframes highlightFlash {
+    0% { background: rgba(102,126,234,0.4); box-shadow: 0 0 20px rgba(102,126,234,0.3); }
+    20% { background: rgba(102,126,234,0.25); }
+    40% { background: rgba(102,126,234,0.35); }
+    60% { background: rgba(102,126,234,0.15); }
+    80% { background: rgba(102,126,234,0.08); }
+    100% { background: transparent; box-shadow: none; }
+}
+
 .chat-product-spinner {
     width: 14px;
     height: 14px;
