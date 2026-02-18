@@ -5551,9 +5551,9 @@ function renderSlipReviewCard(order) {
                 <div style="font-size: 11px; color: rgba(255,255,255,0.4); white-space: nowrap; margin-left: 8px;">${orderDate}</div>
             </div>
             <div class="slip-card-body" style="display: flex; gap: 0;">
-                <div class="slip-image-area" style="width: 120px; min-width: 120px; max-width: 120px; min-height: 160px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="viewSlipFullscreen('${slipUrl}')">
+                <div class="slip-image-area" style="width: 120px; min-width: 120px; max-width: 120px; height: 160px; max-height: 160px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden;" onclick="viewSlipFullscreen('${slipUrl}')">
                     ${slipUrl 
-                        ? `<img src="${slipUrl}" alt="Slip" style="width: 100%; height: 100%; object-fit: contain; max-height: 200px;">`
+                        ? `<img src="${slipUrl}" alt="Slip" style="max-width: 100%; max-height: 100%; object-fit: contain;">`
                         : `<div style="color: rgba(255,255,255,0.3); text-align: center; padding: 12px; font-size: 12px;">ไม่มีสลิป</div>`
                     }
                 </div>

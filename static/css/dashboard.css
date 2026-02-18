@@ -3367,10 +3367,12 @@ tr:hover td {
     justify-content: center;
     cursor: pointer;
     min-width: 0;
+    max-height: 420px;
+    overflow: hidden;
 }
 .slip-review-image img {
     max-width: 100%;
-    max-height: 300px;
+    max-height: 380px;
     border-radius: 8px;
     cursor: pointer;
     transition: transform 0.2s;
