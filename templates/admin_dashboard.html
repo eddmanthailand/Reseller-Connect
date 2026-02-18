@@ -2685,63 +2685,6 @@
                 </div>
             </div>
 
-            <!-- Broadcast Modal -->
-            <div id="broadcastModal" class="modal" style="display: none;">
-                <div class="modal-content" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3>ส่ง Broadcast</h3>
-                        <button onclick="closeBroadcastModal()" class="btn-close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="form-group">
-                            <label>หัวข้อ (ไม่บังคับ)</label>
-                            <input type="text" id="broadcastTitle" placeholder="หัวข้อข้อความ" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>เลือกกลุ่มเป้าหมาย</label>
-                            <select id="broadcastTarget" class="form-control" onchange="toggleBroadcastTier()">
-                                <option value="all">ตัวแทนทั้งหมด</option>
-                                <option value="tier">เลือกตาม Tier</option>
-                            </select>
-                        </div>
-                        <div class="form-group" id="broadcastTierSelect" style="display: none;">
-                            <label>เลือก Tier</label>
-                            <select id="broadcastTierId" class="form-control">
-                                <option value="">เลือก Tier</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>ข้อความ</label>
-                            <textarea id="broadcastContent" rows="4" placeholder="พิมพ์ข้อความที่ต้องการส่ง..." class="form-control"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button onclick="closeBroadcastModal()" class="btn">ยกเลิก</button>
-                        <button onclick="sendBroadcast()" class="btn btn-primary">ส่ง Broadcast</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chat Product Search Modal -->
-            <div id="chatProductModal" class="modal" style="display: none;">
-                <div class="modal-content" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3>เลือกสินค้า</h3>
-                        <button onclick="closeChatProductModal()" class="btn-close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div style="margin-bottom: 16px;">
-                            <input type="text" id="chatProductSearchInput" placeholder="ค้นหาชื่อสินค้าหรือ SKU..." class="form-control" oninput="searchChatProducts()" style="width: 100%;">
-                        </div>
-                        <div id="chatProductSearchResults" style="max-height: 400px; overflow-y: auto;">
-                            <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">
-                                พิมพ์เพื่อค้นหาสินค้า
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Quick Replies Modal -->
             <div id="quickRepliesModal" class="modal" style="display: none;">
                 <div class="modal-content" style="max-width: 600px;">
@@ -3531,5 +3474,62 @@
             initWarehouseAddressCascade();
         });
     </script>
+
+    <!-- Chat Broadcast Modal (root level) -->
+    <div id="broadcastModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>ส่ง Broadcast</h3>
+                <button onclick="closeBroadcastModal()" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>หัวข้อ (ไม่บังคับ)</label>
+                    <input type="text" id="broadcastTitle" placeholder="หัวข้อข้อความ" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>เลือกกลุ่มเป้าหมาย</label>
+                    <select id="broadcastTarget" class="form-control" onchange="toggleBroadcastTier()">
+                        <option value="all">ตัวแทนทั้งหมด</option>
+                        <option value="tier">เลือกตาม Tier</option>
+                    </select>
+                </div>
+                <div class="form-group" id="broadcastTierSelect" style="display: none;">
+                    <label>เลือก Tier</label>
+                    <select id="broadcastTierId" class="form-control">
+                        <option value="">เลือก Tier</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ข้อความ</label>
+                    <textarea id="broadcastContent" rows="4" placeholder="พิมพ์ข้อความที่ต้องการส่ง..." class="form-control"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeBroadcastModal()" class="btn">ยกเลิก</button>
+                <button onclick="sendBroadcast()" class="btn btn-primary">ส่ง Broadcast</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Product Search Modal (root level) -->
+    <div id="chatProductModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>เลือกสินค้า</h3>
+                <button onclick="closeChatProductModal()" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <input type="text" id="chatProductSearchInput" placeholder="ค้นหาชื่อสินค้าหรือ SKU..." class="form-control" oninput="searchChatProducts()" style="width: 100%;">
+                </div>
+                <div id="chatProductSearchResults" style="max-height: 50vh; overflow-y: auto;">
+                    <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.4);">
+                        พิมพ์เพื่อค้นหาสินค้า
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
