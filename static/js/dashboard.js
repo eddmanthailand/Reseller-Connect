@@ -5914,17 +5914,12 @@ async function loadSlipReviewPage() {
                     const itemCount = order.items ? order.items.reduce((sum, i) => sum + i.quantity, 0) : 0;
                     
                     return `
-                    <div class="slip-review-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden;">
-                        <div style="display: grid; grid-template-columns: 280px 1fr; gap: 0;">
-                            <!-- Slip Image -->
-                            <div style="padding: 20px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div class="slip-review-card" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; max-width: 100%; box-sizing: border-box;">
+                        <div class="slip-review-layout">
+                            <div class="slip-review-image" onclick="${slip ? `showSlipFullscreen('${slip.slip_image_url}')` : ''}">
                                 ${slip ? `
-                                    <img src="${slip.slip_image_url}" alt="Payment Slip" 
-                                         style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer; transition: transform 0.2s;"
-                                         onclick="showSlipFullscreen('${slip.slip_image_url}')"
-                                         onmouseover="this.style.transform='scale(1.02)'" 
-                                         onmouseout="this.style.transform='scale(1)'">
-                                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px;">คลิกเพื่อขยาย</p>
+                                    <img src="${slip.slip_image_url}" alt="Payment Slip">
+                                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px; text-align: center;">คลิกเพื่อขยาย</p>
                                 ` : `
                                     <div style="color: rgba(255,255,255,0.4); text-align: center;">
                                         <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -5935,42 +5930,40 @@ async function loadSlipReviewPage() {
                                 `}
                             </div>
                             
-                            <!-- Order Info -->
-                            <div style="padding: 20px;">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                                    <div>
-                                        <h3 style="color: #fff; font-size: 18px; font-weight: 600; margin: 0 0 4px 0;">${order.order_number || '#' + order.id}</h3>
-                                        <p style="color: rgba(255,255,255,0.5); font-size: 13px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
+                            <div class="slip-review-info">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                                    <div style="min-width: 0;">
+                                        <h3 style="color: #fff; font-size: 16px; font-weight: 600; margin: 0 0 4px 0;">${order.order_number || '#' + order.id}</h3>
+                                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
                                     </div>
-                                    <span style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;">รอตรวจสอบ</span>
+                                    <span style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap;">รอตรวจสอบ</span>
                                 </div>
                                 
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
+                                <div class="slip-review-details">
+                                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; min-width: 0;">
                                         <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้สั่ง</div>
-                                        <div style="font-size: 14px; color: #fff; font-weight: 500;">${escapeHtml(order.reseller_name || '-')}</div>
-                                        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">${escapeHtml(order.reseller_tier_name || '')}</div>
+                                        <div style="font-size: 13px; color: #fff; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(order.reseller_name || '-')}</div>
+                                        <div style="font-size: 11px; color: rgba(255,255,255,0.6);">${escapeHtml(order.reseller_tier_name || '')}</div>
                                     </div>
-                                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
+                                    <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; min-width: 0;">
                                         <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ผู้รับ</div>
-                                        <div style="font-size: 14px; color: #fff; font-weight: 500;">${escapeHtml(customerName || '-')}</div>
+                                        <div style="font-size: 13px; color: #fff; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(customerName || '-')}</div>
                                     </div>
                                 </div>
                                 
-                                <div style="display: flex; gap: 20px; margin-bottom: 16px; font-size: 14px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; font-size: 13px;">
                                     <div><span style="color: rgba(255,255,255,0.5);">สินค้า:</span> <strong style="color: #fff;">${itemCount} ชิ้น</strong></div>
                                     <div><span style="color: rgba(255,255,255,0.5);">ยอดรวม:</span> <strong style="color: #22c55e;">฿${parseFloat(order.final_amount || 0).toLocaleString('th-TH')}</strong></div>
-                                    ${slip && slip.amount ? `<div><span style="color: rgba(255,255,255,0.5);">ยอดในสลิป:</span> <strong style="color: #fbbf24;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></div>` : ''}
+                                    ${slip && slip.amount ? `<div><span style="color: rgba(255,255,255,0.5);">ยอดสลิป:</span> <strong style="color: #fbbf24;">฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></div>` : ''}
                                 </div>
                                 
-                                <!-- Action Buttons -->
-                                <div style="display: flex; gap: 12px;">
-                                    <button onclick="approveSlip(${order.id})" style="flex: 1; padding: 12px 20px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
-                                        ยืนยันการชำระเงิน
+                                <div class="slip-review-actions">
+                                    <button onclick="approveSlip(${order.id})" class="slip-btn-approve">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                                        ยืนยัน
                                     </button>
-                                    <button onclick="requestNewSlip(${order.id})" style="flex: 1; padding: 12px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <button onclick="requestNewSlip(${order.id})" class="slip-btn-request">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                         ขอสลิปใหม่
                                     </button>
                                 </div>

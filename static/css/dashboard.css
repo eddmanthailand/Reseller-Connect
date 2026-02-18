@@ -3329,7 +3329,124 @@ tr:hover td {
     to { transform: rotate(360deg); }
 }
 
+.slip-review-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0;
+}
+.slip-review-image {
+    padding: 16px;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    min-width: 0;
+}
+.slip-review-image img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    object-fit: contain;
+}
+.slip-review-image img:hover {
+    transform: scale(1.02);
+}
+.slip-review-info {
+    padding: 16px;
+    min-width: 0;
+    overflow: hidden;
+}
+.slip-review-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.slip-review-actions {
+    display: flex;
+    gap: 10px;
+}
+.slip-btn-approve {
+    flex: 1;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.slip-btn-request {
+    flex: 1;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.slip-review-card .slip-card-header {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 10px 12px !important;
+}
+.slip-review-card .slip-card-body {
+    flex-direction: column !important;
+}
+.slip-review-card .slip-image-area {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    min-height: 180px !important;
+    max-height: 220px !important;
+}
+.slip-review-card .slip-image-area img {
+    max-height: 220px !important;
+}
+
 @media (max-width: 768px) {
+    .slip-review-layout {
+        grid-template-columns: 1fr !important;
+    }
+    .slip-review-image {
+        padding: 12px;
+        max-height: 250px;
+    }
+    .slip-review-image img {
+        max-height: 220px;
+    }
+    .slip-review-info {
+        padding: 12px;
+    }
+    .slip-review-details {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    .slip-review-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .slip-btn-approve,
+    .slip-btn-request {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
     .slip-review-card .slip-card-header {
         flex-wrap: wrap;
         gap: 4px;
