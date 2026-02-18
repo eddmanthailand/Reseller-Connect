@@ -223,40 +223,57 @@ async function unsubscribeFromPush() {
 async function checkPushStatus() {
   try {
     if (!('Notification' in window)) return { supported: false };
+    if (!('serviceWorker' in navigator)) return { supported: false };
+    if (!('PushManager' in window)) return { supported: false };
 
     const permission = Notification.permission;
     if (permission === 'denied') return { supported: true, permission: 'denied', subscribed: false };
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    const swReadyPromise = navigator.serviceWorker.ready;
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 5000));
+    const registration = await Promise.race([swReadyPromise, timeoutPromise]);
 
+    if (!registration) {
+      return { supported: true, permission: permission, subscribed: false };
+    }
+
+    const subscription = await registration.pushManager.getSubscription();
     return {
       supported: true,
       permission: permission,
       subscribed: !!subscription
     };
   } catch (error) {
+    console.log('Push status check error:', error);
+    if ('Notification' in window) {
+      return { supported: true, permission: Notification.permission, subscribed: false };
+    }
     return { supported: false };
   }
 }
 
 async function initPushNotifications() {
-  const status = await checkPushStatus();
+  try {
+    const status = await checkPushStatus();
+    console.log('Push status:', JSON.stringify(status));
 
-  if (!status.supported) return;
+    if (!status.supported) return;
 
-  if (status.permission === 'granted') {
-    await refreshPushSubscription();
-    return;
-  }
+    if (status.permission === 'granted') {
+      await refreshPushSubscription();
+      return;
+    }
 
-  if (status.permission === 'denied') return;
+    if (status.permission === 'denied') return;
 
-  if (status.permission === 'default') {
-    const dismissed = localStorage.getItem('push_prompt_dismissed');
-    if (dismissed && (Date.now() - parseInt(dismissed)) < 300000) return;
+    if (status.permission === 'default') {
+      const dismissed = localStorage.getItem('push_prompt_dismissed');
+      if (dismissed && (Date.now() - parseInt(dismissed)) < 300000) return;
 
-    setTimeout(() => showPushPrompt(), 2000);
+      showPushPrompt();
+    }
+  } catch (error) {
+    console.log('Push init error:', error);
   }
 }
 
