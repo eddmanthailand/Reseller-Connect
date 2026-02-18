@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, make_response
 from flask_cors import CORS
 import psycopg2.extras
 import bcrypt
