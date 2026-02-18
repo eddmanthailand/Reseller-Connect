@@ -462,7 +462,9 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
         'shipped': f'🚚 คำสั่งซื้อ {order_number} จัดส่งแล้ว',
         'delivered': f'📦 คำสั่งซื้อ {order_number} ส่งถึงปลายทางแล้ว',
         'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก',
-        'shipping_issue': f'⚠️ คำสั่งซื้อ {order_number} มีปัญหาการจัดส่ง'
+        'shipping_issue': f'⚠️ คำสั่งซื้อ {order_number} มีปัญหาการจัดส่ง',
+        'failed_delivery': f'❌ คำสั่งซื้อ {order_number} จัดส่งไม่สำเร็จ',
+        'reship': f'🔄 คำสั่งซื้อ {order_number} กำลังจัดส่งใหม่'
     }
     message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
     if extra_info:
@@ -9184,6 +9186,11 @@ def mark_order_delivered(order_id):
             order_id
         )
         
+        try:
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'delivered')
+        except Exception as chat_err:
+            print(f"Chat notification error: {chat_err}")
+        
         return jsonify({'message': 'อัปเดตสถานะสำเร็จ'}), 200
         
     except Exception as e:
@@ -9237,6 +9244,11 @@ def mark_order_failed_delivery(order_id):
             'order',
             order_id
         )
+        
+        try:
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'failed_delivery', f'เหตุผล: {reason}' if reason else '')
+        except Exception as chat_err:
+            print(f"Chat notification error: {chat_err}")
         
         return jsonify({'message': 'อัปเดตสถานะสำเร็จ'}), 200
         
@@ -9295,6 +9307,11 @@ def reship_order(order_id):
             'order',
             order_id
         )
+        
+        try:
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'reship')
+        except Exception as chat_err:
+            print(f"Chat notification error: {chat_err}")
         
         return jsonify({'message': 'เริ่มจัดส่งใหม่สำเร็จ'}), 200
         
