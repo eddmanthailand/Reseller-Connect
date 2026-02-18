@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v13';
+const CACHE_NAME = 'ekg-shops-v14';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
@@ -37,7 +37,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js')) {
+  if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js') && !url.pathname.endsWith('.css')) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;
