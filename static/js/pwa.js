@@ -250,11 +250,13 @@ async function initPushNotifications() {
     return;
   }
 
-  if (status.permission === 'default' && !status.subscribed) {
-    const dismissed = localStorage.getItem('push_prompt_dismissed');
-    if (dismissed && (Date.now() - parseInt(dismissed)) < 86400000) return;
+  if (status.permission === 'denied') return;
 
-    setTimeout(() => showPushPrompt(), 3000);
+  if (status.permission === 'default') {
+    const dismissed = localStorage.getItem('push_prompt_dismissed');
+    if (dismissed && (Date.now() - parseInt(dismissed)) < 300000) return;
+
+    setTimeout(() => showPushPrompt(), 2000);
   }
 }
 
