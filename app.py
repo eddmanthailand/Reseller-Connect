@@ -12717,7 +12717,24 @@ def get_chat_messages(thread_id):
             ''', (thread_id, user_id, last_message_id, last_message_id))
             conn.commit()
         
-        return jsonify(messages), 200
+        other_last_read = 0
+        if role_name == 'Reseller':
+            cursor.execute('''
+                SELECT COALESCE(MAX(last_read_message_id), 0) as last_read
+                FROM chat_read_status 
+                WHERE thread_id = %s AND user_id != %s
+            ''', (thread_id, user_id))
+        else:
+            cursor.execute('''
+                SELECT COALESCE(last_read_message_id, 0) as last_read
+                FROM chat_read_status 
+                WHERE thread_id = %s AND user_id = %s
+            ''', (thread_id, thread_reseller_id))
+        read_row = cursor.fetchone()
+        if read_row:
+            other_last_read = read_row['last_read']
+        
+        return jsonify({'messages': messages, 'other_last_read': other_last_read}), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
