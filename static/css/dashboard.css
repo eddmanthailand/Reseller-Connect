@@ -3178,9 +3178,26 @@ tr:hover td {
 }
 
 @media (max-width: 768px) {
+    #page-chat.active {
+        padding-bottom: 0 !important;
+    }
+    #page-chat .page-header {
+        padding: 8px 12px;
+        margin-bottom: 4px !important;
+    }
+    #page-chat .page-header h1 {
+        font-size: 16px;
+        margin: 0;
+    }
+    #page-chat .page-header p {
+        display: none;
+    }
     #page-chat .admin-chat-grid {
         grid-template-columns: 1fr !important;
-        height: calc(100vh - 160px) !important;
+        height: calc(100vh - 130px) !important;
+        height: calc(100dvh - 130px) !important;
+        gap: 0 !important;
+        min-height: 200px !important;
     }
     #page-chat .admin-chat-grid .admin-chat-threads {
         height: 100%;
@@ -3193,24 +3210,40 @@ tr:hover td {
     }
     #page-chat .admin-chat-grid.chat-thread-open .admin-chat-window {
         display: flex !important;
+        height: 100% !important;
+        max-height: 100% !important;
     }
     #page-chat .admin-chat-back-btn {
         display: flex !important;
     }
-    #page-chat .page-header {
-        padding: 12px 16px;
+    #page-chat .admin-chat-grid.chat-thread-open #chatHeader {
+        padding: 10px 12px !important;
+        flex-shrink: 0;
     }
-    #page-chat .page-header h1 {
-        font-size: 18px;
+    #page-chat .admin-chat-grid.chat-thread-open #chatMessagesContainer {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        padding: 10px !important;
+    }
+    #page-chat .admin-chat-grid.chat-thread-open #chatInputArea {
+        padding: 8px 10px !important;
+        flex-shrink: 0;
     }
     #chatInputArea label,
     #chatInputArea button[onclick*="openChatProductSearch"] {
-        min-width: 44px;
-        min-height: 44px;
-        padding: 12px !important;
+        min-width: 40px;
+        min-height: 40px;
+        padding: 8px !important;
     }
-    #chatInputArea input[type="text"] {
+    #chatInputArea textarea {
         font-size: 16px !important;
+        padding: 8px 12px !important;
+    }
+    #chatInputArea .btn-primary {
+        width: 40px !important;
+        height: 40px !important;
+        padding: 8px !important;
     }
 }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v12';
+const CACHE_NAME = 'ekg-shops-v13';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
@@ -96,6 +96,7 @@ self.addEventListener('notificationclick', (event) => {
   const urlToOpen = event.notification.data.url || '/';
   const fullUrl = new URL(urlToOpen, self.location.origin).href;
   const targetPath = new URL(fullUrl).pathname;
+  const targetHash = new URL(fullUrl).hash || '';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
@@ -113,13 +114,26 @@ self.addEventListener('notificationclick', (event) => {
       }
 
       if (matchingClient) {
-        matchingClient.navigate(fullUrl);
+        matchingClient.postMessage({
+          type: 'NOTIFICATION_CLICK',
+          url: fullUrl,
+          hash: targetHash,
+          notificationData: event.notification.data
+        });
         return matchingClient.focus();
       }
 
-      if (anyClient && targetPath === new URL(anyClient.url).pathname) {
-        anyClient.navigate(fullUrl);
-        return anyClient.focus();
+      if (anyClient) {
+        const anyClientPath = new URL(anyClient.url).pathname;
+        if (anyClientPath === targetPath) {
+          anyClient.postMessage({
+            type: 'NOTIFICATION_CLICK',
+            url: fullUrl,
+            hash: targetHash,
+            notificationData: event.notification.data
+          });
+          return anyClient.focus();
+        }
       }
 
       return clients.openWindow(fullUrl);

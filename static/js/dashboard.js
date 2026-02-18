@@ -150,7 +150,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName] = fullHash.split('?');
-        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings', 'facebook-ads'];
+        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
         }
@@ -582,6 +582,30 @@ function switchPage(pageName) {
         startChatPolling();
     }
 }
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+            const hash = event.data.hash || '';
+            if (hash) {
+                const pageName = hash.replace('#', '');
+                window.location.hash = pageName;
+                switchPage(pageName);
+            }
+        }
+    });
+}
+
+window.openChatThread = async function(threadId) {
+    switchPage('chat');
+    const threads = await loadChatThreads();
+    if (threads && threads.length > 0) {
+        const target = threads.find(t => t.id === threadId);
+        if (target) {
+            selectChatThread(target.id, target.reseller_name, target.tier_name || '', target.reseller_tier_id || null);
+        }
+    }
+};
 
 // Handle create user form submission
 async function handleCreateUser(event) {
