@@ -13717,7 +13717,7 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        cursor.execute('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        cursor.execute('SELECT id, endpoint, p256dh, auth, user_agent FROM push_subscriptions WHERE user_id = %s', (user_id,))
         subscriptions = cursor.fetchall()
         
         if not subscriptions:
@@ -13738,6 +13738,7 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         expired_ids = []
         sent_count = 0
         for sub in subscriptions:
+            device = 'Mobile' if 'Mobile' in (sub.get('user_agent') or '') else 'PC'
             try:
                 webpush(
                     subscription_info={
@@ -13752,14 +13753,30 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
                     vapid_claims={'sub': vapid_subject}
                 )
                 sent_count += 1
-                print(f"[PUSH] Sent successfully to subscription {sub['id']}")
+                print(f"[PUSH] Sent successfully to sub {sub['id']} ({device})")
+                try:
+                    cursor.execute('''INSERT INTO push_delivery_log (user_id, subscription_id, device_info, status, status_code)
+                        VALUES (%s, %s, %s, 'sent', '201')''', (user_id, sub['id'], device))
+                    conn.commit()
+                except: pass
             except WebPushException as e:
-                status_code = e.response.status_code if e.response else 'unknown'
-                print(f"[PUSH] WebPushException for sub {sub['id']}: status={status_code}, {str(e)[:200]}")
+                status_code = str(e.response.status_code) if e.response else 'unknown'
+                error_msg = str(e)[:300]
+                print(f"[PUSH] WebPushException sub {sub['id']} ({device}): status={status_code}, {error_msg[:200]}")
+                try:
+                    cursor.execute('''INSERT INTO push_delivery_log (user_id, subscription_id, device_info, status, status_code, error_message)
+                        VALUES (%s, %s, %s, 'failed', %s, %s)''', (user_id, sub['id'], device, status_code, error_msg))
+                    conn.commit()
+                except: pass
                 if e.response and e.response.status_code in (404, 410):
                     expired_ids.append(sub['id'])
             except Exception as e:
-                print(f"[PUSH] Error for sub {sub['id']}: {str(e)[:200]}")
+                print(f"[PUSH] Error for sub {sub['id']} ({device}): {str(e)[:200]}")
+                try:
+                    cursor.execute('''INSERT INTO push_delivery_log (user_id, subscription_id, device_info, status, status_code, error_message)
+                        VALUES (%s, %s, %s, 'error', 'unknown', %s)''', (user_id, sub['id'], device, str(e)[:300]))
+                    conn.commit()
+                except: pass
         
         print(f"[PUSH] Sent {sent_count}/{len(subscriptions)} to user {user_id}")
         
