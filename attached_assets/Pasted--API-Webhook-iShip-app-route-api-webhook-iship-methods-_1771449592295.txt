@@ -1,0 +1,87 @@
+# API สำหรับรับ Webhook จาก iShip
+@app.route('/api/webhook/iship', methods=['POST'])
+def iship_webhook():
+    try:
+        payload = request.json
+        if not payload:
+            return jsonify({"status": "error", "message": "No payload"}), 400
+            
+        print("📥 Received iShip Webhook:", payload)
+        
+        # 1. ดึงค่าตัวแปรตามโครงสร้าง JSON ของ iShip
+        tracking_no = payload.get('tracking')
+        status = payload.get('status')
+        status_desc = payload.get('status_desc', '')
+        
+        # ถ้าไม่มีเลขพัสดุให้ข้ามไป
+        if not tracking_no:
+             return jsonify({"status": "ignored", "message": "No tracking number"}), 200
+
+        # 2. เชื่อมต่อฐานข้อมูล
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # ค้นหาออเดอร์ที่มีเลข Tracking นี้
+        cur.execute("SELECT id, reseller_id FROM orders WHERE tracking_number = %s", (tracking_no,))
+        order = cur.fetchone()
+        
+        if order:
+            order_id = order['id']
+            reseller_id = order['reseller_id']
+            
+            # 3. อัปเดตสถานะและเด้งแจ้งแชท
+            # ถ้าสถานะคือจัดส่งสำเร็จ (delivered)
+            if status == 'delivered':
+                cur.execute("UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (order_id,))
+                conn.commit()
+                notify_order_status_in_chat(reseller_id, order_id, f"✅ พัสดุออเดอร์ #{order_id} จัดส่งสำเร็จแล้ว! ({status_desc})")
+                
+            # กรณีสถานะอื่นๆ ที่อาจมีการส่งมา (เช่น รับของแล้ว กำลังจัดส่ง)
+            elif status in ['shipped', 'in_transit', 'pickup']:
+                # อัปเดตเป็น shipped
+                cur.execute("UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (order_id,))
+                conn.commit()
+                notify_order_status_in_chat(reseller_id, order_id, f"📦 พัสดุออเดอร์ #{order_id} อัปเดตสถานะ: {status_desc}")
+
+        cur.close()
+        conn.close()
+        
+        # 4. ตอบกลับ iShip 
+        return jsonify({"status": "success", "message": "Webhook processed"}), 200
+
+    except Exception as e:
+        print("❌ iShip Webhook Error:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==========================================================
+# ฟังก์ชันตัวช่วยสำหรับส่งแชท (ถ้าคุณมีในไฟล์ app.py แล้วไม่ต้องก๊อปซ้ำครับ)
+def notify_order_status_in_chat(reseller_id, order_id, message_text):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cur.execute("SELECT id FROM chat_threads WHERE reseller_id = %s LIMIT 1", (reseller_id,))
+        thread = cur.fetchone()
+        
+        if not thread:
+            cur.execute(
+                "INSERT INTO chat_threads (admin_id, reseller_id, created_at, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                (reseller_id,)
+            )
+            thread_id = cur.fetchone()['id']
+        else:
+            thread_id = thread['id']
+            # ยกเลิกการซ่อนแชท (Archive) และดันแชทขึ้นมาบนสุด
+            cur.execute("UPDATE chat_threads SET updated_at = CURRENT_TIMESTAMP, is_archived = FALSE WHERE id = %s", (thread_id,))
+
+        # บันทึกข้อความโดยให้ sender_id เป็น NULL (ระบบส่ง)
+        cur.execute(
+            "INSERT INTO chat_messages (thread_id, sender_id, message, is_system) VALUES (%s, NULL, %s, TRUE)",
+            (thread_id, message_text)
+        )
+        conn.commit()
+    except Exception as e:
+        print("❌ Error sending chat notification:", e)
+    finally:
+        cur.close()
+        conn.close()
