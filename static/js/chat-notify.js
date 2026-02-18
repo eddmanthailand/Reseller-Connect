@@ -1,9 +1,11 @@
 (function() {
   let lastSeenMessageId = 0;
   let pollInterval = null;
-  let shownMessageIds = new Set();
   const POLL_DELAY = 5000;
-  let chatPageActive = false;
+  const SWIPE_COOLDOWN = 5 * 60 * 1000;
+
+  let activeBanners = new Map();
+  let swipedMessages = new Map();
 
   function createNotifyStyles() {
     if (document.getElementById('chatNotifyStyles')) return;
@@ -130,7 +132,18 @@
     return Math.floor(diff / 3600) + ' ชม.ที่แล้ว';
   }
 
-  function setupSwipeToDismiss(banner) {
+  function removeBanner(msgId) {
+    const banner = activeBanners.get(msgId);
+    if (banner && banner.parentNode) {
+      banner.classList.add('dismissing');
+      setTimeout(() => {
+        if (banner.parentNode) banner.remove();
+      }, 250);
+    }
+    activeBanners.delete(msgId);
+  }
+
+  function setupSwipeToDismiss(banner, msgId) {
     let startX = 0;
     let currentX = 0;
     let isDragging = false;
@@ -157,8 +170,12 @@
       banner.classList.remove('swiping');
 
       if (currentX > 80) {
+        swipedMessages.set(msgId, Date.now());
         banner.classList.add('dismissing');
-        setTimeout(() => banner.remove(), 250);
+        setTimeout(() => {
+          if (banner.parentNode) banner.remove();
+        }, 250);
+        activeBanners.delete(msgId);
       } else {
         banner.style.transform = '';
         banner.style.opacity = '';
@@ -167,22 +184,21 @@
   }
 
   function showChatBanner(msg) {
-    if (shownMessageIds.has(msg.id)) return;
-    shownMessageIds.add(msg.id);
+    if (activeBanners.has(msg.id)) return;
 
-    if (shownMessageIds.size > 50) {
-      const arr = Array.from(shownMessageIds);
-      shownMessageIds = new Set(arr.slice(-30));
+    const swipedAt = swipedMessages.get(msg.id);
+    if (swipedAt && (Date.now() - swipedAt) < SWIPE_COOLDOWN) return;
+
+    if (swipedAt) {
+      swipedMessages.delete(msg.id);
     }
 
     createNotifyStyles();
     const container = getContainer();
 
-    const isReseller = window.location.pathname.includes('/reseller');
-    const chatUrl = isReseller ? '/reseller#chat' : '/admin#chat';
-
     const banner = document.createElement('div');
     banner.className = 'chat-notify-banner';
+    banner.dataset.msgId = msg.id;
     banner.innerHTML = `
       <div class="chat-notify-header">
         <div class="chat-notify-avatar">${getInitial(msg.sender_name)}</div>
@@ -198,6 +214,7 @@
     `;
 
     banner.addEventListener('click', () => {
+      removeBanner(msg.id);
       if (window.location.hash === '#chat') {
         if (typeof window.openChatThread === 'function') {
           window.openChatThread(msg.thread_id);
@@ -207,12 +224,16 @@
       }
     });
 
-    setupSwipeToDismiss(banner);
+    setupSwipeToDismiss(banner, msg.id);
+    activeBanners.set(msg.id, banner);
     container.appendChild(banner);
 
     const maxBanners = 3;
     while (container.children.length > maxBanners) {
-      container.removeChild(container.firstChild);
+      const oldest = container.firstChild;
+      const oldId = parseInt(oldest.dataset.msgId);
+      activeBanners.delete(oldId);
+      container.removeChild(oldest);
     }
   }
 
@@ -221,15 +242,18 @@
   }
 
   async function pollNewMessages() {
-    if (isChatPageOpen()) return;
+    if (isChatPageOpen()) {
+      clearAllBanners();
+      return;
+    }
 
     try {
       const resp = await fetch(`/api/chat/new-messages?since_id=${lastSeenMessageId}`, {
         credentials: 'include'
       });
-      
+
       if (!resp.ok) return;
-      
+
       const data = await resp.json();
       if (data.messages && data.messages.length > 0) {
         const sorted = data.messages.sort((a, b) => a.id - b.id);
@@ -239,10 +263,19 @@
           }
           showChatBanner(msg);
         }
+      } else {
+        clearAllBanners();
       }
     } catch (e) {
-      // silent
     }
+  }
+
+  function clearAllBanners() {
+    for (const [msgId, banner] of activeBanners) {
+      if (banner.parentNode) banner.remove();
+    }
+    activeBanners.clear();
+    swipedMessages.clear();
   }
 
   async function initLastSeenId() {
@@ -260,7 +293,6 @@
         }
       }
     } catch(e) {
-      // silent
     }
   }
 
@@ -284,8 +316,7 @@
 
   window.addEventListener('hashchange', () => {
     if (isChatPageOpen()) {
-      const container = document.getElementById('chatNotifyContainer');
-      if (container) container.innerHTML = '';
+      clearAllBanners();
     }
   });
 
