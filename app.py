@@ -8924,10 +8924,12 @@ def approve_order(order_id):
                 return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาตรวจสอบใหม่'}), 400
             
             # Record stock transaction
+            qty_before = item['stock']
+            qty_after = item['stock'] - item['quantity']
             cursor.execute('''
-                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, reference_type, reference_id, reason, created_by)
-                VALUES (%s, 'sale', %s, 'order', %s, %s, %s)
-            ''', (item['sku_id'], -item['quantity'], order_id, f'Order #{order_id} approved', admin_id))
+                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, quantity_before, quantity_after, reference_type, reference_id, reason, created_by)
+                VALUES (%s, 'sale', %s, %s, %s, 'order', %s, %s, %s)
+            ''', (item['sku_id'], -item['quantity'], qty_before, qty_after, order_id, f'Order #{order_id} approved', admin_id))
         
         # Update order status to preparing (ready to ship)
         cursor.execute('''
