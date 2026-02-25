@@ -8940,12 +8940,12 @@ def approve_order(order_id):
         # Update slip status if provided
         if slip_id:
             cursor.execute('''
-                UPDATE payment_slips SET status = 'approved', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+                UPDATE payment_slips SET status = 'approved', verified_by = %s, verified_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             ''', (admin_id, slip_id))
         else:
             cursor.execute('''
-                UPDATE payment_slips SET status = 'approved', reviewed_by = %s, reviewed_at = CURRENT_TIMESTAMP
+                UPDATE payment_slips SET status = 'approved', verified_by = %s, verified_at = CURRENT_TIMESTAMP
                 WHERE order_id = %s AND status = 'pending'
             ''', (admin_id, order_id))
         
