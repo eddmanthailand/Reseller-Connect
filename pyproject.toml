@@ -13,6 +13,6 @@ dependencies = [
     "py-vapid>=1.9.4",
     "python-dotenv>=1.2.1",
     "pywebpush>=2.3.0",
-    "qrcode>=8.2",
+    "qrcode[pil]>=8.2",
     "replit-object-storage>=1.0.2",
 ]
