@@ -64,6 +64,11 @@ CORS(app, supports_credentials=True, origins=allowed_origins)
 # Initialize database on startup
 init_db()
 
+def handle_error(e, user_msg='เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง'):
+    """Log full error for admin, return safe generic message to user."""
+    print(f"[ERROR] {e}")
+    return jsonify({'error': user_msg}), 500
+
 # Disable caching for HTML responses to ensure updates are visible
 @app.after_request
 def add_header(response):
@@ -358,7 +363,7 @@ def login():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -378,7 +383,7 @@ def logout():
 def send_email(to_email, subject, html_content):
     """Send email using Gmail SMTP"""
     try:
-        gmail_user = 'cmidcoteam@gmail.com'
+        gmail_user = os.environ.get('SENDER_EMAIL', 'cmidcoteam@gmail.com')
         gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
         
         if not gmail_password:
@@ -416,7 +421,7 @@ def send_order_notification_to_admin(order_number, reseller_name, total_amount, 
         <p>กรุณาเข้าสู่ระบบเพื่อตรวจสอบคำสั่งซื้อ</p>
     </div>
     '''
-    send_email('cmidcoteam@gmail.com', f'[คำสั่งซื้อใหม่] {order_number} - {reseller_name}', html)
+    send_email(os.environ.get('SENDER_EMAIL', 'cmidcoteam@gmail.com'), f'[คำสั่งซื้อใหม่] {order_number} - {reseller_name}', html)
 
 def send_order_status_email(to_email, reseller_name, order_number, status, message, extra_info=''):
     """Send order status update email to reseller"""
@@ -658,7 +663,7 @@ def register_reseller():
             <p style="margin-top: 20px;">กรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติใบสมัคร</p>
         </div>
         '''
-        send_email('cmidcoteam@gmail.com', f'[ใบสมัครใหม่] {data["full_name"]} - รอการอนุมัติ', admin_email_html)
+        send_email(os.environ.get('SENDER_EMAIL', 'cmidcoteam@gmail.com'), f'[ใบสมัครใหม่] {data["full_name"]} - รอการอนุมัติ', admin_email_html)
         
         applicant_email_html = f'''
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -677,7 +682,7 @@ def register_reseller():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -723,7 +728,7 @@ def forgot_password():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -786,7 +791,7 @@ def reset_password():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -835,7 +840,7 @@ def get_reseller_applications():
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -858,7 +863,7 @@ def get_reseller_applications_count():
         return jsonify({'count': count}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -895,7 +900,7 @@ def get_reseller_application(app_id):
         return jsonify(app_dict), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -978,7 +983,7 @@ def approve_reseller_application(app_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1035,7 +1040,7 @@ def reject_reseller_application(app_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1132,7 +1137,7 @@ def get_activity_logs():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1161,7 +1166,7 @@ def get_activity_log_categories():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1200,7 +1205,7 @@ def check_and_alert_low_stock():
             return jsonify({'message': 'ไม่มีสินค้าใกล้หมด'}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1246,7 +1251,7 @@ def get_reseller_tiers():
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1277,7 +1282,7 @@ def get_reseller_stats():
         return jsonify(stats), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1410,7 +1415,7 @@ def create_user():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1445,7 +1450,7 @@ def get_user(user_id):
         return jsonify(dict(user)), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1591,7 +1596,7 @@ def update_user(user_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1622,7 +1627,7 @@ def delete_user(user_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1654,7 +1659,7 @@ def get_brands():
         return jsonify(brands), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1697,7 +1702,7 @@ def create_brand():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1745,7 +1750,7 @@ def update_brand(brand_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1785,7 +1790,7 @@ def delete_brand(brand_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1814,7 +1819,7 @@ def get_admin_brands(user_id):
         return jsonify(brands), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1866,7 +1871,7 @@ def update_admin_brands(user_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1898,7 +1903,7 @@ def get_categories():
         return jsonify(categories), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1941,7 +1946,7 @@ def create_category():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -1987,7 +1992,7 @@ def update_category(category_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2016,7 +2021,7 @@ def delete_category(category_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2134,7 +2139,7 @@ def get_products():
         return jsonify(products), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2246,7 +2251,7 @@ def get_product(product_id):
         return jsonify(product), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2387,7 +2392,7 @@ def create_product():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2431,7 +2436,7 @@ def reorder_product_images(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2707,7 +2712,7 @@ def update_product(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2745,7 +2750,7 @@ def update_product_status(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2803,7 +2808,7 @@ def delete_product(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2861,7 +2866,7 @@ def update_sku(sku_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2907,7 +2912,7 @@ def get_product_customizations(product_id):
         return jsonify(customizations), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -2970,7 +2975,7 @@ def create_product_customization(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3040,7 +3045,7 @@ def update_customization(customization_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3068,7 +3073,7 @@ def delete_customization(customization_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3114,7 +3119,7 @@ def upload_single_file():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 @app.route('/api/upload-images', methods=['POST'])
 @admin_required
@@ -3165,7 +3170,7 @@ def upload_images():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 @app.route('/storage/<path:filename>')
 def serve_image(filename):
@@ -3227,7 +3232,7 @@ def get_product_tier_pricing(product_id):
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3314,7 +3319,7 @@ def save_product_tier_pricing(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3375,7 +3380,7 @@ def update_user_tier_override(user_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3427,7 +3432,7 @@ def update_reseller_tier(tier_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3480,7 +3485,7 @@ def update_reseller_tiers_bulk():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3555,7 +3560,7 @@ def add_user_purchase(user_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3623,7 +3628,7 @@ def check_all_tier_upgrades():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3661,7 +3666,7 @@ def get_resellers_list():
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3690,7 +3695,7 @@ def get_sales_channels():
         return jsonify(channels), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3729,7 +3734,7 @@ def create_sales_channel():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3771,7 +3776,7 @@ def update_sales_channel(channel_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3804,7 +3809,7 @@ def delete_sales_channel(channel_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3836,7 +3841,7 @@ def get_promptpay_settings():
         return jsonify({}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3899,7 +3904,7 @@ def save_promptpay_settings():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -3995,7 +4000,7 @@ def generate_promptpay_qr():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4025,7 +4030,7 @@ def get_shipping_rates():
         return jsonify(rates), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4058,7 +4063,7 @@ def create_shipping_rate():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4094,7 +4099,7 @@ def update_shipping_rate(rate_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4119,7 +4124,7 @@ def delete_shipping_rate(rate_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4146,7 +4151,7 @@ def get_shipping_promotions():
         return jsonify(promos), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4187,7 +4192,7 @@ def create_shipping_promotion():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4233,7 +4238,7 @@ def update_shipping_promotion(promo_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4258,7 +4263,7 @@ def delete_shipping_promotion(promo_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4287,7 +4292,7 @@ def get_shipping_providers():
         return jsonify(providers), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4328,7 +4333,7 @@ def create_shipping_provider():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4373,7 +4378,7 @@ def update_shipping_provider(provider_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4398,7 +4403,7 @@ def delete_shipping_provider(provider_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4463,7 +4468,7 @@ def calculate_shipping():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4513,7 +4518,7 @@ def get_order_number_settings():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4580,7 +4585,7 @@ def save_order_number_settings():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4615,7 +4620,7 @@ def get_facebook_pixel_settings():
         return jsonify({}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4675,7 +4680,7 @@ def save_facebook_pixel_settings():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4704,7 +4709,7 @@ def get_facebook_pixel_public():
         return jsonify({}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4743,7 +4748,7 @@ def track_page_visit():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4898,7 +4903,7 @@ def get_facebook_ads_stats():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4942,7 +4947,7 @@ def get_notifications():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -4972,7 +4977,7 @@ def mark_notification_read(notification_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5002,7 +5007,7 @@ def mark_all_notifications_read():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5134,7 +5139,7 @@ def get_cart():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5230,7 +5235,7 @@ def add_to_cart():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5282,7 +5287,7 @@ def update_cart_item(item_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5319,7 +5324,7 @@ def remove_cart_item(item_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5351,7 +5356,7 @@ def clear_cart():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5494,7 +5499,7 @@ def get_reseller_dashboard_stats():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5534,7 +5539,7 @@ def get_reseller_recent_orders():
         return jsonify(orders), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5638,7 +5643,7 @@ def get_reseller_featured_products():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5656,7 +5661,7 @@ def get_thailand_provinces():
             provinces = json.load(f)
         return jsonify(provinces), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 @app.route('/api/thailand/districts/<int:province_code>', methods=['GET'])
 def get_thailand_districts(province_code):
@@ -5668,7 +5673,7 @@ def get_thailand_districts(province_code):
         districts = [d for d in all_districts if d['provinceCode'] == province_code]
         return jsonify(districts), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 @app.route('/api/thailand/subdistricts/<int:district_code>', methods=['GET'])
 def get_thailand_subdistricts(district_code):
@@ -5680,7 +5685,7 @@ def get_thailand_subdistricts(district_code):
         subdistricts = [s for s in all_subdistricts if s['districtCode'] == district_code]
         return jsonify(subdistricts), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 # ==================== RESELLER CUSTOMERS ====================
 
@@ -5722,7 +5727,7 @@ def get_reseller_customers():
         return jsonify({'customers': customers}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5774,7 +5779,7 @@ def create_reseller_customer():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5810,7 +5815,7 @@ def get_reseller_customer(customer_id):
         return jsonify({'customer': dict(customer)}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5867,7 +5872,7 @@ def update_reseller_customer(customer_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5905,7 +5910,7 @@ def delete_reseller_customer(customer_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5944,7 +5949,7 @@ def get_reseller_profile():
         return jsonify({'profile': dict(profile)}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -5995,7 +6000,7 @@ def update_reseller_profile():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6066,7 +6071,7 @@ def get_reseller_products():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6188,7 +6193,7 @@ def get_reseller_product_detail(product_id):
         return jsonify(product), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6294,7 +6299,7 @@ def get_reseller_cart():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6380,7 +6385,7 @@ def reseller_add_to_cart():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6429,7 +6434,7 @@ def reseller_update_cart_item(item_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6462,7 +6467,7 @@ def reseller_remove_cart_item(item_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6492,7 +6497,7 @@ def get_cart_count():
         return jsonify({'count': int(result['count'])}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6524,7 +6529,7 @@ def get_reseller_mto_products():
         return jsonify([dict(p) for p in products]), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6588,7 +6593,7 @@ def get_reseller_mto_product_details(product_id):
         return jsonify(product), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6623,7 +6628,7 @@ def get_reseller_mto_product_skus(product_id):
         return jsonify([dict(s) for s in skus]), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6681,7 +6686,7 @@ def create_reseller_quotation_request():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6745,7 +6750,7 @@ def get_reseller_quotations():
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6803,7 +6808,7 @@ def accept_reseller_quotation(quotation_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6838,7 +6843,7 @@ def reject_reseller_quotation(quotation_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6881,7 +6886,7 @@ def get_reseller_mto_orders():
         return jsonify([dict(o) for o in orders]), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6932,7 +6937,7 @@ def get_mto_order_qr_code(order_id):
         return jsonify({'qr_code': f'data:image/png;base64,{img_str}'}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -6997,7 +7002,7 @@ def reseller_submit_mto_payment(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -7329,7 +7334,7 @@ def create_order():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -7378,7 +7383,7 @@ def get_user_orders():
         return jsonify(orders), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -7586,7 +7591,7 @@ def get_order_detail(order_id):
         return jsonify(order), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -7773,7 +7778,7 @@ def update_shipment(order_id, shipment_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -8248,7 +8253,7 @@ def get_dashboard_stats():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -8425,7 +8430,7 @@ def get_sales_history():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -8561,7 +8566,7 @@ def get_brand_sales():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -8755,7 +8760,7 @@ def create_quick_order():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -8858,7 +8863,7 @@ def get_all_orders():
         return jsonify(orders), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9019,7 +9024,7 @@ def approve_order(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9110,7 +9115,7 @@ def request_new_slip(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9220,7 +9225,7 @@ def cancel_order(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9280,7 +9285,7 @@ def mark_order_delivered(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9339,7 +9344,7 @@ def mark_order_failed_delivery(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9402,7 +9407,7 @@ def reship_order(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9436,7 +9441,7 @@ def get_warehouses():
         return jsonify(warehouses), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9484,7 +9489,7 @@ def create_warehouse():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9517,7 +9522,7 @@ def get_warehouse(warehouse_id):
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9576,7 +9581,7 @@ def update_warehouse(warehouse_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9610,7 +9615,7 @@ def delete_warehouse(warehouse_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9652,7 +9657,7 @@ def api_get_products():
         return jsonify({'products': products}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9705,7 +9710,7 @@ def get_product_warehouse_stock(product_id):
         return jsonify(list(sku_stock.values())), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9829,7 +9834,7 @@ def get_product_skus_with_stock(product_id):
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9890,7 +9895,7 @@ def get_stock_transfers():
         return jsonify(transfers), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -9990,7 +9995,7 @@ def create_stock_transfer():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10087,7 +10092,7 @@ def get_stock_adjustments():
         return jsonify(adjustments), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10187,7 +10192,7 @@ def create_stock_adjustment():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10308,7 +10313,7 @@ def create_bulk_stock_adjustment():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10377,7 +10382,7 @@ def get_stock_audit_log():
         return jsonify(logs), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10425,7 +10430,7 @@ def get_stock_audit_summary():
         return jsonify(summary), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10481,7 +10486,7 @@ def search_skus_for_stock():
         return jsonify(skus), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10527,7 +10532,7 @@ def get_sku_warehouse_stock(sku_id):
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10566,7 +10571,7 @@ def get_low_stock_count():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10630,7 +10635,7 @@ def get_stock_summary():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10732,7 +10737,7 @@ def export_stock():
         )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10866,7 +10871,7 @@ def import_stock():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -10912,7 +10917,7 @@ def get_low_stock_items():
         return jsonify(items), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11004,7 +11009,7 @@ def get_mto_products():
         return jsonify(products), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11077,7 +11082,7 @@ def get_mto_product_detail(product_id):
         return jsonify(product), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11137,7 +11142,7 @@ def create_quotation_request():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11178,7 +11183,7 @@ def get_my_quotation_requests():
         return jsonify(requests), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11218,7 +11223,7 @@ def get_my_quotations():
         return jsonify(quotations), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11269,7 +11274,7 @@ def get_quotation_detail(quote_id):
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11310,7 +11315,7 @@ def get_my_mto_orders():
         return jsonify(orders), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11415,7 +11420,7 @@ def get_mto_order_detail(order_id):
         return jsonify(order_dict), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11472,7 +11477,7 @@ def submit_mto_payment(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11517,7 +11522,7 @@ def admin_get_mto_products():
         return jsonify(products), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11656,7 +11661,7 @@ def admin_create_mto_product():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11720,7 +11725,7 @@ def admin_get_mto_product(product_id):
         return jsonify(product), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11841,7 +11846,7 @@ def admin_update_mto_product(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11876,7 +11881,7 @@ def admin_delete_mto_product(product_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11916,7 +11921,7 @@ def admin_get_quotation_requests():
         return jsonify(requests), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -11965,7 +11970,7 @@ def admin_get_quotation_request_detail(request_id):
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12062,7 +12067,7 @@ def admin_create_quotation():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12101,7 +12106,7 @@ def admin_get_quotations():
         return jsonify(quotations), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12160,7 +12165,7 @@ def admin_send_quotation(quote_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12247,7 +12252,7 @@ def admin_get_mto_orders():
         return jsonify(orders), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12279,7 +12284,7 @@ def admin_get_mto_payments():
         return jsonify(payments), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12359,7 +12364,7 @@ def admin_confirm_mto_payment(payment_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12516,7 +12521,7 @@ def admin_update_mto_order_status(order_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12686,7 +12691,7 @@ def admin_get_mto_stats():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12744,7 +12749,7 @@ def get_chat_threads():
         return jsonify(threads), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -12767,7 +12772,7 @@ def archive_chat_thread(thread_id):
         return jsonify({'message': 'Thread archived'}), 200
     except Exception as e:
         if conn: conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
@@ -12788,7 +12793,7 @@ def unarchive_chat_thread(thread_id):
         return jsonify({'message': 'Thread unarchived'}), 200
     except Exception as e:
         if conn: conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
@@ -12867,7 +12872,7 @@ def search_chat_products():
         return jsonify(products), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13029,7 +13034,7 @@ def get_chat_messages(thread_id):
         return jsonify({'messages': messages, 'other_last_read': other_last_read, 'has_more': has_more}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13178,7 +13183,7 @@ def send_chat_message(thread_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13226,7 +13231,7 @@ def get_chat_unread_count():
         return jsonify({'unread_count': result['total_unread']}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13292,7 +13297,7 @@ def get_chat_new_messages():
         return jsonify({'messages': result, 'chat_url': chat_url}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13335,7 +13340,7 @@ def start_chat_thread(reseller_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13364,7 +13369,7 @@ def get_quick_replies():
         return jsonify(replies), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13402,7 +13407,7 @@ def create_quick_reply():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13436,7 +13441,7 @@ def update_quick_reply(reply_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13461,7 +13466,7 @@ def delete_quick_reply(reply_id):
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13571,7 +13576,7 @@ def send_broadcast_message():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13603,7 +13608,7 @@ def get_broadcast_history():
         return jsonify(broadcasts), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13638,7 +13643,7 @@ def get_notification_settings():
         return jsonify(dict(settings)), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13678,7 +13683,7 @@ def update_notification_settings():
     except Exception as e:
         if conn:
             conn.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13727,7 +13732,7 @@ def upload_chat_attachment():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
 
 # Search messages
 @app.route('/api/chat/search', methods=['GET'])
@@ -13778,7 +13783,7 @@ def search_chat_messages():
         return jsonify(results), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13880,7 +13885,7 @@ def push_subscribe():
         return jsonify({'success': True}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13906,7 +13911,7 @@ def push_unsubscribe():
         return jsonify({'success': True}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13928,7 +13933,7 @@ def push_status():
         
         return jsonify({'subscribed': count > 0, 'count': count}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor:
             cursor.close()
@@ -13988,7 +13993,7 @@ def push_test():
         
         return jsonify({'success': True, 'user_id': user_id, 'results': results}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_error(e)
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
