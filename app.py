@@ -5,6 +5,13 @@ import bcrypt
 from functools import wraps
 from database import get_db, init_db
 import os
+import logging
+
+logging.basicConfig(
+    level=logging.ERROR,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
 import json
 import smtplib
 from email.mime.text import MIMEText
@@ -66,7 +73,7 @@ init_db()
 
 def handle_error(e, user_msg='เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง'):
     """Log full error for admin, return safe generic message to user."""
-    print(f"[ERROR] {e}")
+    logging.error(e, exc_info=True)
     return jsonify({'error': user_msg}), 500
 
 # Disable caching for HTML responses to ensure updates are visible
