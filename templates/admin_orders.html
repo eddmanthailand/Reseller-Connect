@@ -118,6 +118,21 @@
             color: #6b7280;
         }
         
+        .order-status.preparing {
+            background: rgba(249, 115, 22, 0.2);
+            color: #f97316;
+        }
+        
+        .order-status.shipped {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+        
+        .order-status.delivered {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
         .pending-badge {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
@@ -486,8 +501,10 @@
                 <div class="status-tabs">
                     <button class="status-tab active" data-status="">ทั้งหมด</button>
                     <button class="status-tab" data-status="under_review">รอตรวจสอบ <span class="count" id="reviewCount">0</span></button>
-                    <button class="status-tab" data-status="pending_payment">รอชำระเงิน</button>
-                    <button class="status-tab" data-status="paid">ชำระแล้ว</button>
+                    <button class="status-tab" data-status="pending_payment">รอชำระเงิน <span class="count" id="pendingPaymentCount">0</span></button>
+                    <button class="status-tab" data-status="preparing">เตรียมสินค้า <span class="count" id="preparingCount">0</span></button>
+                    <button class="status-tab" data-status="shipped">จัดส่งแล้ว <span class="count" id="shippedCount">0</span></button>
+                    <button class="status-tab" data-status="delivered">ส่งถึงแล้ว <span class="count" id="deliveredCount">0</span></button>
                     <button class="status-tab" data-status="rejected">ปฏิเสธ</button>
                     <button class="status-tab" data-status="cancelled">ยกเลิก</button>
                 </div>
@@ -556,16 +573,35 @@
             }
         }
         
-        function updateCounts() {
-            const reviewCount = orders.filter(o => o.status === 'under_review').length;
-            document.getElementById('reviewCount').textContent = reviewCount;
-            
-            const pendingBadge = document.getElementById('pendingCount');
-            if (reviewCount > 0) {
-                pendingBadge.style.display = 'inline';
-                pendingBadge.textContent = reviewCount;
-            } else {
-                pendingBadge.style.display = 'none';
+        async function updateCounts() {
+            try {
+                const response = await fetch(`${API_URL}/admin/orders/counts`);
+                if (!response.ok) return;
+                const counts = await response.json();
+
+                const setCount = (id, status) => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        const n = counts[status] || 0;
+                        el.textContent = n;
+                        el.style.display = n > 0 ? 'inline' : 'none';
+                    }
+                };
+
+                setCount('reviewCount', 'under_review');
+                setCount('pendingPaymentCount', 'pending_payment');
+                setCount('preparingCount', 'preparing');
+                setCount('shippedCount', 'shipped');
+                setCount('deliveredCount', 'delivered');
+
+                const reviewCount = counts['under_review'] || 0;
+                const pendingBadge = document.getElementById('pendingCount');
+                if (pendingBadge) {
+                    pendingBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
+                    pendingBadge.textContent = reviewCount;
+                }
+            } catch (e) {
+                console.error('Error fetching counts:', e);
             }
         }
         
@@ -589,6 +625,9 @@
                 'pending_payment': 'รอชำระเงิน',
                 'under_review': 'รอตรวจสอบ',
                 'paid': 'ชำระแล้ว',
+                'preparing': 'เตรียมสินค้า',
+                'shipped': 'จัดส่งแล้ว',
+                'delivered': 'ส่งถึงแล้ว',
                 'rejected': 'ถูกปฏิเสธ',
                 'cancelled': 'ยกเลิก'
             };

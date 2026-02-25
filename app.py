@@ -7729,7 +7729,7 @@ def update_shipment(order_id, shipment_id):
             ''', (order_id,))
             current_order = cursor.fetchone()
             
-            if current_order and current_order['status'] == 'paid':
+            if current_order and current_order['status'] in ('paid', 'preparing'):
                 cursor.execute('''
                     UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
@@ -8767,6 +8767,47 @@ def create_quick_order():
     except Exception as e:
         if conn:
             conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/api/admin/orders/counts', methods=['GET'])
+@admin_required
+def get_order_counts():
+    """Get order counts grouped by status"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        is_assistant_admin = user_role == 'Assistant Admin'
+
+        if is_assistant_admin:
+            cursor.execute('SELECT brand_id FROM admin_brand_access WHERE user_id = %s', (user_id,))
+            brand_ids = [row['brand_id'] for row in cursor.fetchall()]
+            if not brand_ids:
+                return jsonify({}), 200
+            cursor.execute('''
+                SELECT o.status, COUNT(DISTINCT o.id) as count
+                FROM orders o
+                JOIN order_items oi ON oi.order_id = o.id
+                JOIN skus s ON s.id = oi.sku_id
+                JOIN products p ON p.id = s.product_id
+                WHERE p.brand_id = ANY(%s)
+                GROUP BY o.status
+            ''', (brand_ids,))
+        else:
+            cursor.execute('SELECT status, COUNT(*) as count FROM orders GROUP BY status')
+
+        rows = cursor.fetchall()
+        counts = {row['status']: row['count'] for row in rows}
+        return jsonify(counts), 200
+    except Exception as e:
         return handle_error(e)
     finally:
         if cursor:
