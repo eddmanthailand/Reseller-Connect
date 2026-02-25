@@ -1774,7 +1774,7 @@ function renderOrders() {
         html += `
             <tr>
                 <td style="font-weight: 600; color: #ffffff;">${orderNumber}</td>
-                <td>${escapeHtml(order.customer_name || 'N/A')}</td>
+                <td>${escapeHtml(order.reseller_name || order.username || 'N/A')}</td>
                 <td><span style="font-size: 11px; padding: 2px 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">${escapeHtml(channelName)}</span></td>
                 <td style="font-weight: 600;">฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</td>
                 <td><span style="background: ${statusColor}; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;">${statusLabel}</span></td>
@@ -1790,20 +1790,30 @@ function renderOrders() {
 
 async function updateOrderCounts() {
     try {
-        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
-        const reviewOrders = await response.json();
-        
-        const reviewCountEl = document.getElementById('reviewCount');
+        const response = await fetch(`${API_URL}/admin/orders/counts`);
+        const counts = await response.json();
+
+        const setCount = (id, status) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const n = counts[status] || 0;
+            el.textContent = n;
+            el.style.display = n > 0 ? 'inline' : 'none';
+        };
+
+        setCount('reviewCount', 'under_review');
+        setCount('pendingPaymentCount', 'pending_payment');
+        setCount('preparingCount', 'preparing');
+        setCount('shippedCount', 'shipped');
+        setCount('deliveredCount', 'delivered');
+        setCount('failedCount', 'failed_delivery');
+        setCount('cancelledCount', 'cancelled');
+
+        const reviewCount = counts['under_review'] || 0;
         const pendingBadge = document.getElementById('pendingOrderCount');
-        
-        if (reviewCountEl) reviewCountEl.textContent = reviewOrders.length;
         if (pendingBadge) {
-            if (reviewOrders.length > 0) {
-                pendingBadge.textContent = reviewOrders.length;
-                pendingBadge.style.display = 'inline';
-            } else {
-                pendingBadge.style.display = 'none';
-            }
+            pendingBadge.textContent = reviewCount;
+            pendingBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
         }
     } catch (error) {
         console.error('Error updating order counts:', error);
