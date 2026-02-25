@@ -51,6 +51,7 @@
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 11px;
+            display: none;
         }
         
         .orders-table {
@@ -668,7 +669,7 @@
                         ${orders.map(order => `
                             <tr>
                                 <td class="order-number-cell">${order.order_number}</td>
-                                <td>${order.customer_name || order.username}</td>
+                                <td>${order.reseller_name || order.username}</td>
                                 <td>${order.channel_name || '-'}</td>
                                 <td>
                                     <span class="order-status ${order.status}">${getStatusText(order.status)}</span>
@@ -717,7 +718,7 @@
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">ลูกค้า</span>
-                        <span class="detail-value">${currentOrder.customer_name}</span>
+                        <span class="detail-value">${currentOrder.reseller_name || currentOrder.reseller_username || '-'}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">ช่องทาง</span>
