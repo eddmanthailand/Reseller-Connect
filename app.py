@@ -8918,7 +8918,7 @@ def approve_order(order_id):
             
             # Record stock transaction
             cursor.execute('''
-                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, reference_type, reference_id, notes, created_by)
+                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, reference_type, reference_id, reason, created_by)
                 VALUES (%s, 'sale', %s, 'order', %s, %s, %s)
             ''', (item['sku_id'], -item['quantity'], order_id, f'Order #{order_id} approved', admin_id))
         
