@@ -4731,7 +4731,7 @@ def track_page_visit():
     conn = None
     cursor = None
     try:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         page_name = data.get('page_name', 'unknown')
         source = data.get('source', 'direct')
         
@@ -7829,7 +7829,7 @@ def upload_payment_slip(order_id):
             else:
                 return jsonify({'error': 'กรุณาเลือกรูปสลิป'}), 400
         else:
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             slip_image_url = data.get('slip_image_url')
             amount = data.get('amount')
         
@@ -8885,7 +8885,7 @@ def approve_order(order_id):
     cursor = None
     try:
         admin_id = session.get('user_id')
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         slip_id = data.get('slip_id')
         
         conn = get_db()
@@ -9046,7 +9046,7 @@ def request_new_slip(order_id):
     cursor = None
     try:
         admin_id = session.get('user_id')
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         reason = data.get('reason', '')
         
         if not reason:
@@ -9136,7 +9136,7 @@ def cancel_order(order_id):
     conn = None
     cursor = None
     try:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         reason = data.get('reason', '')
         admin_id = session.get('user_id')
         
@@ -9307,7 +9307,7 @@ def mark_order_failed_delivery(order_id):
     cursor = None
     try:
         admin_id = session.get('user_id')
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         reason = data.get('reason', 'สินค้าตีกลับ')
         
         conn = get_db()
