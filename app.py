@@ -1357,6 +1357,16 @@ def create_user():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
+        # Privilege check: assistant_admin cannot create admin-level accounts
+        current_user_id = session.get('user_id')
+        cursor.execute('SELECT r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = %s', (current_user_id,))
+        current_user = cursor.fetchone()
+        if current_user and current_user['role'] == 'assistant_admin':
+            cursor.execute('SELECT name FROM roles WHERE id = %s', (data['role_id'],))
+            target_role = cursor.fetchone()
+            if target_role and target_role['name'] in ('super_admin', 'assistant_admin'):
+                return jsonify({'error': 'ผู้ช่วย Admin ไม่มีสิทธิ์สร้างบัญชี Admin'}), 403
+        
         # Check if username already exists
         cursor.execute('SELECT id FROM users WHERE username = %s', (data['username'],))
         if cursor.fetchone():
@@ -1458,10 +1468,27 @@ def update_user(user_id):
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         # Check if user exists
-        cursor.execute('SELECT id, username FROM users WHERE id = %s', (user_id,))
+        cursor.execute('''
+            SELECT u.id, u.username, r.name as role 
+            FROM users u JOIN roles r ON u.role_id = r.id 
+            WHERE u.id = %s
+        ''', (user_id,))
         existing_user = cursor.fetchone()
         if not existing_user:
             return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
+        
+        # Privilege check: assistant_admin cannot edit admin accounts or promote to admin
+        current_user_id = session.get('user_id')
+        cursor.execute('SELECT r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = %s', (current_user_id,))
+        current_user = cursor.fetchone()
+        if current_user and current_user['role'] == 'assistant_admin':
+            if existing_user['role'] in ('super_admin', 'assistant_admin'):
+                return jsonify({'error': 'ผู้ช่วย Admin ไม่มีสิทธิ์แก้ไขบัญชี Admin'}), 403
+            if 'role_id' in data:
+                cursor.execute('SELECT name FROM roles WHERE id = %s', (data['role_id'],))
+                target_role = cursor.fetchone()
+                if target_role and target_role['name'] in ('super_admin', 'assistant_admin'):
+                    return jsonify({'error': 'ผู้ช่วย Admin ไม่มีสิทธิ์เปลี่ยน Role เป็น Admin'}), 403
         
         # Check if username is being changed and if it's already taken
         if 'username' in data and data['username'] != existing_user['username']:
@@ -7245,19 +7272,25 @@ def create_order():
                     VALUES (%s, %s, %s)
                 ''', (shipment_id, ship_item['order_item_id'], ship_item['quantity']))
         
-        # Deduct stock from warehouses
+        # Deduct stock from warehouses (atomic check prevents negative stock)
         for sku_id, wh_id, qty in stock_deductions:
             cursor.execute('''
                 UPDATE sku_warehouse_stock
                 SET stock = stock - %s
-                WHERE sku_id = %s AND warehouse_id = %s
-            ''', (qty, sku_id, wh_id))
+                WHERE sku_id = %s AND warehouse_id = %s AND stock >= %s
+            ''', (qty, sku_id, wh_id, qty))
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาลองใหม่อีกครั้ง'}), 400
         
-        # Also update the main SKU stock in skus table
+        # Also update the main SKU stock in skus table (atomic check)
         for item in items:
             cursor.execute('''
-                UPDATE skus SET stock = stock - %s WHERE id = %s
-            ''', (item['quantity'], item['sku_id']))
+                UPDATE skus SET stock = stock - %s WHERE id = %s AND stock >= %s
+            ''', (item['quantity'], item['sku_id'], item['quantity']))
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาลองใหม่อีกครั้ง'}), 400
         
         # Clear cart items
         cursor.execute('DELETE FROM cart_items WHERE cart_id = %s', (cart['cart_id'],))
@@ -8691,19 +8724,25 @@ def create_quick_order():
                     VALUES (%s, %s, %s)
                 ''', (shipment_id, ship_item['order_item_id'], ship_item['quantity']))
         
-        # Deduct stock from warehouses
+        # Deduct stock from warehouses (atomic check prevents negative stock)
         for sku_id, wh_id, qty in stock_deductions:
             cursor.execute('''
                 UPDATE sku_warehouse_stock
                 SET stock = stock - %s
-                WHERE sku_id = %s AND warehouse_id = %s
-            ''', (qty, sku_id, wh_id))
+                WHERE sku_id = %s AND warehouse_id = %s AND stock >= %s
+            ''', (qty, sku_id, wh_id, qty))
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาลองใหม่อีกครั้ง'}), 400
         
-        # Update main SKU stock
+        # Update main SKU stock (atomic check)
         for item in items:
             cursor.execute('''
-                UPDATE skus SET stock = stock - %s WHERE id = %s
-            ''', (item['quantity'], item['sku_id']))
+                UPDATE skus SET stock = stock - %s WHERE id = %s AND stock >= %s
+            ''', (item['quantity'], item['sku_id'], item['quantity']))
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาลองใหม่อีกครั้ง'}), 400
         
         conn.commit()
         
@@ -8864,10 +8903,13 @@ def approve_order(order_id):
             if item['stock'] < item['quantity']:
                 return jsonify({'error': f'Insufficient stock for SKU'}), 400
             
-            # Deduct stock
+            # Deduct stock (atomic check prevents negative stock)
             cursor.execute('''
-                UPDATE skus SET stock = stock - %s WHERE id = %s
-            ''', (item['quantity'], item['sku_id']))
+                UPDATE skus SET stock = stock - %s WHERE id = %s AND stock >= %s
+            ''', (item['quantity'], item['sku_id'], item['quantity']))
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาตรวจสอบใหม่'}), 400
             
             # Record stock transaction
             cursor.execute('''
@@ -9893,8 +9935,11 @@ def create_stock_transfer():
         cursor.execute('''
             UPDATE sku_warehouse_stock 
             SET stock = stock - %s
-            WHERE sku_id = %s AND warehouse_id = %s
-        ''', (data['quantity'], data['sku_id'], data['from_warehouse_id']))
+            WHERE sku_id = %s AND warehouse_id = %s AND stock >= %s
+        ''', (data['quantity'], data['sku_id'], data['from_warehouse_id'], data['quantity']))
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return jsonify({'error': 'สต็อกไม่เพียงพอ กรุณาตรวจสอบใหม่'}), 400
         
         cursor.execute('''
             INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)

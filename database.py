@@ -1,5 +1,6 @@
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 import bcrypt
 import os
 from datetime import datetime
@@ -8,13 +9,53 @@ def get_db_url():
     """Get database URL from environment"""
     return os.environ.get('DATABASE_URL')
 
+_pool = None
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        db_url = get_db_url()
+        if not db_url:
+            raise Exception("DATABASE_URL environment variable not set")
+        _pool = psycopg2.pool.SimpleConnectionPool(1, 5, db_url)
+    return _pool
+
+class _PooledConnection:
+    """Wraps a psycopg2 connection so that .close() returns it to the pool."""
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+
+    def close(self):
+        try:
+            if not self._conn.closed:
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+                self._pool.putconn(self._conn)
+            else:
+                self._conn.close()
+        except Exception:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
 def get_db():
-    """Get database connection"""
-    db_url = get_db_url()
-    if not db_url:
-        raise Exception("DATABASE_URL environment variable not set")
-    conn = psycopg2.connect(db_url)
-    return conn
+    """Get a pooled database connection. Calling .close() returns it to the pool."""
+    pool = _get_pool()
+    conn = pool.getconn()
+    return _PooledConnection(conn, pool)
 
 def init_db():
     """Initialize database with tables and default data"""
