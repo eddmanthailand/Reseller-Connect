@@ -1000,11 +1000,10 @@ let checkoutData = { items: [], total: 0, customers: [], selfAddress: null };
 
 async function loadCheckout() {
     try {
-        const [cartRes, customersRes, profileRes, channelsRes] = await Promise.all([
+        const [cartRes, customersRes, profileRes] = await Promise.all([
             fetch(`${RESELLER_API_URL}/reseller/cart`),
             fetch(`${RESELLER_API_URL}/reseller/customers`),
-            fetch(`${RESELLER_API_URL}/reseller/profile`),
-            fetch(`${RESELLER_API_URL}/sales-channels`)
+            fetch(`${RESELLER_API_URL}/reseller/profile`)
         ]);
         
         if (!cartRes.ok) throw new Error('Failed to load cart');
@@ -1029,10 +1028,6 @@ async function loadCheckout() {
             checkoutData.selfAddress = profileData.profile || profileData;
         }
         
-        if (channelsRes.ok) {
-            checkoutData.salesChannels = await channelsRes.json();
-        }
-        
         renderCheckout();
     } catch (error) {
         console.error('Error loading checkout:', error);
@@ -1048,21 +1043,6 @@ function renderCheckout() {
         checkoutData.customers.map(c => 
             `<option value="${c.id}">${c.full_name} - ${c.phone || 'ไม่มีเบอร์'}</option>`
         ).join('');
-    
-    // Render sales channel buttons
-    const channelContainer = document.getElementById('salesChannelButtons');
-    const channelInput = document.getElementById('checkoutSalesChannel');
-    if (channelContainer && checkoutData.salesChannels) {
-        channelContainer.innerHTML = checkoutData.salesChannels.map(ch => `
-            <button type="button" class="sales-channel-btn" data-channel="${ch.id}" onclick="selectSalesChannel(${ch.id})"
-                    style="padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); 
-                           background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 13px;
-                           transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
-                           backdrop-filter: blur(5px);">
-                <span>${ch.name}</span>
-            </button>
-        `).join('');
-    }
     
     const selfCard = document.getElementById('selfAddressCard');
     const addr = checkoutData.selfAddress;
@@ -1103,18 +1083,6 @@ function renderCheckout() {
     validateCheckout();
 }
 
-function selectSalesChannel(channelId) {
-    document.getElementById('checkoutSalesChannel').value = channelId;
-    document.querySelectorAll('.sales-channel-btn').forEach(btn => {
-        if (btn.dataset.channel == channelId) {
-            btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(236,72,153,0.4))';
-            btn.style.borderColor = 'var(--primary)';
-        } else {
-            btn.style.background = 'rgba(255,255,255,0.05)';
-            btn.style.borderColor = 'rgba(255,255,255,0.2)';
-        }
-    });
-}
 
 function renderCheckoutItems() {
     const container = document.getElementById('checkoutItems');
