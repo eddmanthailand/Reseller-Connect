@@ -433,9 +433,13 @@ function setupEventListeners() {
                 window.open(item.href, '_blank');
                 return false;
             }
-            
-            e.preventDefault();
+
             const targetPage = item.dataset.page;
+
+            // No data-page means it's a real href link (e.g. /chat) — let browser navigate
+            if (!targetPage) return;
+
+            e.preventDefault();
             
             // Handle submenu toggle
             if (item.classList.contains('has-submenu')) {
@@ -446,9 +450,7 @@ function setupEventListeners() {
                 }
             }
             
-            if (targetPage) {
-                switchPage(targetPage);
-            }
+            switchPage(targetPage);
         });
     });
     
