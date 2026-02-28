@@ -6,6 +6,7 @@ from functools import wraps
 from database import get_db, init_db
 import os
 import logging
+import threading
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -14255,7 +14256,9 @@ def push_test():
         if cursor: cursor.close()
         if conn: conn.close()
 
-def send_push_notification(user_id, title, body, url='/', tag='ekg-notification', notification_type='general'):
+def _do_send_push(user_id, title, body, url, tag, notification_type):
+    """Internal: actually send push notifications (runs in background thread)."""
+    import requests as _requests
     conn = None
     cursor = None
     try:
@@ -14263,7 +14266,6 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         vapid_subject = os.environ.get('VAPID_SUBJECT', 'mailto:admin@ekgshops.com')
         
         if not vapid_private_key:
-            print(f"[PUSH] No VAPID_PRIVATE_KEY set, skipping push for user {user_id}")
             return
         
         conn = get_db()
@@ -14273,7 +14275,6 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         subscriptions = cursor.fetchall()
         
         if not subscriptions:
-            print(f"[PUSH] No subscriptions found for user {user_id}")
             return
         
         payload = json.dumps({
@@ -14287,6 +14288,11 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
         
         print(f"[PUSH] Sending to user {user_id}: {title} - {body[:50]} ({len(subscriptions)} subscriptions)")
         
+        push_session = _requests.Session()
+        push_session.request = lambda method, url, **kwargs: _requests.Session.request(
+            push_session, method, url, timeout=8, **kwargs
+        )
+
         expired_ids = []
         sent_count = 0
         for sub in subscriptions:
@@ -14302,7 +14308,8 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
                     },
                     data=payload,
                     vapid_private_key=vapid_private_key,
-                    vapid_claims={'sub': vapid_subject}
+                    vapid_claims={'sub': vapid_subject},
+                    requests_session=push_session
                 )
                 sent_count += 1
                 print(f"[PUSH] Sent successfully to sub {sub['id']} ({device})")
@@ -14324,26 +14331,35 @@ def send_push_notification(user_id, title, body, url='/', tag='ekg-notification'
                     expired_ids.append(sub['id'])
             except Exception as e:
                 print(f"[PUSH] Error for sub {sub['id']} ({device}): {str(e)[:200]}")
-                try:
-                    cursor.execute('''INSERT INTO push_delivery_log (user_id, subscription_id, device_info, status, status_code, error_message)
-                        VALUES (%s, %s, %s, 'error', 'unknown', %s)''', (user_id, sub['id'], device, str(e)[:300]))
-                    conn.commit()
-                except: pass
         
         print(f"[PUSH] Sent {sent_count}/{len(subscriptions)} to user {user_id}")
         
         if expired_ids:
-            cursor.execute('DELETE FROM push_subscriptions WHERE id = ANY(%s)', (expired_ids,))
-            conn.commit()
-            print(f"[PUSH] Cleaned up {len(expired_ids)} expired subscriptions")
+            try:
+                cursor.execute('DELETE FROM push_subscriptions WHERE id = ANY(%s)', (expired_ids,))
+                conn.commit()
+                print(f"[PUSH] Cleaned up {len(expired_ids)} expired subscriptions")
+            except: pass
             
     except Exception as e:
         print(f"[PUSH] Fatal error sending to user {user_id}: {str(e)[:300]}")
     finally:
         if cursor:
-            cursor.close()
+            try: cursor.close()
+            except: pass
         if conn:
-            conn.close()
+            try: conn.close()
+            except: pass
+
+
+def send_push_notification(user_id, title, body, url='/', tag='ekg-notification', notification_type='general'):
+    """Non-blocking push notification — runs in background thread so it never blocks a Gunicorn worker."""
+    t = threading.Thread(
+        target=_do_send_push,
+        args=(user_id, title, body, url, tag, notification_type),
+        daemon=True
+    )
+    t.start()
 
 def send_push_to_admins(title, body, url='/', tag='admin-notification'):
     conn = None
