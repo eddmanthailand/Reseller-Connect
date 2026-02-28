@@ -1220,20 +1220,47 @@ async function loadPromptPayQR() {
 
 function downloadQRCode() {
     const img = document.getElementById('promptpayQRImage');
+    const amountEl = document.getElementById('promptpayAmount');
     if (!img || !img.src) return;
 
-    const src = img.src;
+    const amountText = amountEl ? amountEl.textContent.trim() : '';
 
-    // Convert base64 to Blob so download works on both Android and iOS
-    try {
-        const [header, base64Data] = src.split(',');
-        const mime = header.match(/:(.*?);/)[1];
-        const binary = atob(base64Data);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes], { type: mime });
+    const canvas = document.createElement('canvas');
+    const padding = 24;
+    const headerH = 44;
+    const footerH = amountText ? 48 : 0;
+    const qrSize = 280;
+
+    canvas.width = qrSize + padding * 2;
+    canvas.height = headerH + qrSize + footerH + padding * 2;
+
+    const ctx = canvas.getContext('2d');
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Header: "EKG-Shop"
+    ctx.fillStyle = '#7c3aed';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('EKG-Shop', canvas.width / 2, padding + 28);
+
+    // Draw QR image
+    const qrY = padding + headerH;
+    ctx.drawImage(img, padding, qrY, qrSize, qrSize);
+
+    // Footer: amount
+    if (amountText) {
+        ctx.fillStyle = '#16a34a';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`ยอดชำระ ${amountText}`, canvas.width / 2, qrY + qrSize + 34);
+    }
+
+    // Download as PNG via Blob
+    canvas.toBlob(blob => {
         const blobUrl = URL.createObjectURL(blob);
-
         const a = document.createElement('a');
         a.href = blobUrl;
         a.download = 'promptpay-qr.png';
@@ -1241,10 +1268,7 @@ function downloadQRCode() {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-    } catch (e) {
-        // Fallback: open in new tab so user can long-press to save (iOS)
-        window.open(src, '_blank');
-    }
+    }, 'image/png');
 }
 
 function toggleShippingType() {
