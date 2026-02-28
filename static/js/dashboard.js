@@ -153,10 +153,19 @@ function handleHashNavigation() {
     const fullHash = window.location.hash.substring(1); // Remove the '#'
     if (fullHash) {
         // Extract page name before any query parameters
-        const [pageName] = fullHash.split('?');
+        const [pageName, queryString] = fullHash.split('?');
         const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
+            // Auto-open order detail if order_id param is present
+            if (pageName === 'orders' && queryString) {
+                const params = new URLSearchParams(queryString);
+                const orderId = params.get('order_id');
+                if (orderId) {
+                    setTimeout(() => viewOrderDetails(parseInt(orderId)), 600);
+                    history.replaceState(null, '', window.location.pathname + '#orders');
+                }
+            }
         }
     }
 }

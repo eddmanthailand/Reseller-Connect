@@ -1875,9 +1875,9 @@ async function openAdminChatOrderPreview(orderId) {
             ${shipments.length > 0 ? `
             <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px;">
                 <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:8px;">การจัดส่ง</div>
-                ${shipments.map(sh => `<div style="font-size:11px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.05);border-radius:8px;padding:8px 10px;margin-bottom:4px;">${sh.carrier_name ? `<span style="color:rgba(255,255,255,0.5);">${esc(sh.carrier_name)}</span> ` : ''}${sh.tracking_number ? `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;"><span style="color:white;font-weight:600;">${esc(sh.tracking_number)}</span><button onclick="navigator.clipboard.writeText('${esc(sh.tracking_number)}').then(()=>{this.textContent='✓ คัดลอกแล้ว';this.style.color='#34d399';setTimeout(()=>{this.textContent='คัดลอก';this.style.color='rgba(255,255,255,0.5)';},1500)})" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);padding:1px 7px;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;">คัดลอก</button></div>` : ''}</div>`).join('')}
+                ${shipments.map(sh => { const tUrl = sh.tracking_url || getTrackingUrl(sh.shipping_provider, sh.tracking_number); return `<div style="font-size:11px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.05);border-radius:8px;padding:8px 10px;margin-bottom:4px;">${sh.shipping_provider ? `<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:4px;">🚚 ${esc(sh.shipping_provider)}</div>` : ''}${sh.tracking_number ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="color:white;font-weight:600;">${esc(sh.tracking_number)}</span><button onclick="navigator.clipboard.writeText('${esc(sh.tracking_number)}').then(()=>{this.textContent='✓ คัดลอกแล้ว';this.style.color='#34d399';setTimeout(()=>{this.textContent='คัดลอก';this.style.color='rgba(255,255,255,0.5)';},1500)})" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);padding:1px 7px;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;">คัดลอก</button>${tUrl ? `<a href="${esc(tUrl)}" target="_blank" style="color:#a855f7;text-decoration:none;font-size:10px;white-space:nowrap;border:1px solid rgba(168,85,247,0.4);padding:1px 7px;border-radius:5px;">ติดตามพัสดุ →</a>` : ''}</div>` : ''}</div>`; }).join('')}
             </div>` : ''}
-            <button onclick="window.open('/admin#orders','_blank')" style="width:100%;margin-top:16px;padding:10px;background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">ไปที่หน้าคำสั่งซื้อ →</button>`;
+            <button onclick="window.open('/admin#orders?order_id=${o.id}','_blank')" style="width:100%;margin-top:16px;padding:10px;background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">รายละเอียดคำสั่งซื้อ →</button>`;
     } catch(err) {
         body.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171;">เกิดข้อผิดพลาด</div>';
     }
@@ -2215,6 +2215,29 @@ function startGlobalPolling() {
 function esc(s) {
     if (!s) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getTrackingUrl(provider, trackingNumber) {
+    if (!provider || !trackingNumber) return null;
+    const p = provider.toLowerCase();
+    const map = {
+        'thailand post': `https://track.thailandpost.co.th/?trackNumber=${trackingNumber}`,
+        'ไปรษณีย์ไทย': `https://track.thailandpost.co.th/?trackNumber=${trackingNumber}`,
+        'kerry express': `https://th.kerryexpress.com/th/track/?track=${trackingNumber}`,
+        'kerry': `https://th.kerryexpress.com/th/track/?track=${trackingNumber}`,
+        'flash express': `https://flashexpress.com/fle/tracking?se=${trackingNumber}`,
+        'flash': `https://flashexpress.com/fle/tracking?se=${trackingNumber}`,
+        'j&t express': `https://www.jtexpress.co.th/index/query/gzquery.html?billcode=${trackingNumber}`,
+        'j&t': `https://www.jtexpress.co.th/index/query/gzquery.html?billcode=${trackingNumber}`,
+        'shopee express': `https://spx.co.th/th/tracking?code=${trackingNumber}`,
+        'spx': `https://spx.co.th/th/tracking?code=${trackingNumber}`,
+        'best express': `https://www.best-inc.co.th/track?bills=${trackingNumber}`,
+        'best': `https://www.best-inc.co.th/track?bills=${trackingNumber}`,
+        'ninja van': `https://www.ninjavan.co/th-th/tracking?id=${trackingNumber}`,
+        'ninjavan': `https://www.ninjavan.co/th-th/tracking?id=${trackingNumber}`,
+        'dhl': `https://www.dhl.com/th-th/home/tracking.html?tracking-id=${trackingNumber}`
+    };
+    return map[p] || null;
 }
 
 // ── New Chat Modal ──
