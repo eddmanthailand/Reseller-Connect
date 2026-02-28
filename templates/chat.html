@@ -764,6 +764,144 @@
         .qr-manage-item-info { flex: 1; min-width: 0; }
         .qr-manage-title { font-size: 13px; font-weight: 600; }
         .qr-manage-content { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ── New Chat Modal ── */
+        .member-search-wrap {
+            padding: 0 0 12px;
+            flex-shrink: 0;
+        }
+        .member-search-input {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 10px 16px 10px 40px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .member-search-input:focus { border-color: rgba(102,126,234,0.5); }
+        .member-search-input::placeholder { color: var(--text-muted); }
+        .member-search-box {
+            position: relative;
+        }
+        .member-search-box svg {
+            position: absolute;
+            left: 12px; top: 50%;
+            transform: translateY(-50%);
+            width: 16px; height: 16px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .member-list-scroll {
+            flex: 1;
+            overflow-y: auto;
+            margin: 0 -20px;
+            padding: 0 8px;
+        }
+        .member-list-scroll::-webkit-scrollbar { width: 4px; }
+        .member-list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .member-item:hover { background: rgba(255,255,255,0.05); }
+        .member-item:active { background: rgba(102,126,234,0.15); }
+
+        .member-avatar {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 17px; font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .member-info { flex: 1; min-width: 0; }
+        .member-name {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .member-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 2px;
+        }
+        .has-thread-badge {
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(52,211,153,0.15);
+            color: #34d399;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .member-item-action {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .member-item:hover .member-item-action { opacity: 1; }
+        .member-item-action svg { width: 16px; height: 16px; color: white; }
+
+        @media (max-width: 768px) {
+            .member-item-action { opacity: 1; }
+        }
+
+        .member-section-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 10px 12px 4px;
+        }
+
+        .new-chat-modal .modal-box {
+            max-height: 90vh;
+        }
+        .new-chat-modal .modal-body {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 20px 0;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* Compose button highlight */
+        .compose-btn {
+            width: 34px; height: 34px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: opacity 0.2s, transform 0.15s;
+            box-shadow: 0 2px 8px rgba(102,126,234,0.4);
+        }
+        .compose-btn:hover { opacity: 0.9; transform: scale(1.05); }
+        .compose-btn svg { width: 17px; height: 17px; }
     </style>
 </head>
 <body>
@@ -793,6 +931,12 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/>
                         <polyline points="13 2 13 9 20 9"/>
+                    </svg>
+                </button>
+                <button class="compose-btn" onclick="openNewChatModal()" title="เริ่มแชทใหม่">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 20h9"/>
+                        <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
                     </svg>
                 </button>
             </div>
@@ -974,6 +1118,36 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- ═══════════════════════════════════════ NEW CHAT MODAL ═══════════════════════════════════════ -->
+<div class="modal-overlay new-chat-modal" id="newChatModal" onclick="handleNewChatOverlayClick(event)">
+    <div class="modal-box" style="max-height:90vh;">
+        <div class="modal-header">
+            <span class="modal-title">✏️ เริ่มแชทใหม่</span>
+            <button class="modal-close" onclick="closeNewChatModal()">×</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;overflow:hidden;padding:12px 20px 0;gap:0;">
+            <div class="member-search-wrap">
+                <div class="member-search-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                    <input type="text" class="member-search-input" id="memberSearchInput"
+                        placeholder="ค้นหาชื่อสมาชิก..."
+                        oninput="filterMembers(this.value)"
+                        autocomplete="off">
+                </div>
+            </div>
+            <div id="memberListStats" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;flex-shrink:0;"></div>
+            <div class="member-list-scroll" id="memberList">
+                <div style="text-align:center;padding:40px 0;">
+                    <span class="spinner"></span>
+                </div>
+            </div>
+            <div style="padding:12px 0;flex-shrink:0;"></div>
+        </div>
+    </div>
+</div>
 
 <script>
 const API = '/api';
@@ -1665,6 +1839,147 @@ function startGlobalPolling() {
 function esc(s) {
     if (!s) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── New Chat Modal ──
+let allMembers = [];
+let memberSearchTimer = null;
+
+async function openNewChatModal() {
+    document.getElementById('newChatModal').classList.add('open');
+    document.getElementById('memberSearchInput').value = '';
+    document.getElementById('memberListStats').textContent = '';
+    document.getElementById('memberList').innerHTML = `
+        <div style="text-align:center;padding:48px 0;color:var(--text-muted);">
+            <span class="spinner"></span>
+        </div>`;
+    setTimeout(() => document.getElementById('memberSearchInput').focus(), 200);
+    await loadAllMembers();
+}
+
+function closeNewChatModal() {
+    document.getElementById('newChatModal').classList.remove('open');
+}
+
+function handleNewChatOverlayClick(e) {
+    if (e.target === document.getElementById('newChatModal')) closeNewChatModal();
+}
+
+async function loadAllMembers() {
+    try {
+        const r = await fetch(`${API}/resellers`, { credentials: 'include' });
+        if (!r.ok) { allMembers = []; return; }
+        const resellers = await r.json();
+
+        // Mark those who already have a thread
+        const threadSet = new Set(allThreads.map(t => t.reseller_id));
+        allMembers = resellers.map(m => ({
+            ...m,
+            hasThread: threadSet.has(m.id)
+        }));
+
+        renderMemberList(allMembers);
+    } catch(e) {
+        document.getElementById('memberList').innerHTML =
+            `<div style="text-align:center;padding:40px;color:var(--text-muted);">ไม่สามารถโหลดข้อมูลได้</div>`;
+    }
+}
+
+function filterMembers(q) {
+    clearTimeout(memberSearchTimer);
+    memberSearchTimer = setTimeout(() => {
+        const filtered = q.trim()
+            ? allMembers.filter(m =>
+                (m.full_name || '').toLowerCase().includes(q.toLowerCase()) ||
+                (m.username || '').toLowerCase().includes(q.toLowerCase()) ||
+                (m.tier_name || '').toLowerCase().includes(q.toLowerCase()))
+            : allMembers;
+        renderMemberList(filtered, q.trim());
+    }, 150);
+}
+
+function renderMemberList(members, query = '') {
+    const stats = document.getElementById('memberListStats');
+    const list = document.getElementById('memberList');
+
+    if (!members.length) {
+        stats.textContent = query ? `ไม่พบสมาชิกที่ค้นหา "${query}"` : 'ยังไม่มีสมาชิก';
+        list.innerHTML = `
+            <div style="text-align:center;padding:48px 16px;color:var(--text-muted);">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.25;margin-bottom:10px;display:block;margin-inline:auto;">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                </svg>
+                <span style="font-size:14px;">${query ? 'ไม่พบสมาชิก' : 'ยังไม่มีสมาชิก'}</span>
+            </div>`;
+        return;
+    }
+
+    stats.textContent = `${members.length} สมาชิก`;
+
+    // Separate: has thread on top, then others
+    const withThread = members.filter(m => m.hasThread);
+    const noThread = members.filter(m => !m.hasThread);
+
+    let html = '';
+    if (withThread.length) {
+        html += `<div class="member-section-label">สนทนาแล้ว</div>`;
+        html += withThread.map(m => memberItemHtml(m)).join('');
+    }
+    if (noThread.length) {
+        html += `<div class="member-section-label">สมาชิกทั้งหมด</div>`;
+        html += noThread.map(m => memberItemHtml(m)).join('');
+    }
+    list.innerHTML = html;
+}
+
+function memberItemHtml(m) {
+    const name = m.full_name || m.username || `สมาชิก #${m.id}`;
+    const initial = name.charAt(0).toUpperCase();
+    const tier = m.tier_name || '';
+    return `
+        <div class="member-item" onclick="startNewChat(${m.id}, '${esc(name)}', '${esc(tier)}', ${m.reseller_tier_id || 'null'})">
+            <div class="member-avatar">${initial}</div>
+            <div class="member-info">
+                <div class="member-name">${esc(name)}</div>
+                <div class="member-meta">
+                    ${tier ? `<span class="tier-badge ${tierClass(tier)}">${esc(tier)}</span>` : ''}
+                    ${m.hasThread ? `<span class="has-thread-badge">มีแชทอยู่แล้ว</span>` : ''}
+                </div>
+            </div>
+            <div class="member-item-action">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+            </div>
+        </div>`;
+}
+
+async function startNewChat(resellerId, name, tier, tierId) {
+    closeNewChatModal();
+    toast('กำลังเปิดแชท...', 'info');
+
+    try {
+        const r = await fetch(`${API}/chat/start/${resellerId}`, {
+            method: 'POST',
+            headers: csrfHeaders(),
+            credentials: 'include'
+        });
+        if (!r.ok) { toast('ไม่สามารถเริ่มแชทได้', 'error'); return; }
+        const data = await r.json();
+        const threadId = data.thread_id;
+
+        // Refresh threads then select
+        await loadThreads();
+
+        // Find the thread to get full info
+        const thread = allThreads.find(t => t.id === threadId);
+        const isArchived = thread ? !!thread.is_archived : false;
+
+        await selectThread(threadId, name, tier, tierId, isArchived);
+    } catch(e) {
+        toast('เกิดข้อผิดพลาด', 'error');
+    }
 }
 
 // ── Init ──
