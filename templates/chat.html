@@ -1590,8 +1590,8 @@ async function sendMessage() {
         }
     }
 
-    await loadMessages();
-    loadThreads();
+    stopPolling();
+    runPoll();
 }
 
 function handleInputKeydown(e) {

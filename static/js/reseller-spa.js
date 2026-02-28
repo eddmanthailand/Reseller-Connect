@@ -3316,6 +3316,7 @@ let resellerOldestMessageId = 0;
 let resellerHasMoreMessages = true;
 let resellerLoadingOlder = false;
 let resellerAllMessages = [];
+let resellerMsgLoading = false;
 
 async function initResellerChat() {
     try {
@@ -3351,6 +3352,8 @@ async function initResellerChat() {
 
 async function loadResellerChatMessages() {
     if (!resellerChatThreadId) return;
+    if (resellerMsgLoading) return;
+    resellerMsgLoading = true;
     
     try {
         const container = document.getElementById('resellerChatMessages');
@@ -3428,6 +3431,8 @@ async function loadResellerChatMessages() {
         }
     } catch (error) {
         console.error('Error loading messages:', error);
+    } finally {
+        resellerMsgLoading = false;
     }
 }
 
