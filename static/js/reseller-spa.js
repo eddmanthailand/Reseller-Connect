@@ -1558,6 +1558,7 @@ async function placeOrder() {
             body: JSON.stringify({
                 payment_method: paymentMethod,
                 notes: notes,
+                shipping_fee: checkoutData.shippingCost || 0,
                 ...shippingData
             })
         });
@@ -1930,33 +1931,54 @@ async function viewResellerOrderDetails(orderId) {
             `;
         }
         
-        const modalHtml = `
-            <div id="orderDetailModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;">
-                <div style="background: linear-gradient(135deg, rgba(30,20,50,0.98), rgba(20,10,40,0.98)); border: 1px solid rgba(168,85,247,0.3); border-radius: 16px; max-width: 500px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative;">
-                    <button onclick="closeOrderModal()" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 5px; line-height: 1;">&times;</button>
-                    <div style="padding: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2 style="font-size: 18px;">${order.order_number || '#' + order.id}</h2>
-                            <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 12px;">${statusLabels[order.status] || order.status}</span>
-                        </div>
-                        ${rejectionNoticeHtml}
-                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 16px;">
-                            <div>วันที่: ${new Date(order.created_at).toLocaleString('th-TH')}</div>
-                            ${order.notes ? `<div style="margin-top: 4px;">หมายเหตุ: ${escapeHtml(order.notes)}</div>` : ''}
-                        </div>
-                        <h4 style="margin-bottom: 8px; font-size: 14px;">รายการสินค้า</h4>
-                        <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
-                            ${itemsHtml || '<p style="opacity: 0.6; text-align: center;">ไม่มีรายการ</p>'}
-                            <div style="display: flex; justify-content: space-between; padding-top: 10px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); font-weight: 600;">
-                                <span>ยอดรวม</span>
-                                <span>฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
-                            </div>
-                        </div>
-                        ${recipientHtml}
-                        ${shipmentsHtml}
-                        ${slipsHtml}
-                        ${actionsHtml}
+        const itemTotal = (order.final_amount || 0) - (order.shipping_fee || 0);
+        const shippingFee = order.shipping_fee || 0;
+        const grandTotal = order.final_amount || 0;
+
+        const summaryHtml = `
+            <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 14px; margin-bottom: 4px;">
+                ${itemsHtml || '<p style="opacity: 0.6; text-align: center; font-size: 13px;">ไม่มีรายการ</p>'}
+                <div style="border-top: 1px solid rgba(255,255,255,0.15); margin-top: 10px; padding-top: 10px;">
+                    ${order.discount_amount > 0 ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
+                        <span>ส่วนลดสมาชิก</span>
+                        <span style="color: #34d399;">-฿${order.discount_amount.toLocaleString('th-TH')}</span>
+                    </div>` : ''}
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
+                        <span>ค่าจัดส่ง</span>
+                        <span>${shippingFee > 0 ? `฿${shippingFee.toLocaleString('th-TH')}` : '<span style="color: #34d399;">ฟรี</span>'}</span>
                     </div>
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <span>ยอดรวมทั้งหมด</span>
+                        <span style="color: #fbbf24;">฿${grandTotal.toLocaleString('th-TH')}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const modalHtml = `
+            <div id="orderDetailModal" style="position: fixed; inset: 0; background: linear-gradient(160deg, #1a0a2e 0%, #0d0a1e 100%); z-index: 1000; display: flex; flex-direction: column; animation: slideUpFull 0.28s cubic-bezier(.4,0,.2,1);">
+                <style>@keyframes slideUpFull { from { transform: translateY(100%); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }</style>
+                <div style="flex-shrink: 0; padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px);">
+                    <button onclick="closeOrderModal()" style="background: rgba(255,255,255,0.1); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${order.order_number || '#' + order.id}</div>
+                        <div style="font-size: 11px; color: rgba(255,255,255,0.5);">${new Date(order.created_at).toLocaleString('th-TH', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+                    </div>
+                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">${statusLabels[order.status] || order.status}</span>
+                </div>
+                <div style="flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch;">
+                    ${rejectionNoticeHtml}
+                    ${order.notes ? `<div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 13px; color: rgba(255,255,255,0.7);">📝 ${escapeHtml(order.notes)}</div>` : ''}
+                    <h4 style="margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5);">รายการสินค้า</h4>
+                    ${summaryHtml}
+                    ${recipientHtml}
+                    ${shipmentsHtml}
+                    ${slipsHtml}
+                    ${actionsHtml}
+                    <div style="height: 24px;"></div>
                 </div>
             </div>
         `;
@@ -3503,6 +3525,66 @@ async function loadResellerChatMessages() {
 let resellerChatOtherLastRead = 0;
 
 function buildResellerMessageHtml(msg, isMine, isRead) {
+    let orderCardHtml = '';
+    if (msg.order) {
+        const o = msg.order;
+        const statusLabels = {
+            'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบสลิป',
+            'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง',
+            'delivered': 'ได้รับสินค้าแล้ว', 'failed_delivery': 'จัดส่งไม่สำเร็จ',
+            'cancelled': 'ยกเลิก'
+        };
+        const statusColors = {
+            'pending_payment': '#f59e0b', 'under_review': '#3b82f6',
+            'preparing': '#8b5cf6', 'shipped': '#0ea5e9',
+            'delivered': '#10b981', 'failed_delivery': '#ef4444',
+            'cancelled': '#6b7280'
+        };
+        const fmtN = n => Number(n || 0).toLocaleString('th-TH');
+        const items = Array.isArray(o.items) ? o.items.filter(it => it && it.product_name) : [];
+        const displayItems = items.slice(0, 3);
+        const moreCount = items.length - displayItems.length;
+        const shipping = o.shipping_fee || 0;
+        const grandTotal = o.final_amount || 0;
+
+        const itemsListHtml = displayItems.map(it => `
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);">
+                ${it.image_url
+                    ? `<img src="${escapeHtmlChat(it.image_url)}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">`
+                    : `<div style="width:36px;height:36px;border-radius:6px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">📦</div>`}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtmlChat(it.product_name)}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);">x${it.quantity} &nbsp;·&nbsp; ฿${fmtN(it.subtotal)}</div>
+                </div>
+            </div>
+        `).join('');
+
+        orderCardHtml = `
+            <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; cursor: pointer; min-width: 240px; max-width: 280px;" onclick="viewResellerOrderDetails(${o.id})">
+                <div style="padding: 10px 12px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; font-weight: 700;">${escapeHtmlChat(o.order_number || '#' + o.id)}</span>
+                    <span style="background: ${statusColors[o.status] || '#6b7280'}; color: white; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;">${statusLabels[o.status] || o.status}</span>
+                </div>
+                <div style="padding: 8px 12px;">
+                    ${itemsListHtml}
+                    ${moreCount > 0 ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);padding-top:4px;">+${moreCount} รายการอื่น...</div>` : ''}
+                </div>
+                <div style="padding: 0 12px 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; margin-top: 2px;">
+                    ${o.discount_amount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:2px;"><span>ส่วนลด</span><span style="color:#34d399;">-฿${fmtN(o.discount_amount)}</span></div>` : ''}
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">
+                        <span>ค่าจัดส่ง</span>
+                        <span>${shipping > 0 ? `฿${fmtN(shipping)}` : '<span style="color:#34d399;">ฟรี</span>'}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;">
+                        <span>ยอดรวม</span>
+                        <span style="color:#fbbf24;">฿${fmtN(grandTotal)}</span>
+                    </div>
+                </div>
+                <div style="background: rgba(168,85,247,0.15); padding: 7px 12px; text-align: center; font-size: 11px; color: rgba(255,255,255,0.6);">กดเพื่อดูรายละเอียด →</div>
+            </div>
+        `;
+    }
+
     let productCardHtml = '';
     if (msg.product) {
         const p = msg.product;
@@ -3528,18 +3610,25 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
         `;
     }
 
+    const hasOrderCard = !!orderCardHtml;
+    const bubbleStyle = hasOrderCard
+        ? `max-width: 85%; padding: 0; border-radius: 16px; overflow: hidden; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: #3a3a3c; border-bottom-left-radius: 4px;'}`
+        : `max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}`;
+
     return `
         <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
-            <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
-                ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
+            <div style="${bubbleStyle}">
+                ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px; padding: 4px 12px 0;">📢 ประกาศ</div>' : ''}
+                ${orderCardHtml}
                 ${productCardHtml}
-                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.content && !hasOrderCard ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${hasOrderCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
                 ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                     att.file_type && att.file_type.startsWith('image/') 
-                        ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
-                        : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa;">📎 ${escapeHtmlChat(att.file_name)}</a>`
+                        ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer; ${hasOrderCard ? 'margin: 8px 12px;' : ''}" onclick="window.open('${att.file_url}', '_blank')">`
+                        : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa; ${hasOrderCard ? 'padding: 0 12px;' : ''}">📎 ${escapeHtmlChat(att.file_name)}</a>`
                 ).join('') : ''}
-                <div style="font-size: 10px; opacity: 0.5; margin-top: 6px; text-align: right;" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
+                <div style="font-size: 10px; opacity: 0.5; margin-top: 4px; text-align: right; ${hasOrderCard ? 'padding: 0 10px 8px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
             </div>
         </div>
     `;

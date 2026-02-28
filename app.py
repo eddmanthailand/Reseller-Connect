@@ -602,12 +602,12 @@ def send_order_status_email(to_email, reseller_name, order_number, status, messa
     subject = f'[{label}] คำสั่งซื้อ {order_number}'
     send_email(to_email, subject, html)
 
-def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
+def send_order_status_chat(reseller_id, order_number, status, extra_info='', order_id=None):
     """Send order status update as chat message"""
     status_messages = {
-        'slip_uploaded': f'🧾 คำสั่งซื้อ {order_number} อัปโหลดสลิปแล้ว รอตรวจสอบ',
+        'slip_uploaded': f'🧾 คำสั่งซื้อ {order_number} ส่งสลิปแล้ว รอตรวจสอบ',
         'approved': f'✅ คำสั่งซื้อ {order_number} สลิปได้รับการยืนยันแล้ว กำลังเตรียมจัดส่ง',
-        'request_new_slip': f'⚠️ คำสั่งซื้อ {order_number} กรุณาอัปโหลดสลิปใหม่',
+        'request_new_slip': f'⚠️ คำสั่งซื้อ {order_number} กรุณาส่งสลิปใหม่',
         'shipped': f'🚚 คำสั่งซื้อ {order_number} จัดส่งแล้ว',
         'delivered': f'📦 คำสั่งซื้อ {order_number} ส่งถึงปลายทางแล้ว',
         'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก',
@@ -638,9 +638,9 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info=''):
         admin_id = admin['id'] if admin else 1
         
         cursor.execute('''
-            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content)
-            VALUES (%s, %s, 'admin', %s) RETURNING id
-        ''', (thread_id, admin_id, message))
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, order_id)
+            VALUES (%s, %s, 'admin', %s, %s) RETURNING id
+        ''', (thread_id, admin_id, message, order_id))
         
         preview = message[:100]
         cursor.execute('''
@@ -7405,7 +7405,9 @@ def create_order():
             total_amount += unit_price * item['quantity']
             total_discount += (unit_price - discounted_price) * item['quantity']
         
-        final_amount = total_amount - total_discount
+        item_total = total_amount - total_discount
+        shipping_fee = float(data.get('shipping_fee', 0) or 0)
+        final_amount = item_total + shipping_fee
         
         # Get default online channel
         cursor.execute("SELECT id FROM sales_channels WHERE name = 'ระบบออนไลน์' LIMIT 1")
@@ -7418,10 +7420,10 @@ def create_order():
         # Create order with new order number format (ORD-YYMM-XXXX)
         order_number = generate_order_number(cursor)
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, customer_id)
-            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, shipping_fee, final_amount, notes, customer_id)
+            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, user_id, channel_id, total_amount, total_discount, final_amount, notes, customer_id))
+        ''', (order_number, user_id, channel_id, total_amount, total_discount, shipping_fee, final_amount, notes, customer_id))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs using cart_item_id as unique key
@@ -7647,6 +7649,7 @@ def get_order_detail(order_id):
         order = dict(order)
         order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
         order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
+        order['shipping_fee'] = float(order['shipping_fee']) if order['shipping_fee'] else 0
         order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
         
         # Get order items with variant names
@@ -7968,7 +7971,7 @@ def update_shipment(order_id, shipment_id):
                             tracking_info
                         )
                         try:
-                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'shipped', tracking_info)
+                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'shipped', tracking_info, order_id=order_id)
                         except Exception as chat_err:
                             print(f"Chat notification error: {chat_err}")
                     elif data['status'] == 'delivered':
@@ -7980,7 +7983,7 @@ def update_shipment(order_id, shipment_id):
                             'สินค้าของคุณถูกส่งถึงปลายทางเรียบร้อยแล้ว'
                         )
                         try:
-                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'delivered')
+                            send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'delivered', order_id=order_id)
                         except Exception as chat_err:
                             print(f"Chat notification error: {chat_err}")
             except Exception as email_err:
@@ -8102,7 +8105,7 @@ def upload_payment_slip(order_id):
                 print(f"[PUSH] Admin push error: {push_err}")
         
         try:
-            send_order_status_chat(user_id, order_num, 'slip_uploaded')
+            send_order_status_chat(user_id, order_num, 'slip_uploaded', order_id=order_id)
         except Exception as chat_err:
             print(f"[CHAT] Slip upload chat notification error: {chat_err}")
         
@@ -9257,7 +9260,7 @@ def approve_order(order_id):
                     'สลิปการชำระเงินของคุณได้รับการยืนยันแล้ว กำลังเตรียมจัดส่งสินค้า'
                 )
             try:
-                send_order_status_chat(order['user_id'], order_info['order_number'] if order_info else f'#{order_id}', 'approved')
+                send_order_status_chat(order['user_id'], order_info['order_number'] if order_info else f'#{order_id}', 'approved', order_id=order_id)
             except Exception as chat_err:
                 print(f"Chat notification error: {chat_err}")
         except Exception as email_err:
@@ -9355,7 +9358,7 @@ def request_new_slip(order_id):
                 f'เหตุผล: {reason}'
             )
         try:
-            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'request_new_slip', f'เหตุผล: {reason}')
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'request_new_slip', f'เหตุผล: {reason}', order_id=order_id)
         except Exception as chat_err:
             print(f"Chat notification error: {chat_err}")
         
@@ -9465,7 +9468,7 @@ def cancel_order(order_id):
                 f'เหตุผล: {reason}' if reason else ''
             )
         try:
-            send_order_status_chat(reseller_info.get('user_id') or order.get('user_id', 0), reseller_info['order_number'] or f'#{order_id}', 'cancelled', f'เหตุผล: {reason}' if reason else '')
+            send_order_status_chat(reseller_info.get('user_id') or order.get('user_id', 0), reseller_info['order_number'] or f'#{order_id}', 'cancelled', f'เหตุผล: {reason}' if reason else '', order_id=order_id)
         except Exception as chat_err:
             print(f"Chat notification error: {chat_err}")
         
@@ -9535,7 +9538,7 @@ def mark_order_delivered(order_id):
         )
         
         try:
-            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'delivered')
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'delivered', order_id=order_id)
         except Exception as chat_err:
             print(f"Chat notification error: {chat_err}")
         
@@ -9594,7 +9597,7 @@ def mark_order_failed_delivery(order_id):
         )
         
         try:
-            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'failed_delivery', f'เหตุผล: {reason}' if reason else '')
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'failed_delivery', f'เหตุผล: {reason}' if reason else '', order_id=order_id)
         except Exception as chat_err:
             print(f"Chat notification error: {chat_err}")
         
@@ -9657,7 +9660,7 @@ def reship_order(order_id):
         )
         
         try:
-            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'reship')
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'reship', order_id=order_id)
         except Exception as chat_err:
             print(f"Chat notification error: {chat_err}")
         
@@ -13165,9 +13168,8 @@ def get_chat_messages(thread_id):
         before_id = request.args.get('before_id', 0, type=int)
         limit = request.args.get('limit', 50, type=int)
         
-        if since_id > 0:
-            cursor.execute('''
-                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
+        msg_select = '''
+                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id, cm.order_id,
                        u.full_name as sender_name,
                        r.name as sender_role,
                        (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
@@ -13176,43 +13178,19 @@ def get_chat_messages(thread_id):
                 FROM chat_messages cm
                 JOIN users u ON u.id = cm.sender_id
                 LEFT JOIN roles r ON r.id = u.role_id
-                WHERE cm.thread_id = %s AND cm.id > %s
-                ORDER BY cm.id ASC
-                LIMIT %s
-            ''', (thread_id, since_id, limit))
+        '''
+        if since_id > 0:
+            cursor.execute(msg_select + ' WHERE cm.thread_id = %s AND cm.id > %s ORDER BY cm.id ASC LIMIT %s',
+                           (thread_id, since_id, limit))
             messages = [dict(row) for row in cursor.fetchall()]
         elif before_id > 0:
-            cursor.execute('''
-                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
-                       u.full_name as sender_name,
-                       r.name as sender_role,
-                       (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
-                        'file_name', ca.file_name, 'file_type', ca.file_type))
-                        FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
-                FROM chat_messages cm
-                JOIN users u ON u.id = cm.sender_id
-                LEFT JOIN roles r ON r.id = u.role_id
-                WHERE cm.thread_id = %s AND cm.id < %s
-                ORDER BY cm.id DESC
-                LIMIT %s
-            ''', (thread_id, before_id, limit))
+            cursor.execute(msg_select + ' WHERE cm.thread_id = %s AND cm.id < %s ORDER BY cm.id DESC LIMIT %s',
+                           (thread_id, before_id, limit))
             messages = [dict(row) for row in cursor.fetchall()]
             messages.reverse()
         else:
-            cursor.execute('''
-                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id,
-                       u.full_name as sender_name,
-                       r.name as sender_role,
-                       (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
-                        'file_name', ca.file_name, 'file_type', ca.file_type))
-                        FROM chat_attachments ca WHERE ca.message_id = cm.id) as attachments
-                FROM chat_messages cm
-                JOIN users u ON u.id = cm.sender_id
-                LEFT JOIN roles r ON r.id = u.role_id
-                WHERE cm.thread_id = %s
-                ORDER BY cm.id DESC
-                LIMIT %s
-            ''', (thread_id, limit))
+            cursor.execute(msg_select + ' WHERE cm.thread_id = %s ORDER BY cm.id DESC LIMIT %s',
+                           (thread_id, limit))
             messages = [dict(row) for row in cursor.fetchall()]
             messages.reverse()
         
@@ -13261,6 +13239,33 @@ def get_chat_messages(thread_id):
                                 product_data['tier_max_price'] = round(product_data['max_price'] * (1 - discount/100), 2)
                     
                     msg['product'] = product_data
+            if msg.get('order_id'):
+                cursor.execute('''
+                    SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount,
+                           o.shipping_fee, o.final_amount,
+                           json_agg(json_build_object(
+                               'product_name', oi.product_name,
+                               'quantity', oi.quantity,
+                               'subtotal', oi.subtotal,
+                               'image_url', (SELECT pi.image_url FROM product_images pi
+                                             JOIN products p2 ON p2.id = pi.product_id
+                                             JOIN skus s2 ON s2.product_id = p2.id
+                                             WHERE s2.id = oi.sku_id
+                                             ORDER BY pi.sort_order LIMIT 1)
+                           ) ORDER BY oi.id) as items
+                    FROM orders o
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    WHERE o.id = %s
+                    GROUP BY o.id
+                ''', (msg['order_id'],))
+                order_row = cursor.fetchone()
+                if order_row:
+                    od = dict(order_row)
+                    od['total_amount'] = float(od['total_amount'] or 0)
+                    od['discount_amount'] = float(od['discount_amount'] or 0)
+                    od['shipping_fee'] = float(od['shipping_fee'] or 0)
+                    od['final_amount'] = float(od['final_amount'] or 0)
+                    msg['order'] = od
         
         # Mark as read
         if messages:
@@ -14460,7 +14465,7 @@ def iship_webhook():
             
             extra = f"({status_desc})" if status_desc else ""
             try:
-                send_order_status_chat(reseller_id, order_number, 'delivered', extra)
+                send_order_status_chat(reseller_id, order_number, 'delivered', extra, order_id=shipment['order_id'])
             except Exception as ce:
                 print(f"[iSHIP] Chat notification error: {ce}")
                 
@@ -14480,14 +14485,14 @@ def iship_webhook():
             
             extra = f"({status_desc})" if status_desc else ""
             try:
-                send_order_status_chat(reseller_id, order_number, 'shipped', extra)
+                send_order_status_chat(reseller_id, order_number, 'shipped', extra, order_id=shipment['order_id'])
             except Exception as ce:
                 print(f"[iSHIP] Chat notification error: {ce}")
         elif status in ['returned', 'exception', 'failed']:
             extra = f"({status_desc})" if status_desc else ""
             conn.commit()
             try:
-                send_order_status_chat(reseller_id, order_number, 'shipping_issue', extra)
+                send_order_status_chat(reseller_id, order_number, 'shipping_issue', extra, order_id=shipment['order_id'])
             except Exception as ce:
                 print(f"[iSHIP] Chat notification error: {ce}")
         else:
