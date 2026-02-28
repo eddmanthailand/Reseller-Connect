@@ -44,7 +44,7 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Database:** Neon PostgreSQL (reliability, scalability, Replit integration).
 - **Authentication:** Custom session-based for granular control.
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
-- **Deployment:** Gunicorn production server.
+- **Deployment:** Gunicorn production server with `gevent` async workers (`--worker-class gevent --workers 2 --worker-connections 1000`). Gevent prevents worker timeouts caused by browser idle keep-alive connections blocking sync workers.
 
 ## Planned Integrations
 
