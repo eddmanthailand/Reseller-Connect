@@ -249,10 +249,10 @@ def login_page():
 
 @app.route('/register')
 def register_page():
-    """Render registration page for new resellers"""
+    """Redirect to Google OAuth login (old QR code compatibility)"""
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
-    return render_template('register.html')
+    return redirect(url_for('test_google_login'))
 
 @app.route('/become-reseller')
 def fb_landing_page():
