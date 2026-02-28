@@ -509,7 +509,7 @@ def send_email(to_email, subject, html_content):
         
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = f"ระบบตัวแทนจำหน่าย <{gmail_user}>"
+        msg['From'] = f"ระบบสมาชิก <{gmail_user}>"
         msg['To'] = to_email
         
         html_part = MIMEText(html_content, 'html', 'utf-8')
@@ -531,7 +531,7 @@ def send_order_notification_to_admin(order_number, reseller_name, total_amount, 
         <h2 style="color: #8b5cf6;">📦 คำสั่งซื้อใหม่</h2>
         <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
             <p><strong>หมายเลขคำสั่งซื้อ:</strong> {order_number}</p>
-            <p><strong>ตัวแทนจำหน่าย:</strong> {reseller_name}</p>
+            <p><strong>สมาชิก:</strong> {reseller_name}</p>
             <p><strong>จำนวนรายการ:</strong> {item_count} รายการ</p>
             <p><strong>ยอดรวม:</strong> ฿{total_amount:,.2f}</p>
         </div>
@@ -675,7 +675,7 @@ def send_password_reset_email(to_email, full_name, reset_token, reset_link):
         <p style="color: #999; font-size: 12px;">หากปุ่มไม่ทำงาน คัดลอกลิงก์นี้: {reset_link}</p>
     </div>
     '''
-    send_email(to_email, 'รีเซ็ตรหัสผ่าน - ระบบตัวแทนจำหน่าย', html)
+    send_email(to_email, 'รีเซ็ตรหัสผ่าน - ระบบสมาชิก', html)
 
 def log_activity(action_type, action_category, description, target_type=None, target_id=None, target_name=None, extra_data=None):
     """Log user activity to activity_logs table"""
@@ -767,7 +767,7 @@ def register_reseller():
         
         admin_email_html = f'''
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #667eea;">มีใบสมัครตัวแทนจำหน่ายใหม่</h2>
+            <h2 style="color: #667eea;">มีใบสมัครสมาชิกใหม่</h2>
             <p>มีผู้สมัครใหม่รอการอนุมัติ:</p>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>ชื่อ-นามสกุล:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{data['full_name']}</td></tr>
@@ -784,15 +784,15 @@ def register_reseller():
         
         applicant_email_html = f'''
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #667eea;">ขอบคุณสำหรับการสมัครตัวแทนจำหน่าย</h2>
+            <h2 style="color: #667eea;">ขอบคุณสำหรับการสมัครสมาชิก</h2>
             <p>สวัสดีคุณ {data['full_name']},</p>
             <p>เราได้รับใบสมัครของคุณเรียบร้อยแล้ว</p>
             <p>ทีมงานจะตรวจสอบข้อมูลและติดต่อกลับทางโทรศัพท์เพื่อยืนยันข้อมูล</p>
             <p>หากมีข้อสงสัย สามารถติดต่อได้ที่ Line: @cmidco</p>
-            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นตัวแทนจำหน่ายกับเรา</p>
+            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นสมาชิกกับเรา</p>
         </div>
         '''
-        send_email(data['email'], 'ได้รับใบสมัครตัวแทนจำหน่ายแล้ว', applicant_email_html)
+        send_email(data['email'], 'ได้รับใบสมัครสมาชิกแล้ว', applicant_email_html)
         
         return jsonify({'message': 'ส่งใบสมัครสำเร็จ', 'id': application_id}), 201
         
@@ -1054,7 +1054,7 @@ def approve_reseller_application(app_id):
         cursor.execute('SELECT id FROM roles WHERE name = %s', ('Reseller',))
         reseller_role = cursor.fetchone()
         if not reseller_role:
-            return jsonify({'error': 'ไม่พบบทบาทตัวแทนจำหน่ายในระบบ'}), 500
+            return jsonify({'error': 'ไม่พบบทบาทสมาชิกในระบบ'}), 500
         
         cursor.execute('''
             INSERT INTO users 
@@ -1079,7 +1079,7 @@ def approve_reseller_application(app_id):
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #4CAF50;">ยินดีด้วย! ใบสมัครของคุณได้รับการอนุมัติแล้ว</h2>
             <p>สวัสดีคุณ {app['full_name']},</p>
-            <p>ใบสมัครตัวแทนจำหน่ายของคุณได้รับการอนุมัติเรียบร้อยแล้ว</p>
+            <p>ใบสมัครสมาชิกของคุณได้รับการอนุมัติเรียบร้อยแล้ว</p>
             <p>คุณสามารถเข้าสู่ระบบได้ทันทีด้วยข้อมูลดังนี้:</p>
             <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
                 <p><strong>Username:</strong> {app['username']}</p>
@@ -1090,7 +1090,7 @@ def approve_reseller_application(app_id):
             <p style="margin-top: 20px; color: #666;">ขอบคุณที่เป็นส่วนหนึ่งของเรา</p>
         </div>
         '''
-        send_email(app['email'], 'ใบสมัครตัวแทนจำหน่ายได้รับการอนุมัติแล้ว', approval_email_html)
+        send_email(app['email'], 'ใบสมัครสมาชิกได้รับการอนุมัติแล้ว', approval_email_html)
         
         log_activity('approve', 'application', f"อนุมัติใบสมัคร: {app['full_name']} ({app['email']})", 
                     target_type='application', target_id=app_id, target_name=app['full_name'])
@@ -1141,13 +1141,13 @@ def reject_reseller_application(app_id):
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #f44336;">แจ้งผลการพิจารณาใบสมัคร</h2>
             <p>สวัสดีคุณ {app['full_name']},</p>
-            <p>เราขอแจ้งให้ทราบว่าใบสมัครตัวแทนจำหน่ายของคุณไม่ผ่านการอนุมัติในครั้งนี้</p>
+            <p>เราขอแจ้งให้ทราบว่าใบสมัครสมาชิกของคุณไม่ผ่านการอนุมัติในครั้งนี้</p>
             {f'<p><strong>เหตุผล:</strong> {reject_reason}</p>' if reject_reason else ''}
             <p>หากต้องการสอบถามเพิ่มเติม สามารถติดต่อได้ที่ Line: @cmidco</p>
-            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นตัวแทนจำหน่ายกับเรา</p>
+            <p style="margin-top: 20px; color: #666;">ขอบคุณที่สนใจเป็นสมาชิกกับเรา</p>
         </div>
         '''
-        send_email(app['email'], 'แจ้งผลการพิจารณาใบสมัครตัวแทนจำหน่าย', rejection_email_html)
+        send_email(app['email'], 'แจ้งผลการพิจารณาใบสมัครสมาชิก', rejection_email_html)
         
         log_activity('reject', 'application', f"ปฏิเสธใบสมัคร: {app['full_name']} ({app['email']})" + (f" - เหตุผล: {reject_reason}" if reject_reason else ""), 
                     target_type='application', target_id=app_id, target_name=app['full_name'])
@@ -3468,7 +3468,7 @@ def update_user_tier_override(user_id):
             return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         if user['role_name'] != 'Reseller':
-            return jsonify({'error': 'ผู้ใช้ไม่ใช่ตัวแทนจำหน่าย'}), 400
+            return jsonify({'error': 'ผู้ใช้ไม่ใช่สมาชิก'}), 400
         
         tier_id = data.get('reseller_tier_id')
         manual_override = data.get('tier_manual_override', False)
@@ -3637,7 +3637,7 @@ def add_user_purchase(user_id):
             return jsonify({'error': 'ไม่พบผู้ใช้'}), 404
         
         if user['role_name'] != 'Reseller':
-            return jsonify({'error': 'ผู้ใช้ไม่ใช่ตัวแทนจำหน่าย'}), 400
+            return jsonify({'error': 'ผู้ใช้ไม่ใช่สมาชิก'}), 400
         
         new_total = float(user['total_purchases'] or 0) + float(amount)
         

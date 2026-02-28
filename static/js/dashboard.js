@@ -5896,7 +5896,7 @@ async function requestNewSlip(orderId) {
         
         const result = await response.json();
         if (response.ok) {
-            showGlobalAlert('ขอสลิปใหม่สำเร็จ - แจ้งเตือนตัวแทนจำหน่ายแล้ว', 'success');
+            showGlobalAlert('ขอสลิปใหม่สำเร็จ - แจ้งเตือนสมาชิกแล้ว', 'success');
             loadSlipReviewPage();
         } else {
             showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
