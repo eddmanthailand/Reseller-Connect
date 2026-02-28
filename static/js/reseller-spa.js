@@ -230,7 +230,7 @@ async function loadDashboardData() {
             const pendingPayment = data.pending_orders?.pending_payment || 0;
             const underReview = data.pending_orders?.under_review || 0;
             let pendingText = [];
-            if (pendingPayment > 0) pendingText.push(`รอชำระ ${pendingPayment}`);
+            if (pendingPayment > 0) pendingText.push(`รอส่งสลิป ${pendingPayment}`);
             if (underReview > 0) pendingText.push(`รอตรวจ ${underReview}`);
             document.getElementById('statPendingDetail').textContent = pendingText.join(', ') || 'ไม่มี';
             
@@ -314,7 +314,7 @@ function renderRecentOrders(orders) {
     }
     
     const statusLabels = {
-        'pending_payment': 'รอชำระเงิน',
+        'pending_payment': 'รอส่งสลิป',
         'under_review': 'รอตรวจสอบ',
         'preparing': 'เตรียมสินค้า',
         'shipped': 'กำลังจัดส่ง',
@@ -1719,7 +1719,7 @@ function renderOrders(orders) {
     }
     
     const statusLabels = {
-        'pending_payment': 'รอชำระเงิน',
+        'pending_payment': 'รอส่งสลิป',
         'under_review': 'รอตรวจสอบ',
         'preparing': 'เตรียมสินค้า',
         'shipped': 'กำลังจัดส่ง',
@@ -1749,9 +1749,9 @@ function renderOrders(orders) {
                 <span class="order-card-amount">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
             </div>
             ${order.status === 'pending_payment' ? `
-                <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})">
+                <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    อัพโหลดสลิป
+                    ส่งสลิปชำระเงิน
                 </button>
             ` : ''}
         </div>
@@ -1766,7 +1766,7 @@ async function viewResellerOrderDetails(orderId) {
         const order = await response.json();
         
         const statusLabels = {
-            'pending_payment': 'รอชำระเงิน',
+            'pending_payment': 'รอส่งสลิป',
             'under_review': 'รอตรวจสอบ',
             'preparing': 'เตรียมสินค้า',
             'shipped': 'กำลังจัดส่ง',
@@ -1900,13 +1900,21 @@ async function viewResellerOrderDetails(orderId) {
         }
         
         let rejectionNoticeHtml = '';
-        if (order.status === 'pending_payment' && order.payment_slips && order.payment_slips.some(s => s.status === 'rejected')) {
-            const rejectedSlip = order.payment_slips.find(s => s.status === 'rejected');
+        if (order.status === 'pending_payment') {
+            const hasSlips = order.payment_slips && order.payment_slips.length > 0;
+            const rejectedSlip = hasSlips ? order.payment_slips.find(s => s.status === 'rejected') : null;
             if (rejectedSlip && rejectedSlip.notes) {
                 rejectionNoticeHtml = `
                     <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                        <div style="color: #ef4444; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ กรุณาอัพโหลดสลิปใหม่</div>
+                        <div style="color: #ef4444; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ สลิปถูกปฏิเสธ กรุณาส่งสลิปใหม่</div>
                         <div style="color: rgba(255,255,255,0.8); font-size: 12px;">เหตุผล: ${escapeHtml(rejectedSlip.notes)}</div>
+                    </div>
+                `;
+            } else if (!hasSlips) {
+                rejectionNoticeHtml = `
+                    <div style="background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="color: #f59e0b; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ ยังไม่ได้รับสลิปการชำระเงิน</div>
+                        <div style="color: rgba(255,255,255,0.7); font-size: 12px;">กรุณาชำระเงินผ่าน PromptPay แล้วส่งสลิปเพื่อให้ admin ตรวจสอบ</div>
                     </div>
                 `;
             }
@@ -1915,8 +1923,9 @@ async function viewResellerOrderDetails(orderId) {
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
-                <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; margin-top: 16px; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #a855f7, #ec4899);">
-                    อัพโหลดสลิปชำระเงิน
+                <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; margin-top: 16px; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:8px;vertical-align:middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    ส่งสลิปชำระเงิน
                 </button>
             `;
         }
