@@ -57,7 +57,10 @@ async function init() {
         setInterval(loadResellerChatUnreadCount, 30000);
     } catch (error) {
         console.error('Initialization error:', error);
-        window.location.href = '/login';
+        // Only redirect if truly unauthenticated (not on generic errors)
+        if (error.message === 'Not authenticated' || error.status === 401) {
+            window.location.href = '/login';
+        }
     }
 }
 

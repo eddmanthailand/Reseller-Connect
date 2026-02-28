@@ -177,7 +177,9 @@ async function loadCurrentUser() {
         applyRoleBasedUI(user.role);
     } catch (error) {
         console.error('Error loading current user:', error);
-        window.location.href = '/login';
+        if (error.message === 'Not authenticated') {
+            window.location.href = '/login';
+        }
     }
 }
 
