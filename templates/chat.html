@@ -1236,7 +1236,10 @@ async function loadThreads() {
 }
 
 function filterThreads(q) {
-    const filtered = q ? allThreads.filter(t => t.reseller_name.toLowerCase().includes(q.toLowerCase())) : allThreads;
+    const filtered = q ? allThreads.filter(t => {
+        const name = (t.reseller_name || t.username || '').toLowerCase();
+        return name.includes(q.toLowerCase());
+    }) : allThreads;
     renderThreads(filtered);
 }
 
@@ -1249,15 +1252,17 @@ function renderThreads(threads) {
         </div>`;
         return;
     }
-    el.innerHTML = threads.map(t => `
-        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(t.reseller_name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
-            <div class="thread-avatar">${t.reseller_name.charAt(0).toUpperCase()}</div>
+    el.innerHTML = threads.map(t => {
+        const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
+        return `
+        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
+            <div class="thread-avatar">${name.charAt(0).toUpperCase()}</div>
             <div class="thread-info">
                 <div class="thread-badges">
                     ${t.tier_name ? `<span class="tier-badge ${tierClass(t.tier_name)}">${esc(t.tier_name)}</span>` : ''}
                 </div>
                 <div class="thread-name-row">
-                    <span class="thread-name">${esc(t.reseller_name)}</span>
+                    <span class="thread-name">${esc(name)}</span>
                     <span class="thread-time">${fmtThreadTime(t.last_message_at)}</span>
                 </div>
                 <div style="display:flex;align-items:center;justify-content:space-between;">

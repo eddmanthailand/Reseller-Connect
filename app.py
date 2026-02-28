@@ -12964,7 +12964,7 @@ def get_chat_threads():
             # Reseller sees only their own thread
             cursor.execute('''
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
-                       u.full_name as reseller_name,
+                       COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
@@ -12979,8 +12979,8 @@ def get_chat_threads():
             show_archived = request.args.get('archived', 'false') == 'true'
             cursor.execute('''
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
-                       u.full_name as reseller_name, u.username,
-                       rt.name as tier_name, u.reseller_tier_id,
+                       COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
+                       u.username, rt.name as tier_name, u.reseller_tier_id,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
