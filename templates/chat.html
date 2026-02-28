@@ -713,8 +713,12 @@
                 width: 100%;
                 z-index: 20;
                 transition: transform 0.3s ease;
+                pointer-events: auto;
             }
-            .chat-sidebar.hidden { transform: translateX(-100%); }
+            .chat-sidebar.hidden {
+                transform: translateX(-100%);
+                pointer-events: none;
+            }
 
             .chat-main {
                 position: fixed;
@@ -722,8 +726,12 @@
                 z-index: 30;
                 transition: transform 0.3s ease;
                 transform: translateX(100%);
+                pointer-events: none;
             }
-            .chat-main.visible { transform: translateX(0); }
+            .chat-main.visible {
+                transform: translateX(0);
+                pointer-events: auto;
+            }
 
             .mobile-back { display: flex; }
             .back-to-dash { display: flex; }
