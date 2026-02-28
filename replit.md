@@ -3,6 +3,14 @@
 ## Overview
 This full-stack reseller/distributor application, built with Flask and Neon PostgreSQL, is designed for Super Admins to manage users (Super Admin, Assistant Admin, Reseller) and their tiers, alongside comprehensive product management. Key capabilities include advanced SPU/SKU variant handling, multiple image uploads with drag-and-drop ordering, optional size charts, and dynamic pricing based on a 4-tier reseller system with configurable auto-upgrade logic. It features role-based access control, a robust order management system with configurable numbering, sales analytics, and a complete Made-to-Order (MTO) system with production tracking and payment verification. The system also includes an in-app chat for real-time communication between Admins and Resellers. The overarching goal is to provide a professional, secure business management solution with a modern UI and real-time API integration.
 
+## Authentication System (Google OAuth)
+- **All users login via Google OAuth** (`/auth/google` → `/auth/google/callback`)
+- **Admin (Super Admin / Assistant Admin)**: Login with Google — email must exist in DB first. Super Admin creates Admin accounts manually.
+- **Reseller**: Login with Google — if email not in DB, auto-creates account and logs in immediately (auto-approve)
+- **Fallback**: Username/Password form available for Admins only (hidden behind toggle on login page)
+- **Routes**: `GET /auth/google`, `GET /auth/google/callback`
+- **Dependencies**: `authlib`, `werkzeug.middleware.proxy_fix.ProxyFix` (for HTTPS URL generation behind Gunicorn)
+
 ## User Preferences
 - **Communication Style:** Simple, everyday language (Thai/English)
 - **Database:** Neon PostgreSQL (via Replit built-in integration)

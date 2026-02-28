@@ -91,38 +91,100 @@ google = oauth.register(
 )
 
 @app.route('/test/google')
+@app.route('/auth/google')
 def test_google_login():
-    """Test endpoint: redirect to Google OAuth"""
+    """Redirect to Google OAuth"""
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth/google/callback')
 def google_callback():
-    """Handle Google OAuth callback — test only, shows user info"""
+    """Handle Google OAuth callback — login existing user or auto-register new Reseller"""
+    conn = None
+    cursor = None
     try:
         token = google.authorize_access_token()
         user_info = token.get('userinfo')
         if not user_info:
-            return '<h2>❌ ไม่ได้รับข้อมูลจาก Google</h2>', 400
-        email = user_info.get('email')
-        name = user_info.get('name')
-        google_id = user_info.get('sub')
-        picture = user_info.get('picture', '')
-        return f'''
-        <html><body style="font-family:sans-serif;padding:40px;background:#1a1a2e;color:white;">
-        <h2>✅ Google OAuth ทำงานสำเร็จ!</h2>
-        <img src="{picture}" style="border-radius:50%;width:80px;height:80px;"><br><br>
-        <p><b>ชื่อ:</b> {name}</p>
-        <p><b>Email:</b> {email}</p>
-        <p><b>Google ID:</b> {google_id}</p>
-        <hr>
-        <p style="color:#22c55e;">การเชื่อมต่อสำเร็จ พร้อม integrate เข้าระบบจริง</p>
-        <a href="/login" style="color:#a855f7;">← กลับหน้า Login</a>
-        </body></html>
-        '''
+            return redirect('/login?error=google_failed')
+
+        email = user_info.get('email', '').strip().lower()
+        name = user_info.get('name', '')
+
+        if not email:
+            return redirect('/login?error=no_email')
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.email,
+                   r.name as role_name, u.reseller_tier_id
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE LOWER(u.email) = %s
+        ''', (email,))
+        user = cursor.fetchone()
+
+        if user:
+            session.clear()
+            session['user_id'] = user['id']
+            session['role'] = user['role_name'].lower().replace(' ', '_')
+            session['reseller_tier'] = user['reseller_tier_id']
+            session['_csrf_token'] = secrets.token_hex(32)
+            session.permanent = True
+            role = session['role']
+            if 'admin' in role:
+                return redirect('/admin')
+            return redirect('/dashboard')
+
+        # Email not found → auto-register as Reseller
+        base_username = email.split('@')[0].replace('.', '_').replace('-', '_')
+        username = base_username
+        counter = 1
+        while True:
+            cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
+            if not cursor.fetchone():
+                break
+            username = f'{base_username}{counter}'
+            counter += 1
+
+        cursor.execute("SELECT id FROM roles WHERE name = 'Reseller'")
+        reseller_role = cursor.fetchone()
+        if not reseller_role:
+            return redirect('/login?error=no_role')
+
+        cursor.execute('SELECT id FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
+        default_tier = cursor.fetchone()
+        tier_id = default_tier['id'] if default_tier else None
+
+        random_password = secrets.token_hex(32)
+        password_hash = bcrypt.hashpw(random_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        cursor.execute('''
+            INSERT INTO users (full_name, username, password, role_id, reseller_tier_id, email)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (name, username, password_hash, reseller_role['id'], tier_id, email))
+
+        new_user_id = cursor.fetchone()['id']
+        conn.commit()
+
+        session.clear()
+        session['user_id'] = new_user_id
+        session['role'] = 'reseller'
+        session['reseller_tier'] = tier_id
+        session['_csrf_token'] = secrets.token_hex(32)
+        session.permanent = True
+
+        return redirect('/dashboard')
+
     except Exception as e:
         logging.error(f"Google callback error: {e}", exc_info=True)
-        return f'<h2>❌ Error: {str(e)}</h2>', 500
+        return redirect('/login?error=oauth_failed')
+    finally:
+        if cursor:
+            cursor.close()
 
 # Disable caching for HTML responses to ensure updates are visible
 @app.after_request
