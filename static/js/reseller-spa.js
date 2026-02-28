@@ -1558,7 +1558,36 @@ async function placeOrder() {
         const result = await response.json();
         
         if (response.ok) {
-            showAlert('สร้างคำสั่งซื้อสำเร็จ!', 'success');
+            const orderId = result.order?.id;
+
+            // Auto-upload slip if attached
+            if (selectedPaymentSlip && orderId) {
+                document.getElementById('btnPlaceOrder').innerHTML = '<span>กำลังอัปโหลดสลิป...</span>';
+                try {
+                    const formData = new FormData();
+                    formData.append('slip_image', selectedPaymentSlip);
+                    formData.append('amount', (checkoutData.total || 0) + (checkoutData.shippingCost || 0));
+
+                    const slipRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (slipRes.ok) {
+                        showAlert('สร้างคำสั่งซื้อและอัปโหลดสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+                    } else {
+                        const slipErr = await slipRes.json();
+                        showAlert('สร้างคำสั่งซื้อสำเร็จ แต่อัปโหลดสลิปไม่สำเร็จ: ' + (slipErr.error || 'กรุณาอัปโหลดใหม่จากหน้าประวัติ'), 'warning');
+                    }
+                } catch (slipError) {
+                    console.error('Slip upload error:', slipError);
+                    showAlert('สร้างคำสั่งซื้อสำเร็จ แต่อัปโหลดสลิปไม่สำเร็จ กรุณาอัปโหลดใหม่จากหน้าประวัติ', 'warning');
+                }
+            } else {
+                showAlert('สร้างคำสั่งซื้อสำเร็จ!', 'success');
+            }
+
+            selectedPaymentSlip = null;
             loadCartBadge();
             window.location.hash = 'orders';
         } else {
