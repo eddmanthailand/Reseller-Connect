@@ -8830,10 +8830,23 @@ document.addEventListener('click', function(e) {
 
 // ─── Shipping Update Page ─────────────────────────────────────────────────────
 
+function copyTrackingNumber(el, tn) {
+    navigator.clipboard.writeText(tn).then(() => {
+        el.textContent = 'คัดลอกแล้ว';
+        el.style.color = '#34d399';
+        setTimeout(() => {
+            el.textContent = 'คัดลอก';
+            el.style.color = 'rgba(255,255,255,0.5)';
+        }, 1800);
+    }).catch(() => {
+        el.textContent = 'ไม่สำเร็จ';
+    });
+}
+
 async function loadShippingUpdatePage() {
     const container = document.getElementById('shippingUpdateContent');
     if (!container) return;
-    container.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.6;">กำลังโหลดข้อมูล...</div>';
+    container.innerHTML = '<div style="text-align:center;padding:48px;color:rgba(255,255,255,0.5);font-size:13px;">กำลังโหลด...</div>';
 
     try {
         const resp = await fetch(`${API_URL}/admin/orders/shipped`, { credentials: 'include' });
@@ -8841,108 +8854,106 @@ async function loadShippingUpdatePage() {
 
         const badge = document.getElementById('shippingUpdateCount');
         if (badge) {
-            if (orders.length > 0) {
-                badge.textContent = orders.length;
-                badge.style.display = 'inline';
-            } else {
-                badge.style.display = 'none';
-            }
+            badge.textContent = orders.length;
+            badge.style.display = orders.length > 0 ? 'inline' : 'none';
         }
 
         if (!orders.length) {
             container.innerHTML = `
-                <div style="text-align:center;padding:60px 20px;opacity:0.5;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:0.4;"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                    <div>ไม่มีคำสั่งซื้อที่กำลังจัดส่งในขณะนี้</div>
+                <div style="text-align:center;padding:72px 20px;color:rgba(255,255,255,0.35);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:block;margin:0 auto 14px;opacity:0.3;">
+                        <rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                    <div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.45);">ไม่มีคำสั่งซื้อที่กำลังจัดส่งในขณะนี้</div>
                 </div>`;
             return;
         }
-
-        const iconTruck = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
-        const iconUser = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px;opacity:0.5;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-        const iconCopy = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-        const iconLink = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
-        const iconCheck = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;"><polyline points="20 6 9 17 4 12"/></svg>`;
-        const iconReturn = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>`;
 
         const rows = orders.map(order => {
             const shipments = order.shipments || [];
             const sh = shipments[0] || {};
             const orderNum = escapeHtml(order.order_number || '#' + order.id);
+            const resellerName = escapeHtml(order.reseller_name || '-');
 
-            // Days since shipped
             let daysLabel = '';
             if (sh.shipped_at) {
                 const diff = Math.floor((Date.now() - new Date(sh.shipped_at)) / 86400000);
-                daysLabel = diff === 0 ? 'วันนี้' : `${diff} วันที่แล้ว`;
+                daysLabel = diff === 0 ? 'ส่งวันนี้' : `${diff} วันที่แล้ว`;
             }
-            const shippedDate = sh.shipped_at ? new Date(sh.shipped_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '-';
+            const shippedDate = sh.shipped_at
+                ? new Date(sh.shipped_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
+                : '-';
 
-            // Tracking section for each shipment
             const shipmentsHtml = shipments.length > 0 ? shipments.map(s => {
                 const tn = escapeHtml(s.tracking_number || '');
-                const provider = escapeHtml(s.shipping_provider || '');
-                const tUrl = s.tracking_url || '';
+                const provider = escapeHtml(s.shipping_provider || 'ไม่ระบุ');
+                const tUrl = escapeHtml(s.tracking_url || '');
                 return `
-                <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:6px;min-width:100px;">
-                        <span style="color:#38bdf8;">${iconTruck}</span>
-                        <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);">${provider || '-'}</span>
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(0,0,0,0.2);border-radius:10px;flex-wrap:wrap;row-gap:6px;">
+                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                        <span style="font-size:12px;font-weight:600;color:#ffffff;">${provider}</span>
                     </div>
-                    <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:140px;">
-                        <span style="font-family:monospace;font-size:12px;color:#e2e8f0;background:rgba(255,255,255,0.06);padding:3px 10px;border-radius:6px;letter-spacing:0.5px;">${tn || '-'}</span>
-                        ${tn ? `<button onclick="navigator.clipboard.writeText('${tn}').then(()=>{this.innerHTML='${iconCopy} คัดลอกแล้ว';this.style.color='#34d399';setTimeout(()=>{this.innerHTML='${iconCopy} คัดลอก';this.style.color='rgba(255,255,255,0.45)';},1500)})" style="background:none;border:none;color:rgba(255,255,255,0.45);font-size:11px;cursor:pointer;padding:2px 6px;display:flex;align-items:center;gap:3px;white-space:nowrap;">${iconCopy} คัดลอก</button>` : ''}
+                    <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;row-gap:4px;">
+                        <span style="font-family:monospace;font-size:12px;color:#ffffff;background:rgba(255,255,255,0.08);padding:3px 10px;border-radius:6px;letter-spacing:0.5px;word-break:break-all;">${tn || '-'}</span>
+                        ${tn ? `<button onclick="copyTrackingNumber(this,'${tn}')" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:11px;cursor:pointer;padding:0;white-space:nowrap;flex-shrink:0;">คัดลอก</button>` : ''}
                     </div>
-                    ${tUrl ? `<a href="${escapeHtml(tUrl)}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#818cf8;text-decoration:none;border:1px solid rgba(129,140,248,0.35);padding:3px 10px;border-radius:6px;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.background='rgba(129,140,248,0.12)'" onmouseout="this.style.background=''">${iconLink} ติดตามพัสดุ</a>` : ''}
+                    ${tUrl ? `<a href="${tUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#ffffff;font-weight:500;text-decoration:none;background:rgba(129,140,248,0.2);border:1px solid rgba(129,140,248,0.4);padding:4px 10px;border-radius:7px;white-space:nowrap;flex-shrink:0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        ติดตามพัสดุ
+                    </a>` : ''}
                 </div>`;
-            }).join('') : `<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:6px 0;">ยังไม่มีข้อมูลพัสดุ</div>`;
+            }).join('') : `<div style="font-size:12px;color:rgba(255,255,255,0.35);padding:8px 0;">ยังไม่มีข้อมูลพัสดุ</div>`;
 
             return `
-            <div style="background:linear-gradient(145deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:18px 20px;margin-bottom:12px;transition:border-color 0.2s;" onmouseover="this.style.borderColor='rgba(56,189,248,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">
+            <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px 18px;margin-bottom:10px;">
 
-                <!-- Header row -->
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:12px;">
-                        <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,rgba(56,189,248,0.2),rgba(99,102,241,0.2));border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px;flex-wrap:wrap;row-gap:8px;">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                        <div style="width:38px;height:38px;flex-shrink:0;border-radius:10px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);display:flex;align-items:center;justify-content:center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                         </div>
-                        <div>
-                            <div style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">${orderNum}</div>
-                            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;">${iconUser}${escapeHtml(order.reseller_name || '-')}</div>
+                        <div style="min-width:0;">
+                            <div style="font-size:14px;font-weight:700;color:#ffffff;">${orderNum}</div>
+                            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;display:flex;align-items:center;gap:4px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                ${resellerName}
+                            </div>
                         </div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                        <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.35);color:#38bdf8;font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;letter-spacing:0.5px;">
-                            <span style="width:6px;height:6px;border-radius:50%;background:#38bdf8;animation:pulse-badge 1.5s ease-in-out infinite;display:inline-block;"></span>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;row-gap:4px;">
+                        <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.35);color:#ffffff;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;">
+                            <span style="width:5px;height:5px;border-radius:50%;background:#38bdf8;flex-shrink:0;"></span>
                             กำลังจัดส่ง
                         </span>
-                        ${shippedDate !== '-' ? `<div style="text-align:right;"><div style="font-size:11px;color:rgba(255,255,255,0.4);">${shippedDate}</div>${daysLabel ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">${daysLabel}</div>` : ''}</div>` : ''}
+                        ${shippedDate !== '-' ? `<div style="text-align:right;"><div style="font-size:11px;color:rgba(255,255,255,0.7);">${shippedDate}</div>${daysLabel ? `<div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;">${daysLabel}</div>` : ''}</div>` : ''}
                     </div>
                 </div>
 
-                <!-- Shipment tracking -->
-                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
                     ${shipmentsHtml}
                 </div>
 
-                <!-- Action buttons -->
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button onclick="markShippingDelivered(${order.id}, '${orderNum}')"
-                        style="flex:1;min-width:130px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                        ${iconCheck} จัดส่งสำเร็จ
+                    <button onclick="markShippingDelivered(${order.id},'${orderNum}')"
+                        style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        จัดส่งสำเร็จ
                     </button>
-                    <button onclick="openFailedDeliveryModal(${order.id}, '${orderNum}')"
-                        style="flex:1;min-width:130px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
-                        ${iconReturn} สินค้าตีกลับ
+                    <button onclick="openFailedDeliveryModal(${order.id},'${orderNum}')"
+                        style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.45);color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>
+                        สินค้าตีกลับ
                     </button>
                 </div>
             </div>`;
         }).join('');
 
         container.innerHTML = `
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
-                <span style="font-size:13px;color:rgba(255,255,255,0.5);">กำลังจัดส่งอยู่</span>
-                <span style="background:rgba(14,165,233,0.2);border:1px solid rgba(14,165,233,0.4);color:#38bdf8;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">${orders.length} รายการ</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <span style="font-size:13px;color:rgba(255,255,255,0.6);">กำลังจัดส่งอยู่</span>
+                <span style="background:rgba(14,165,233,0.2);border:1px solid rgba(14,165,233,0.4);color:#ffffff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;">${orders.length} รายการ</span>
             </div>
             ${rows}`;
 
