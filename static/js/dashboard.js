@@ -154,7 +154,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName, queryString] = fullHash.split('?');
-        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
+        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
             // Auto-open order detail if order_id param is present
@@ -533,6 +533,8 @@ function switchPage(pageName) {
         loadProducts();
     } else if (pageName === 'orders') {
         loadOrders();
+    } else if (pageName === 'shipping-update') {
+        loadShippingUpdatePage();
     } else if (pageName === 'tier-settings') {
         loadTierSettings();
         loadResellers();
@@ -8825,6 +8827,135 @@ document.addEventListener('click', function(e) {
         }
     }
 });
+
+// ─── Shipping Update Page ─────────────────────────────────────────────────────
+
+async function loadShippingUpdatePage() {
+    const container = document.getElementById('shippingUpdateContent');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.6;">กำลังโหลดข้อมูล...</div>';
+
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/shipped`, { credentials: 'include' });
+        const orders = await resp.json();
+
+        const badge = document.getElementById('shippingUpdateCount');
+        if (badge) {
+            if (orders.length > 0) {
+                badge.textContent = orders.length;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        if (!orders.length) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:60px 20px;opacity:0.5;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:0.4;"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                    <div>ไม่มีคำสั่งซื้อที่กำลังจัดส่งในขณะนี้</div>
+                </div>`;
+            return;
+        }
+
+        const rows = orders.map(order => {
+            const shipments = order.shipments || [];
+            const sh = shipments[0] || {};
+            const shippedDate = sh.shipped_at ? new Date(sh.shipped_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }) : '-';
+            const trackBtn = sh.tracking_url
+                ? `<a href="${escapeHtml(sh.tracking_url)}" target="_blank" class="btn btn-sm" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:#c084fc;font-size:11px;padding:5px 10px;text-decoration:none;border-radius:7px;white-space:nowrap;">ติดตามพัสดุ →</a>`
+                : `<span style="font-size:11px;color:rgba(255,255,255,0.3);">ไม่มีลิงก์</span>`;
+            return `
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr 1fr auto;align-items:center;gap:16px;margin-bottom:10px;">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:white;">${escapeHtml(order.order_number || '#' + order.id)}</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;">${escapeHtml(order.reseller_name || '')}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.85);">🚚 ${escapeHtml(sh.shipping_provider || '-')}</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;font-family:monospace;">${escapeHtml(sh.tracking_number || '-')}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px;color:rgba(255,255,255,0.5);">วันที่ส่ง</div>
+                        <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;">${shippedDate}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;min-width:160px;">
+                        ${trackBtn}
+                        <button onclick="markShippingDelivered(${order.id}, '${escapeHtml(order.order_number || '#' + order.id)}')"
+                            style="background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;width:100%;">
+                            ✅ จัดส่งสำเร็จ
+                        </button>
+                        <button onclick="openFailedDeliveryModal(${order.id}, '${escapeHtml(order.order_number || '#' + order.id)}')"
+                            style="background:linear-gradient(135deg,#ef4444,#b91c1c);border:none;color:white;font-size:11px;padding:5px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;width:100%;">
+                            📦 สินค้าตีกลับ
+                        </button>
+                    </div>
+                </div>`;
+        }).join('');
+
+        container.innerHTML = `<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">พบ ${orders.length} รายการที่กำลังจัดส่ง</div>${rows}`;
+
+    } catch (err) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#f87171;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
+        console.error('loadShippingUpdatePage error:', err);
+    }
+}
+
+async function markShippingDelivered(orderId, orderNumber) {
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/${orderId}/mark-delivered`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showGlobalAlert(`✅ อัปเดต ${orderNumber} เป็นจัดส่งสำเร็จแล้ว`, 'success');
+            loadShippingUpdatePage();
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (err) {
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+function openFailedDeliveryModal(orderId, orderNumber) {
+    document.getElementById('failedDeliveryOrderId').value = orderId;
+    document.getElementById('failedDeliveryReason').value = '';
+    const modal = document.getElementById('failedDeliveryModal');
+    if (modal) { modal.style.display = 'flex'; }
+}
+
+function closeFailedDeliveryModal() {
+    const modal = document.getElementById('failedDeliveryModal');
+    if (modal) { modal.style.display = 'none'; }
+}
+
+async function confirmFailedDelivery() {
+    const orderId = document.getElementById('failedDeliveryOrderId').value;
+    const reason = document.getElementById('failedDeliveryReason').value.trim();
+    if (!reason) {
+        showGlobalAlert('กรุณากรอกเหตุผล', 'error');
+        return;
+    }
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/${orderId}/mark-failed-delivery`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            closeFailedDeliveryModal();
+            showGlobalAlert('📦 บันทึกสินค้าตีกลับเรียบร้อย', 'success');
+            loadShippingUpdatePage();
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (err) {
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);

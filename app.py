@@ -9507,6 +9507,63 @@ def cancel_order(order_id):
         if conn:
             conn.close()
 
+@app.route('/api/admin/orders/shipped', methods=['GET'])
+@admin_required
+def get_shipped_orders():
+    """Get all orders currently being shipped, with shipment data"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('SELECT name, tracking_url FROM shipping_providers WHERE is_active = TRUE')
+        provider_tracking_map = {p['name']: p['tracking_url'] for p in cursor.fetchall()}
+
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status, o.final_amount, o.updated_at,
+                   u.full_name AS reseller_name, u.id AS reseller_id
+            FROM orders o
+            JOIN users u ON u.id = o.user_id
+            WHERE o.status = 'shipped'
+            ORDER BY o.updated_at DESC
+        ''')
+        orders = [dict(r) for r in cursor.fetchall()]
+
+        for order in orders:
+            order['final_amount'] = float(order['final_amount'] or 0)
+            cursor.execute('''
+                SELECT os.id, os.tracking_number, os.shipping_provider, os.shipped_at,
+                       w.name AS warehouse_name
+                FROM order_shipments os
+                JOIN warehouses w ON w.id = os.warehouse_id
+                WHERE os.order_id = %s
+                ORDER BY os.id
+            ''', (order['id'],))
+            shipments = []
+            for sh in cursor.fetchall():
+                sh = dict(sh)
+                if sh.get('shipping_provider') and sh.get('tracking_number'):
+                    tmpl = provider_tracking_map.get(sh['shipping_provider'], '')
+                    if tmpl:
+                        if '{tracking}' in tmpl:
+                            sh['tracking_url'] = tmpl.replace('{tracking}', sh['tracking_number'])
+                        else:
+                            sh['tracking_url'] = tmpl + sh['tracking_number']
+                shipments.append(sh)
+            order['shipments'] = shipments
+
+        return jsonify(orders), 200
+
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route('/api/admin/orders/<int:order_id>/mark-delivered', methods=['POST'])
 @admin_required
 def mark_order_delivered(order_id):

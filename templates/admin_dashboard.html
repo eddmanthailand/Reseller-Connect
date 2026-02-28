@@ -236,6 +236,19 @@
                     <span class="sidebar-text">ตรวจสอบสลิป</span>
                     <span class="pending-badge" id="slipReviewCount" style="display: none;">0</span>
                 </a>
+
+                <a href="#" class="nav-item" data-page="shipping-update">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="1" y="3" width="15" height="13" rx="1"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">อัปเดตการขนส่ง</span>
+                    <span class="pending-badge" id="shippingUpdateCount" style="display: none;">0</span>
+                </a>
                 
                 <a href="#" class="nav-item" data-page="quick-order">
                     <span class="icon">
@@ -2081,6 +2094,48 @@
                 
                 <div id="slipReviewContent">
                     <div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>
+                </div>
+            </div>
+
+            <!-- Shipping Update Page -->
+            <div id="page-shipping-update" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:8px;">
+                            <rect x="1" y="3" width="15" height="13" rx="1"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        อัปเดตการขนส่ง
+                    </h1>
+                    <p>จัดการคำสั่งซื้อที่กำลังจัดส่ง — อัปเดตสถานะเมื่อได้รับหรือตีกลับ</p>
+                </div>
+                <div style="margin-bottom:16px;display:flex;justify-content:flex-end;">
+                    <button onclick="loadShippingUpdatePage()" class="btn btn-secondary" style="font-size:13px;padding:8px 16px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:middle;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>
+                        รีเฟรช
+                    </button>
+                </div>
+                <div id="shippingUpdateContent">
+                    <div style="text-align:center;padding:40px;opacity:0.6;">กำลังโหลดข้อมูล...</div>
+                </div>
+            </div>
+
+            <!-- Reason Modal for Failed Delivery -->
+            <div id="failedDeliveryModal" class="modal" style="display:none;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);">
+                <div style="width:100%;max-width:440px;background:linear-gradient(160deg,#1a0a2e,#0d0a1e);border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:24px;margin:16px;">
+                    <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;color:white;">📦 สินค้าตีกลับ — กรอกเหตุผล</h3>
+                    <input type="hidden" id="failedDeliveryOrderId">
+                    <div style="margin-bottom:16px;">
+                        <label style="font-size:13px;color:rgba(255,255,255,0.7);display:block;margin-bottom:8px;">เหตุผล</label>
+                        <textarea id="failedDeliveryReason" rows="3" placeholder="เช่น ที่อยู่ไม่ถูกต้อง, ไม่มีผู้รับ, ปฏิเสธรับสินค้า..."
+                            style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:white;font-size:13px;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="closeFailedDeliveryModal()" style="flex:1;padding:10px;background:rgba(255,255,255,0.1);border:none;color:white;border-radius:10px;font-size:13px;cursor:pointer;">ยกเลิก</button>
+                        <button onclick="confirmFailedDelivery()" style="flex:2;padding:10px;background:linear-gradient(135deg,#ef4444,#b91c1c);border:none;color:white;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">บันทึกสินค้าตีกลับ</button>
+                    </div>
                 </div>
             </div>
 
