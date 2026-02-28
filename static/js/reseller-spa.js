@@ -1218,6 +1218,35 @@ async function loadPromptPayQR() {
     }
 }
 
+function downloadQRCode() {
+    const img = document.getElementById('promptpayQRImage');
+    if (!img || !img.src) return;
+
+    const src = img.src;
+
+    // Convert base64 to Blob so download works on both Android and iOS
+    try {
+        const [header, base64Data] = src.split(',');
+        const mime = header.match(/:(.*?);/)[1];
+        const binary = atob(base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = 'promptpay-qr.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+    } catch (e) {
+        // Fallback: open in new tab so user can long-press to save (iOS)
+        window.open(src, '_blank');
+    }
+}
+
 function toggleShippingType() {
     const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
     document.getElementById('customerShippingSection').style.display = shippingType === 'customer' ? 'block' : 'none';
