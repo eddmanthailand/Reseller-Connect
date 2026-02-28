@@ -3,20 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>สมัครสมาชิก - ระบบสมาชิกและตัวแทนจำหน่าย</title>
+    <title>สมัครสมาชิก - EKG Shops</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
             min-height: 100vh;
             display: flex;
@@ -24,11 +19,10 @@
             align-items: center;
             padding: 20px;
             position: relative;
-            overflow-x: hidden;
+            overflow: hidden;
         }
 
-        body::before,
-        body::after {
+        body::before, body::after {
             content: '';
             position: absolute;
             border-radius: 50%;
@@ -36,677 +30,355 @@
             opacity: 0.6;
             animation: float 20s infinite ease-in-out;
         }
-
         body::before {
-            width: 400px;
-            height: 400px;
-            background: rgba(255, 255, 255, 0.1);
-            top: -100px;
-            right: -100px;
-            animation-delay: 0s;
+            width: 400px; height: 400px;
+            background: rgba(255,255,255,0.1);
+            top: -100px; right: -100px;
         }
-
         body::after {
-            width: 300px;
-            height: 300px;
-            background: rgba(240, 147, 251, 0.2);
-            bottom: -50px;
-            left: -50px;
-            animation-delay: 10s;
+            width: 300px; height: 300px;
+            background: rgba(255,255,255,0.08);
+            bottom: -80px; left: -80px;
+            animation-delay: -10s;
         }
 
         @keyframes float {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            33% { transform: translate(30px, -30px) rotate(120deg); }
-            66% { transform: translate(-20px, 20px) rotate(240deg); }
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-30px) rotate(180deg); }
         }
 
-        .register-container {
-            background: rgba(255, 255, 255, 0.15);
+        .container {
+            background: rgba(255,255,255,0.1);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            padding: 40px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 30px;
+            padding: 48px 40px;
             width: 100%;
-            max-width: 600px;
+            max-width: 420px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
             position: relative;
             z-index: 1;
-            animation: slideIn 0.6s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .register-header {
             text-align: center;
-            margin-bottom: 30px;
         }
 
-        .icon-wrapper {
-            width: 70px;
-            height: 70px;
-            margin: 0 auto 15px;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -1px;
+            margin-bottom: 6px;
+        }
+        .logo span {
+            background: linear-gradient(135deg, #ffd700, #ffb347);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        .icon-wrapper svg {
-            width: 36px;
-            height: 36px;
-            stroke: white;
+        .tagline {
+            color: rgba(255,255,255,0.75);
+            font-size: 14px;
+            margin-bottom: 32px;
         }
 
-        .register-header h1 {
-            color: white;
-            font-size: 26px;
+        .main-title {
+            color: #fff;
+            font-size: 22px;
             font-weight: 700;
             margin-bottom: 8px;
         }
 
-        .register-header p {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
-        }
-
-        .form-section {
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            color: white;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .section-title svg {
-            width: 18px;
-            height: 18px;
-            stroke: rgba(255,255,255,0.8);
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-        }
-
-        .form-group.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 6px;
-            color: white;
-            font-weight: 500;
+        .sub-title {
+            color: rgba(255,255,255,0.7);
             font-size: 13px;
-        }
-
-        .form-group label .required {
-            color: #ff6b6b;
-        }
-
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 12px 14px;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            font-size: 14px;
-            color: white;
-            transition: all 0.3s ease;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .form-group select {
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 12px center;
-            padding-right: 36px;
-        }
-
-        .form-group select option {
-            background: #764ba2;
-            color: white;
-        }
-
-        .form-group input::placeholder,
-        .form-group textarea::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.25);
-            border-color: rgba(255, 255, 255, 0.5);
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
-        }
-
-        .form-group textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
-
-        .btn-submit {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.2));
-            backdrop-filter: blur(10px);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 8px;
-        }
-
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.3));
-        }
-
-        .btn-submit:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-back {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: rgba(255, 255, 255, 0.9);
-            text-decoration: none;
-            font-size: 13px;
-            margin-top: 16px;
-            transition: color 0.3s;
-        }
-
-        .btn-back:hover {
-            color: white;
-        }
-
-        .btn-back svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        .footer-text {
-            text-align: center;
-            margin-top: 20px;
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 13px;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .success-message {
-            text-align: center;
-            padding: 40px 20px;
-        }
-
-        .success-icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
-            background: rgba(76, 175, 80, 0.3);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .success-icon svg {
-            width: 40px;
-            height: 40px;
-            stroke: #4CAF50;
-        }
-
-        .success-message h2 {
-            color: white;
-            font-size: 22px;
-            margin-bottom: 12px;
-        }
-
-        .success-message p {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
             line-height: 1.6;
-        }
-
-        .promo-banner {
-            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%);
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 16px;
-            padding: 20px 24px;
             margin-bottom: 28px;
-            backdrop-filter: blur(10px);
         }
 
-        .promo-title {
+        .benefits {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 28px;
+            text-align: left;
+        }
+        .benefit-item {
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #fff;
-            font-size: 15px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            line-height: 1.4;
+            color: rgba(255,255,255,0.85);
+            font-size: 13px;
         }
+        .benefit-icon { font-size: 18px; flex-shrink: 0; }
 
-        .promo-title svg {
-            flex-shrink: 0;
+        /* WebView Warning */
+        .webview-warning {
+            background: rgba(251, 191, 36, 0.12);
+            border: 1px solid rgba(251, 191, 36, 0.45);
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+            text-align: left;
+            display: none;
+        }
+        .webview-warning.show { display: block; }
+
+        .warning-title {
             color: #fbbf24;
-        }
-
-        .promo-body {
-            color: rgba(255,255,255,0.9);
-            font-size: 13.5px;
-            line-height: 1.7;
-            margin-bottom: 16px;
-        }
-
-        .promo-body strong {
-            color: #fde68a;
-        }
-
-        .promo-perks {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 10px;
             display: flex;
-            flex-wrap: wrap;
+            align-items: flex-start;
             gap: 8px;
         }
+        .warning-title svg { flex-shrink: 0; margin-top: 1px; }
 
-        .perk-item {
-            background: rgba(255,255,255,0.15);
-            color: #fff;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.2);
+        .warning-steps {
+            color: rgba(255,255,255,0.85);
+            font-size: 13px;
+            line-height: 1.75;
         }
+        .warning-steps strong { color: #fde68a; }
 
-        @media (max-width: 600px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .register-container {
-                padding: 30px 20px;
-            }
+        .url-box {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .url-text {
+            color: rgba(255,255,255,0.9);
+            font-size: 12px;
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .copy-btn {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 11px;
+            padding: 5px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.28); }
 
-            .register-header h1 {
-                font-size: 22px;
-            }
+        /* Open in Chrome (Android) */
+        .open-chrome-btn {
+            display: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            margin-bottom: 12px;
+            transition: opacity 0.2s;
+        }
+        .open-chrome-btn:hover { opacity: 0.9; }
 
-            .promo-title {
-                font-size: 14px;
-            }
+        /* Google Button */
+        .google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            background: #fff;
+            color: #333;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .google-logo { width: 22px; height: 22px; flex-shrink: 0; }
+
+        .redirect-note {
+            color: rgba(255,255,255,0.65);
+            font-size: 13px;
+            margin-top: 16px;
+            display: none;
+        }
+        .spinner {
+            display: inline-block;
+            width: 13px; height: 13px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .already-member {
+            margin-top: 20px;
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+        }
+        .already-member a {
+            color: rgba(255,255,255,0.9);
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <div class="register-container">
-        <div id="formSection">
-            <div class="register-header">
-                <div class="icon-wrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <line x1="19" y1="8" x2="19" y2="14"/>
-                        <line x1="22" y1="11" x2="16" y2="11"/>
-                    </svg>
-                </div>
-                <h1>สมัครสมาชิกและตัวแทนจำหน่าย</h1>
-                <p>กรอกข้อมูลเพื่อสมัครสมาชิก</p>
+    <div class="container">
+        <div class="logo">EKG <span>Shops</span></div>
+        <div class="tagline">ระบบตัวแทนจำหน่าย</div>
+
+        <div class="main-title">สมัครสมาชิกฟรี</div>
+        <div class="sub-title">ช้อปสินค้าราคาส่ง ไม่มีขั้นต่ำ<br>ชิ้นเดียวก็ได้ราคาสมาชิก</div>
+
+        <div class="benefits">
+            <div class="benefit-item">
+                <span class="benefit-icon">🛍️</span>
+                <span>ราคาส่งตั้งแต่ชิ้นแรก ไม่มีขั้นต่ำ</span>
             </div>
-
-            <div class="promo-banner">
-                <div class="promo-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                    </svg>
-                    สมัครฟรี มีแต่ได้! ช้อปสินค้าราคาส่ง แบบไม่มีข้อผูกมัด
-                </div>
-                <p class="promo-body">ลบภาพจำตัวแทนจำหน่ายแบบเดิมๆ ที่ต้องรักษายอด! ที่นี่ให้คุณสมัครเพื่อรับสิทธิ์ <strong>"ซื้อของถูก"</strong> ไปใช้เองได้สบายใจ ไม่มีขั้นต่ำ ชิ้นเดียวก็ได้ราคาสมาชิก เปลี่ยนรายจ่ายให้ลดลง หรือจะเปลี่ยนเป็นรายรับก็ทำได้ทุกเมื่อที่คุณพร้อม</p>
-                <div class="promo-perks">
-                    <span class="perk-item">✅ ราคาสมาชิกทันที</span>
-                    <span class="perk-item">✅ ไม่มีขั้นต่ำ</span>
-                    <span class="perk-item">✅ ไม่ต้องรักษายอด</span>
-                    <span class="perk-item">✅ สมัครฟรี</span>
-                </div>
+            <div class="benefit-item">
+                <span class="benefit-icon">💰</span>
+                <span>ซื้อใช้เองหรือขายต่อก็ได้กำไร</span>
             </div>
-
-            <form id="registerForm">
-                <div class="form-section">
-                    <div class="section-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        ข้อมูลบัญชี
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>ชื่อ-นามสกุล <span class="required">*</span></label>
-                            <input type="text" id="full_name" name="full_name" required placeholder="ชื่อ นามสกุล">
-                        </div>
-                        <div class="form-group">
-                            <label>Username <span class="required">*</span></label>
-                            <input type="text" id="username" name="username" required placeholder="ชื่อผู้ใช้สำหรับเข้าสู่ระบบ">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Email <span class="required">*</span></label>
-                            <input type="email" id="email" name="email" required placeholder="email@example.com">
-                        </div>
-                        <div class="form-group">
-                            <label>รหัสผ่าน <span class="required">*</span></label>
-                            <input type="password" id="password" name="password" required placeholder="รหัสผ่านอย่างน้อย 6 ตัว" minlength="6">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>ยืนยันรหัสผ่าน <span class="required">*</span></label>
-                        <input type="password" id="confirm_password" name="confirm_password" required placeholder="กรอกรหัสผ่านอีกครั้ง">
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="section-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-                        </svg>
-                        ช่องทางติดต่อ
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>เบอร์โทรศัพท์ <span class="required">*</span></label>
-                            <input type="tel" id="phone" name="phone" required placeholder="0812345678">
-                        </div>
-                        <div class="form-group">
-                            <label>Line ID <span class="required">*</span></label>
-                            <input type="text" id="line_id" name="line_id" required placeholder="Line ID สำหรับติดต่อ">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="section-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                            <circle cx="12" cy="10" r="3"/>
-                        </svg>
-                        ที่อยู่
-                    </div>
-                    <div class="form-group">
-                        <label>ที่อยู่ <span class="required">*</span></label>
-                        <textarea id="address" name="address" required placeholder="บ้านเลขที่ ซอย ถนน"></textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>จังหวัด <span class="required">*</span></label>
-                            <select id="province" name="province" required>
-                                <option value="">-- เลือกจังหวัด --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>อำเภอ/เขต <span class="required">*</span></label>
-                            <select id="district" name="district" required disabled>
-                                <option value="">-- เลือกอำเภอ/เขต --</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>ตำบล/แขวง <span class="required">*</span></label>
-                            <select id="subdistrict" name="subdistrict" required disabled>
-                                <option value="">-- เลือกตำบล/แขวง --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>รหัสไปรษณีย์ <span class="required">*</span></label>
-                            <input type="text" id="postal_code" name="postal_code" required placeholder="รหัสไปรษณีย์" maxlength="5" readonly>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-group">
-                        <label>หมายเหตุเพิ่มเติม (ถ้ามี)</label>
-                        <textarea id="notes" name="notes" placeholder="ข้อมูลเพิ่มเติมที่ต้องการแจ้ง"></textarea>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-submit">ส่งใบสมัคร</button>
-            </form>
-
-            <div class="footer-text">
-                <a href="/login" class="btn-back">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="19" y1="12" x2="5" y2="12"/>
-                        <polyline points="12 19 5 12 12 5"/>
-                    </svg>
-                    กลับไปหน้าเข้าสู่ระบบ
-                </a>
+            <div class="benefit-item">
+                <span class="benefit-icon">📦</span>
+                <span>ส่งตรงถึงลูกค้า ไม่ต้องสต็อกสินค้า</span>
             </div>
         </div>
 
-        <div id="successSection" style="display: none;">
-            <div class="success-message">
-                <div class="success-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                </div>
-                <h2>ส่งใบสมัครสำเร็จ!</h2>
-                <p>
-                    ขอบคุณสำหรับการสมัคร<br>
-                    ทีมงานจะตรวจสอบข้อมูลและติดต่อกลับทางโทรศัพท์<br>
-                    เพื่อยืนยันข้อมูลและแจ้งผลการสมัคร<br><br>
-                    หากมีข้อสงสัย สามารถติดต่อได้ที่ cmidcoteam@gmail.com
-                </p>
-                <a href="/login" class="btn-back" style="margin-top: 24px; display: inline-flex;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="19" y1="12" x2="5" y2="12"/>
-                        <polyline points="12 19 5 12 12 5"/>
-                    </svg>
-                    กลับไปหน้าเข้าสู่ระบบ
-                </a>
+        <!-- WebView Warning -->
+        <div class="webview-warning" id="webviewWarning">
+            <div class="warning-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                กรุณาเปิดลิงก์ในเบราว์เซอร์
             </div>
+            <div class="warning-steps" id="warningSteps"></div>
+            <div class="url-box">
+                <span class="url-text" id="urlToOpen">https://ekgshops.com/register</span>
+                <button class="copy-btn" onclick="copyUrl()">คัดลอก</button>
+            </div>
+        </div>
+
+        <!-- Open in Chrome (Android only) -->
+        <a href="#" id="openChromeBtn" class="open-chrome-btn">
+            🌐 เปิดใน Chrome เพื่อสมัคร
+        </a>
+
+        <!-- Google Login Button -->
+        <a href="/auth/google" class="google-btn" id="googleBtn">
+            <svg class="google-logo" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            สมัคร / เข้าสู่ระบบด้วย Google
+        </a>
+
+        <div class="redirect-note" id="redirectNote">
+            <span class="spinner"></span> กำลังนำไปยัง Google...
+        </div>
+
+        <div class="already-member">
+            มีบัญชีแล้ว? <a href="/auth/google">เข้าสู่ระบบ</a>
         </div>
     </div>
 
-    <script src="/static/js/global-alert.js"></script>
-    <script src="/static/js/thai-address.js"></script>
     <script>
-        const registerForm = document.getElementById('registerForm');
-        const formSection = document.getElementById('formSection');
-        const successSection = document.getElementById('successSection');
+        const REGISTER_URL = 'https://ekgshops.com/register';
 
-        const provinceSelect = document.getElementById('province');
-        const districtSelect = document.getElementById('district');
-        const subdistrictSelect = document.getElementById('subdistrict');
-        const postalCodeInput = document.getElementById('postal_code');
-
-        function initProvinces() {
-            const provinces = Object.keys(THAI_ADDRESSES).sort();
-            provinces.forEach(province => {
-                const option = document.createElement('option');
-                option.value = province;
-                option.textContent = province;
-                provinceSelect.appendChild(option);
-            });
+        function detectEnv() {
+            const ua = navigator.userAgent || '';
+            return {
+                isLINE:          /\bLine\//i.test(ua),
+                isFacebook:      /FBIAB|FBIOS|FBAV|FBAN|FB_IAB/i.test(ua),
+                isInstagram:     /\bInstagram\b/i.test(ua),
+                isAndroidWV:     /Android/.test(ua) && /\bwv\b/.test(ua),
+                isIOSWV:         /iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua),
+                isAndroid:       /Android/.test(ua),
+            };
         }
 
-        provinceSelect.addEventListener('change', function() {
-            const selectedProvince = this.value;
-            districtSelect.innerHTML = '<option value="">-- เลือกอำเภอ/เขต --</option>';
-            subdistrictSelect.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
-            postalCodeInput.value = '';
-            
-            if (selectedProvince && THAI_ADDRESSES[selectedProvince]) {
-                districtSelect.disabled = false;
-                subdistrictSelect.disabled = true;
-                
-                const districts = Object.keys(THAI_ADDRESSES[selectedProvince]).sort();
-                districts.forEach(district => {
-                    const option = document.createElement('option');
-                    option.value = district;
-                    option.textContent = district;
-                    districtSelect.appendChild(option);
+        function copyUrl() {
+            const url = document.getElementById('urlToOpen').textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => {
+                    const btn = document.querySelector('.copy-btn');
+                    btn.textContent = '✓ คัดลอกแล้ว';
+                    setTimeout(() => btn.textContent = 'คัดลอก', 2500);
                 });
             } else {
-                districtSelect.disabled = true;
-                subdistrictSelect.disabled = true;
+                const el = document.getElementById('urlToOpen');
+                const range = document.createRange();
+                range.selectNode(el);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
             }
-        });
+        }
 
-        districtSelect.addEventListener('change', function() {
-            const selectedProvince = provinceSelect.value;
-            const selectedDistrict = this.value;
-            subdistrictSelect.innerHTML = '<option value="">-- เลือกตำบล/แขวง --</option>';
-            postalCodeInput.value = '';
-            
-            if (selectedDistrict && THAI_ADDRESSES[selectedProvince] && THAI_ADDRESSES[selectedProvince][selectedDistrict]) {
-                subdistrictSelect.disabled = false;
-                
-                const subdistricts = Object.keys(THAI_ADDRESSES[selectedProvince][selectedDistrict]).sort();
-                subdistricts.forEach(subdistrict => {
-                    const option = document.createElement('option');
-                    option.value = subdistrict;
-                    option.textContent = subdistrict;
-                    subdistrictSelect.appendChild(option);
-                });
-            } else {
-                subdistrictSelect.disabled = true;
-            }
-        });
+        function setup() {
+            const env = detectEnv();
+            const isWebView = env.isLINE || env.isFacebook || env.isInstagram || env.isAndroidWV || env.isIOSWV;
 
-        subdistrictSelect.addEventListener('change', function() {
-            const selectedProvince = provinceSelect.value;
-            const selectedDistrict = districtSelect.value;
-            const selectedSubdistrict = this.value;
-            
-            if (selectedSubdistrict && THAI_ADDRESSES[selectedProvince] && 
-                THAI_ADDRESSES[selectedProvince][selectedDistrict] &&
-                THAI_ADDRESSES[selectedProvince][selectedDistrict][selectedSubdistrict]) {
-                postalCodeInput.value = THAI_ADDRESSES[selectedProvince][selectedDistrict][selectedSubdistrict];
-            } else {
-                postalCodeInput.value = '';
-            }
-        });
-
-        initProvinces();
-
-        registerForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
-
-            if (password !== confirmPassword) {
-                showAlert('รหัสผ่านไม่ตรงกัน กรุณากรอกใหม่', 'error');
+            if (!isWebView) {
+                // Normal browser → auto-redirect to Google OAuth
+                document.getElementById('googleBtn').style.display = 'none';
+                document.getElementById('redirectNote').style.display = 'block';
+                setTimeout(() => { window.location.href = '/auth/google'; }, 600);
                 return;
             }
 
-            if (password.length < 6) {
-                showAlert('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', 'error');
-                return;
+            // In-app browser / WebView detected
+            const warning = document.getElementById('webviewWarning');
+            const steps   = document.getElementById('warningSteps');
+            const chrome  = document.getElementById('openChromeBtn');
+            warning.classList.add('show');
+
+            if (env.isLINE) {
+                steps.innerHTML =
+                    'กด <strong>เมนู 3 จุด (···)</strong> ที่มุมขวาบน<br>' +
+                    'เลือก <strong>"เปิดใน Chrome"</strong> หรือ <strong>"เปิดในเบราว์เซอร์"</strong><br>' +
+                    'แล้วกดปุ่มสมัครด้วย Google';
+            } else if (env.isFacebook || env.isInstagram) {
+                steps.innerHTML =
+                    'กด <strong>เมนู 3 จุด (⋮)</strong> ที่มุมขวาบน<br>' +
+                    'เลือก <strong>"เปิดใน Chrome"</strong> หรือ <strong>"เปิดในเบราว์เซอร์ภายนอก"</strong><br>' +
+                    'แล้วกดปุ่มสมัครด้วย Google';
+            } else {
+                steps.innerHTML =
+                    'คัดลอก URL ด้านล่าง แล้วเปิดในแอป<br>' +
+                    '<strong>Chrome</strong> หรือ <strong>Safari</strong><br>' +
+                    'แล้วกดปุ่มสมัครด้วย Google';
             }
 
-            const submitButton = registerForm.querySelector('button[type="submit"]');
-            const originalText = submitButton.innerHTML;
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<span class="spinner"></span>กำลังส่งใบสมัคร...';
-
-            const formData = {
-                full_name: document.getElementById('full_name').value,
-                username: document.getElementById('username').value,
-                email: document.getElementById('email').value,
-                password: password,
-                phone: document.getElementById('phone').value,
-                line_id: document.getElementById('line_id').value,
-                address: document.getElementById('address').value,
-                province: document.getElementById('province').value,
-                district: document.getElementById('district').value,
-                subdistrict: document.getElementById('subdistrict').value,
-                postal_code: document.getElementById('postal_code').value,
-                notes: document.getElementById('notes').value
-            };
-
-            try {
-                const response = await fetch('/api/register', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || 'เกิดข้อผิดพลาดในการส่งใบสมัคร');
-                }
-
-                formSection.style.display = 'none';
-                successSection.style.display = 'block';
-
-            } catch (error) {
-                console.error('Register error:', error);
-                showAlert(error.message, 'error');
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalText;
+            // Show "Open in Chrome" deep-link button on Android
+            if (env.isAndroid && (env.isFacebook || env.isInstagram || env.isAndroidWV)) {
+                chrome.style.display = 'block';
+                chrome.href = 'intent://' + location.host + '/auth/google#Intent;scheme=https;package=com.android.chrome;end';
             }
-        });
+        }
+
+        setup();
     </script>
 </body>
 </html>
