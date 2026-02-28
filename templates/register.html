@@ -212,6 +212,11 @@
 </head>
 <body>
     <div class="container">
+        {% if preview_mode %}
+        <div style="background:rgba(255,200,0,0.25);border:1px solid rgba(255,200,0,0.5);border-radius:10px;padding:8px 14px;margin-bottom:14px;font-size:13px;color:#fff;text-align:center;">
+            👁️ <strong>Admin Preview</strong> — นี่คือหน้าที่สมาชิกใหม่จะเห็น (ปุ่ม Google จะไม่ auto-redirect)
+        </div>
+        {% endif %}
         <div class="logo">EKG <span>Shops</span></div>
         <div class="tagline">ระบบสมาชิก</div>
 
@@ -300,11 +305,16 @@
             const loginLink     = document.getElementById('loginLink');
 
             if (!isWebView) {
+                {% if preview_mode %}
+                // Admin preview mode: show Google button normally, no auto-redirect
+                return;
+                {% else %}
                 // Normal browser: hide Google button, show spinner, redirect
                 googleBtn.style.display = 'none';
                 redirectNote.style.display = 'block';
                 setTimeout(() => { window.location.href = '/auth/google'; }, 600);
                 return;
+                {% endif %}
             }
 
             // WebView detected: hide Google button, show force-open section

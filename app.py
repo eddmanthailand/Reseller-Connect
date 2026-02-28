@@ -250,9 +250,11 @@ def login_page():
 @app.route('/register')
 def register_page():
     """QR code landing page - handles WebView browsers that block Google OAuth"""
-    if 'user_id' in session and session.get('role') not in ('Super Admin', 'Assistant Admin'):
+    role = session.get('role')
+    is_admin = role in ('Super Admin', 'Assistant Admin')
+    if 'user_id' in session and not is_admin:
         return redirect(url_for('dashboard'))
-    return render_template('register.html')
+    return render_template('register.html', preview_mode=is_admin)
 
 @app.route('/become-reseller')
 def fb_landing_page():
