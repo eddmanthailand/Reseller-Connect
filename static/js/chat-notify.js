@@ -342,6 +342,9 @@
           }
           showChatBanner(msg);
         }
+        if (typeof loadResellerChatUnreadCount === 'function') {
+          loadResellerChatUnreadCount();
+        }
       } else {
         clearAllBanners();
       }
