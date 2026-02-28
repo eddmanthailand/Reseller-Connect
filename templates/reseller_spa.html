@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#7c3aed">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1268,31 +1268,88 @@
                 padding-bottom: 200px;
             }
 
+            /* ── Product Modal: Full-screen on mobile ── */
+            #productModal {
+                padding: 0;
+                align-items: flex-start;
+                justify-content: flex-start;
+            }
+
+            #productModal .modal-content {
+                width: 100%;
+                height: 100dvh;
+                max-height: 100dvh;
+                max-width: none;
+                border-radius: 0;
+                border: none;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                background: linear-gradient(160deg, #1a0a2e 0%, #0f0a1a 50%, #12051e 100%);
+            }
+
+            #productModal .modal-header {
+                flex-shrink: 0;
+                background: rgba(255,255,255,0.04);
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                padding: 14px 16px;
+                padding-top: calc(14px + env(safe-area-inset-top, 0px));
+            }
+
+            #productModal .modal-header h2 {
+                font-size: 16px;
+            }
+
+            #productModal .modal-body {
+                flex: 1;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+
             .product-modal-grid {
                 grid-template-columns: 1fr;
             }
 
             .product-modal-images {
-                padding: 16px;
+                padding: 20px 16px 12px;
+                background: transparent;
             }
 
             .product-modal-main-image {
-                max-height: 200px;
+                max-height: 280px;
+                border-radius: 16px;
+                box-shadow: 0 12px 40px rgba(102,126,234,0.25);
+                background: rgba(255,255,255,0.03);
+            }
+
+            .product-modal-gallery img {
+                width: 56px;
+                height: 56px;
+                border-radius: 8px;
+                border-color: transparent;
+            }
+
+            .product-modal-gallery img.active {
+                border-color: rgba(102,126,234,0.8);
+                box-shadow: 0 0 0 2px rgba(102,126,234,0.4);
             }
 
             .product-modal-info {
-                padding: 16px;
+                padding: 12px 16px 16px;
                 max-height: none;
                 overflow-y: visible;
             }
 
-            #productModal .modal-body {
-                overflow-y: auto;
-                flex: 1;
-            }
-
             .product-modal-sticky-footer {
                 flex-wrap: wrap;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                padding: 12px 16px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+                position: sticky;
+                bottom: 0;
+                z-index: 10;
+                background: linear-gradient(135deg, #1a0a2e, #110820);
             }
 
             .sticky-footer-price {
