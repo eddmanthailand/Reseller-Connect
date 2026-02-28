@@ -961,9 +961,9 @@
         </div>
 
         <div class="thread-list" id="threadList">
-            <div class="empty-threads">
+            <div class="empty-threads" id="loadingState">
                 <div class="spinner"></div>
-                <span>กำลังโหลด...</span>
+                <span id="loadingMsg">กำลังโหลด...</span>
             </div>
         </div>
 
@@ -1182,25 +1182,25 @@ let currentUserId = null;
 
 // ── Boot ──
 async function init() {
-    await fetchCsrf();
-    await fetchCurrentUser();
-    loadThreads();
+    const setMsg = (m) => { const el = document.getElementById('loadingMsg'); if(el) el.textContent = m; };
+    setMsg('กำลังเชื่อมต่อ...');
+    try { await fetchCsrf(); } catch(e) { console.error('[init] fetchCsrf error:', e); }
+    setMsg('กำลังตรวจสอบผู้ใช้...');
+    try { await fetchCurrentUser(); } catch(e) { console.error('[init] fetchCurrentUser error:', e); }
+    setMsg('กำลังโหลดการสนทนา...');
+    await loadThreads();
     loadQuickReplies();
     startGlobalPolling();
 }
 
 async function fetchCsrf() {
-    try {
-        const r = await fetch(`${API}/csrf-token`, { credentials: 'include' });
-        if (r.ok) { const d = await r.json(); csrfToken = d.csrf_token; }
-    } catch(e) {}
+    const r = await fetch(`${API}/csrf-token`, { credentials: 'include' });
+    if (r.ok) { const d = await r.json(); csrfToken = d.csrf_token; }
 }
 
 async function fetchCurrentUser() {
-    try {
-        const r = await fetch(`${API}/me`, { credentials: 'include' });
-        if (r.ok) { const d = await r.json(); currentUserId = d.id; }
-    } catch(e) {}
+    const r = await fetch(`${API}/me`, { credentials: 'include' });
+    if (r.ok) { const d = await r.json(); currentUserId = d.id; }
 }
 
 function csrfHeaders() {
@@ -1232,18 +1232,23 @@ async function loadThreads() {
         const url = `${API}/chat/threads${showArchived ? '?archived=true' : ''}`;
         const r = await fetch(url, { credentials: 'include' });
         if (!r.ok) {
+            const errText = await r.text().catch(() => '');
             document.getElementById('threadList').innerHTML = `<div class="empty-threads" style="color:rgba(255,255,255,0.4);">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span style="font-size:13px;">โหลดไม่สำเร็จ</span>
+                <span style="font-size:13px;">โหลดไม่สำเร็จ (${r.status})</span>
                 <button onclick="loadThreads()" style="margin-top:8px;padding:6px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;font-size:12px;">ลองใหม่</button>
             </div>`;
+            console.error('[loadThreads] status:', r.status, errText);
+            if (r.status === 401 || r.status === 403) {
+                setTimeout(() => { window.location.href = '/login'; }, 2000);
+            }
             return;
         }
         allThreads = await r.json();
         renderThreads(allThreads);
         updateGlobalUnread(allThreads);
     } catch(e) {
-        console.error(e);
+        console.error('[loadThreads] error:', e);
         document.getElementById('threadList').innerHTML = `<div class="empty-threads" style="color:rgba(255,255,255,0.4);">
             <span style="font-size:13px;">เชื่อมต่อไม่ได้</span>
             <button onclick="loadThreads()" style="margin-top:8px;padding:6px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;font-size:12px;">ลองใหม่</button>

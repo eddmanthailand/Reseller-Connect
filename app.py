@@ -40,7 +40,7 @@ app.secret_key = session_secret
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
@@ -293,7 +293,10 @@ def admin_management():
 @admin_required
 def admin_chat_page():
     """Full-page chat interface for admins"""
-    return render_template('chat.html', user_name=session.get('full_name', ''), user_role=session.get('role', ''))
+    response = make_response(render_template('chat.html', user_name=session.get('full_name', ''), user_role=session.get('role', '')))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 @app.route('/admin/products')
 @admin_required
