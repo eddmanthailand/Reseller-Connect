@@ -1508,6 +1508,54 @@ function renderMsg(msg, otherLastRead) {
         </div>`;
     }
 
+    let orderHtml = '';
+    if (msg.order) {
+        const o = msg.order;
+        const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบสลิป', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'ได้รับสินค้าแล้ว', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
+        const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
+        const fmtN = n => Number(n || 0).toLocaleString('th-TH');
+        const items = Array.isArray(o.items) ? o.items.filter(it => it && it.product_name) : [];
+        const displayItems = items.slice(0, 3);
+        const moreCount = items.length - displayItems.length;
+        const shippingFee = o.shipping_fee || 0;
+        const grandTotal = o.final_amount || 0;
+
+        const itemsListHtml = displayItems.map(it => `
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                ${it.image_url
+                    ? `<img src="${esc(it.image_url)}" style="width:32px;height:32px;border-radius:5px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">`
+                    : `<div style="width:32px;height:32px;border-radius:5px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">📦</div>`}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.product_name)}</div>
+                    <div style="font-size:10px;color:rgba(255,255,255,0.5);">x${it.quantity} · ฿${fmtN(it.subtotal)}</div>
+                </div>
+            </div>`).join('');
+
+        orderHtml = `
+            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;overflow:hidden;margin-bottom:${msg.content ? '6px' : '0'};cursor:pointer;min-width:220px;max-width:260px;" onclick="window.location.hash='orders'">
+                <div style="padding:9px 11px 0;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:12px;font-weight:700;">${esc(o.order_number || '#' + o.id)}</span>
+                    <span style="background:${sC[o.status]||'#6b7280'};color:white;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:600;">${sL[o.status]||o.status}</span>
+                </div>
+                <div style="padding:6px 11px;">
+                    ${itemsListHtml}
+                    ${moreCount > 0 ? `<div style="font-size:10px;color:rgba(255,255,255,0.4);padding-top:3px;">+${moreCount} รายการอื่น...</div>` : ''}
+                </div>
+                <div style="padding:0 11px 9px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;margin-top:2px;">
+                    ${o.discount_amount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:2px;"><span>ส่วนลด</span><span style="color:#34d399;">-฿${fmtN(o.discount_amount)}</span></div>` : ''}
+                    <div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:3px;">
+                        <span>ค่าจัดส่ง</span>
+                        <span>${shippingFee > 0 ? `฿${fmtN(shippingFee)}` : '<span style="color:#34d399;">ฟรี</span>'}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;">
+                        <span>ยอดรวม</span>
+                        <span style="color:#fbbf24;">฿${fmtN(grandTotal)}</span>
+                    </div>
+                </div>
+                <div style="background:rgba(168,85,247,0.12);padding:5px 11px;text-align:center;font-size:10px;color:rgba(255,255,255,0.5);">กดเพื่อไปที่หน้าคำสั่งซื้อ →</div>
+            </div>`;
+    }
+
     const attachHtml = (msg.attachments || []).map(a =>
         a.file_type && a.file_type.startsWith('image/')
             ? `<img class="msg-img" src="${a.file_url}" onclick="window.open('${a.file_url}','_blank')">`
@@ -1516,14 +1564,17 @@ function renderMsg(msg, otherLastRead) {
                 ${esc(a.file_name)}</a>`
     ).join('');
 
+    const hasOrderCard = !!orderHtml;
     return `<div class="msg-row ${isMine ? 'me' : 'them'}">
         ${!isMine ? `<div class="msg-avatar-small">${currentMemberInitial}</div>` : ''}
         <div class="msg-bubble-wrap">
-            <div class="msg-bubble">
-                ${msg.is_broadcast ? '<div class="broadcast-label">📢 Broadcast</div>' : ''}
+            <div class="msg-bubble" style="${hasOrderCard ? 'padding:0;overflow:hidden;' : ''}">
+                ${msg.is_broadcast ? `<div class="broadcast-label" style="${hasOrderCard ? 'padding:6px 11px 0;' : ''}">📢 Broadcast</div>` : ''}
+                ${orderHtml}
                 ${productHtml}
-                ${msg.content ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
-                ${attachHtml}
+                ${msg.content && !hasOrderCard ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
+                ${hasOrderCard && msg.content ? `<div class="msg-text" style="padding:4px 11px 8px;font-size:11px;color:rgba(255,255,255,0.7);">${esc(msg.content)}</div>` : ''}
+                ${attachHtml ? `<div style="${hasOrderCard ? 'padding:0 11px 8px;' : ''}">${attachHtml}</div>` : ''}
             </div>
             <div class="msg-time">${fmtMsgTime(msg.created_at)}${isRead ? ' <span class="msg-read">อ่านแล้ว</span>' : ''}</div>
         </div>
