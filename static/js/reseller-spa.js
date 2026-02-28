@@ -1957,7 +1957,7 @@ async function viewResellerOrderDetails(orderId) {
         `;
 
         const modalHtml = `
-            <div id="orderDetailModal" style="position: fixed; inset: 0; background: linear-gradient(160deg, #1a0a2e 0%, #0d0a1e 100%); z-index: 1000; display: flex; flex-direction: column; animation: slideUpFull 0.28s cubic-bezier(.4,0,.2,1);">
+            <div id="orderDetailModal" style="position: fixed; inset: 0; background: linear-gradient(160deg, #1a0a2e 0%, #0d0a1e 100%); z-index: 10002; display: flex; flex-direction: column; animation: slideUpFull 0.28s cubic-bezier(.4,0,.2,1);">
                 <style>@keyframes slideUpFull { from { transform: translateY(100%); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }</style>
                 <div style="flex-shrink: 0; padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px);">
                     <button onclick="closeOrderModal()" style="background: rgba(255,255,255,0.1); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -1997,7 +1997,7 @@ function closeOrderModal() {
 
 function openPaymentSlipModal(orderId) {
     const modalHtml = `
-        <div id="paymentSlipModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1001; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <div id="paymentSlipModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10003; display: flex; align-items: center; justify-content: center; padding: 20px;">
             <div style="background: linear-gradient(135deg, rgba(30,20,50,0.98), rgba(20,10,40,0.98)); border: 1px solid rgba(168,85,247,0.3); border-radius: 16px; max-width: 400px; width: 100%; position: relative;">
                 <button onclick="closePaymentSlipModal()" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 5px; line-height: 1;">&times;</button>
                 <div style="padding: 24px;">
