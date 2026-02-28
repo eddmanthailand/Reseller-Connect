@@ -1187,6 +1187,9 @@
             min-width: 18px;
             text-align: center;
         }
+        .bottom-tab-badge.animated {
+            animation: pulse-badge 1.5s ease-in-out infinite, glow-badge 2s ease-in-out infinite;
+        }
 
         /* Mobile Card View for Cart/Orders */
         .mobile-card {
@@ -2197,7 +2200,7 @@
                 </a>
                 <a href="#" class="nav-item" data-page="chat">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                    แชทกับแอดมิน
+                    ข้อความ
                     <span class="nav-badge" id="resellerChatBadge" style="display: none;">0</span>
                 </a>
             </nav>
@@ -3014,6 +3017,13 @@
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                 </svg>
                 <span>คำสั่งซื้อ</span>
+            </a>
+            <a href="#chat" class="bottom-tab-item" data-page="chat" style="position:relative;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>ข้อความ</span>
+                <span class="bottom-tab-badge" id="bottomChatBadge" style="display:none;">0</span>
             </a>
             <a href="#profile" class="bottom-tab-item" data-page="profile">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

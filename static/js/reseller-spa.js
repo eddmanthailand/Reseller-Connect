@@ -4095,13 +4095,17 @@ async function loadResellerChatUnreadCount() {
     try {
         const response = await fetch('/api/chat/unread-count', { credentials: 'include' });
         const data = await response.json();
-        
+
         const badge = document.getElementById('resellerChatBadge');
+        const bottomBadge = document.getElementById('bottomChatBadge');
         const chatNavItem = document.querySelector('.nav-item[data-page="chat"]');
-        
+        const bottomChatTab = document.querySelector('.bottom-tab-item[data-page="chat"]');
+        const count = data.unread_count || 0;
+        const countText = count > 99 ? '99+' : count;
+
         if (badge) {
-            if (data.unread_count > 0) {
-                badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+            if (count > 0) {
+                badge.textContent = countText;
                 badge.style.display = 'flex';
                 badge.classList.add('chat-badge-animated');
                 if (chatNavItem) chatNavItem.classList.add('chat-nav-active');
@@ -4109,6 +4113,19 @@ async function loadResellerChatUnreadCount() {
                 badge.style.display = 'none';
                 badge.classList.remove('chat-badge-animated');
                 if (chatNavItem) chatNavItem.classList.remove('chat-nav-active');
+            }
+        }
+
+        if (bottomBadge) {
+            if (count > 0) {
+                bottomBadge.textContent = countText;
+                bottomBadge.style.display = 'flex';
+                bottomBadge.classList.add('animated');
+                if (bottomChatTab) bottomChatTab.style.color = '#ef4444';
+            } else {
+                bottomBadge.style.display = 'none';
+                bottomBadge.classList.remove('animated');
+                if (bottomChatTab) bottomChatTab.style.color = '';
             }
         }
     } catch (error) {
