@@ -1765,13 +1765,14 @@ async function openAdminChatOrderPicker() {
             : `${API}/admin/orders?limit=5`;
         const r = await fetch(url, { credentials: 'include' });
         const data = await r.json();
-        if (!r.ok || !data.orders || data.orders.length === 0) {
+        const orders = Array.isArray(data) ? data : (data.orders || []);
+        if (!r.ok || orders.length === 0) {
             list.innerHTML = '<div style="padding:32px;text-align:center;color:rgba(255,255,255,0.5);">ไม่พบคำสั่งซื้อ</div>';
             return;
         }
         const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบ', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'สำเร็จ', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
         const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
-        list.innerHTML = data.orders.map(o => `
+        list.innerHTML = orders.map(o => `
             <div onclick="selectAdminChatOrder(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background 0.15s;display:flex;justify-content:space-between;align-items:center;gap:10px;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                 <div>
                     <div style="font-size:13px;font-weight:700;color:white;">${esc(o.order_number || '#' + o.id)}</div>
