@@ -6444,6 +6444,7 @@ def get_reseller_cart():
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
                    ci.customization_data,
                    s.sku_code, s.stock, p.name as product_name, p.id as product_id,
+                   p.brand_id, p.weight,
                    b.name as brand_name,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
             FROM cart_items ci
