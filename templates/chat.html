@@ -1472,6 +1472,7 @@ async function loadMessages() {
             setupScrollListener(area);
         } else if (msgs.length > 0) {
             msgs.forEach(msg => {
+                if (area.querySelector(`[data-msg-id="${msg.id}"]`)) return;
                 const msgDate = new Date(msg.created_at).toDateString();
                 const last = area.lastElementChild;
                 const lastDate = last ? last.dataset.msgDate : '';
@@ -1482,6 +1483,7 @@ async function loadMessages() {
                 }
                 const el = document.createElement('div');
                 el.dataset.msgDate = msgDate;
+                el.dataset.msgId = msg.id;
                 el.innerHTML = renderMsg(msg, otherLastRead);
                 area.appendChild(el);
             });
@@ -1531,7 +1533,7 @@ function renderMsgsWithSep(msgs, otherLastRead, startDate) {
     msgs.forEach(m => {
         const d = new Date(m.created_at).toDateString();
         if (d !== lastDate) { lastDate = d; html += renderDateSep(fmtDateSep(m.created_at)); }
-        html += `<div data-msg-date="${d}">${renderMsg(m, otherLastRead)}</div>`;
+        html += `<div data-msg-date="${d}" data-msg-id="${m.id}">${renderMsg(m, otherLastRead)}</div>`;
     });
     return html;
 }
@@ -2175,10 +2177,12 @@ async function sendBroadcast() {
 // ── Polling ──
 let isPolling = false;
 let chatPollTimer = null;
+let pollGeneration = 0;
 
 async function runPoll() {
     if (isPolling) return;
     isPolling = true;
+    const myGen = pollGeneration;
     try {
         if (currentThreadId) await loadMessages();
         await loadThreads();
@@ -2186,8 +2190,10 @@ async function runPoll() {
         console.error(e);
     } finally {
         isPolling = false;
-        const delay = currentThreadId ? 5000 : 10000;
-        chatPollTimer = setTimeout(runPoll, delay);
+        if (myGen === pollGeneration) {
+            const delay = currentThreadId ? 5000 : 10000;
+            chatPollTimer = setTimeout(runPoll, delay);
+        }
     }
 }
 
@@ -2196,6 +2202,7 @@ function startPolling() {
     runPoll();
 }
 function stopPolling() {
+    pollGeneration++;
     if (chatPollTimer) { clearTimeout(chatPollTimer); chatPollTimer = null; }
     isPolling = false;
 }
