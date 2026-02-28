@@ -2139,6 +2139,105 @@
                 </div>
             </div>
 
+            <!-- Cancel Order Modal -->
+            <div id="cancelOrderModal" class="modal" style="display:none;position:fixed;inset:0;z-index:10002;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(5px);">
+                <div style="width:100%;max-width:460px;background:linear-gradient(160deg,#1a0a2e,#0d0a1e);border-radius:18px;border:1px solid rgba(239,68,68,0.3);padding:26px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:15px;font-weight:700;color:#ffffff;">ยกเลิกคำสั่งซื้อ</h3>
+                            <div id="cancelOrderNumber" style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:1px;"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="cancelOrderId">
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+                        <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.6;">
+                            หากออเดอร์นี้มีสถานะ <strong style="color:#f87171;">กำลังจัดส่ง</strong> สต็อกจะ<strong>ไม่</strong>คืนอัตโนมัติ และระบบจะแจ้งให้ดำเนินการ<strong style="color:#fbbf24;">คืนเงิน</strong>ต่อไป
+                        </p>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="font-size:13px;color:rgba(255,255,255,0.8);display:block;margin-bottom:8px;font-weight:500;">เหตุผลการยกเลิก <span style="color:#f87171;">*</span></label>
+                        <textarea id="cancelOrderReason" rows="3" placeholder="ระบุเหตุผลการยกเลิก..."
+                            style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#ffffff;font-size:13px;resize:vertical;font-family:inherit;box-sizing:border-box;outline:none;"></textarea>
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="closeCancelOrderModal()" style="flex:1;padding:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;border-radius:10px;font-size:13px;cursor:pointer;font-weight:500;">ยกเลิก</button>
+                        <button onclick="submitCancelOrder()" style="flex:2;padding:11px;background:linear-gradient(135deg,#ef4444,#b91c1c);border:none;color:#ffffff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">บันทึกการยกเลิก</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Refund Modal -->
+            <div id="refundModal" class="modal" style="display:none;position:fixed;inset:0;z-index:10003;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);overflow-y:auto;padding:16px;">
+                <div style="width:100%;max-width:520px;background:linear-gradient(160deg,#1a0a2e,#0d0a1e);border-radius:18px;border:1px solid rgba(251,191,36,0.3);padding:26px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);display:flex;align-items:center;justify-content:center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:15px;font-weight:700;color:#ffffff;">ดำเนินการคืนเงิน</h3>
+                            <div id="refundOrderNumber" style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:1px;"></div>
+                        </div>
+                        <button onclick="closeRefundModal()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:20px;line-height:1;padding:0;">&times;</button>
+                    </div>
+
+                    <!-- Amount summary -->
+                    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin-bottom:16px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                            <span style="font-size:13px;color:rgba(255,255,255,0.6);">ยอดที่ชำระ</span>
+                            <span id="refundTotalPaid" style="font-size:13px;color:#ffffff;font-weight:600;"></span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                            <span style="font-size:13px;color:rgba(255,255,255,0.6);">หักค่าขนส่ง</span>
+                            <span id="refundShippingDeducted" style="font-size:13px;color:#f87171;font-weight:600;"></span>
+                        </div>
+                        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;display:flex;justify-content:space-between;">
+                            <span style="font-size:14px;font-weight:700;color:#ffffff;">ยอดที่ต้องคืน</span>
+                            <span id="refundAmount" style="font-size:16px;font-weight:800;color:#fbbf24;"></span>
+                        </div>
+                    </div>
+
+                    <!-- Reseller bank info -->
+                    <div id="refundBankInfo" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;margin-bottom:16px;">
+                        <div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.5);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">ข้อมูลบัญชีสมาชิก</div>
+                        <div id="refundBankDetails" style="font-size:13px;color:#ffffff;line-height:1.8;"></div>
+                    </div>
+
+                    <!-- PromptPay QR -->
+                    <div id="refundQrSection" style="text-align:center;margin-bottom:16px;display:none;">
+                        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">สแกน QR จ่าย PromptPay</div>
+                        <img id="refundQrImage" src="" style="width:180px;height:180px;border-radius:12px;border:4px solid rgba(255,255,255,0.1);">
+                        <div id="refundQrName" style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:8px;"></div>
+                        <div id="refundQrPhone" style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;"></div>
+                    </div>
+
+                    <!-- Slip upload -->
+                    <div style="margin-bottom:16px;">
+                        <label style="font-size:13px;color:rgba(255,255,255,0.8);display:block;margin-bottom:8px;font-weight:500;">แนบสลิปการโอน <span style="color:#f87171;">*</span></label>
+                        <div id="refundSlipPreview" style="display:none;margin-bottom:8px;text-align:center;">
+                            <img id="refundSlipImg" src="" style="max-width:100%;max-height:200px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);">
+                        </div>
+                        <label for="refundSlipInput" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(255,255,255,0.05);border:2px dashed rgba(255,255,255,0.2);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            คลิกเพื่อเลือกรูปสลิป
+                        </label>
+                        <input type="file" id="refundSlipInput" accept="image/*" style="display:none;" onchange="previewRefundSlip(event)">
+                    </div>
+
+                    <input type="hidden" id="refundOrderId">
+                    <input type="hidden" id="refundTotalPaidVal">
+                    <input type="hidden" id="refundShippingVal">
+                    <input type="hidden" id="refundAmountVal">
+
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="closeRefundModal()" style="flex:1;padding:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;border-radius:10px;font-size:13px;cursor:pointer;font-weight:500;">ปิด</button>
+                        <button onclick="submitRefund()" id="refundSubmitBtn" style="flex:2;padding:11px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#ffffff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">ยืนยันคืนเงิน</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Quick Order Page -->
             <div id="page-quick-order" class="page-content">
 

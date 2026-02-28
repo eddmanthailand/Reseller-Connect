@@ -2000,7 +2000,7 @@ async function viewOrderDetails(orderId) {
         } else if (order.status === 'pending_payment') {
             actionsHtml = `
                 <div style="margin-top: 24px;">
-                    <button onclick="cancelOrderAdmin(${orderId})" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="cancelOrderAdmin(${orderId},'${escapeHtml(order.order_number||'#'+orderId)}','${order.status}')" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิกคำสั่งซื้อ
                     </button>
                 </div>
@@ -2008,19 +2008,22 @@ async function viewOrderDetails(orderId) {
         } else if (order.status === 'preparing') {
             actionsHtml = `
                 <div style="margin-top: 24px;">
-                    <button onclick="cancelOrderAdmin(${orderId})" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="cancelOrderAdmin(${orderId},'${escapeHtml(order.order_number||'#'+orderId)}','${order.status}')" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิกคำสั่งซื้อ
                     </button>
                 </div>
             `;
         } else if (order.status === 'shipped') {
             actionsHtml = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
-                    <button onclick="markDelivered(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 24px;">
+                    <button onclick="markDelivered(${orderId})" style="padding: 12px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
                         ส่งสำเร็จ
                     </button>
-                    <button onclick="markFailedDelivery(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="markFailedDelivery(${orderId})" style="padding: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
                         จัดส่งไม่สำเร็จ
+                    </button>
+                    <button onclick="cancelOrderAdmin(${orderId},'${escapeHtml(order.order_number||'#'+orderId)}','shipped')" style="padding: 12px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                        ยกเลิก+คืนเงิน
                     </button>
                 </div>
             `;
@@ -2030,7 +2033,7 @@ async function viewOrderDetails(orderId) {
                     <button onclick="reshipOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         จัดส่งใหม่
                     </button>
-                    <button onclick="cancelOrderAdmin(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="cancelOrderAdmin(${orderId},'${escapeHtml(order.order_number||'#'+orderId)}','${order.status}')" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิก / คืนเงิน
                     </button>
                 </div>
@@ -2233,29 +2236,173 @@ async function rejectOrder(orderId) {
     }
 }
 
-async function cancelOrderAdmin(orderId) {
-    const reason = prompt('เหตุผลในการยกเลิก:');
-    if (reason === null) return;
-    
+function cancelOrderAdmin(orderId, orderNumber, orderStatus) {
+    document.getElementById('cancelOrderId').value = orderId;
+    document.getElementById('cancelOrderNumber').textContent = orderNumber || `#${orderId}`;
+    document.getElementById('cancelOrderReason').value = '';
+    const modal = document.getElementById('cancelOrderModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCancelOrderModal() {
+    const modal = document.getElementById('cancelOrderModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitCancelOrder() {
+    const orderId = document.getElementById('cancelOrderId').value;
+    const reason = document.getElementById('cancelOrderReason').value.trim();
+    if (!reason) {
+        showGlobalAlert('กรุณาระบุเหตุผลการยกเลิก', 'error');
+        return;
+    }
     try {
         const response = await fetch(`${API_URL}/admin/orders/${orderId}/cancel`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
-        
+        const data = await response.json();
         if (response.ok) {
-            showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ สต็อกถูกคืนกลับแล้ว', 'success');
+            closeCancelOrderModal();
             closeModal();
+            if (data.requires_refund) {
+                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ — กรุณาดำเนินการคืนเงิน', 'success');
+                setTimeout(() => openRefundModal(orderId), 600);
+            } else {
+                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ สต็อกถูกคืนกลับแล้ว', 'success');
+            }
             loadOrders(currentOrdersStatus);
         } else {
-            const error = await response.json();
-            showGlobalAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
         }
-    } catch (error) {
-        console.error('Error cancelling order:', error);
+    } catch (err) {
         showGlobalAlert('เกิดข้อผิดพลาด', 'error');
     }
+}
+
+async function openRefundModal(orderId) {
+    document.getElementById('refundOrderId').value = orderId;
+    document.getElementById('refundSlipPreview').style.display = 'none';
+    document.getElementById('refundSlipInput').value = '';
+    document.getElementById('refundQrSection').style.display = 'none';
+    document.getElementById('refundModal').style.display = 'flex';
+
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/${orderId}/refund-info`, { credentials: 'include' });
+        const d = await resp.json();
+        if (!resp.ok) { showGlobalAlert(d.error || 'โหลดข้อมูลไม่ได้', 'error'); return; }
+
+        document.getElementById('refundOrderNumber').textContent = d.order_number || `#${orderId}`;
+        document.getElementById('refundTotalPaid').textContent = `฿${(d.final_amount||0).toLocaleString('th-TH',{minimumFractionDigits:2})}`;
+        document.getElementById('refundShippingDeducted').textContent = `-฿${(d.shipping_fee||0).toLocaleString('th-TH',{minimumFractionDigits:2})}`;
+        document.getElementById('refundAmount').textContent = `฿${(d.refund_amount||0).toLocaleString('th-TH',{minimumFractionDigits:2})}`;
+        document.getElementById('refundTotalPaidVal').value = d.final_amount || 0;
+        document.getElementById('refundShippingVal').value = d.shipping_fee || 0;
+        document.getElementById('refundAmountVal').value = d.refund_amount || 0;
+
+        const r = d.reseller || {};
+        let bankHtml = '';
+        if (r.bank_name || r.bank_account_number) {
+            bankHtml += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span>${escapeHtml(r.bank_name||'-')} — ${escapeHtml(r.bank_account_number||'-')}</span></div>`;
+            bankHtml += `<div style="margin-left:21px;color:rgba(255,255,255,0.7);">${escapeHtml(r.bank_account_name||'')}</div>`;
+        } else {
+            bankHtml = '<span style="color:rgba(255,255,255,0.4);font-size:12px;">สมาชิกยังไม่ได้เพิ่มข้อมูลบัญชี</span>';
+        }
+        if (r.promptpay_number) {
+            bankHtml += `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" style="flex-shrink:0;"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                <span style="color:#34d399;">PromptPay: ${escapeHtml(r.promptpay_number)}</span></div>`;
+        }
+        document.getElementById('refundBankDetails').innerHTML = bankHtml;
+
+        if (r.promptpay_number && d.refund_amount > 0) {
+            try {
+                const qrResp = await fetch(`${API_URL}/admin/orders/${orderId}/refund-qr?amount=${d.refund_amount}`, { credentials: 'include' });
+                const qrData = await qrResp.json();
+                if (qrResp.ok && qrData.qr_image) {
+                    document.getElementById('refundQrImage').src = qrData.qr_image;
+                    document.getElementById('refundQrName').textContent = qrData.account_name || '';
+                    document.getElementById('refundQrPhone').textContent = qrData.promptpay_number || '';
+                    document.getElementById('refundQrSection').style.display = 'block';
+                }
+            } catch(e) {}
+        }
+    } catch(err) {
+        showGlobalAlert('เกิดข้อผิดพลาดในการโหลดข้อมูลคืนเงิน', 'error');
+    }
+}
+
+function closeRefundModal() {
+    document.getElementById('refundModal').style.display = 'none';
+}
+
+function previewRefundSlip(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('refundSlipImg').src = e.target.result;
+        document.getElementById('refundSlipPreview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function submitRefund() {
+    const orderId = document.getElementById('refundOrderId').value;
+    const slipInput = document.getElementById('refundSlipInput');
+    if (!slipInput.files[0]) {
+        showGlobalAlert('กรุณาแนบสลิปการโอนก่อน', 'error');
+        return;
+    }
+    const btn = document.getElementById('refundSubmitBtn');
+    btn.textContent = 'กำลังบันทึก...';
+    btn.disabled = true;
+
+    const slipFile = slipInput.files[0];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const slipData = e.target.result;
+        const bankInfo = {};
+        const bankDetails = document.getElementById('refundBankDetails').textContent;
+        try {
+            const resp = await fetch(`${API_URL}/admin/orders/${orderId}/refund-info`, { credentials: 'include' });
+            const d = await resp.json();
+            const r = d.reseller || {};
+            const payload = {
+                refund_amount: parseFloat(document.getElementById('refundAmountVal').value),
+                shipping_deducted: parseFloat(document.getElementById('refundShippingVal').value),
+                total_paid: parseFloat(document.getElementById('refundTotalPaidVal').value),
+                bank_name: r.bank_name || '',
+                bank_account_number: r.bank_account_number || '',
+                bank_account_name: r.bank_account_name || '',
+                promptpay_number: r.promptpay_number || '',
+                slip_data: slipData,
+            };
+            const saveResp = await fetch(`${API_URL}/admin/orders/${orderId}/refund`, {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const saveData = await saveResp.json();
+            if (saveResp.ok) {
+                closeRefundModal();
+                showGlobalAlert('💸 บันทึกการคืนเงินสำเร็จ แจ้งสมาชิกในแชทแล้ว', 'success');
+                loadOrders(currentOrdersStatus);
+            } else {
+                showGlobalAlert(saveData.error || 'เกิดข้อผิดพลาด', 'error');
+            }
+        } catch(err) {
+            showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+        } finally {
+            btn.textContent = 'ยืนยันคืนเงิน';
+            btn.disabled = false;
+        }
+    };
+    reader.readAsDataURL(slipFile);
 }
 
 async function markDelivered(orderId) {

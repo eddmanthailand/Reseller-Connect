@@ -2281,6 +2281,14 @@ async function loadProfile() {
         document.getElementById('profileEmail').value = profile.email || '';
         document.getElementById('profileAddress').value = profile.address || '';
         document.getElementById('profilePostalCode').value = profile.postal_code || '';
+        const bankSel = document.getElementById('profileBankName');
+        if (bankSel) bankSel.value = profile.bank_name || '';
+        const bankAcc = document.getElementById('profileBankAccountNumber');
+        if (bankAcc) bankAcc.value = profile.bank_account_number || '';
+        const bankName = document.getElementById('profileBankAccountName');
+        if (bankName) bankName.value = profile.bank_account_name || '';
+        const ppNum = document.getElementById('profilePromptpayNumber');
+        if (ppNum) ppNum.value = profile.promptpay_number || '';
         
         populateProvinceSelect('profileProvince');
         
@@ -2357,7 +2365,11 @@ async function handleSaveProfile(event) {
         subdistrict: getSelectedText('profileSubdistrict'),
         district: getSelectedText('profileDistrict'),
         province: getSelectedText('profileProvince'),
-        postal_code: document.getElementById('profilePostalCode').value
+        postal_code: document.getElementById('profilePostalCode').value,
+        bank_name: document.getElementById('profileBankName')?.value || '',
+        bank_account_number: document.getElementById('profileBankAccountNumber')?.value || '',
+        bank_account_name: document.getElementById('profileBankAccountName')?.value || '',
+        promptpay_number: document.getElementById('profilePromptpayNumber')?.value || '',
     };
     
     try {

@@ -613,7 +613,8 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info='', ord
         'cancelled': f'❌ คำสั่งซื้อ {order_number} ถูกยกเลิก',
         'shipping_issue': f'⚠️ คำสั่งซื้อ {order_number} มีปัญหาการจัดส่ง',
         'failed_delivery': f'❌ คำสั่งซื้อ {order_number} จัดส่งไม่สำเร็จ',
-        'reship': f'🔄 คำสั่งซื้อ {order_number} กำลังจัดส่งใหม่'
+        'reship': f'🔄 คำสั่งซื้อ {order_number} กำลังจัดส่งใหม่',
+        'refunded': f'💸 คำสั่งซื้อ {order_number} คืนเงินสำเร็จแล้ว'
     }
     message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
     if extra_info:
@@ -6150,7 +6151,8 @@ def get_reseller_profile():
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.phone, u.email, u.address,
                    u.province, u.district, u.subdistrict, u.postal_code,
-                   u.brand_name, u.logo_url,
+                   u.brand_name, u.logo_url, u.line_id,
+                   u.bank_name, u.bank_account_number, u.bank_account_name, u.promptpay_number,
                    rt.name as tier_name
             FROM users u
             LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
@@ -6191,9 +6193,11 @@ def update_reseller_profile():
             UPDATE users
             SET phone = %s, email = %s, address = %s,
                 province = %s, district = %s, subdistrict = %s, postal_code = %s,
-                brand_name = %s, logo_url = %s
+                brand_name = %s, logo_url = %s,
+                bank_name = %s, bank_account_number = %s, bank_account_name = %s, promptpay_number = %s
             WHERE id = %s
-            RETURNING id, full_name, phone, email, address, province, district, subdistrict, postal_code, brand_name, logo_url
+            RETURNING id, full_name, phone, email, address, province, district, subdistrict, postal_code,
+                      brand_name, logo_url, bank_name, bank_account_number, bank_account_name, promptpay_number
         ''', (
             data.get('phone'),
             data.get('email'),
@@ -6204,6 +6208,10 @@ def update_reseller_profile():
             data.get('postal_code'),
             data.get('brand_name'),
             data.get('logo_url'),
+            data.get('bank_name'),
+            data.get('bank_account_number'),
+            data.get('bank_account_name'),
+            data.get('promptpay_number'),
             user_id
         ))
         
@@ -9418,42 +9426,45 @@ def cancel_order(order_id):
         if not order:
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
         
-        if order['status'] not in ('pending_payment', 'under_review', 'rejected', 'paid', 'preparing', 'failed_delivery'):
+        CANCELLABLE_STATUSES = ('pending_payment', 'under_review', 'rejected', 'paid', 'preparing', 'failed_delivery', 'shipped')
+        if order['status'] not in CANCELLABLE_STATUSES:
             return jsonify({'error': 'ไม่สามารถยกเลิกคำสั่งซื้อนี้ได้'}), 400
         
-        # Get order items and shipments to restore stock
-        cursor.execute('''
-            SELECT osi.order_item_id, osi.quantity, os.warehouse_id, oi.sku_id
-            FROM order_shipment_items osi
-            JOIN order_shipments os ON os.id = osi.shipment_id
-            JOIN order_items oi ON oi.id = osi.order_item_id
-            WHERE os.order_id = %s
-        ''', (order_id,))
-        shipment_items = cursor.fetchall()
+        is_shipped = order['status'] == 'shipped'
         
-        # Restore warehouse stock
-        for item in shipment_items:
+        if not is_shipped:
+            # Get order items and shipments to restore stock (only for non-shipped orders)
             cursor.execute('''
-                UPDATE sku_warehouse_stock 
-                SET stock = stock + %s 
-                WHERE sku_id = %s AND warehouse_id = %s
-            ''', (item['quantity'], item['sku_id'], item['warehouse_id']))
+                SELECT osi.order_item_id, osi.quantity, os.warehouse_id, oi.sku_id
+                FROM order_shipment_items osi
+                JOIN order_shipments os ON os.id = osi.shipment_id
+                JOIN order_items oi ON oi.id = osi.order_item_id
+                WHERE os.order_id = %s
+            ''', (order_id,))
+            shipment_items = cursor.fetchall()
             
-            # Log stock restoration
+            # Restore warehouse stock
+            for item in shipment_items:
+                cursor.execute('''
+                    UPDATE sku_warehouse_stock 
+                    SET stock = stock + %s 
+                    WHERE sku_id = %s AND warehouse_id = %s
+                ''', (item['quantity'], item['sku_id'], item['warehouse_id']))
+                
+                cursor.execute('''
+                    INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
+                    SELECT %s, %s, stock - %s, stock, 'order_cancel', %s, 'order', %s, %s
+                    FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
+                ''', (item['sku_id'], item['warehouse_id'], item['quantity'], order_id, f'ยกเลิกออเดอร์: {reason}', admin_id, item['sku_id'], item['warehouse_id']))
+            
+            # Restore main SKU stock
             cursor.execute('''
-                INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
-                SELECT %s, %s, stock - %s, stock, 'order_cancel', %s, 'order', %s, %s
-                FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
-            ''', (item['sku_id'], item['warehouse_id'], item['quantity'], order_id, f'ยกเลิกออเดอร์: {reason}', admin_id, item['sku_id'], item['warehouse_id']))
-        
-        # Restore main SKU stock
-        cursor.execute('''
-            SELECT sku_id, SUM(quantity) as total_qty
-            FROM order_items WHERE order_id = %s
-            GROUP BY sku_id
-        ''', (order_id,))
-        for sku in cursor.fetchall():
-            cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (sku['total_qty'], sku['sku_id']))
+                SELECT sku_id, SUM(quantity) as total_qty
+                FROM order_items WHERE order_id = %s
+                GROUP BY sku_id
+            ''', (order_id,))
+            for sku in cursor.fetchall():
+                cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (sku['total_qty'], sku['sku_id']))
         
         # Update order status
         cursor.execute('''
@@ -9495,7 +9506,7 @@ def cancel_order(order_id):
             order_id
         )
         
-        return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ'}), 200
+        return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ', 'requires_refund': is_shipped}), 200
         
     except Exception as e:
         if conn:
@@ -9506,6 +9517,207 @@ def cancel_order(order_id):
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/refund-info', methods=['GET'])
+@admin_required
+def get_refund_info(order_id):
+    """Get refund calculation and reseller bank info for a cancelled shipped order"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status, o.final_amount, o.shipping_fee,
+                   u.id as reseller_id, u.full_name, u.phone, u.email,
+                   u.bank_name, u.bank_account_number, u.bank_account_name, u.promptpay_number
+            FROM orders o
+            JOIN users u ON u.id = o.user_id
+            WHERE o.id = %s
+        ''', (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        cursor.execute('SELECT * FROM order_refunds WHERE order_id = %s ORDER BY created_at DESC LIMIT 1', (order_id,))
+        existing_refund = cursor.fetchone()
+        final_amount = float(order['final_amount'] or 0)
+        shipping_fee = float(order['shipping_fee'] or 0)
+        refund_amount = max(0, final_amount - shipping_fee)
+        return jsonify({
+            'order_id': order_id,
+            'order_number': order['order_number'],
+            'status': order['status'],
+            'final_amount': final_amount,
+            'shipping_fee': shipping_fee,
+            'refund_amount': refund_amount,
+            'reseller': {
+                'id': order['reseller_id'],
+                'full_name': order['full_name'],
+                'phone': order['phone'],
+                'email': order['email'],
+                'bank_name': order['bank_name'],
+                'bank_account_number': order['bank_account_number'],
+                'bank_account_name': order['bank_account_name'],
+                'promptpay_number': order['promptpay_number'],
+            },
+            'existing_refund': dict(existing_refund) if existing_refund else None
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/orders/<int:order_id>/refund', methods=['POST'])
+@admin_required
+def process_refund(order_id):
+    """Process a refund: save slip + update status + notify reseller via chat"""
+    import base64, io, uuid
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json(silent=True) or {}
+        refund_amount = float(data.get('refund_amount', 0))
+        shipping_deducted = float(data.get('shipping_deducted', 0))
+        total_paid = float(data.get('total_paid', 0))
+        bank_name = data.get('bank_name', '')
+        bank_account_number = data.get('bank_account_number', '')
+        bank_account_name = data.get('bank_account_name', '')
+        promptpay_number = data.get('promptpay_number', '')
+        slip_data = data.get('slip_data', '')  # base64 encoded image
+        notes = data.get('notes', '')
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT o.id, o.order_number, o.user_id, o.status FROM orders o WHERE o.id = %s', (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+
+        slip_url = None
+        if slip_data and slip_data.startswith('data:image'):
+            try:
+                header, encoded = slip_data.split(',', 1)
+                img_bytes = base64.b64decode(encoded)
+                ext = 'jpg' if 'jpeg' in header else 'png'
+                filename = f'refund_slip_{order_id}_{uuid.uuid4().hex[:8]}.{ext}'
+                upload_dir = os.path.join('static', 'uploads', 'refund_slips')
+                os.makedirs(upload_dir, exist_ok=True)
+                filepath = os.path.join(upload_dir, filename)
+                with open(filepath, 'wb') as f:
+                    f.write(img_bytes)
+                slip_url = f'/static/uploads/refund_slips/{filename}'
+            except Exception as img_err:
+                print(f'Slip upload error: {img_err}')
+
+        cursor.execute('''
+            INSERT INTO order_refunds (order_id, refund_amount, shipping_deducted, total_paid,
+                bank_name, bank_account_number, bank_account_name, promptpay_number,
+                slip_url, status, notes, created_by, completed_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'completed',%s,%s,CURRENT_TIMESTAMP)
+            RETURNING id
+        ''', (order_id, refund_amount, shipping_deducted, total_paid,
+              bank_name, bank_account_number, bank_account_name, promptpay_number,
+              slip_url, notes, admin_id))
+        conn.commit()
+
+        # Send chat notification with slip
+        try:
+            chat_msg = f'💸 คืนเงินสำเร็จ ฿{refund_amount:,.2f}\n'
+            chat_msg += f'(หักค่าขนส่ง ฿{shipping_deducted:,.2f} จากยอดจ่าย ฿{total_paid:,.2f})'
+            if bank_account_number:
+                chat_msg += f'\nโอนไปยัง: {bank_name} {bank_account_number} ({bank_account_name})'
+            send_order_status_chat(
+                order['user_id'],
+                order['order_number'] or f'#{order_id}',
+                'refunded',
+                chat_msg,
+                order_id=order_id
+            )
+        except Exception as chat_err:
+            print(f'Refund chat notification error: {chat_err}')
+
+        return jsonify({'message': 'บันทึกการคืนเงินสำเร็จ', 'slip_url': slip_url}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/orders/<int:order_id>/refund-qr', methods=['GET'])
+@admin_required
+def generate_refund_qr(order_id):
+    """Generate PromptPay QR for refund using reseller's promptpay_number"""
+    import qrcode, io, base64
+    conn = None
+    cursor = None
+    try:
+        amount = request.args.get('amount', type=float)
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT u.promptpay_number, u.full_name
+            FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = %s
+        ''', (order_id,))
+        row = cursor.fetchone()
+        if not row or not row['promptpay_number']:
+            return jsonify({'error': 'สมาชิกยังไม่ได้ตั้งค่าเบอร์ PromptPay'}), 400
+
+        phone_or_id = row['promptpay_number'].replace('-', '').replace(' ', '')
+        if len(phone_or_id) == 10 and phone_or_id.startswith('0'):
+            formatted_id = '0066' + phone_or_id[1:]
+            aid = '01'
+        elif len(phone_or_id) == 13:
+            formatted_id = phone_or_id
+            aid = '02'
+        else:
+            return jsonify({'error': 'รูปแบบเบอร์ PromptPay ไม่ถูกต้อง'}), 400
+
+        def crc16(data):
+            crc = 0xFFFF
+            for byte in data.encode('ascii'):
+                crc ^= byte << 8
+                for _ in range(8):
+                    if crc & 0x8000: crc = (crc << 1) ^ 0x1021
+                    else: crc <<= 1
+                    crc &= 0xFFFF
+            return format(crc, '04X')
+
+        aid_field = f'00{len("A000000677010111"):02d}A000000677010111{aid}{len(formatted_id):02d}{formatted_id}'
+        merchant_field = f'29{len(aid_field):02d}{aid_field}'
+        payload_parts = ['000201', '010212', merchant_field, '52040000', '5303764']
+        if amount and amount > 0:
+            amount_str = f'{amount:.2f}'
+            payload_parts.append(f'54{len(amount_str):02d}{amount_str}')
+        payload_parts += ['5802TH', '6304']
+        payload = ''.join(payload_parts)
+        payload += crc16(payload)
+
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=8, border=4)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color='black', back_color='white')
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        return jsonify({
+            'qr_image': f'data:image/png;base64,{img_b64}',
+            'promptpay_number': row['promptpay_number'],
+            'account_name': row['full_name'],
+            'amount': amount
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
 
 @app.route('/api/admin/orders/shipped', methods=['GET'])
 @admin_required

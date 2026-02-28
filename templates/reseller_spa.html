@@ -2686,6 +2686,38 @@
                             </div>
                         </div>
 
+                        <h3 class="section-title" style="margin-top: 24px;">บัญชีธนาคาร / PromptPay (สำหรับรับเงินคืน)</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>ธนาคาร</label>
+                                <select id="profileBankName" class="form-select" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:10px;padding:10px 12px;">
+                                    <option value="">-- เลือกธนาคาร --</option>
+                                    <option value="ธนาคารกรุงเทพ (BBL)">ธนาคารกรุงเทพ (BBL)</option>
+                                    <option value="ธนาคารกสิกรไทย (KBANK)">ธนาคารกสิกรไทย (KBANK)</option>
+                                    <option value="ธนาคารกรุงไทย (KTB)">ธนาคารกรุงไทย (KTB)</option>
+                                    <option value="ธนาคารทหารไทยธนชาต (TTB)">ธนาคารทหารไทยธนชาต (TTB)</option>
+                                    <option value="ธนาคารไทยพาณิชย์ (SCB)">ธนาคารไทยพาณิชย์ (SCB)</option>
+                                    <option value="ธนาคารกรุงศรีอยุธยา (BAY)">ธนาคารกรุงศรีอยุธยา (BAY)</option>
+                                    <option value="ธนาคารออมสิน (GSB)">ธนาคารออมสิน (GSB)</option>
+                                    <option value="ธนาคาร ธ.ก.ส. (BAAC)">ธนาคาร ธ.ก.ส. (BAAC)</option>
+                                    <option value="ธนาคารซีไอเอ็มบีไทย (CIMB)">ธนาคารซีไอเอ็มบีไทย (CIMB)</option>
+                                    <option value="ธนาคารอื่นๆ">ธนาคารอื่นๆ</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>เลขบัญชี</label>
+                                <input type="text" id="profileBankAccountNumber" placeholder="xxx-x-xxxxx-x">
+                            </div>
+                            <div class="form-group full">
+                                <label>ชื่อบัญชี</label>
+                                <input type="text" id="profileBankAccountName" placeholder="ชื่อ-นามสกุลในบัญชี">
+                            </div>
+                            <div class="form-group">
+                                <label>เบอร์ PromptPay</label>
+                                <input type="text" id="profilePromptpayNumber" placeholder="0xx-xxx-xxxx หรือเลขบัตร 13 หลัก">
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn-primary" style="margin-top: 24px;">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                             บันทึกข้อมูล
