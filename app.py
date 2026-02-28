@@ -7737,7 +7737,11 @@ def get_order_detail(order_id):
             if shipment_dict.get('shipping_provider') and shipment_dict.get('tracking_number'):
                 tracking_template = provider_tracking_map.get(shipment_dict['shipping_provider'], '')
                 if tracking_template:
-                    shipment_dict['tracking_url'] = tracking_template.replace('{tracking}', shipment_dict['tracking_number'])
+                    tracking_number = shipment_dict['tracking_number']
+                    if '{tracking}' in tracking_template:
+                        shipment_dict['tracking_url'] = tracking_template.replace('{tracking}', tracking_number)
+                    else:
+                        shipment_dict['tracking_url'] = tracking_template + tracking_number
             # Get items in this shipment with option values
             cursor.execute('''
                 SELECT osi.id, osi.order_item_id, osi.quantity,
