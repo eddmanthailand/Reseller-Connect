@@ -4251,7 +4251,7 @@ def delete_shipping_rate(rate_id):
 @app.route('/api/shipping-promotions', methods=['GET'])
 @login_required
 def get_shipping_promotions():
-    """Get all shipping promotions"""
+    """Get all shipping promotions with their associated brands"""
     conn = None
     cursor = None
     try:
@@ -4264,6 +4264,27 @@ def get_shipping_promotions():
             ORDER BY min_order_value DESC
         ''')
         promos = [dict(row) for row in cursor.fetchall()]
+        
+        # Load brand associations for each promo
+        if promos:
+            promo_ids = [p['id'] for p in promos]
+            cursor.execute('''
+                SELECT spb.promo_id, spb.brand_id, b.name as brand_name
+                FROM shipping_promotion_brands spb
+                JOIN brands b ON b.id = spb.brand_id
+                WHERE spb.promo_id = ANY(%s)
+            ''', (promo_ids,))
+            brand_rows = cursor.fetchall()
+            
+            brands_by_promo = {}
+            for row in brand_rows:
+                pid = row['promo_id']
+                if pid not in brands_by_promo:
+                    brands_by_promo[pid] = []
+                brands_by_promo[pid].append({'id': row['brand_id'], 'name': row['brand_name']})
+            
+            for p in promos:
+                p['brands'] = brands_by_promo.get(p['id'], [])
         
         return jsonify(promos), 200
         
@@ -4283,6 +4304,7 @@ def create_shipping_promotion():
     cursor = None
     try:
         data = request.get_json()
+        brand_ids = data.get('brand_ids', [])
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -4302,8 +4324,17 @@ def create_shipping_promotion():
         ))
         
         promo = dict(cursor.fetchone())
-        conn.commit()
+        promo_id = promo['id']
         
+        if brand_ids:
+            for bid in brand_ids:
+                cursor.execute('''
+                    INSERT INTO shipping_promotion_brands (promo_id, brand_id)
+                    VALUES (%s, %s) ON CONFLICT DO NOTHING
+                ''', (promo_id, bid))
+        
+        conn.commit()
+        promo['brands'] = []
         return jsonify(promo), 201
         
     except Exception as e:
@@ -4324,6 +4355,7 @@ def update_shipping_promotion(promo_id):
     cursor = None
     try:
         data = request.get_json()
+        brand_ids = data.get('brand_ids', [])
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -4348,6 +4380,15 @@ def update_shipping_promotion(promo_id):
         promo = cursor.fetchone()
         if not promo:
             return jsonify({'error': 'Promotion not found'}), 404
+        
+        # Replace brand associations
+        cursor.execute('DELETE FROM shipping_promotion_brands WHERE promo_id = %s', (promo_id,))
+        if brand_ids:
+            for bid in brand_ids:
+                cursor.execute('''
+                    INSERT INTO shipping_promotion_brands (promo_id, brand_id)
+                    VALUES (%s, %s) ON CONFLICT DO NOTHING
+                ''', (promo_id, bid))
         
         conn.commit()
         return jsonify(dict(promo)), 200
@@ -4537,6 +4578,7 @@ def calculate_shipping():
         data = request.get_json()
         total_weight = data.get('total_weight', 0)
         order_total = data.get('order_total', 0)
+        brand_ids = data.get('brand_ids', [])  # brand IDs from cart items
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -4554,16 +4596,41 @@ def calculate_shipping():
         shipping_cost = float(rate_row['rate']) if rate_row else 0
         original_shipping = shipping_cost
         
-        cursor.execute('''
-            SELECT promo_type, min_order_value, discount_amount, name
-            FROM shipping_promotions
-            WHERE is_active = TRUE
-              AND min_order_value <= %s
-              AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP)
-              AND (end_date IS NULL OR end_date >= CURRENT_TIMESTAMP)
-            ORDER BY min_order_value DESC
-            LIMIT 1
-        ''', (order_total,))
+        # Find best applicable promotion:
+        # - If promo has no brands → applies to all orders
+        # - If promo has brands → only applies if cart contains items from those brands
+        if brand_ids:
+            cursor.execute('''
+                SELECT sp.id, sp.promo_type, sp.min_order_value, sp.discount_amount, sp.name
+                FROM shipping_promotions sp
+                WHERE sp.is_active = TRUE
+                  AND sp.min_order_value <= %s
+                  AND (sp.start_date IS NULL OR sp.start_date <= CURRENT_TIMESTAMP)
+                  AND (sp.end_date IS NULL OR sp.end_date >= CURRENT_TIMESTAMP)
+                  AND (
+                      NOT EXISTS (SELECT 1 FROM shipping_promotion_brands spb WHERE spb.promo_id = sp.id)
+                      OR EXISTS (
+                          SELECT 1 FROM shipping_promotion_brands spb
+                          WHERE spb.promo_id = sp.id AND spb.brand_id = ANY(%s)
+                      )
+                  )
+                ORDER BY sp.min_order_value DESC
+                LIMIT 1
+            ''', (order_total, brand_ids))
+        else:
+            cursor.execute('''
+                SELECT id, promo_type, min_order_value, discount_amount, name
+                FROM shipping_promotions
+                WHERE is_active = TRUE
+                  AND min_order_value <= %s
+                  AND (start_date IS NULL OR start_date <= CURRENT_TIMESTAMP)
+                  AND (end_date IS NULL OR end_date >= CURRENT_TIMESTAMP)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM shipping_promotion_brands spb WHERE spb.promo_id = shipping_promotions.id
+                  )
+                ORDER BY min_order_value DESC
+                LIMIT 1
+            ''', (order_total,))
         
         promo = cursor.fetchone()
         promo_applied = None
@@ -4572,9 +4639,13 @@ def calculate_shipping():
             if promo['promo_type'] == 'free_shipping':
                 shipping_cost = 0
                 promo_applied = promo['name']
-            elif promo['promo_type'] == 'discount':
+            elif promo['promo_type'] in ('discount_amount', 'discount'):
                 discount = float(promo['discount_amount'])
                 shipping_cost = max(0, shipping_cost - discount)
+                promo_applied = promo['name']
+            elif promo['promo_type'] == 'discount_percent':
+                discount = float(promo['discount_amount'])
+                shipping_cost = max(0, shipping_cost * (1 - discount / 100))
                 promo_applied = promo['name']
         
         return jsonify({
@@ -5216,7 +5287,7 @@ def get_cart():
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
                    ci.customization_data, ci.created_at,
                    s.sku_code, s.price as current_price, s.stock,
-                   p.id as product_id, p.name as product_name, p.parent_sku,
+                   p.id as product_id, p.name as product_name, p.parent_sku, p.brand_id, p.weight,
                    (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order LIMIT 1) as image_url
             FROM cart_items ci
             JOIN skus s ON s.id = ci.sku_id

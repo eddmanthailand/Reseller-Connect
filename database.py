@@ -945,6 +945,16 @@ def init_db():
                 VALUES ('ส่งฟรีเมื่อซื้อครบ 800 บาท', 'free_shipping', 800, TRUE)
             ''')
         
+        # Create shipping_promotion_brands table (brand-specific promotions)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS shipping_promotion_brands (
+                id SERIAL PRIMARY KEY,
+                promo_id INTEGER NOT NULL REFERENCES shipping_promotions(id) ON DELETE CASCADE,
+                brand_id INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+                UNIQUE(promo_id, brand_id)
+            )
+        ''')
+        
         # Create reseller_applications table (registration applications from public)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS reseller_applications (

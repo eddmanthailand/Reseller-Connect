@@ -1161,9 +1161,11 @@ async function calculateShippingCost() {
     const promoSaved = document.getElementById('shippingPromoSaved');
     
     let totalWeight = 0;
+    const brandIdSet = new Set();
     checkoutData.items.forEach(item => {
         const weight = item.weight || 100;
         totalWeight += weight * item.quantity;
+        if (item.brand_id) brandIdSet.add(item.brand_id);
     });
     
     try {
@@ -1172,7 +1174,8 @@ async function calculateShippingCost() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 total_weight: totalWeight,
-                order_total: checkoutData.total
+                order_total: checkoutData.total,
+                brand_ids: Array.from(brandIdSet)
             })
         });
         

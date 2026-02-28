@@ -5979,7 +5979,7 @@ async function loadShippingPromos() {
     } catch (error) {
         console.error('Error loading shipping promotions:', error);
         document.getElementById('shippingPromosTableBody').innerHTML = 
-            '<tr><td colspan="5" style="text-align: center; color: #ef4444;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
+            '<tr><td colspan="6" style="text-align: center; color: #ef4444;">ไม่สามารถโหลดข้อมูลได้</td></tr>';
     }
 }
 
@@ -5988,7 +5988,7 @@ function renderShippingPromos() {
     if (!tbody) return;
     
     if (shippingPromos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: rgba(255,255,255,0.5);">ยังไม่มีโปรโมชั่น</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: rgba(255,255,255,0.5);">ยังไม่มีโปรโมชั่น</td></tr>';
         return;
     }
     
@@ -6010,9 +6010,15 @@ function renderShippingPromos() {
         const statusClass = promo.is_active ? 'status-active' : 'status-inactive';
         const statusText = promo.is_active ? 'ใช้งาน' : 'ปิดใช้งาน';
         
+        const brands = promo.brands || [];
+        const brandsText = brands.length === 0
+            ? '<span style="color: rgba(255,255,255,0.5); font-size: 12px;">ทุกแบรนด์</span>'
+            : brands.map(b => `<span style="background: rgba(168,85,247,0.25); border: 1px solid rgba(168,85,247,0.4); color: #e9d5ff; border-radius: 4px; padding: 1px 6px; font-size: 11px; margin: 1px; display: inline-block;">${escapeHtml(b.name)}</span>`).join('');
+        
         return `
             <tr>
                 <td>${escapeHtml(promo.name)}</td>
+                <td>${brandsText}</td>
                 <td>${conditionText}</td>
                 <td>${discountText}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -6167,8 +6173,25 @@ async function deleteShippingRate(id) {
     }
 }
 
-function showAddShippingPromoModal() {
+async function buildPromoBrandCheckboxes(selectedBrandIds = []) {
+    try {
+        const res = await fetch(`${API_URL}/brands`);
+        const brandList = res.ok ? await res.json() : [];
+        if (brandList.length === 0) return '<p style="color: rgba(255,255,255,0.5); font-size: 12px;">ยังไม่มีแบรนด์</p>';
+        return brandList.map(b => `
+            <label style="display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer;">
+                <input type="checkbox" class="promo-brand-cb" value="${b.id}" ${selectedBrandIds.includes(b.id) ? 'checked' : ''}>
+                <span style="font-size: 13px;">${escapeHtml(b.name)}</span>
+            </label>
+        `).join('');
+    } catch {
+        return '<p style="color: #ef4444; font-size: 12px;">โหลดแบรนด์ไม่สำเร็จ</p>';
+    }
+}
+
+async function showAddShippingPromoModal() {
     editingPromoId = null;
+    const brandCheckboxes = await buildPromoBrandCheckboxes([]);
     const modalHtml = `
         <div class="modal-overlay" id="shippingPromoModal" onclick="closeShippingPromoModal(event)">
             <div class="modal-content" onclick="event.stopPropagation()">
@@ -6196,6 +6219,13 @@ function showAddShippingPromoModal() {
                     <div class="form-group" id="promoDiscountGroup" style="display: none;">
                         <label class="form-label" id="promoDiscountLabel">ส่วนลด</label>
                         <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">แบรนด์ที่ใช้โปรโมชั่นได้</label>
+                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0 0 8px;">ไม่เลือก = ใช้ได้กับทุกแบรนด์</p>
+                        <div id="promoBrandsContainer" style="max-height: 160px; overflow-y: auto; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.1);">
+                            ${brandCheckboxes}
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label" style="display: flex; align-items: center; gap: 10px;">
@@ -6230,12 +6260,14 @@ function updatePromoFields() {
     }
 }
 
-function editShippingPromo(id) {
+async function editShippingPromo(id) {
     const promo = shippingPromos.find(p => p.id === id);
     if (!promo) return;
     
     editingPromoId = id;
     const showDiscount = promo.promo_type !== 'free_shipping';
+    const selectedBrandIds = (promo.brands || []).map(b => b.id);
+    const brandCheckboxes = await buildPromoBrandCheckboxes(selectedBrandIds);
     
     const modalHtml = `
         <div class="modal-overlay" id="shippingPromoModal" onclick="closeShippingPromoModal(event)">
@@ -6266,6 +6298,13 @@ function editShippingPromo(id) {
                         <input type="number" id="promoDiscountValue" class="form-input" min="0" step="0.01" value="${promo.discount_amount || 0}">
                     </div>
                     <div class="form-group">
+                        <label class="form-label">แบรนด์ที่ใช้โปรโมชั่นได้</label>
+                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0 0 8px;">ไม่เลือก = ใช้ได้กับทุกแบรนด์</p>
+                        <div id="promoBrandsContainer" style="max-height: 160px; overflow-y: auto; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.1);">
+                            ${brandCheckboxes}
+                        </div>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" style="display: flex; align-items: center; gap: 10px;">
                             <input type="checkbox" id="promoIsActive" ${promo.is_active ? 'checked' : ''}>
                             เปิดใช้งานโปรโมชั่น
@@ -6292,8 +6331,11 @@ async function saveShippingPromo() {
     const name = document.getElementById('promoName').value.trim();
     const promoType = document.getElementById('promoType').value;
     const minAmount = parseFloat(document.getElementById('promoMinAmount').value) || 0;
-    const discountValue = parseFloat(document.getElementById('promoDiscountValue').value) || 0;
+    const discountValue = parseFloat(document.getElementById('promoDiscountValue') ? document.getElementById('promoDiscountValue').value : 0) || 0;
     const isActive = document.getElementById('promoIsActive').checked;
+    
+    const brandCbs = document.querySelectorAll('.promo-brand-cb:checked');
+    const brandIds = Array.from(brandCbs).map(cb => parseInt(cb.value));
     
     if (!name) {
         showGlobalAlert('กรุณากรอกชื่อโปรโมชั่น', 'error');
@@ -6304,8 +6346,9 @@ async function saveShippingPromo() {
         name: name,
         promo_type: promoType,
         min_order_value: minAmount,
-        discount_amount: promoType === 'free_shipping' ? 100 : discountValue,
-        is_active: isActive
+        discount_amount: promoType === 'free_shipping' ? 0 : discountValue,
+        is_active: isActive,
+        brand_ids: brandIds
     };
     
     try {
