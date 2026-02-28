@@ -1440,9 +1440,8 @@ function validateCheckout() {
 
 async function placeOrder() {
     const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
-    const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+    const paymentMethod = 'promptpay';
     const notes = document.getElementById('orderNotes').value;
-    const salesChannelId = document.getElementById('checkoutSalesChannel')?.value || null;
     
     // Validation with clear error messages
     const missingFields = [];
@@ -1499,7 +1498,6 @@ async function placeOrder() {
             body: JSON.stringify({
                 payment_method: paymentMethod,
                 notes: notes,
-                sales_channel_id: salesChannelId ? parseInt(salesChannelId) : null,
                 ...shippingData
             })
         });
