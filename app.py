@@ -489,13 +489,21 @@ def login():
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    """Handle user logout"""
+    """Handle user logout (API call from dashboard)"""
     user_name = session.get('full_name', 'Unknown')
     user_id = session.get('user_id')
     log_activity('logout', 'auth', f"ออกจากระบบ: {user_name}", 
                 target_type='user', target_id=user_id, target_name=user_name)
     session.clear()
     return jsonify({'message': 'ออกจากระบบสำเร็จ'}), 200
+
+@app.route('/logout')
+def logout_get():
+    """Handle logout via direct URL visit — clears session and redirects to login"""
+    session.clear()
+    response = redirect(url_for('login_page'))
+    response.delete_cookie('session')
+    return response
 
 def send_email(to_email, subject, html_content):
     """Send email using Gmail SMTP"""
