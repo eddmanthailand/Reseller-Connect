@@ -1,0 +1,117 @@
+จุดที่ 1: แก้ไขไฟล์ templates/chat.html
+เปิดไฟล์ templates/chat.html เลื่อนลงไปที่แท็ก <script> ด้านล่างสุด ค้นหาฟังก์ชัน renderThreads และระบบ Polling เดิม แล้ว ลบของเดิมทิ้งและวางโค้ดนี้ทับลงไปแทนครับ:
+
+JavaScript
+let currentRenderedHtml = ''; // ตัวแปรเก็บสถานะ DOM ป้องกันการวาดใหม่ซ้ำๆ
+
+function renderThreads(threads) {
+    const el = document.getElementById('threadList');
+    if (!Array.isArray(threads) || threads.length === 0) {
+        const emptyHtml = `<div class="empty-threads">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span>${showArchived ? 'ไม่มีการสนทนาที่ซ่อน' : 'ยังไม่มีการสนทนา'}</span>
+        </div>`;
+        if (currentRenderedHtml !== emptyHtml) {
+            el.innerHTML = emptyHtml;
+            currentRenderedHtml = emptyHtml;
+        }
+        return;
+    }
+    
+    // จำกัดการเรนเดอร์ในหน้าจอแค่ 300 รายการล่าสุด ไม่ให้เบราว์เซอร์รับภาระหนักเกินไป
+    const displayThreads = threads.slice(0, 300);
+    
+    const newHtml = displayThreads.map(t => {
+        const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
+        return `
+        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
+            <div class="thread-avatar">${name.charAt(0).toUpperCase()}</div>
+            <div class="thread-info">
+                <div class="thread-badges">
+                    ${t.tier_name ? `<span class="tier-badge ${tierClass(t.tier_name)}">${esc(t.tier_name)}</span>` : ''}
+                </div>
+                <div class="thread-name-row">
+                    <span class="thread-name">${esc(name)}</span>
+                    <span class="thread-time">${fmtThreadTime(t.last_message_at)}</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span class="thread-preview">${esc(t.last_message_preview||'ยังไม่มีข้อความ')}</span>
+                    ${t.unread_count > 0 ? `<span class="unread-badge">${t.unread_count}</span>` : ''}
+                </div>
+            </div>
+            <div class="thread-actions">
+                <button class="thread-action-btn" onclick="archiveThread(event, ${t.id}, ${!!t.is_archived})" title="${t.is_archived ? 'แสดง' : 'ซ่อน'}">
+                    ${t.is_archived
+                        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+                        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'}
+                </button>
+            </div>
+        </div>
+    `}).join('');
+    
+    // อัปเดต HTML เฉพาะเมื่อมีข้อความใหม่จริงๆ (แก้ปัญหาพิมพ์แล้วกระตุก)
+    if (currentRenderedHtml !== newHtml) {
+        el.innerHTML = newHtml;
+        currentRenderedHtml = newHtml;
+    }
+}
+
+// ── Polling ──
+let isPolling = false;
+let chatPollTimer = null;
+
+async function runPoll() {
+    if (isPolling) return; // ล็อกไว้ไม่ให้ Request ชนกัน
+    isPolling = true;
+    try {
+        if (currentThreadId) await loadMessages();
+        await loadThreads();
+    } catch(e) {
+        console.error(e);
+    } finally {
+        isPolling = false;
+        // ถ้าอยู่หน้าห้องแชท ดึงทุก 5 วิ ถ้าอยู่หน้าเปล่า ดึงทุก 10 วิ
+        const delay = currentThreadId ? 5000 : 10000;
+        chatPollTimer = setTimeout(runPoll, delay);
+    }
+}
+
+function startPolling() {
+    stopPolling();
+    runPoll();
+}
+
+function stopPolling() {
+    if (chatPollTimer) {
+        clearTimeout(chatPollTimer);
+        chatPollTimer = null;
+    }
+    isPolling = false;
+}
+
+function startGlobalPolling() {
+    startPolling(); // ใช้ตัวเดียวกันเพื่อไม่ให้ Timer ซ้อนกัน
+}
+จุดที่ 2: เพิ่ม LIMIT ใน app.py
+การที่ระบบโหลดช้ามากๆ เพราะพอดึงข้อมูลแชท app.py รัน Subquery นับข้อความทั้งหมดโดยไม่มีขีดจำกัด
+
+เปิดไฟล์ app.py ค้นหาคำว่า @app.route('/api/chat/threads' (ประมาณบรรทัดที่ 2200) เลื่อนลงมาเล็กน้อยในส่วนของ else: (Admin sees all threads) ให้แก้โค้ด SQL โดยเติม LIMIT 300 ไว้ท้ายสุด ดังนี้ครับ:
+
+Python
+        else:
+            # Admin sees all threads
+            show_archived = request.args.get('archived', 'false') == 'true'
+            cursor.execute('''
+                SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
+                       COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
+                       u.username, rt.name as tier_name, u.reseller_tier_id,
+                       (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status WHERE thread_id = ct.id AND user_id = %s), 0)) as unread_count
+                FROM chat_threads ct
+                JOIN users u ON u.id = ct.reseller_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+                WHERE ct.is_archived = %s
+                ORDER BY ct.last_message_at DESC NULLS LAST
+                LIMIT 300
+            ''', (user_id, show_archived))
+            threads = [dict(row) for row in cursor.fetchall()]
+สาเหตุที่ต้องเติม LIMIT 300 เพราะว่าถึงเราจะแก้ฝั่ง Frontend (chat.html) แล้ว แต่ถ้าฝั่ง Backend (app.py) ยังประมวลผลคำสั่งค้นหาแชทลูกค้าทั้งหมด 2,000-3,000 คนพร้อมกันทุก 5 วินาที Server CPU จะพุ่งสูงและทำให้เกิดอาการค้าง/ตอบสนองช้าทั้งระบบครับ เมื่อปรับทั้ง 2 จุดนี้รับรองว่าหน้าแชทจะกลับมาลื่นไหลแน่นอนครับ
