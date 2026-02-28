@@ -127,10 +127,13 @@ def google_callback():
         user = cursor.fetchone()
 
         if user:
+            display_name = user['full_name'] or user['username'] or email.split('@')[0]
             session.clear()
             session['user_id'] = user['id']
             session['role'] = user['role_name']
             session['reseller_tier'] = user['reseller_tier_id']
+            session['full_name'] = display_name
+            session['username'] = user['username']
             session['_csrf_token'] = secrets.token_hex(32)
             session.permanent = True
             role = user['role_name']
@@ -161,11 +164,13 @@ def google_callback():
         random_password = secrets.token_hex(32)
         password_hash = bcrypt.hashpw(random_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
+        display_name = name or username
+
         cursor.execute('''
             INSERT INTO users (full_name, username, password, role_id, reseller_tier_id, email)
             VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (name, username, password_hash, reseller_role['id'], tier_id, email))
+        ''', (display_name, username, password_hash, reseller_role['id'], tier_id, email))
 
         new_user_id = cursor.fetchone()['id']
         conn.commit()
@@ -174,6 +179,8 @@ def google_callback():
         session['user_id'] = new_user_id
         session['role'] = 'Reseller'
         session['reseller_tier'] = tier_id
+        session['full_name'] = display_name
+        session['username'] = username
         session['_csrf_token'] = secrets.token_hex(32)
         session.permanent = True
 

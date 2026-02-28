@@ -186,9 +186,10 @@ async function loadCurrentUser() {
     
     currentUser = await response.json();
     
-    document.getElementById('userName').textContent = currentUser.full_name;
-    document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
-    document.getElementById('welcomeText').textContent = `ยินดีต้อนรับ, ${currentUser.full_name}`;
+    const displayName = currentUser.full_name || currentUser.username || 'สมาชิก';
+    document.getElementById('userName').textContent = displayName;
+    document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
+    document.getElementById('welcomeText').textContent = `ยินดีต้อนรับ, ${displayName}`;
     
     const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
     const tierName = currentUser.reseller_tier || 'Bronze';
@@ -2177,9 +2178,10 @@ async function loadProfile() {
         const data = await response.json();
         const profile = data.profile;
         
-        document.getElementById('profileName').textContent = profile.full_name;
-        document.getElementById('profileUsername').textContent = profile.username;
-        document.getElementById('profileAvatar').textContent = profile.full_name.charAt(0).toUpperCase();
+        const profileDisplayName = profile.full_name || profile.username || 'สมาชิก';
+        document.getElementById('profileName').textContent = profileDisplayName;
+        document.getElementById('profileUsername').textContent = profile.username || '';
+        document.getElementById('profileAvatar').textContent = profileDisplayName.charAt(0).toUpperCase();
         
         const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
         document.getElementById('profileTierIcon').textContent = tierIcons[profile.tier_name] || '🏷️';
