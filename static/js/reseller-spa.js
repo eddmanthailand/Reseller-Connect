@@ -1841,9 +1841,12 @@ async function viewResellerOrderDetails(orderId) {
                                     <span style="background: ${shipmentColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${shipmentStatus}</span>
                                 </div>
                                 ${s.tracking_number ? `
-                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center;">
-                                        <span><strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}</span>
-                                        ${trackingUrl ? `<a href="${trackingUrl}" target="_blank" style="color: #a855f7; text-decoration: none; font-size: 11px;">ติดตามพัสดุ →</a>` : ''}
+                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span><strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}</span>
+                                            <button onclick="navigator.clipboard.writeText('${escapeHtml(s.tracking_number)}').then(()=>{this.textContent='✓ คัดลอกแล้ว';this.style.color='#34d399';setTimeout(()=>{this.textContent='คัดลอก';this.style.color='rgba(255,255,255,0.5)';},1500)})" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);padding:1px 7px;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;transition:all 0.15s;">คัดลอก</button>
+                                        </div>
+                                        ${trackingUrl ? `<a href="${trackingUrl}" target="_blank" style="color: #a855f7; text-decoration: none; font-size: 11px; white-space: nowrap; flex-shrink: 0;">ติดตามพัสดุ →</a>` : ''}
                                     </div>
                                 ` : ''}
                             </div>
