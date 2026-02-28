@@ -1448,6 +1448,7 @@ function previewPaymentSlip(input) {
         `;
     };
     reader.readAsDataURL(file);
+    validateCheckout();
 }
 
 function removePaymentSlip() {
@@ -1457,6 +1458,7 @@ function removePaymentSlip() {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px; opacity: 0.5; margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <p style="opacity: 0.6; font-size: 13px;">คลิกเพื่ออัปโหลดสลิป หรือลากไฟล์มาวาง</p>
     `;
+    validateCheckout();
 }
 
 function validateCheckout() {
@@ -1476,7 +1478,12 @@ function validateCheckout() {
             (checkoutData.selfAddress.address || checkoutData.selfAddress.province);
         if (!isValid) reason = 'กรุณาตั้งค่าที่อยู่ร้านก่อน';
     }
-    
+
+    if (isValid && !selectedPaymentSlip) {
+        isValid = false;
+        reason = 'กรุณาแนบสลิปการชำระเงินก่อนยืนยัน';
+    }
+
     btn.disabled = !isValid;
     
     // Show/hide helper text
