@@ -13001,6 +13001,7 @@ def get_chat_threads():
                 LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
                 WHERE ct.is_archived = %s
                 ORDER BY ct.last_message_at DESC NULLS LAST
+                LIMIT 300
             ''', (user_id, show_archived))
         
         threads = [dict(row) for row in cursor.fetchall()]

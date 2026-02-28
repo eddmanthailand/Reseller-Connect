@@ -1271,16 +1271,23 @@ function filterThreads(q) {
     renderThreads(filtered);
 }
 
+let currentRenderedHtml = '';
+
 function renderThreads(threads) {
     const el = document.getElementById('threadList');
     if (!Array.isArray(threads) || threads.length === 0) {
-        el.innerHTML = `<div class="empty-threads">
+        const emptyHtml = `<div class="empty-threads">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
             <span>${showArchived ? 'ไม่มีการสนทนาที่ซ่อน' : 'ยังไม่มีการสนทนา'}</span>
         </div>`;
+        if (currentRenderedHtml !== emptyHtml) {
+            el.innerHTML = emptyHtml;
+            currentRenderedHtml = emptyHtml;
+        }
         return;
     }
-    el.innerHTML = threads.map(t => {
+    const displayThreads = threads.slice(0, 300);
+    const newHtml = displayThreads.map(t => {
         const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
         return `
         <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
@@ -1306,7 +1313,11 @@ function renderThreads(threads) {
                 </button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
+    if (currentRenderedHtml !== newHtml) {
+        el.innerHTML = newHtml;
+        currentRenderedHtml = newHtml;
+    }
 }
 
 function tierClass(name) {
@@ -1864,17 +1875,35 @@ async function sendBroadcast() {
 }
 
 // ── Polling ──
+let isPolling = false;
+let chatPollTimer = null;
+
+async function runPoll() {
+    if (isPolling) return;
+    isPolling = true;
+    try {
+        if (currentThreadId) await loadMessages();
+        await loadThreads();
+    } catch(e) {
+        console.error(e);
+    } finally {
+        isPolling = false;
+        const delay = currentThreadId ? 5000 : 10000;
+        chatPollTimer = setTimeout(runPoll, delay);
+    }
+}
+
 function startPolling() {
     stopPolling();
-    pollingTimer = setInterval(() => {
-        if (currentThreadId) loadMessages();
-        loadThreads();
-    }, 5000);
+    runPoll();
 }
-function stopPolling() { if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; } }
+function stopPolling() {
+    if (chatPollTimer) { clearTimeout(chatPollTimer); chatPollTimer = null; }
+    isPolling = false;
+}
 
 function startGlobalPolling() {
-    setInterval(() => { if (!currentThreadId) loadThreads(); }, 10000);
+    startPolling();
 }
 
 // ── Utilities ──
