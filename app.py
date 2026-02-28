@@ -7,6 +7,7 @@ from database import get_db, init_db
 import os
 import logging
 from authlib.integrations.flask_client import OAuth
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 logging.basicConfig(
     level=logging.ERROR,
@@ -24,6 +25,7 @@ import secrets
 from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # SESSION_SECRET is required for production security
 session_secret = os.environ.get('SESSION_SECRET')
@@ -40,6 +42,7 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 # Rate limiting storage (in-memory for simplicity)
 login_attempts = {}
