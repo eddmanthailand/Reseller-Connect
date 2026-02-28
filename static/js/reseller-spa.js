@@ -3464,7 +3464,7 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
             <div style="max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
                 ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 ประกาศ</div>' : ''}
                 ${productCardHtml}
-                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
                 ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                     att.file_type && att.file_type.startsWith('image/') 
                         ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`

@@ -367,8 +367,11 @@
             font-size: 14px;
             line-height: 1.5;
             word-break: break-word;
-            white-space: pre-wrap;
             position: relative;
+        }
+        .msg-text {
+            white-space: pre-wrap;
+            word-break: break-word;
         }
         .msg-row.me .msg-bubble {
             background: var(--bubble-me);
@@ -1519,7 +1522,7 @@ function renderMsg(msg, otherLastRead) {
             <div class="msg-bubble">
                 ${msg.is_broadcast ? '<div class="broadcast-label">📢 Broadcast</div>' : ''}
                 ${productHtml}
-                ${msg.content ? `<div>${esc(msg.content)}</div>` : ''}
+                ${msg.content ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
                 ${attachHtml}
             </div>
             <div class="msg-time">${fmtMsgTime(msg.created_at)}${isRead ? ' <span class="msg-read">อ่านแล้ว</span>' : ''}</div>

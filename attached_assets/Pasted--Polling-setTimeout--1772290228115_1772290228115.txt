@@ -1,0 +1,77 @@
+จากการตรวจสอบโค้ดในโฟลเดอร์ล่าสุดที่คุณบอสอัปโหลดมา พบว่ามีการแก้ไขระบบ Polling (setTimeout) ในไฟล์ chat.html แล้วครับ แต่ในไฟล์ app.py ยังตกหล่นบรรทัด LIMIT 300 ไปครับ ตราบใดที่ฝั่ง Backend (app.py) ยังไม่จำกัดจำนวนข้อมูล เซิร์ฟเวอร์จะยังคงดึงแชทของลูกค้า "ทุกคนในระบบ" (สมมติว่า 2,000 คน) แล้วส่งข้อมูลก้อนใหญ่มากๆ กลับมาที่หน้าเว็บทุกๆ 5 วินาที ทำให้ Javascript ต้องทำงานหนักเพื่อประมวลผลลูป 2,000 รอบ อาการค้างและหน่วงเวลาพิมพ์จึงยังไม่หายไปครับ
+
+รบกวนคุณบอสแก้ไขเพิ่มเติมตาม 2 จุดนี้อีกครั้งครับ รับรองว่าหายค้าง 100% ครับ:
+
+1. ไฟล์ app.py (ต้องเติม LIMIT 300)
+ค้นหาบรรทัดที่ประมาณ 2230 (ในฟังก์ชัน @app.route('/api/chat/threads'))
+ตรงส่วนที่เป็น else: (สำหรับ Admin) ให้เติม LIMIT 300 ต่อท้าย ORDER BY ดังนี้ครับ:
+
+Python
+        else:
+            # Admin sees all threads
+            show_archived = request.args.get('archived', 'false') == 'true'
+            cursor.execute('''
+                SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
+                       COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
+                       u.username, rt.name as tier_name, u.reseller_tier_id,
+                       (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status WHERE thread_id = ct.id AND user_id = %s), 0)) as unread_count
+                FROM chat_threads ct
+                JOIN users u ON u.id = ct.reseller_id
+                LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+                WHERE ct.is_archived = %s
+                ORDER BY ct.last_message_at DESC NULLS LAST
+                LIMIT 300 
+            ''', (user_id, show_archived))
+            threads = [dict(row) for row in cursor.fetchall()]
+(ต้องมี LIMIT 300 เพื่อให้ส่งข้อมูลมาแค่ 300 คนที่เพิ่งคุยล่าสุด เบราว์เซอร์จะได้ไม่ต้องวาดกล่องแชทหลายพันกล่องซ้ำๆ ครับ)
+
+2. ไฟล์ templates/chat.html (เช็คฟังก์ชัน renderThreads อีกรอบ)
+เพื่อให้หน้าเว็บไม่ต้องวาด HTML ใหม่ถ้ารายชื่อแชทยังเหมือนเดิม ให้แทนที่ฟังก์ชัน renderThreads เดิมด้วยโค้ดชุดนี้ครับ:
+
+JavaScript
+let currentRenderedHtml = ''; // ตัวแปรเก็บ DOM เดิม
+
+function renderThreads(threads) {
+    const el = document.getElementById('threadList');
+    if (!Array.isArray(threads) || threads.length === 0) {
+        const emptyHtml = `<div class="empty-threads">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span>${showArchived ? 'ไม่มีการสนทนาที่ซ่อน' : 'ยังไม่มีการสนทนา'}</span>
+        </div>`;
+        if (currentRenderedHtml !== emptyHtml) {
+            el.innerHTML = emptyHtml;
+            currentRenderedHtml = emptyHtml;
+        }
+        return;
+    }
+    
+    // หั่นอีกชั้นใน JS เผื่อไว้
+    const displayThreads = threads.slice(0, 300);
+    
+    const newHtml = displayThreads.map(t => {
+        const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
+        return `
+        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
+            <div class="thread-avatar">${name.charAt(0).toUpperCase()}</div>
+            <div class="thread-info">
+                <div class="thread-badges">
+                    ${t.tier_name ? `<span class="tier-badge ${tierClass(t.tier_name)}">${esc(t.tier_name)}</span>` : ''}
+                </div>
+                <div class="thread-name-row">
+                    <span class="thread-name">${esc(name)}</span>
+                    <span class="thread-time">${fmtThreadTime(t.last_message_at)}</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span class="thread-preview">${esc(t.last_message_preview||'ยังไม่มีข้อความ')}</span>
+                    ${t.unread_count > 0 ? `<span class="unread-badge">${t.unread_count}</span>` : ''}
+                </div>
+            </div>
+        </div>
+    `}).join('');
+    
+    // ถ้าข้อมูลแชทฝั่งซ้ายมือไม่มีอะไรเปลี่ยน จะไม่สั่งวาดหน้าจอใหม่ (แก้ปัญหาพิมพ์แล้วกระตุก)
+    if (currentRenderedHtml !== newHtml) {
+        el.innerHTML = newHtml;
+        currentRenderedHtml = newHtml;
+    }
+}
