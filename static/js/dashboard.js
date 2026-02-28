@@ -138,6 +138,10 @@ async function init() {
         
         // Listen for hash changes
         window.addEventListener('hashchange', handleHashNavigation);
+
+        // Global chat badge polling — runs on every page
+        loadChatUnreadCount();
+        setInterval(loadChatUnreadCount, 15000);
     } catch (error) {
         console.error('Initialization error:', error);
         showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
@@ -8451,8 +8455,8 @@ async function loadChatUnreadCount() {
         const data = await response.json();
         
         const badge = document.getElementById('chatUnreadCount');
-        const chatNavItem = document.querySelector('.nav-item[data-page="chat"]');
-        
+        const chatNavItem = document.querySelector('a.nav-item[href="/chat"]');
+
         if (badge) {
             if (data.unread_count > 0) {
                 badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
