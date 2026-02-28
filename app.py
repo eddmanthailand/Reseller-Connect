@@ -282,6 +282,12 @@ def admin_management():
     """Render the admin dashboard"""
     return render_template('admin_dashboard.html')
 
+@app.route('/chat')
+@admin_required
+def admin_chat_page():
+    """Full-page chat interface for admins"""
+    return render_template('chat.html', user_name=session.get('full_name', ''), user_role=session.get('role', ''))
+
 @app.route('/admin/products')
 @admin_required
 def product_list():
