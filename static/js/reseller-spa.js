@@ -3443,7 +3443,10 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
         const originalPrice = p.min_price === p.max_price ? `฿${fmtNum(p.min_price)}` : `฿${fmtNum(p.min_price)} - ฿${fmtNum(p.max_price)}`;
         productCardHtml = `
             <div style="background: rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; margin-bottom: ${msg.content ? '8px' : '0'}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; -webkit-transform: translateZ(0); transform: translateZ(0); width: 220px; max-width: 100%;" onclick="viewProduct(${p.id})">
-                ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; max-height: 200px; object-fit: contain; display: block; background: rgba(0,0,0,0.15);" onerror="this.outerHTML='<div style=\\'height:80px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:28px;\\'>📦</div>'">` : '<div style="height: 80px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 28px;">📦</div>'}
+                <div style="position:relative;">
+                    ${p.image_url ? `<img src="${p.image_url}" style="width: 100%; max-height: 200px; object-fit: contain; display: block; background: rgba(0,0,0,0.15);" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+                    <div style="height:80px;background:rgba(255,255,255,0.05);display:${p.image_url ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:28px;">📦</div>
+                </div>
                 <div style="padding: 10px;">
                     <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>
                     ${hasDiscount ? `
