@@ -1761,8 +1761,8 @@ async function openAdminChatOrderPicker() {
 
     try {
         const url = currentResellerId
-            ? `${API}/admin/orders?reseller_id=${currentResellerId}&limit=10`
-            : `${API}/admin/orders?limit=10`;
+            ? `${API}/admin/orders?reseller_id=${currentResellerId}&limit=5`
+            : `${API}/admin/orders?limit=5`;
         const r = await fetch(url, { credentials: 'include' });
         const data = await r.json();
         if (!r.ok || !data.orders || data.orders.length === 0) {
