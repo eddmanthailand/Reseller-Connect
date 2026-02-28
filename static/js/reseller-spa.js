@@ -231,7 +231,7 @@ async function loadDashboardData() {
             const underReview = data.pending_orders?.under_review || 0;
             let pendingText = [];
             if (pendingPayment > 0) pendingText.push(`รอส่งสลิป ${pendingPayment}`);
-            if (underReview > 0) pendingText.push(`รอตรวจ ${underReview}`);
+            if (underReview > 0) pendingText.push(`รอตรวจสลิป ${underReview}`);
             document.getElementById('statPendingDetail').textContent = pendingText.join(', ') || 'ไม่มี';
             
             updateTierProgress(data.tier_progress, data.all_time_stats?.total || 0);
@@ -315,7 +315,7 @@ function renderRecentOrders(orders) {
     
     const statusLabels = {
         'pending_payment': 'รอส่งสลิป',
-        'under_review': 'รอตรวจสอบ',
+        'under_review': 'รอตรวจสอบสลิป',
         'preparing': 'เตรียมสินค้า',
         'shipped': 'กำลังจัดส่ง',
         'delivered': 'ได้รับสินค้าแล้ว',
@@ -1720,7 +1720,7 @@ function renderOrders(orders) {
     
     const statusLabels = {
         'pending_payment': 'รอส่งสลิป',
-        'under_review': 'รอตรวจสอบ',
+        'under_review': 'รอตรวจสอบสลิป',
         'preparing': 'เตรียมสินค้า',
         'shipped': 'กำลังจัดส่ง',
         'delivered': 'ได้รับสินค้าแล้ว',
@@ -1767,7 +1767,7 @@ async function viewResellerOrderDetails(orderId) {
         
         const statusLabels = {
             'pending_payment': 'รอส่งสลิป',
-            'under_review': 'รอตรวจสอบ',
+            'under_review': 'รอตรวจสอบสลิป',
             'preparing': 'เตรียมสินค้า',
             'shipped': 'กำลังจัดส่ง',
             'delivered': 'ได้รับสินค้าแล้ว',
@@ -1858,7 +1858,7 @@ async function viewResellerOrderDetails(orderId) {
                 <div style="margin-top: 16px;">
                     <h4 style="margin-bottom: 10px; font-size: 14px;">หลักฐานการชำระเงิน</h4>
                     ${order.payment_slips.map(slip => {
-                        const slipStatus = slip.status === 'approved' ? 'อนุมัติ' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ';
+                        const slipStatus = slip.status === 'approved' ? 'อนุมัติ' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบสลิป';
                         const slipColor = slip.status === 'approved' ? '#22c55e' : slip.status === 'rejected' ? '#ef4444' : '#f59e0b';
                         return `
                             <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
@@ -2046,7 +2046,7 @@ async function uploadPaymentSlip(orderId) {
         });
         
         if (response.ok) {
-            showAlert('อัพโหลดสลิปสำเร็จ รอตรวจสอบ', 'success');
+            showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบสลิป', 'success');
             closePaymentSlipModal();
             closeOrderModal();
             loadOrders();
