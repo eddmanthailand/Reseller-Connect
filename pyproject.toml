@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "authlib>=1.6.8",
     "bcrypt>=5.0.0",
     "flask>=3.1.2",
     "flask-cors>=6.0.1",
@@ -15,4 +16,5 @@ dependencies = [
     "pywebpush>=2.3.0",
     "qrcode[pil]>=8.2",
     "replit-object-storage>=1.0.2",
+    "requests>=2.32.5",
 ]
