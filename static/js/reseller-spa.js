@@ -3768,7 +3768,7 @@ async function sendResellerChatMessage() {
     const input = document.getElementById('resellerChatInput');
     const content = input.value.trim();
     
-    if (!content && resellerPendingAttachments.length === 0 && !resellerSelectedChatProduct) return;
+    if (!content && resellerPendingAttachments.length === 0 && !resellerSelectedChatProduct && !resellerSelectedChatOrder) return;
     
     try {
         const body = {
@@ -3777,6 +3777,9 @@ async function sendResellerChatMessage() {
         };
         if (resellerSelectedChatProduct) {
             body.product_id = resellerSelectedChatProduct.id;
+        }
+        if (resellerSelectedChatOrder) {
+            body.order_id = resellerSelectedChatOrder.id;
         }
         
         const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
@@ -3791,9 +3794,11 @@ async function sendResellerChatMessage() {
             input.style.height = 'auto';
             resellerPendingAttachments = [];
             resellerSelectedChatProduct = null;
+            resellerSelectedChatOrder = null;
             document.getElementById('resellerChatAttachmentPreview').style.display = 'none';
             document.getElementById('resellerChatAttachmentPreview').innerHTML = '';
             document.getElementById('resellerChatProductPreview').style.display = 'none';
+            document.getElementById('resellerChatOrderPreview').style.display = 'none';
             await loadResellerChatMessages();
         } else {
             const error = await response.json();
@@ -4106,4 +4111,125 @@ async function loadResellerChatUnreadCount() {
     } catch (error) {
         console.error('Error loading unread count:', error);
     }
+}
+
+/* ─── Chat Plus Menu ─────────────────────────────────────── */
+let resellerChatPlusMenuOpen = false;
+
+function toggleResellerChatPlusMenu() {
+    resellerChatPlusMenuOpen ? closeResellerChatPlusMenu() : openResellerChatPlusMenuFn();
+}
+
+function openResellerChatPlusMenuFn() {
+    resellerChatPlusMenuOpen = true;
+    const menu = document.getElementById('resellerChatPlusMenu');
+    const iconPlus = document.getElementById('resellerChatPlusIconPlus');
+    const iconX = document.getElementById('resellerChatPlusIconX');
+    if (menu) menu.style.display = 'block';
+    if (iconPlus) iconPlus.style.display = 'none';
+    if (iconX) iconX.style.display = 'block';
+    setTimeout(() => document.addEventListener('click', resellerChatPlusOutsideClick), 50);
+}
+
+function closeResellerChatPlusMenu() {
+    resellerChatPlusMenuOpen = false;
+    const menu = document.getElementById('resellerChatPlusMenu');
+    const iconPlus = document.getElementById('resellerChatPlusIconPlus');
+    const iconX = document.getElementById('resellerChatPlusIconX');
+    if (menu) menu.style.display = 'none';
+    if (iconPlus) iconPlus.style.display = 'block';
+    if (iconX) iconX.style.display = 'none';
+    document.removeEventListener('click', resellerChatPlusOutsideClick);
+}
+
+function resellerChatPlusOutsideClick(e) {
+    const btn = document.getElementById('resellerChatPlusBtn');
+    const menu = document.getElementById('resellerChatPlusMenu');
+    if (btn && !btn.contains(e.target) && menu && !menu.contains(e.target)) {
+        closeResellerChatPlusMenu();
+    }
+}
+
+function openResellerChatGallery() {
+    closeResellerChatPlusMenu();
+    const el = document.getElementById('resellerChatFileInput');
+    if (el) { el.value = ''; el.click(); }
+}
+
+function openResellerChatCamera() {
+    closeResellerChatPlusMenu();
+    const el = document.getElementById('resellerChatCameraInput');
+    if (el) { el.value = ''; el.click(); }
+}
+
+/* ─── Chat Order Picker ─────────────────────────────────── */
+let resellerSelectedChatOrder = null;
+
+async function openResellerChatOrderPicker() {
+    closeResellerChatPlusMenu();
+    const modal = document.getElementById('resellerChatOrderPickerModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    const listEl = document.getElementById('resellerChatOrderPickerList');
+    listEl.innerHTML = `<div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.4);">
+        <div style="width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: chatSpinAnim 0.6s linear infinite; margin: 0 auto 12px;"></div>
+        <div style="font-size: 13px;">กำลังโหลด...</div>
+    </div>`;
+
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/reseller/recent-orders?limit=5`, { credentials: 'include' });
+        const orders = await res.json();
+
+        const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบสลิป', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'ได้รับสินค้าแล้ว', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
+        const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
+
+        if (!Array.isArray(orders) || orders.length === 0) {
+            listEl.innerHTML = `<div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.4);">
+                <div style="font-size: 32px; margin-bottom: 10px;">📋</div>
+                <div style="font-size: 13px;">ยังไม่มีคำสั่งซื้อ</div>
+            </div>`;
+            return;
+        }
+
+        listEl.innerHTML = orders.map(o => `
+            <div onclick="selectResellerChatOrder(${o.id}, '${escapeHtmlChat(o.order_number)}', '${o.status}', ${o.final_amount})"
+                 style="padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;"
+                 onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'"
+                 ontouchstart="this.style.background='rgba(255,255,255,0.05)'" ontouchend="this.style.background='transparent'">
+                <div>
+                    <div style="font-size: 14px; font-weight: 700; color: white;">${escapeHtmlChat(o.order_number)}</div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 3px;">${new Date(o.created_at).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'numeric'})}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="margin-bottom: 5px;">
+                        <span style="background: ${sC[o.status] || '#6b7280'}; color: white; padding: 2px 10px; border-radius: 20px; font-size: 10px; font-weight: 600;">${sL[o.status] || o.status}</span>
+                    </div>
+                    <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">฿${Number(o.final_amount || 0).toLocaleString('th-TH')}</div>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        listEl.innerHTML = `<div style="text-align: center; padding: 40px 20px; color: #ef4444; font-size: 13px;">เกิดข้อผิดพลาด กรุณาลองใหม่</div>`;
+    }
+}
+
+function closeResellerChatOrderPicker() {
+    const modal = document.getElementById('resellerChatOrderPickerModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function selectResellerChatOrder(id, orderNumber, status, finalAmount) {
+    resellerSelectedChatOrder = { id, order_number: orderNumber, status, final_amount: finalAmount };
+    closeResellerChatOrderPicker();
+    const preview = document.getElementById('resellerChatOrderPreview');
+    const previewText = document.getElementById('resellerChatOrderPreviewText');
+    if (preview) preview.style.display = 'block';
+    if (previewText) previewText.textContent = `${orderNumber}  ·  ฿${Number(finalAmount).toLocaleString('th-TH')}`;
+}
+
+function removeResellerChatOrder() {
+    resellerSelectedChatOrder = null;
+    const preview = document.getElementById('resellerChatOrderPreview');
+    if (preview) preview.style.display = 'none';
 }

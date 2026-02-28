@@ -13332,17 +13332,18 @@ def send_chat_message(thread_id):
         content = data.get('content', '').strip()
         attachments = data.get('attachments', [])
         product_id = data.get('product_id', None)
+        order_id = data.get('order_id', None)
         
-        if not content and not attachments and not product_id:
+        if not content and not attachments and not product_id and not order_id:
             return jsonify({'error': 'Message content, attachments or product required'}), 400
         
         sender_type = 'reseller' if role_name == 'Reseller' else 'admin'
         
         # Insert message
         cursor.execute('''
-            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at
-        ''', (thread_id, user_id, sender_type, content, product_id))
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id, order_id)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at
+        ''', (thread_id, user_id, sender_type, content, product_id, order_id))
         result = cursor.fetchone()
         message_id = result['id']
         
@@ -13355,7 +13356,14 @@ def send_chat_message(thread_id):
                   attachment.get('file_type'), attachment.get('file_size')))
         
         # Update thread last message
-        preview = content[:100] if content else ('[📦 สินค้า]' if product_id else '[รูปภาพ]')
+        if content:
+            preview = content[:100]
+        elif order_id:
+            preview = '[🧾 คำสั่งซื้อ]'
+        elif product_id:
+            preview = '[📦 สินค้า]'
+        else:
+            preview = '[รูปภาพ]'
         cursor.execute('''
             UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s
             WHERE id = %s
