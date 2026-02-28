@@ -129,12 +129,12 @@ def google_callback():
         if user:
             session.clear()
             session['user_id'] = user['id']
-            session['role'] = user['role_name'].lower().replace(' ', '_')
+            session['role'] = user['role_name']
             session['reseller_tier'] = user['reseller_tier_id']
             session['_csrf_token'] = secrets.token_hex(32)
             session.permanent = True
-            role = session['role']
-            if 'admin' in role:
+            role = user['role_name']
+            if 'Admin' in role:
                 return redirect('/admin')
             return redirect('/dashboard')
 
@@ -172,7 +172,7 @@ def google_callback():
 
         session.clear()
         session['user_id'] = new_user_id
-        session['role'] = 'reseller'
+        session['role'] = 'Reseller'
         session['reseller_tier'] = tier_id
         session['_csrf_token'] = secrets.token_hex(32)
         session.permanent = True
