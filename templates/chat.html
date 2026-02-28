@@ -367,6 +367,7 @@
             font-size: 14px;
             line-height: 1.5;
             word-break: break-word;
+            white-space: pre-wrap;
             position: relative;
         }
         .msg-row.me .msg-bubble {
@@ -1032,7 +1033,7 @@
                             </svg>
                         </button>
                     </div>
-                    <textarea id="msgInput" placeholder="พิมพ์ข้อความ..." rows="1" onkeydown="handleInputKeydown(event)" oninput="autoResizeInput(this)"></textarea>
+                    <textarea id="msgInput" placeholder="พิมพ์ข้อความ... (Enter = ขึ้นบรรทัดใหม่)" rows="1" onkeydown="handleInputKeydown(event)" oninput="autoResizeInput(this)"></textarea>
                     <button class="send-btn" onclick="sendMessage()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="22" y1="2" x2="11" y2="13"/>
@@ -1591,7 +1592,7 @@ async function sendMessage() {
 }
 
 function handleInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage(); }
 }
 function autoResizeInput(el) {
     el.style.height = 'auto';

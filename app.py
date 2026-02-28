@@ -14289,16 +14289,15 @@ def _do_send_push(user_id, title, body, url, tag, notification_type):
         
         print(f"[PUSH] Sending to user {user_id}: {title} - {body[:50]} ({len(subscriptions)} subscriptions)")
         
-        push_session = _requests.Session()
-        push_session.request = lambda method, url, **kwargs: _requests.Session.request(
-            push_session, method, url, timeout=8, **kwargs
-        )
-
         expired_ids = []
         sent_count = 0
         for sub in subscriptions:
             device = 'Mobile' if 'Mobile' in (sub.get('user_agent') or '') else 'PC'
             try:
+                push_session = _requests.Session()
+                push_session.request = lambda method, url, timeout=8, **kwargs: (
+                    _requests.Session.request(push_session, method, url, timeout=timeout, **kwargs)
+                )
                 webpush(
                     subscription_info={
                         'endpoint': sub['endpoint'],
