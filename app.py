@@ -9035,6 +9035,8 @@ def get_all_orders():
     cursor = None
     try:
         status_filter = request.args.get('status')
+        reseller_id_filter = request.args.get('reseller_id', type=int)
+        limit_filter = request.args.get('limit', type=int)
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -9102,12 +9104,19 @@ def get_all_orders():
                 LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             '''
             params = []
-            
+            conditions = []
             if status_filter:
-                query += ' WHERE o.status = %s'
+                conditions.append('o.status = %s')
                 params.append(status_filter)
+            if reseller_id_filter:
+                conditions.append('o.user_id = %s')
+                params.append(reseller_id_filter)
+            if conditions:
+                query += ' WHERE ' + ' AND '.join(conditions)
         
         query += ' ORDER BY o.created_at DESC'
+        if limit_filter:
+            query += f' LIMIT {int(limit_filter)}'
         
         cursor.execute(query, params)
         orders = []

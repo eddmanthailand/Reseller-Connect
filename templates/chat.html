@@ -713,6 +713,7 @@
             display: inline-block;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes chatPlusMenuIn { from { opacity:0; transform:translateY(8px) scale(0.95); } to { opacity:1; transform:translateY(0) scale(1); } }
 
         /* ── Mobile ── */
         @media (max-width: 768px) {
@@ -1015,20 +1016,44 @@
             <!-- Input area -->
             <div class="chat-input-wrap">
                 <div class="quick-replies-bar" id="quickRepliesBar"></div>
+                <div id="adminOrderPreviewBar" style="display:none; padding:8px 12px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(168,85,247,0.08);"></div>
                 <div class="attachment-preview-bar" id="attachPreviewBar"></div>
                 <div class="input-row">
                     <div class="input-side-btns">
-                        <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="แนบไฟล์">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-                            </svg>
-                        </button>
-                        <button class="icon-btn" onclick="openProductModal()" title="ส่งสินค้า">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/>
-                                <line x1="16" y1="10" x2="8" y2="10"/>
-                            </svg>
-                        </button>
+                        <div style="position:relative;">
+                            <button class="icon-btn" id="adminChatPlusBtn" onclick="toggleAdminChatPlusMenu()" title="เพิ่ม" style="position:relative;">
+                                <svg id="adminPlusIconPlus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                <svg id="adminPlusIconX" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                            <div id="adminChatPlusMenu" style="display:none; position:absolute; bottom:54px; left:0; z-index:500; background:rgba(18,10,34,0.97); border:1px solid rgba(255,255,255,0.12); border-radius:18px; padding:12px 10px; backdrop-filter:blur(20px); box-shadow:0 -8px 32px rgba(0,0,0,0.5); animation:chatPlusMenuIn 0.18s cubic-bezier(0.34,1.56,0.64,1);">
+                                <div style="display:flex; gap:4px;">
+                                    <div onclick="adminChatOpenGallery()" style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:8px 6px;border-radius:12px;transition:background 0.15s;min-width:64px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+                                        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(102,126,234,0.45);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                        </div>
+                                        <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">คลังภาพ</span>
+                                    </div>
+                                    <div onclick="adminChatOpenCamera()" style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:8px 6px;border-radius:12px;transition:background 0.15s;min-width:64px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+                                        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#f093fb,#f5576c);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(245,87,108,0.45);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        </div>
+                                        <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">กล้อง</span>
+                                    </div>
+                                    <div onclick="openProductModal(); closeAdminChatPlusMenu();" style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:8px 6px;border-radius:12px;transition:background 0.15s;min-width:64px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+                                        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#4facfe,#00f2fe);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(79,172,254,0.45);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                                        </div>
+                                        <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">สินค้า</span>
+                                    </div>
+                                    <div onclick="openAdminChatOrderPicker()" style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:8px 6px;border-radius:12px;transition:background 0.15s;min-width:64px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+                                        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#fa709a,#fee140);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(250,112,154,0.45);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                        </div>
+                                        <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">คำสั่งซื้อ</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <button class="icon-btn" id="qrToggleBtn" onclick="toggleQuickReplies()" title="Quick Reply">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="13 17 18 12 13 7"/>
@@ -1051,8 +1076,32 @@
 
 </div><!-- /chat-app -->
 
-<!-- hidden file input -->
+<!-- hidden file inputs -->
 <input type="file" id="fileInput" style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip" onchange="handleFileUpload(event)">
+<input type="file" id="adminChatCameraInput" style="display:none" accept="image/*" capture="environment" onchange="handleFileUpload(event)">
+
+<!-- Admin Chat Order Picker Modal -->
+<div id="adminChatOrderPickerModal" style="display:none; position:fixed; inset:0; z-index:10001; align-items:flex-end; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px);">
+    <div style="width:100%; max-width:640px; margin:0 auto; background:linear-gradient(160deg,#1a0a2e,#0d0a1e); border-radius:22px 22px 0 0; border-top:1px solid rgba(255,255,255,0.1); box-shadow:0 -8px 32px rgba(0,0,0,0.5);">
+        <div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 0;"></div>
+        <div style="padding:14px 20px 12px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:16px;font-weight:700;margin:0;color:white;">เลือกคำสั่งซื้อ</h3>
+            <button onclick="closeAdminChatOrderPicker()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        <div id="adminChatOrderPickerList" style="max-height:55vh; overflow-y:auto; padding-bottom:8px;"></div>
+    </div>
+</div>
+
+<!-- Admin Chat Order Preview Modal -->
+<div id="adminChatOrderPreviewModal" style="display:none; position:fixed; inset:0; z-index:10001; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); padding:16px;">
+    <div style="width:100%; max-width:500px; max-height:90vh; background:linear-gradient(160deg,#1a0a2e,#0d0a1e); border-radius:18px; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; overflow:hidden;">
+        <div style="padding:16px 20px 12px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+            <h3 id="adminOrderPreviewTitle" style="font-size:15px;font-weight:700;margin:0;color:white;">รายละเอียดคำสั่งซื้อ</h3>
+            <button onclick="closeAdminChatOrderPreview()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        <div id="adminOrderPreviewBody" style="flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch;"></div>
+    </div>
+</div>
 
 <!-- ═══════════════════════════════════════ BROADCAST MODAL ═══════════════════════════════════════ -->
 <div class="modal-overlay" id="broadcastModal">
@@ -1166,6 +1215,8 @@
 const API = '/api';
 let csrfToken = null;
 let currentThreadId = null;
+let currentResellerId = null;
+let adminSelectedChatOrder = null;
 let currentThreadArchived = false;
 let currentMemberName = '';
 let currentMemberInitial = '';
@@ -1294,7 +1345,7 @@ function renderThreads(threads) {
     const newHtml = displayThreads.map(t => {
         const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
         return `
-        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false})">
+        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false}, ${t.reseller_id||'null'})">
             <div class="thread-avatar">${name.charAt(0).toUpperCase()}</div>
             <div class="thread-info">
                 <div class="thread-badges">
@@ -1353,8 +1404,9 @@ function fmtThreadTime(dateStr) {
 }
 
 // ── Select Thread ──
-async function selectThread(id, name, tier, tierId, isArchived) {
+async function selectThread(id, name, tier, tierId, isArchived, resellerId) {
     currentThreadId = id;
+    currentResellerId = resellerId || null;
     currentMemberName = name;
     currentMemberInitial = name.charAt(0).toUpperCase();
     currentTierId = tierId;
@@ -1515,8 +1567,8 @@ function renderMsg(msg, otherLastRead) {
         const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
         const fmtN = n => Number(n || 0).toLocaleString('th-TH');
         const items = Array.isArray(o.items) ? o.items.filter(it => it && it.product_name) : [];
-        const displayItems = items.slice(0, 3);
-        const moreCount = items.length - displayItems.length;
+        const displayItems = items;
+        const moreCount = 0;
         const shippingFee = o.shipping_fee || 0;
         const grandTotal = o.final_amount || 0;
 
@@ -1532,7 +1584,7 @@ function renderMsg(msg, otherLastRead) {
             </div>`).join('');
 
         orderHtml = `
-            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;overflow:hidden;margin-bottom:${msg.content ? '6px' : '0'};cursor:pointer;min-width:220px;max-width:260px;" onclick="window.location.hash='orders'">
+            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;overflow:hidden;margin-bottom:${msg.content ? '6px' : '0'};cursor:pointer;min-width:220px;max-width:260px;" onclick="openAdminChatOrderPreview(${o.id})">
                 <div style="padding:9px 11px 0;display:flex;justify-content:space-between;align-items:center;">
                     <span style="font-size:12px;font-weight:700;">${esc(o.order_number || '#' + o.id)}</span>
                     <span style="background:${sC[o.status]||'#6b7280'};color:white;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:600;">${sL[o.status]||o.status}</span>
@@ -1552,7 +1604,7 @@ function renderMsg(msg, otherLastRead) {
                         <span style="color:#fbbf24;">฿${fmtN(grandTotal)}</span>
                     </div>
                 </div>
-                <div style="background:rgba(168,85,247,0.12);padding:5px 11px;text-align:center;font-size:10px;color:rgba(255,255,255,0.5);">กดเพื่อไปที่หน้าคำสั่งซื้อ →</div>
+                <div style="background:rgba(168,85,247,0.12);padding:5px 11px;text-align:center;font-size:10px;color:rgba(255,255,255,0.5);">กดเพื่อดูรายละเอียดคำสั่งซื้อ →</div>
             </div>`;
     }
 
@@ -1608,7 +1660,27 @@ async function sendMessage() {
     if (!currentThreadId) return;
     const input = document.getElementById('msgInput');
     const content = input.value.trim();
-    if (!content && pendingAttachments.length === 0 && selectedProducts.length === 0) return;
+    if (!content && pendingAttachments.length === 0 && selectedProducts.length === 0 && !adminSelectedChatOrder) return;
+
+    if (adminSelectedChatOrder) {
+        const body = { content: content || '', order_id: adminSelectedChatOrder.id };
+        const r = await fetch(`${API}/chat/threads/${currentThreadId}/messages`, {
+            method: 'POST', headers: csrfHeaders(), credentials: 'include',
+            body: JSON.stringify(body)
+        });
+        if (r.ok) {
+            input.value = '';
+            input.style.height = 'auto';
+            adminSelectedChatOrder = null;
+            const bar = document.getElementById('adminOrderPreviewBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        } else {
+            const err = await r.json();
+            toast(err.error || 'ส่งไม่สำเร็จ', 'error');
+            return;
+        }
+        stopPolling(); runPoll(); return;
+    }
 
     if (selectedProducts.length > 0) {
         for (const p of selectedProducts) {
@@ -1648,6 +1720,176 @@ async function sendMessage() {
 function handleInputKeydown(e) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage(); }
 }
+
+// ── Admin Chat Plus Menu ──
+let adminChatPlusMenuOpen = false;
+function toggleAdminChatPlusMenu() {
+    adminChatPlusMenuOpen = !adminChatPlusMenuOpen;
+    const menu = document.getElementById('adminChatPlusMenu');
+    const iconPlus = document.getElementById('adminPlusIconPlus');
+    const iconX = document.getElementById('adminPlusIconX');
+    if (menu) menu.style.display = adminChatPlusMenuOpen ? 'block' : 'none';
+    if (iconPlus) iconPlus.style.display = adminChatPlusMenuOpen ? 'none' : 'block';
+    if (iconX) iconX.style.display = adminChatPlusMenuOpen ? 'block' : 'none';
+}
+function closeAdminChatPlusMenu() {
+    adminChatPlusMenuOpen = false;
+    const menu = document.getElementById('adminChatPlusMenu');
+    const iconPlus = document.getElementById('adminPlusIconPlus');
+    const iconX = document.getElementById('adminPlusIconX');
+    if (menu) menu.style.display = 'none';
+    if (iconPlus) iconPlus.style.display = 'block';
+    if (iconX) iconX.style.display = 'none';
+}
+function adminChatOpenGallery() {
+    closeAdminChatPlusMenu();
+    document.getElementById('fileInput').click();
+}
+function adminChatOpenCamera() {
+    closeAdminChatPlusMenu();
+    document.getElementById('adminChatCameraInput').click();
+}
+
+// ── Admin Chat Order Picker ──
+async function openAdminChatOrderPicker() {
+    closeAdminChatPlusMenu();
+    const modal = document.getElementById('adminChatOrderPickerModal');
+    const list = document.getElementById('adminChatOrderPickerList');
+    if (!modal || !list) return;
+    modal.style.display = 'flex';
+    list.innerHTML = '<div style="padding:32px;text-align:center;color:rgba(255,255,255,0.5);">กำลังโหลด...</div>';
+
+    try {
+        const url = currentResellerId
+            ? `${API}/admin/orders?reseller_id=${currentResellerId}&limit=10`
+            : `${API}/admin/orders?limit=10`;
+        const r = await fetch(url, { credentials: 'include' });
+        const data = await r.json();
+        if (!r.ok || !data.orders || data.orders.length === 0) {
+            list.innerHTML = '<div style="padding:32px;text-align:center;color:rgba(255,255,255,0.5);">ไม่พบคำสั่งซื้อ</div>';
+            return;
+        }
+        const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบ', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'สำเร็จ', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
+        const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
+        list.innerHTML = data.orders.map(o => `
+            <div onclick="selectAdminChatOrder(${JSON.stringify(o).replace(/"/g,'&quot;')})" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background 0.15s;display:flex;justify-content:space-between;align-items:center;gap:10px;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:white;">${esc(o.order_number || '#' + o.id)}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;">${esc(o.reseller_name || '')} · ${o.item_count || 0} รายการ</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                    <span style="background:${sC[o.status]||'#6b7280'};color:white;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:600;">${sL[o.status]||o.status}</span>
+                    <span style="font-size:12px;font-weight:700;color:#fbbf24;">฿${Number(o.final_amount||0).toLocaleString('th-TH')}</span>
+                </div>
+            </div>`).join('');
+    } catch(err) {
+        list.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171;">เกิดข้อผิดพลาด</div>';
+    }
+}
+function selectAdminChatOrder(order) {
+    adminSelectedChatOrder = order;
+    closeAdminChatOrderPicker();
+    const bar = document.getElementById('adminOrderPreviewBar');
+    const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบ', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'สำเร็จ', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
+    const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
+    if (bar) {
+        bar.style.display = 'block';
+        bar.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#fa709a,#fee140);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;font-weight:700;color:white;">${esc(order.order_number || '#' + order.id)}</div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                            <span style="background:${sC[order.status]||'#6b7280'};color:white;padding:1px 6px;border-radius:20px;font-size:9px;font-weight:600;">${sL[order.status]||order.status}</span>
+                            <span style="font-size:10px;color:rgba(255,255,255,0.5);">฿${Number(order.final_amount||0).toLocaleString('th-TH')}</span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="clearAdminSelectedOrder()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">&times;</button>
+            </div>`;
+    }
+}
+function closeAdminChatOrderPicker() {
+    const modal = document.getElementById('adminChatOrderPickerModal');
+    if (modal) modal.style.display = 'none';
+}
+function clearAdminSelectedOrder() {
+    adminSelectedChatOrder = null;
+    const bar = document.getElementById('adminOrderPreviewBar');
+    if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+}
+
+// ── Admin Chat Order Preview (detail modal on card click) ──
+async function openAdminChatOrderPreview(orderId) {
+    const modal = document.getElementById('adminChatOrderPreviewModal');
+    const body = document.getElementById('adminOrderPreviewBody');
+    const title = document.getElementById('adminOrderPreviewTitle');
+    if (!modal || !body) return;
+    modal.style.display = 'flex';
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:rgba(255,255,255,0.5);">กำลังโหลด...</div>';
+    if (title) title.textContent = 'รายละเอียดคำสั่งซื้อ';
+
+    try {
+        const r = await fetch(`${API}/orders/${orderId}`, { credentials: 'include' });
+        const o = await r.json();
+        if (!r.ok) throw new Error(o.error || 'error');
+        if (title) title.textContent = o.order_number || '#' + o.id;
+        const sL = { 'pending_payment': 'รอส่งสลิป', 'under_review': 'รอตรวจสอบสลิป', 'preparing': 'เตรียมสินค้า', 'shipped': 'กำลังจัดส่ง', 'delivered': 'ได้รับสินค้าแล้ว', 'failed_delivery': 'จัดส่งไม่สำเร็จ', 'cancelled': 'ยกเลิก' };
+        const sC = { 'pending_payment': '#f59e0b', 'under_review': '#3b82f6', 'preparing': '#8b5cf6', 'shipped': '#0ea5e9', 'delivered': '#10b981', 'failed_delivery': '#ef4444', 'cancelled': '#6b7280' };
+        const fmt = n => Number(n||0).toLocaleString('th-TH');
+        const items = Array.isArray(o.items) ? o.items : [];
+        const shipments = Array.isArray(o.shipments) ? o.shipments : [];
+        body.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="background:${sC[o.status]||'#6b7280'};color:white;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">${sL[o.status]||o.status}</span>
+                <span style="font-size:11px;color:rgba(255,255,255,0.5);">${new Date(o.created_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'})}</span>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">สมาชิก: <span style="color:white;font-weight:600;">${esc(o.reseller_name || o.username || '')}</span></div>
+            ${o.reseller_tier_name ? `<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:12px;">ระดับ: <span style="color:#fbbf24;font-weight:600;">${esc(o.reseller_tier_name)}</span></div>` : ''}
+            <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;margin-top:4px;">
+                <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:8px;">รายการสินค้า</div>
+                ${items.map(it => `
+                    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                        ${it.image_url ? `<img src="${esc(it.image_url)}" style="width:40px;height:40px;border-radius:7px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">` : `<div style="width:40px;height:40px;border-radius:7px;background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">📦</div>`}
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.product_name||'')}</div>
+                            ${it.sku_attributes ? `<div style="font-size:10px;color:rgba(255,255,255,0.45);">${esc(it.sku_attributes)}</div>` : ''}
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-size:11px;color:rgba(255,255,255,0.5);">x${it.quantity}</div>
+                            <div style="font-size:12px;font-weight:700;color:white;">฿${fmt(it.subtotal)}</div>
+                        </div>
+                    </div>`).join('')}
+            </div>
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px;">
+                ${o.discount_amount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;"><span>ส่วนลด</span><span style="color:#34d399;">-฿${fmt(o.discount_amount)}</span></div>` : ''}
+                ${o.shipping_fee > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;"><span>ค่าจัดส่ง</span><span>฿${fmt(o.shipping_fee)}</span></div>` : `<div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;"><span>ค่าจัดส่ง</span><span style="color:#34d399;">ฟรี</span></div>`}
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin-top:6px;"><span>ยอดรวม</span><span style="color:#fbbf24;">฿${fmt(o.final_amount)}</span></div>
+            </div>
+            ${shipments.length > 0 ? `
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px;">
+                <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:8px;">การจัดส่ง</div>
+                ${shipments.map(sh => `<div style="font-size:11px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.05);border-radius:8px;padding:8px 10px;margin-bottom:4px;">${sh.tracking_number ? `Tracking: <span style="color:white;font-weight:600;">${esc(sh.tracking_number)}</span>` : ''} ${sh.carrier_name ? `· ${esc(sh.carrier_name)}` : ''}</div>`).join('')}
+            </div>` : ''}
+            <button onclick="window.location.href='/admin/dashboard#orders'" style="width:100%;margin-top:16px;padding:10px;background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">ไปที่หน้าคำสั่งซื้อ →</button>`;
+    } catch(err) {
+        body.innerHTML = '<div style="padding:32px;text-align:center;color:#f87171;">เกิดข้อผิดพลาด</div>';
+    }
+}
+function closeAdminChatOrderPreview() {
+    const modal = document.getElementById('adminChatOrderPreviewModal');
+    if (modal) modal.style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('adminChatPlusMenu');
+    const btn = document.getElementById('adminChatPlusBtn');
+    if (adminChatPlusMenuOpen && menu && btn && !menu.contains(e.target) && !btn.contains(e.target)) {
+        closeAdminChatPlusMenu();
+    }
+});
 function autoResizeInput(el) {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';

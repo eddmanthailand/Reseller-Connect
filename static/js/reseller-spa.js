@@ -3542,8 +3542,8 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
         };
         const fmtN = n => Number(n || 0).toLocaleString('th-TH');
         const items = Array.isArray(o.items) ? o.items.filter(it => it && it.product_name) : [];
-        const displayItems = items.slice(0, 3);
-        const moreCount = items.length - displayItems.length;
+        const displayItems = items;
+        const moreCount = 0;
         const shipping = o.shipping_fee || 0;
         const grandTotal = o.final_amount || 0;
 
