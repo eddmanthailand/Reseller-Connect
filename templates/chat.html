@@ -397,10 +397,13 @@
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.1);
             cursor: pointer;
-            max-width: 200px;
+            width: 220px;
+            max-width: 220px;
             margin-bottom: 4px;
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
         }
-        .msg-product-card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+        .msg-product-card img { width: 100%; max-height: 180px; object-fit: contain; display: block; background: rgba(0,0,0,0.15); }
         .msg-product-info { padding: 8px 10px; }
         .msg-product-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .msg-product-price { font-size: 13px; font-weight: 700; color: #fbbf24; margin-top: 2px; }
@@ -1453,7 +1456,7 @@ function renderMsg(msg, otherLastRead) {
             ? `<div class="msg-product-price">฿${fmtNum(p.tier_min_price)} <small style="text-decoration:line-through;opacity:0.5;font-weight:400;">฿${fmtNum(p.min_price)}</small></div>`
             : `<div class="msg-product-price">฿${fmtNum(p.min_price)}</div>`;
         productHtml = `<div class="msg-product-card" onclick="window.open('/admin#products','_self')">
-            ${p.image_url ? `<img src="${p.image_url}" style="width:100%;height:120px;object-fit:cover;display:block;">` : '<div style="height:60px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:24px;">📦</div>'}
+            ${p.image_url ? `<img src="${p.image_url}" style="width:100%;max-height:180px;object-fit:contain;display:block;background:rgba(0,0,0,0.15);" onerror="this.outerHTML='<div style=\\'height:80px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:28px;\\'>📦</div>'">` : '<div style="height:80px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:28px;">📦</div>'}
             <div class="msg-product-info">
                 <div class="msg-product-name">${esc(p.name)}</div>
                 ${price}
