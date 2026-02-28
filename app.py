@@ -250,7 +250,7 @@ def login_page():
 @app.route('/register')
 def register_page():
     """QR code landing page - handles WebView browsers that block Google OAuth"""
-    if 'user_id' in session:
+    if 'user_id' in session and session.get('role') not in ('Super Admin', 'Assistant Admin'):
         return redirect(url_for('dashboard'))
     return render_template('register.html')
 
