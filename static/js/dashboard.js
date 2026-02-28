@@ -8935,13 +8935,13 @@ async function loadShippingUpdatePage() {
                     ${shipmentsHtml}
                 </div>
 
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button onclick="markShippingDelivered(${order.id},'${orderNum}')"
+                <div id="shipping-actions-${order.id}" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button onclick="showShippingConfirm(${order.id},'${orderNum}','delivered')"
                         style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                         จัดส่งสำเร็จ
                     </button>
-                    <button onclick="openFailedDeliveryModal(${order.id},'${orderNum}')"
+                    <button onclick="showShippingConfirm(${order.id},'${orderNum}','return')"
                         style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.45);color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>
                         สินค้าตีกลับ
@@ -8961,6 +8961,60 @@ async function loadShippingUpdatePage() {
         container.innerHTML = '<div style="text-align:center;padding:40px;color:#f87171;">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
         console.error('loadShippingUpdatePage error:', err);
     }
+}
+
+function showShippingConfirm(orderId, orderNum, action) {
+    const actionsDiv = document.getElementById(`shipping-actions-${orderId}`);
+    if (!actionsDiv) return;
+
+    const isDelivered = action === 'delivered';
+    const label    = isDelivered ? 'ยืนยันจัดส่งสำเร็จ?' : 'ยืนยันสินค้าตีกลับ?';
+    const color    = isDelivered ? '#10b981' : '#ef4444';
+    const colorBg  = isDelivered ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)';
+    const colorBdr = isDelivered ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)';
+    const iconSvg  = isDelivered
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>`;
+
+    const onConfirm = isDelivered
+        ? `markShippingDelivered(${orderId},'${orderNum}')`
+        : `openFailedDeliveryModal(${orderId},'${orderNum}');restoreShippingActions(${orderId},'${orderNum}')`;
+
+    actionsDiv.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;width:100%;background:${colorBg};border:1px solid ${colorBdr};border-radius:10px;padding:10px 14px;flex-wrap:wrap;row-gap:8px;">
+            <span style="flex:1;font-size:12px;font-weight:600;color:#ffffff;display:flex;align-items:center;gap:6px;">
+                ${iconSvg} ${label}
+            </span>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button onclick="${onConfirm}"
+                    style="padding:6px 16px;background:${color};border:none;color:#ffffff;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                    ยืนยัน
+                </button>
+                <button onclick="restoreShippingActions(${orderId},'${orderNum}')"
+                    style="padding:6px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#ffffff;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+                    ยกเลิก
+                </button>
+            </div>
+        </div>`;
+}
+
+function restoreShippingActions(orderId, orderNum) {
+    const actionsDiv = document.getElementById(`shipping-actions-${orderId}`);
+    if (!actionsDiv) return;
+    actionsDiv.innerHTML = `
+        <button onclick="showShippingConfirm(${orderId},'${orderNum}','delivered')"
+            style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            จัดส่งสำเร็จ
+        </button>
+        <button onclick="showShippingConfirm(${orderId},'${orderNum}','return')"
+            style="flex:1;min-width:120px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.45);color:#ffffff;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.87"/></svg>
+            สินค้าตีกลับ
+        </button>`;
+    actionsDiv.style.display = 'flex';
+    actionsDiv.style.gap = '8px';
+    actionsDiv.style.flexWrap = 'wrap';
 }
 
 async function markShippingDelivered(orderId, orderNumber) {
