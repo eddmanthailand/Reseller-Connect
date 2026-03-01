@@ -154,7 +154,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName, queryString] = fullHash.split('?');
-        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'slip-review', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
+        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
             // Auto-open order detail if order_id param is present
@@ -562,8 +562,6 @@ function switchPage(pageName) {
         loadQuickOrderPage();
     } else if (pageName === 'shipping-settings') {
         loadShippingSettingsPage();
-    } else if (pageName === 'slip-review') {
-        loadSlipReviewPage();
     } else if (pageName === 'applications') {
         loadApplicationsPage();
     } else if (pageName === 'activity-logs') {
@@ -5745,127 +5743,6 @@ function exportCurrentStock() {
     window.location.href = `${API_URL}/admin/stock/export?type=current`;
 }
 
-// ==================== SLIP REVIEW SECTION ====================
-
-async function loadSlipReviewPage() {
-    const container = document.getElementById('slipReviewContent');
-    if (!container) return;
-    
-    container.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div><p style="color: rgba(255,255,255,0.6); margin-top: 12px;">กำลังโหลด...</p></div>';
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/orders?status=under_review`);
-        if (!response.ok) throw new Error('Failed to load orders');
-        const orders = await response.json();
-        
-        const badge = document.getElementById('slipReviewCount');
-        if (badge) {
-            if (orders.length > 0) {
-                badge.textContent = orders.length;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-        
-        if (orders.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 60px;">
-                    <svg width="64" height="64" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto 16px;">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <h3 style="color: rgba(255,255,255,0.6); font-size: 18px; margin-bottom: 8px;">ไม่มีสลิปรอตรวจสอบ</h3>
-                    <p style="color: rgba(255,255,255,0.4); font-size: 14px;">สลิปทั้งหมดถูกตรวจสอบแล้ว</p>
-                </div>
-            `;
-            return;
-        }
-        
-        container.innerHTML = `
-            <div class="slip-review-grid">
-                ${orders.map(order => renderSlipReviewCard(order)).join('')}
-            </div>
-        `;
-        
-    } catch (error) {
-        console.error('Error loading slip review:', error);
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #ef4444;">
-                <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
-                <button onclick="loadSlipReviewPage()" style="margin-top: 12px; padding: 8px 16px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 8px; cursor: pointer;">ลองใหม่</button>
-            </div>
-        `;
-    }
-}
-
-function renderSlipReviewCard(order) {
-    const slipDate = order.slip_created_at 
-        ? new Date(order.slip_created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-        : new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const orderDate = new Date(order.created_at).toLocaleDateString('th-TH', { 
-        day: 'numeric', month: 'short', year: 'numeric'
-    });
-    
-    const slipUrl = order.slip_image_url || null;
-    const slipAmount = order.slip_amount ? parseFloat(order.slip_amount) : null;
-    const finalAmount = parseFloat(order.final_amount || order.total_amount || 0);
-    
-    const slipImgHtml = slipUrl 
-        ? `<img src="${slipUrl}" alt="Payment Slip" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-           <div class="slip-no-image" style="display:none;">
-               <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-               <span>โหลดไม่ได้</span>
-           </div>`
-        : `<div class="slip-no-image">
-               <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-               <span>ไม่มีสลิป</span>
-           </div>`;
-    
-    return `
-        <div class="slip-card">
-            <div class="slip-card-top">
-                <div class="slip-card-img" onclick="${slipUrl ? `viewSlipFullscreen('${slipUrl}')` : ''}">
-                    ${slipImgHtml}
-                    ${slipUrl ? '<div class="slip-card-zoom">คลิกเพื่อขยาย</div>' : ''}
-                </div>
-                <div class="slip-card-info">
-                    <div class="slip-card-header-row">
-                        <span class="slip-card-order-num">${escapeHtml(order.order_number || 'ORD-' + order.id)}</span>
-                        <span class="slip-card-badge">รอตรวจสอบ</span>
-                    </div>
-                    <div class="slip-card-date">แนบสลิป: ${slipDate}</div>
-                    <div class="slip-card-date" style="font-size: 11px; opacity: 0.5;">สั่งซื้อ: ${orderDate}</div>
-                    <div class="slip-card-detail-row">
-                        <div class="slip-card-detail-item">
-                            <div class="slip-card-label">ผู้สั่ง</div>
-                            <div class="slip-card-value">${escapeHtml(order.reseller_name || order.customer_name || '-')}</div>
-                            ${order.reseller_tier_name ? `<div class="slip-card-tier">${escapeHtml(order.reseller_tier_name)}</div>` : ''}
-                        </div>
-                    </div>
-                    <div class="slip-card-amounts">
-                        <div><span class="slip-card-label">สินค้า:</span> <strong>${order.item_count || 0} ชิ้น</strong></div>
-                        <div><span class="slip-card-label">ยอดรวม:</span> <strong class="slip-amount-green">฿${finalAmount.toLocaleString('th-TH', {minimumFractionDigits: 2})}</strong></div>
-                        ${slipAmount ? `<div><span class="slip-card-label">ยอดสลิป:</span> <strong class="slip-amount-yellow">฿${slipAmount.toLocaleString('th-TH', {minimumFractionDigits: 2})}</strong></div>` : ''}
-                    </div>
-                </div>
-            </div>
-            <div class="slip-card-actions">
-                <button onclick="approveSlip(${order.id})" class="slip-btn-approve">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
-                    ยืนยัน
-                </button>
-                <button onclick="requestNewSlip(${order.id})" class="slip-btn-request">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    ขอสลิปใหม่
-                </button>
-                <button onclick="viewOrderDetails(${order.id})" class="slip-btn-view" title="ดูรายละเอียด">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-            </div>
-        </div>
-    `;
-}
-
 function viewSlipFullscreen(imageUrl) {
     if (!imageUrl) {
         showGlobalAlert('ไม่พบภาพสลิป', 'error');
@@ -6161,33 +6038,6 @@ document.addEventListener('change', function(e) {
         updateQuickOrderSummary();
     }
 });
-
-// =====================================================
-// SLIP REVIEW HELPER FUNCTIONS
-// =====================================================
-
-async function approveSlip(orderId) {
-    if (!confirm('ยืนยันการชำระเงินและอนุมัติคำสั่งซื้อนี้?')) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include'
-        });
-        
-        const result = await response.json();
-        if (response.ok) {
-            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ — สถานะเปลี่ยนเป็น "ที่ต้องจัดส่ง"', 'success');
-            loadSlipReviewPage();
-        } else {
-            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
-        }
-    } catch (error) {
-        console.error('Error approving order:', error);
-        showGlobalAlert('เกิดข้อผิดพลาดในการอนุมัติ', 'error');
-    }
-}
 
 async function requestNewSlip(orderId) {
     const reason = prompt('เหตุผลในการขอสลิปใหม่:', 'สลิปไม่ชัด');

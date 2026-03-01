@@ -8110,7 +8110,7 @@ def upload_payment_slip(order_id):
                     admin['id'],
                     '🧾 สลิปใหม่รอตรวจสอบ',
                     f'{reseller_name} อัปโหลดสลิป {order_num}',
-                    url='/admin#slip-review',
+                    url='/admin#orders',
                     tag=f'slip-{order_id}'
                 )
             except Exception as push_err:
