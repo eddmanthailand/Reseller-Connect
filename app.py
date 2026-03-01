@@ -9314,6 +9314,71 @@ def approve_order(order_id):
         if conn:
             conn.close()
 
+
+@app.route('/api/admin/orders/<int:order_id>/reject', methods=['POST'])
+@admin_required
+def reject_order(order_id):
+    """Reject order payment slip — status → rejected, notify reseller"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json(silent=True) or {}
+        reason = data.get('reason', '')
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['status'] != 'under_review':
+            return jsonify({'error': 'ออเดอร์นี้ไม่ได้อยู่ในสถานะรอตรวจสอบ'}), 400
+
+        # Update order status to rejected
+        cursor.execute('''
+            UPDATE orders SET status = 'rejected',
+                notes = CONCAT(COALESCE(notes, ''), ' [ปฏิเสธสลิป: ', %s, ']'),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (reason, order_id))
+
+        # Mark pending payment slip as rejected
+        cursor.execute('''
+            UPDATE payment_slips SET status = 'rejected', verified_by = %s, verified_at = CURRENT_TIMESTAMP
+            WHERE order_id = %s AND status = 'pending'
+        ''', (admin_id, order_id))
+
+        conn.commit()
+
+        order_number = order['order_number'] or f'#{order_id}'
+        # Notify reseller via chat
+        try:
+            send_order_status_chat(order['user_id'], order_number, 'rejected',
+                                   f'เหตุผล: {reason}' if reason else '', order_id=order_id)
+        except Exception as chat_err:
+            print(f'Reject chat notification error: {chat_err}')
+
+        # In-app notification
+        create_notification(order['user_id'], 'สลิปการชำระเงินถูกปฏิเสธ',
+                            f'คำสั่งซื้อ {order_number} ถูกปฏิเสธ: {reason}',
+                            'warning', 'order', order_id)
+
+        return jsonify({'message': 'ปฏิเสธสลิปการชำระเงินสำเร็จ'}), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route('/api/admin/orders/<int:order_id>/request-new-slip', methods=['POST'])
 @admin_required
 def request_new_slip(order_id):

@@ -2255,6 +2255,7 @@ async function rejectOrder(orderId) {
     try {
         const response = await fetch(`${API_URL}/admin/orders/${orderId}/reject`, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason })
         });
@@ -2270,6 +2271,14 @@ async function rejectOrder(orderId) {
     } catch (error) {
         console.error('Error rejecting order:', error);
         showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    }
+}
+
+async function updateOrderStatus(orderId, newStatus) {
+    if (newStatus === 'paid') {
+        await approveOrder(orderId);
+    } else if (newStatus === 'rejected') {
+        await rejectOrder(orderId);
     }
 }
 
