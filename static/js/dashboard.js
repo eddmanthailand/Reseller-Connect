@@ -2419,6 +2419,19 @@ function closeRefundModal() {
     document.getElementById('refundModal').style.display = 'none';
 }
 
+function downloadRefundQr() {
+    const img = document.getElementById('refundQrImage');
+    const name = document.getElementById('refundQrName').textContent || 'promptpay';
+    const phone = document.getElementById('refundQrPhone').textContent || '';
+    if (!img || !img.src || img.src === window.location.href) return;
+    const a = document.createElement('a');
+    a.href = img.src;
+    a.download = `QR_${name}_${phone}.png`.replace(/\s+/g, '_');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 function previewRefundSlip(event) {
     const file = event.target.files[0];
     if (!file) return;
