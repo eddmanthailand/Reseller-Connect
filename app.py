@@ -9807,18 +9807,45 @@ def get_return_stock_info(order_id):
         ''', (order_id,))
         items = cursor.fetchall()
 
+        # Get all return history records (good returns + damaged/lost)
         cursor.execute('''
-            SELECT sku_id, warehouse_id, SUM(quantity_after - quantity_before) as returned_qty
-            FROM stock_audit_log
-            WHERE reference_id = %s AND reference_type = 'order' AND change_type = 'return_from_order'
-            GROUP BY sku_id, warehouse_id
+            SELECT sal.sku_id, sal.warehouse_id, sal.change_type,
+                   CASE WHEN sal.change_type = 'return_from_order'
+                        THEN (sal.quantity_after - sal.quantity_before)
+                        ELSE sal.quantity_after END as qty,
+                   sal.notes, sal.created_at,
+                   u.full_name as admin_name
+            FROM stock_audit_log sal
+            LEFT JOIN users u ON u.id = sal.created_by
+            WHERE sal.reference_id = %s AND sal.reference_type = 'order'
+              AND sal.change_type IN ('return_from_order', 'order_damaged')
+            ORDER BY sal.created_at ASC
         ''', (order_id,))
-        returned_map = {(r['sku_id'], r['warehouse_id']): r['returned_qty'] for r in cursor.fetchall()}
+        history_rows = cursor.fetchall()
+
+        history_map = {}
+        accounted_map = {}
+        for row in history_rows:
+            key = (row['sku_id'], row['warehouse_id'])
+            qty = int(row['qty'] or 0)
+            if key not in history_map:
+                history_map[key] = []
+            label = 'บันทึกคืนคลัง' if row['change_type'] == 'return_from_order' else 'ไม่คืนคลัง'
+            history_map[key].append({
+                'date': row['created_at'].strftime('%d/%m/%Y %H:%M') if row['created_at'] else '-',
+                'qty': qty,
+                'type': row['change_type'],
+                'label': label,
+                'notes': row['notes'] or '-',
+                'admin_name': row['admin_name'] or '-'
+            })
+            accounted_map[key] = accounted_map.get(key, 0) + qty
 
         items_list = []
         for item in items:
-            already_returned = int(returned_map.get((item['sku_id'], item['warehouse_id']), 0))
-            max_ret = max(0, int(item['shipped_qty'] or 0) - already_returned)
+            key = (item['sku_id'], item['warehouse_id'])
+            already_accounted = int(accounted_map.get(key, 0))
+            max_ret = max(0, int(item['shipped_qty'] or 0) - already_accounted)
             items_list.append({
                 'order_item_id': item['order_item_id'],
                 'sku_id': item['sku_id'],
@@ -9830,8 +9857,9 @@ def get_return_stock_info(order_id):
                 'warehouse_id': item['warehouse_id'],
                 'warehouse_name': item['warehouse_name'],
                 'current_stock': item['current_stock'],
-                'already_returned': already_returned,
-                'max_returnable': max_ret
+                'already_accounted': already_accounted,
+                'max_returnable': max_ret,
+                'return_history': history_map.get(key, [])
             })
 
         return jsonify({
@@ -9870,33 +9898,99 @@ def process_return_stock(order_id):
         if order['status'] != 'pending_refund':
             return jsonify({'error': 'ออเดอร์นี้ไม่อยู่ในสถานะรอคืนเงิน'}), 400
 
-        returned_count = 0
+        # Get shipped qty per SKU+warehouse
+        cursor.execute('''
+            SELECT oi.sku_id, os.warehouse_id, COALESCE(osi.quantity, oi.quantity) as shipped_qty
+            FROM order_items oi
+            JOIN order_shipment_items osi ON osi.order_item_id = oi.id
+            JOIN order_shipments os ON os.id = osi.shipment_id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        shipped_map = {(r['sku_id'], r['warehouse_id']): int(r['shipped_qty']) for r in cursor.fetchall()}
+
+        # Get already accounted qty per SKU+warehouse (both good returns and damaged/lost)
+        cursor.execute('''
+            SELECT sku_id, warehouse_id,
+                   SUM(CASE WHEN change_type = 'return_from_order' THEN (quantity_after - quantity_before)
+                            ELSE quantity_after END) as accounted_qty
+            FROM stock_audit_log
+            WHERE reference_id = %s AND reference_type = 'order'
+              AND change_type IN ('return_from_order', 'order_damaged')
+            GROUP BY sku_id, warehouse_id
+        ''', (order_id,))
+        accounted_map = {(r['sku_id'], r['warehouse_id']): int(r['accounted_qty'] or 0) for r in cursor.fetchall()}
+
+        # Validate all items first
         for item in items:
             sku_id = item.get('sku_id')
             warehouse_id = item.get('warehouse_id')
             return_qty = int(item.get('return_qty', 0))
+            if return_qty <= 0:
+                continue
+            shipped = shipped_map.get((sku_id, warehouse_id), 0)
+            accounted = accounted_map.get((sku_id, warehouse_id), 0)
+            if accounted + return_qty > shipped:
+                return jsonify({'error': f'จำนวนสินค้าเกินที่จัดส่งไป (จัดส่ง {shipped} ชิ้น, รับคืนแล้ว {accounted} ชิ้น)'}), 400
+
+        order_num = order['order_number'] or f'#{order_id}'
+        good_return_count = 0
+        damaged_count = 0
+
+        for item in items:
+            sku_id = item.get('sku_id')
+            warehouse_id = item.get('warehouse_id')
+            return_qty = int(item.get('return_qty', 0))
+            reason = item.get('reason', 'good')
+            custom_note = item.get('custom_note', '').strip()
             if not sku_id or not warehouse_id or return_qty <= 0:
                 continue
 
-            cursor.execute('''
-                INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
-            ''', (sku_id, warehouse_id, return_qty))
+            is_good_return = reason in ('good', 'other')
+            reason_labels = {
+                'good': 'สินค้าสภาพดี',
+                'damaged': 'สินค้ามีตำหนิ',
+                'lost': 'สินค้าสูญหาย',
+                'other': f'อื่นๆ: {custom_note}' if custom_note else 'อื่นๆ'
+            }
+            reason_text = reason_labels.get(reason, reason)
 
-            cursor.execute('''
-                INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
-                SELECT %s, %s, stock - %s, stock, 'return_from_order', %s, 'order', %s, %s
-                FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
-            ''', (sku_id, warehouse_id, return_qty, order_id,
-                  f'รับสินค้าคืนคลังจากออเดอร์ {order["order_number"] or "#"+str(order_id)}',
-                  admin_id, sku_id, warehouse_id))
+            if is_good_return:
+                # Restore stock to warehouse and main SKU
+                cursor.execute('''
+                    INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+                ''', (sku_id, warehouse_id, return_qty))
 
-            cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (return_qty, sku_id))
-            returned_count += return_qty
+                cursor.execute('''
+                    INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
+                    SELECT %s, %s, stock - %s, stock, 'return_from_order', %s, 'order', %s, %s
+                    FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
+                ''', (sku_id, warehouse_id, return_qty, order_id,
+                      f'{return_qty} ชิ้น | {reason_text} | ออเดอร์ {order_num}',
+                      admin_id, sku_id, warehouse_id))
+
+                cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (return_qty, sku_id))
+                good_return_count += return_qty
+            else:
+                # Damaged/lost: log only, do NOT restore stock
+                # Store qty in quantity_after (quantity_before=0) for easy aggregation
+                cursor.execute('''
+                    INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
+                    VALUES (%s, %s, 0, %s, 'order_damaged', %s, 'order', %s, %s)
+                ''', (sku_id, warehouse_id, return_qty, order_id,
+                      f'{return_qty} ชิ้น | {reason_text} | ออเดอร์ {order_num}',
+                      admin_id))
+                damaged_count += return_qty
 
         conn.commit()
-        return jsonify({'message': f'รับสินค้าคืนคลังสำเร็จ {returned_count} ชิ้น'}), 200
+        parts = []
+        if good_return_count > 0:
+            parts.append(f'คืนคลัง {good_return_count} ชิ้น')
+        if damaged_count > 0:
+            parts.append(f'บันทึกตำหนิ/สูญหาย {damaged_count} ชิ้น')
+        msg = ' | '.join(parts) if parts else 'ไม่มีการเปลี่ยนแปลง'
+        return jsonify({'message': f'บันทึกสำเร็จ: {msg}'}), 200
     except Exception as e:
         if conn: conn.rollback()
         return handle_error(e)

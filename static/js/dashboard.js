@@ -2471,19 +2471,62 @@ async function openReturnStockModal(orderId) {
             html = '<div style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">ไม่พบรายการสินค้า</div>';
         } else {
             d.items.forEach((item, i) => {
+                const hasHistory = item.return_history && item.return_history.length > 0;
+                const historyHtml = hasHistory ? item.return_history.map(h => {
+                    const isGood = h.type === 'return_from_order';
+                    const color = isGood ? '#22c55e' : '#f97316';
+                    const icon = isGood ? '✅' : '⚠️';
+                    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div>
+                            <span style="font-size:11px;color:${color};">${icon} ${h.qty} ชิ้น — ${escapeHtml(h.label)}</span>
+                            <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;">${escapeHtml(h.notes)}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;margin-left:8px;">
+                            <div style="font-size:10px;color:rgba(255,255,255,0.35);">${escapeHtml(h.date)}</div>
+                            <div style="font-size:10px;color:rgba(255,255,255,0.3);">${escapeHtml(h.admin_name)}</div>
+                        </div>
+                    </div>`;
+                }).join('') : '';
+
+                const allDone = item.max_returnable <= 0;
                 html += `
-                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
+                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px; margin-bottom: 10px; ${allDone ? 'opacity:0.6;' : ''}">
                     <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px;">${escapeHtml(item.product_name)}</div>
                     ${item.variant_options ? `<div style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 2px;">${escapeHtml(item.variant_options)}</div>` : ''}
                     <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 6px;">SKU: ${escapeHtml(item.sku_code || '-')}</div>
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 10px;">คลัง: ${escapeHtml(item.warehouse_name || '-')} | ส่งออกไป: ${item.shipped_qty} ชิ้น | รับคืนแล้ว: ${item.already_returned} ชิ้น</div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <label style="font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap;">จำนวนที่รับคืน:</label>
-                        <input type="number" id="returnQty_${i}" min="0" max="${item.max_returnable}" value="${item.max_returnable}"
-                            data-sku-id="${item.sku_id}" data-warehouse-id="${item.warehouse_id}"
-                            style="width: 80px; padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 13px; text-align: center;">
-                        <span style="font-size: 12px; color: rgba(255,255,255,0.5);">/ ${item.max_returnable} ชิ้น</span>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: ${hasHistory ? '8px' : '10px'};">
+                        คลัง: ${escapeHtml(item.warehouse_name || '-')} | ส่งออกไป: ${item.shipped_qty} ชิ้น | บันทึกแล้ว: ${item.already_accounted} ชิ้น
                     </div>
+                    ${hasHistory ? `
+                    <div style="background:rgba(0,0,0,0.2);border-radius:7px;padding:8px 10px;margin-bottom:10px;">
+                        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;font-weight:600;">ประวัติการบันทึก</div>
+                        ${historyHtml}
+                    </div>` : ''}
+                    ${allDone ? `<div style="font-size:12px;color:#22c55e;text-align:center;padding:6px;background:rgba(34,197,94,0.1);border-radius:6px;">✅ บันทึกครบแล้ว (${item.shipped_qty} ชิ้น)</div>` : `
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;min-width:80px;">เหตุผล:</label>
+                            <select id="returnReason_${i}" onchange="onReturnReasonChange(${i})"
+                                style="flex:1;padding:6px 10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:12px;">
+                                <option value="good">✅ สภาพดี — บันทึกคืนคลัง</option>
+                                <option value="damaged">⚠️ มีตำหนิ — ไม่คืนคลัง</option>
+                                <option value="lost">❌ สูญหาย — ไม่คืนคลัง</option>
+                                <option value="other">✏️ อื่นๆ — บันทึกคืนคลัง</option>
+                            </select>
+                        </div>
+                        <div id="returnCustomNote_${i}" style="display:none;">
+                            <input type="text" id="returnCustomNoteText_${i}" placeholder="ระบุเหตุผล..."
+                                style="width:100%;box-sizing:border-box;padding:6px 10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:12px;">
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <label style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;min-width:80px;">จำนวน:</label>
+                            <input type="number" id="returnQty_${i}" min="0" max="${item.max_returnable}" value="${item.max_returnable}"
+                                data-sku-id="${item.sku_id}" data-warehouse-id="${item.warehouse_id}"
+                                oninput="if(parseInt(this.value)>parseInt(this.max)){this.value=this.max;showGlobalAlert('จำนวนต้องไม่เกิน ${item.max_returnable} ชิ้น','warning');}"
+                                style="width:80px;padding:6px 10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:13px;text-align:center;">
+                            <span style="font-size:12px;color:rgba(255,255,255,0.5);">/ ${item.max_returnable} ชิ้น</span>
+                        </div>
+                    </div>`}
                 </div>`;
             });
         }
@@ -2500,6 +2543,12 @@ function closeReturnStockModal() {
     if (modal) modal.style.display = 'none';
 }
 
+function onReturnReasonChange(i) {
+    const reason = document.getElementById(`returnReason_${i}`)?.value;
+    const noteEl = document.getElementById(`returnCustomNote_${i}`);
+    if (noteEl) noteEl.style.display = reason === 'other' ? 'block' : 'none';
+}
+
 async function submitReturnStock() {
     const orderId = document.getElementById('returnStockOrderId').value;
     const count = window._returnStockItemCount || 0;
@@ -2508,16 +2557,24 @@ async function submitReturnStock() {
         const input = document.getElementById(`returnQty_${i}`);
         if (!input) continue;
         const qty = parseInt(input.value) || 0;
+        const reason = document.getElementById(`returnReason_${i}`)?.value || 'good';
+        const customNote = document.getElementById(`returnCustomNoteText_${i}`)?.value?.trim() || '';
         if (qty > 0) {
+            if (qty > parseInt(input.max || 0)) {
+                showGlobalAlert(`จำนวนสินค้าเกินที่จัดส่งไป (สูงสุด ${input.max} ชิ้น)`, 'error');
+                return;
+            }
             items.push({
                 sku_id: parseInt(input.dataset.skuId),
                 warehouse_id: parseInt(input.dataset.warehouseId),
-                return_qty: qty
+                return_qty: qty,
+                reason,
+                custom_note: customNote
             });
         }
     }
     if (items.length === 0) {
-        showGlobalAlert('กรุณาระบุจำนวนสินค้าที่ต้องการรับคืน', 'error');
+        showGlobalAlert('กรุณาระบุจำนวนสินค้าที่ต้องการบันทึก', 'error');
         return;
     }
     const btn = document.getElementById('returnStockSubmitBtn');
