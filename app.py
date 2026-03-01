@@ -9789,7 +9789,12 @@ def get_return_stock_info(order_id):
                    p.name as product_name,
                    os.warehouse_id, COALESCE(osi.quantity, oi.quantity) as shipped_qty,
                    w.name as warehouse_name,
-                   COALESCE(sws.stock, 0) as current_stock
+                   COALESCE(sws.stock, 0) as current_stock,
+                   (SELECT STRING_AGG(o.name || ': ' || ov.value, ', ' ORDER BY o.name)
+                    FROM sku_values_map svm2
+                    JOIN option_values ov ON ov.id = svm2.option_value_id
+                    JOIN options o ON o.id = ov.option_id
+                    WHERE svm2.sku_id = s.id) as variant_options
             FROM order_items oi
             JOIN skus s ON s.id = oi.sku_id
             JOIN products p ON p.id = s.product_id
@@ -9818,7 +9823,7 @@ def get_return_stock_info(order_id):
                 'order_item_id': item['order_item_id'],
                 'sku_id': item['sku_id'],
                 'sku_code': item['sku_code'],
-                'attributes': None,
+                'variant_options': item['variant_options'],
                 'product_name': item['product_name'],
                 'ordered_qty': item['ordered_qty'],
                 'shipped_qty': item['shipped_qty'],

@@ -2471,12 +2471,11 @@ async function openReturnStockModal(orderId) {
             html = '<div style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">ไม่พบรายการสินค้า</div>';
         } else {
             d.items.forEach((item, i) => {
-                const attrs = typeof item.attributes === 'string' ? (() => { try { return JSON.parse(item.attributes); } catch { return {}; } })() : (item.attributes || {});
-                const attrStr = Object.entries(attrs).map(([k, v]) => `${k}: ${v}`).join(', ');
                 html += `
                 <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
                     <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px;">${escapeHtml(item.product_name)}</div>
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 6px;">SKU: ${escapeHtml(item.sku_code || '-')}</div>
+                    ${item.variant_options ? `<div style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 2px;">${escapeHtml(item.variant_options)}</div>` : ''}
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 6px;">SKU: ${escapeHtml(item.sku_code || '-')}</div>
                     <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 10px;">คลัง: ${escapeHtml(item.warehouse_name || '-')} | ส่งออกไป: ${item.shipped_qty} ชิ้น | รับคืนแล้ว: ${item.already_returned} ชิ้น</div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label style="font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap;">จำนวนที่รับคืน:</label>
