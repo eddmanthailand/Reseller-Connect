@@ -9154,7 +9154,7 @@ def get_all_orders():
 @app.route('/api/admin/orders/<int:order_id>/approve', methods=['POST'])
 @admin_required
 def approve_order(order_id):
-    """Approve order payment and deduct stock"""
+    """Approve order payment (stock was already deducted at order creation)"""
     conn = None
     cursor = None
     try:
@@ -9174,43 +9174,6 @@ def approve_order(order_id):
         
         if order['status'] != 'under_review':
             return jsonify({'error': 'Order is not under review'}), 400
-        
-        # Get order items for stock deduction
-        cursor.execute('''
-            SELECT oi.sku_id, oi.quantity, s.stock, s.sku_code,
-                   COALESCE(oi.product_name, p.name) as product_name
-            FROM order_items oi
-            JOIN skus s ON s.id = oi.sku_id
-            LEFT JOIN products p ON p.id = s.product_id
-            WHERE oi.order_id = %s
-        ''', (order_id,))
-        items = cursor.fetchall()
-
-        # Validate ALL items first before deducting anything
-        insufficient = []
-        for item in items:
-            if item['stock'] < item['quantity']:
-                insufficient.append(
-                    f"{item['product_name']} ({item['sku_code']}): มีสต็อก {item['stock']} ชิ้น ต้องการ {item['quantity']} ชิ้น"
-                )
-        if insufficient:
-            return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ:\n' + '\n'.join(insufficient)}), 400
-
-        # All items passed — deduct stock
-        for item in items:
-            cursor.execute('''
-                UPDATE skus SET stock = stock - %s WHERE id = %s AND stock >= %s
-            ''', (item['quantity'], item['sku_id'], item['quantity']))
-            if cursor.rowcount == 0:
-                conn.rollback()
-                return jsonify({'error': f'สต็อก {item["sku_code"]} ไม่เพียงพอ กรุณาตรวจสอบใหม่'}), 400
-
-            qty_before = item['stock']
-            qty_after = item['stock'] - item['quantity']
-            cursor.execute('''
-                INSERT INTO stock_transactions (sku_id, transaction_type, quantity_change, quantity_before, quantity_after, reference_type, reference_id, reason, created_by)
-                VALUES (%s, 'sale', %s, %s, %s, 'order', %s, %s, %s)
-            ''', (item['sku_id'], -item['quantity'], qty_before, qty_after, order_id, f'Order #{order_id} approved', admin_id))
         
         # Update order status to preparing (ready to ship)
         cursor.execute('''
@@ -9309,7 +9272,7 @@ def approve_order(order_id):
             order_id
         )
         
-        return jsonify({'message': 'Order approved and stock deducted'}), 200
+        return jsonify({'message': 'ยืนยันการชำระเงินสำเร็จ'}), 200
         
     except Exception as e:
         if conn:
