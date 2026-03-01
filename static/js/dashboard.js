@@ -2002,10 +2002,10 @@ async function viewOrderDetails(orderId) {
         if (order.status === 'under_review') {
             actionsHtml = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px;">
-                    <button onclick="approveSlip(${orderId}); closeModal('orderDetailModal');" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="approveOrder(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยืนยันการชำระเงิน
                     </button>
-                    <button onclick="requestNewSlip(${orderId}); closeModal('orderDetailModal');" style="padding: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button onclick="requestNewSlip(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ขอสลิปใหม่
                     </button>
                 </div>
@@ -2230,11 +2230,12 @@ async function approveOrder(orderId) {
     try {
         const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
         });
         
         if (response.ok) {
-            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ', 'success');
+            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ — สถานะเปลี่ยนเป็น "ที่ต้องจัดส่ง"', 'success');
             closeModal();
             loadOrders(currentOrdersStatus);
         } else {
@@ -6162,12 +6163,13 @@ async function approveSlip(orderId) {
     try {
         const response = await fetch(`${API_URL}/admin/orders/${orderId}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
         });
         
         const result = await response.json();
         if (response.ok) {
-            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ - สถานะเปลี่ยนเป็น "ที่ต้องจัดส่ง"', 'success');
+            showGlobalAlert('อนุมัติคำสั่งซื้อสำเร็จ — สถานะเปลี่ยนเป็น "ที่ต้องจัดส่ง"', 'success');
             loadSlipReviewPage();
         } else {
             showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
@@ -6186,13 +6188,15 @@ async function requestNewSlip(orderId) {
         const response = await fetch(`${API_URL}/admin/orders/${orderId}/request-new-slip`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
         
         const result = await response.json();
         if (response.ok) {
-            showGlobalAlert('ขอสลิปใหม่สำเร็จ - แจ้งเตือนสมาชิกแล้ว', 'success');
-            loadSlipReviewPage();
+            showGlobalAlert('ขอสลิปใหม่สำเร็จ — แจ้งเตือนสมาชิกแล้ว', 'success');
+            closeModal();
+            loadOrders(currentOrdersStatus);
         } else {
             showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
         }
