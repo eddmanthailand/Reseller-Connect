@@ -2330,6 +2330,18 @@ async function openRefundModal(orderId) {
     document.getElementById('refundSlipPreview').style.display = 'none';
     document.getElementById('refundSlipInput').value = '';
     document.getElementById('refundQrSection').style.display = 'none';
+    document.getElementById('refundNoAccountWarning').style.display = 'none';
+    document.getElementById('refundWeightInfo').textContent = '';
+
+    const slipLabel = document.getElementById('refundSlipLabel');
+    const submitBtn = document.getElementById('refundSubmitBtn');
+    slipLabel.style.opacity = '1';
+    slipLabel.style.cursor = 'pointer';
+    slipLabel.style.pointerEvents = 'auto';
+    submitBtn.disabled = false;
+    submitBtn.style.opacity = '1';
+    submitBtn.style.cursor = 'pointer';
+
     document.getElementById('refundModal').style.display = 'flex';
 
     try {
@@ -2345,22 +2357,46 @@ async function openRefundModal(orderId) {
         document.getElementById('refundShippingVal').value = d.shipping_fee || 0;
         document.getElementById('refundAmountVal').value = d.refund_amount || 0;
 
+        // Show weight info below "หักค่าขนส่ง"
+        const wg = d.total_weight_g || 0;
+        const tier = d.rate_tier;
+        if (wg > 0 && tier) {
+            const maxLabel = tier.max_weight ? `${tier.max_weight.toLocaleString()}g` : 'ขึ้นไป';
+            document.getElementById('refundWeightInfo').textContent =
+                `น้ำหนักรวม ${wg.toLocaleString()}g (${tier.min_weight.toLocaleString()}–${maxLabel})`;
+        } else if (wg === 0) {
+            document.getElementById('refundWeightInfo').textContent = 'ไม่มีข้อมูลน้ำหนักสินค้า';
+        }
+
         const r = d.reseller || {};
+        const hasAccount = !!(r.bank_account_number || r.promptpay_number);
         let bankHtml = '';
         if (r.bank_name || r.bank_account_number) {
             bankHtml += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 <span>${escapeHtml(r.bank_name||'-')} — ${escapeHtml(r.bank_account_number||'-')}</span></div>`;
             bankHtml += `<div style="margin-left:21px;color:rgba(255,255,255,0.7);">${escapeHtml(r.bank_account_name||'')}</div>`;
-        } else {
-            bankHtml = '<span style="color:rgba(255,255,255,0.4);font-size:12px;">สมาชิกยังไม่ได้เพิ่มข้อมูลบัญชี</span>';
         }
         if (r.promptpay_number) {
-            bankHtml += `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+            bankHtml += `<div style="display:flex;gap:8px;align-items:center;margin-top:${r.bank_account_number ? '8' : '0'}px;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" style="flex-shrink:0;"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                 <span style="color:#34d399;">PromptPay: ${escapeHtml(r.promptpay_number)}</span></div>`;
         }
+        if (!hasAccount) {
+            bankHtml = '<span style="color:rgba(255,255,255,0.4);font-size:12px;">สมาชิกยังไม่ได้บันทึกข้อมูลบัญชี</span>';
+        }
         document.getElementById('refundBankDetails').innerHTML = bankHtml;
+
+        // Disable slip + confirm if no account info
+        if (!hasAccount) {
+            document.getElementById('refundNoAccountWarning').style.display = 'block';
+            slipLabel.style.opacity = '0.35';
+            slipLabel.style.cursor = 'not-allowed';
+            slipLabel.style.pointerEvents = 'none';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.35';
+            submitBtn.style.cursor = 'not-allowed';
+        }
 
         if (r.promptpay_number && d.refund_amount > 0) {
             try {
@@ -2395,13 +2431,14 @@ function previewRefundSlip(event) {
 }
 
 async function submitRefund() {
+    const btn = document.getElementById('refundSubmitBtn');
+    if (btn.disabled) return;
     const orderId = document.getElementById('refundOrderId').value;
     const slipInput = document.getElementById('refundSlipInput');
     if (!slipInput.files[0]) {
         showGlobalAlert('กรุณาแนบสลิปการโอนก่อน', 'error');
         return;
     }
-    const btn = document.getElementById('refundSubmitBtn');
     btn.textContent = 'กำลังบันทึก...';
     btn.disabled = true;
 

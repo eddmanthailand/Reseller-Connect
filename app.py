@@ -9582,15 +9582,47 @@ def get_refund_info(order_id):
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
         cursor.execute('SELECT * FROM order_refunds WHERE order_id = %s ORDER BY created_at DESC LIMIT 1', (order_id,))
         existing_refund = cursor.fetchone()
+
+        # Calculate total weight from order items × product weight
+        cursor.execute('''
+            SELECT COALESCE(SUM(COALESCE(p.weight, 0) * oi.quantity), 0) AS total_weight_g
+            FROM order_items oi
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE oi.order_id = %s
+        ''', (order_id,))
+        weight_row = cursor.fetchone()
+        total_weight_g = float(weight_row['total_weight_g'] or 0)
+
+        # Look up shipping rate from weight table
+        cursor.execute('''
+            SELECT rate, min_weight, max_weight
+            FROM shipping_weight_rates
+            WHERE is_active = true
+              AND min_weight <= %s
+              AND (max_weight IS NULL OR max_weight >= %s)
+            ORDER BY min_weight DESC
+            LIMIT 1
+        ''', (total_weight_g, total_weight_g))
+        rate_row = cursor.fetchone()
+        calculated_shipping_fee = float(rate_row['rate']) if rate_row else 0.0
+        rate_tier = {
+            'min_weight': int(rate_row['min_weight']) if rate_row else 0,
+            'max_weight': int(rate_row['max_weight']) if rate_row and rate_row['max_weight'] else None,
+            'rate': calculated_shipping_fee
+        } if rate_row else None
+
         final_amount = float(order['final_amount'] or 0)
-        shipping_fee = float(order['shipping_fee'] or 0)
-        refund_amount = max(0, final_amount - shipping_fee)
+        refund_amount = max(0, final_amount - calculated_shipping_fee)
+
         return jsonify({
             'order_id': order_id,
             'order_number': order['order_number'],
             'status': order['status'],
             'final_amount': final_amount,
-            'shipping_fee': shipping_fee,
+            'shipping_fee': calculated_shipping_fee,
+            'total_weight_g': total_weight_g,
+            'rate_tier': rate_tier,
             'refund_amount': refund_amount,
             'reseller': {
                 'id': order['reseller_id'],

@@ -2164,7 +2164,10 @@
                             <span id="refundTotalPaid" style="font-size:13px;color:#ffffff;font-weight:600;"></span>
                         </div>
                         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                            <span style="font-size:13px;color:rgba(255,255,255,0.6);">หักค่าขนส่ง</span>
+                            <div>
+                                <span style="font-size:13px;color:rgba(255,255,255,0.6);">หักค่าขนส่ง</span>
+                                <div id="refundWeightInfo" style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:1px;"></div>
+                            </div>
                             <span id="refundShippingDeducted" style="font-size:13px;color:#f87171;font-weight:600;"></span>
                         </div>
                         <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;display:flex;justify-content:space-between;">
@@ -2187,13 +2190,21 @@
                         <div id="refundQrPhone" style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;"></div>
                     </div>
 
+                    <!-- No-account warning -->
+                    <div id="refundNoAccountWarning" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:11px 14px;margin-bottom:14px;">
+                        <div style="display:flex;gap:8px;align-items:flex-start;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <span style="font-size:12px;color:#fca5a5;line-height:1.5;">ไม่สามารถดำเนินการคืนเงินได้ เนื่องจากสมาชิกยังไม่ได้บันทึกข้อมูลบัญชีรับเงิน กรุณาแจ้งให้สมาชิกเพิ่มข้อมูลบัญชีในโปรไฟล์ก่อน</span>
+                        </div>
+                    </div>
+
                     <!-- Slip upload -->
                     <div style="margin-bottom:16px;">
                         <label style="font-size:13px;color:rgba(255,255,255,0.8);display:block;margin-bottom:8px;font-weight:500;">แนบสลิปการโอน <span style="color:#f87171;">*</span></label>
                         <div id="refundSlipPreview" style="display:none;margin-bottom:8px;text-align:center;">
                             <img id="refundSlipImg" src="" style="max-width:100%;max-height:200px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);">
                         </div>
-                        <label for="refundSlipInput" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(255,255,255,0.05);border:2px dashed rgba(255,255,255,0.2);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);">
+                        <label id="refundSlipLabel" for="refundSlipInput" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(255,255,255,0.05);border:2px dashed rgba(255,255,255,0.2);border-radius:10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,0.6);">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                             คลิกเพื่อเลือกรูปสลิป
                         </label>
