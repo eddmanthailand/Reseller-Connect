@@ -2475,8 +2475,8 @@ async function openReturnStockModal(orderId) {
                 const attrStr = Object.entries(attrs).map(([k, v]) => `${k}: ${v}`).join(', ');
                 html += `
                 <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
-                    <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 4px;">${escapeHtml(item.product_name)}</div>
-                    ${attrStr ? `<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">${escapeHtml(attrStr)}</div>` : ''}
+                    <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px;">${escapeHtml(item.product_name)}</div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 6px;">SKU: ${escapeHtml(item.sku_code || '-')}</div>
                     <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 10px;">คลัง: ${escapeHtml(item.warehouse_name || '-')} | ส่งออกไป: ${item.shipped_qty} ชิ้น | รับคืนแล้ว: ${item.already_returned} ชิ้น</div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label style="font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap;">จำนวนที่รับคืน:</label>
