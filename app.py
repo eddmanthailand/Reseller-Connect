@@ -9337,9 +9337,9 @@ def reject_order(order_id):
         if order['status'] != 'under_review':
             return jsonify({'error': 'ออเดอร์นี้ไม่ได้อยู่ในสถานะรอตรวจสอบ'}), 400
 
-        # Update order status to rejected
+        # Update order status back to pending_payment so reseller can re-upload slip
         cursor.execute('''
-            UPDATE orders SET status = 'rejected',
+            UPDATE orders SET status = 'pending_payment',
                 notes = CONCAT(COALESCE(notes, ''), ' [ปฏิเสธสลิป: ', %s, ']'),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
@@ -9354,19 +9354,20 @@ def reject_order(order_id):
         conn.commit()
 
         order_number = order['order_number'] or f'#{order_id}'
+        extra = f'เหตุผล: {reason} — กรุณาอัปโหลดสลิปใหม่' if reason else 'กรุณาอัปโหลดสลิปการชำระเงินใหม่'
         # Notify reseller via chat
         try:
-            send_order_status_chat(order['user_id'], order_number, 'rejected',
-                                   f'เหตุผล: {reason}' if reason else '', order_id=order_id)
+            send_order_status_chat(order['user_id'], order_number, 'pending_payment',
+                                   extra, order_id=order_id)
         except Exception as chat_err:
             print(f'Reject chat notification error: {chat_err}')
 
         # In-app notification
-        create_notification(order['user_id'], 'สลิปการชำระเงินถูกปฏิเสธ',
-                            f'คำสั่งซื้อ {order_number} ถูกปฏิเสธ: {reason}',
+        create_notification(order['user_id'], 'สลิปการชำระเงินถูกปฏิเสธ — กรุณาอัปโหลดใหม่',
+                            f'คำสั่งซื้อ {order_number}: {reason}' if reason else f'คำสั่งซื้อ {order_number} กรุณาอัปโหลดสลิปใหม่',
                             'warning', 'order', order_id)
 
-        return jsonify({'message': 'ปฏิเสธสลิปการชำระเงินสำเร็จ'}), 200
+        return jsonify({'message': 'ปฏิเสธสลิปและรีเซ็ตเป็นรอชำระเงินสำเร็จ'}), 200
 
     except Exception as e:
         if conn:

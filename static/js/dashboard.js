@@ -2261,7 +2261,7 @@ async function rejectOrder(orderId) {
         });
         
         if (response.ok) {
-            showGlobalAlert('ปฏิเสธคำสั่งซื้อสำเร็จ', 'success');
+            showGlobalAlert('ปฏิเสธสลิปสำเร็จ — ออเดอร์กลับเป็น "รอชำระเงิน"', 'success');
             closeModal();
             loadOrders(currentOrdersStatus);
         } else {
