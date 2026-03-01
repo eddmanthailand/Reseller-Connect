@@ -1718,7 +1718,9 @@ function renderOrders() {
         'delivered': 'จัดส่งสำเร็จ',
         'failed_delivery': 'จัดส่งไม่สำเร็จ',
         'rejected': 'ปฏิเสธ',
-        'cancelled': 'ยกเลิก'
+        'cancelled': 'ยกเลิก',
+        'pending_refund': 'รอคืนเงิน',
+        'refunded': 'คืนเงินสำเร็จ'
     };
     
     const statusColors = {
@@ -1730,7 +1732,9 @@ function renderOrders() {
         'delivered': '#10b981',
         'failed_delivery': '#ef4444',
         'rejected': '#ef4444',
-        'cancelled': '#6b7280'
+        'cancelled': '#6b7280',
+        'pending_refund': '#f97316',
+        'refunded': '#10b981'
     };
     
     let html = `
@@ -1811,6 +1815,7 @@ async function updateOrderCounts() {
         setCount('deliveredCount', 'delivered');
         setCount('failedCount', 'failed_delivery');
         setCount('cancelledCount', 'cancelled');
+        setCount('pendingRefundCount', 'pending_refund');
 
         const reviewCount = counts['under_review'] || 0;
         const pendingBadge = document.getElementById('pendingOrderCount');
@@ -1858,20 +1863,28 @@ async function viewOrderDetails(orderId) {
             'pending_payment': 'รอชำระเงิน',
             'under_review': 'รอตรวจสอบ',
             'preparing': 'ที่ต้องจัดส่ง',
+            'paid': 'ชำระแล้ว',
             'shipped': 'กำลังจัดส่ง',
             'delivered': 'จัดส่งสำเร็จ',
             'failed_delivery': 'จัดส่งไม่สำเร็จ',
-            'cancelled': 'ยกเลิก'
+            'rejected': 'ปฏิเสธ',
+            'cancelled': 'ยกเลิก',
+            'pending_refund': 'รอคืนเงิน',
+            'refunded': 'คืนเงินสำเร็จ'
         };
         
         const statusColors = {
             'pending_payment': '#f59e0b',
             'under_review': '#3b82f6',
             'preparing': '#8b5cf6',
+            'paid': '#22c55e',
             'shipped': '#0ea5e9',
             'delivered': '#10b981',
             'failed_delivery': '#ef4444',
-            'cancelled': '#6b7280'
+            'rejected': '#ef4444',
+            'cancelled': '#6b7280',
+            'pending_refund': '#f97316',
+            'refunded': '#10b981'
         };
         
         // Build items HTML - Modern card style
@@ -2036,6 +2049,29 @@ async function viewOrderDetails(orderId) {
                     <button onclick="cancelOrderAdmin(${orderId},'${escapeHtml(order.order_number||'#'+orderId)}','${order.status}')" style="padding: 14px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;">
                         ยกเลิก / คืนเงิน
                     </button>
+                </div>
+            `;
+        } else if (order.status === 'pending_refund') {
+            actionsHtml = `
+                <div style="margin-top: 24px;">
+                    <div style="background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: #f97316;">
+                        ⚠️ ออเดอร์นี้ถูกยกเลิกแล้ว — รอดำเนินการคืนสต็อกและคืนเงิน
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button onclick="openReturnStockModal(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            📦 รับสินค้าคืนคลัง
+                        </button>
+                        <button onclick="closeModal('orderDetailModal'); openRefundModal(${orderId})" style="padding: 14px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            💸 ดำเนินการคืนเงิน
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else if (order.status === 'refunded') {
+            actionsHtml = `
+                <div style="margin-top: 24px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 10px; padding: 14px 16px; text-align: center;">
+                    <div style="font-size: 22px; margin-bottom: 6px;">✅</div>
+                    <div style="color: #10b981; font-size: 14px; font-weight: 600;">คืนเงินสำเร็จแล้ว</div>
                 </div>
             `;
         }
@@ -2268,10 +2304,9 @@ async function submitCancelOrder() {
             closeCancelOrderModal();
             closeModal();
             if (data.requires_refund) {
-                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ — กรุณาดำเนินการคืนเงิน', 'success');
-                setTimeout(() => openRefundModal(orderId), 600);
+                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ — ออเดอร์อยู่ในสถานะ "รอคืนเงิน" กรุณาดำเนินการต่อในหน้าออเดอร์', 'success');
             } else {
-                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ สต็อกถูกคืนกลับแล้ว', 'success');
+                showGlobalAlert('ยกเลิกคำสั่งซื้อสำเร็จ', 'success');
             }
             loadOrders(currentOrdersStatus);
         } else {
@@ -2403,6 +2438,104 @@ async function submitRefund() {
         }
     };
     reader.readAsDataURL(slipFile);
+}
+
+async function openReturnStockModal(orderId) {
+    const modal = document.getElementById('returnStockModal');
+    if (!modal) return;
+    document.getElementById('returnStockOrderId').value = orderId;
+    document.getElementById('returnStockItems').innerHTML = '<div style="color: rgba(255,255,255,0.6); text-align: center; padding: 20px;">กำลังโหลด...</div>';
+    modal.style.display = 'flex';
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/${orderId}/return-stock-info`, { credentials: 'include' });
+        const d = await resp.json();
+        if (!resp.ok) { showGlobalAlert(d.error || 'โหลดข้อมูลไม่ได้', 'error'); modal.style.display = 'none'; return; }
+        document.getElementById('returnStockOrderNumber').textContent = d.order_number || `#${orderId}`;
+        if (!d.was_shipped) {
+            document.getElementById('returnStockItems').innerHTML = `
+                <div style="background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 10px; padding: 14px; color: #f97316; font-size: 13px; text-align: center;">
+                    ออเดอร์นี้ยังไม่เคยจัดส่ง — ไม่มีสินค้าที่ต้องรับคืน
+                </div>`;
+            return;
+        }
+        let html = '';
+        if (!d.items || d.items.length === 0) {
+            html = '<div style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">ไม่พบรายการสินค้า</div>';
+        } else {
+            d.items.forEach((item, i) => {
+                const attrs = typeof item.attributes === 'string' ? (() => { try { return JSON.parse(item.attributes); } catch { return {}; } })() : (item.attributes || {});
+                const attrStr = Object.entries(attrs).map(([k, v]) => `${k}: ${v}`).join(', ');
+                html += `
+                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 14px; margin-bottom: 10px;">
+                    <div style="font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 4px;">${escapeHtml(item.product_name)}</div>
+                    ${attrStr ? `<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">${escapeHtml(attrStr)}</div>` : ''}
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 10px;">คลัง: ${escapeHtml(item.warehouse_name || '-')} | ส่งออกไป: ${item.shipped_qty} ชิ้น | รับคืนแล้ว: ${item.already_returned} ชิ้น</div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap;">จำนวนที่รับคืน:</label>
+                        <input type="number" id="returnQty_${i}" min="0" max="${item.max_returnable}" value="${item.max_returnable}"
+                            data-sku-id="${item.sku_id}" data-warehouse-id="${item.warehouse_id}"
+                            style="width: 80px; padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 13px; text-align: center;">
+                        <span style="font-size: 12px; color: rgba(255,255,255,0.5);">/ ${item.max_returnable} ชิ้น</span>
+                    </div>
+                </div>`;
+            });
+        }
+        document.getElementById('returnStockItems').innerHTML = html;
+        window._returnStockItemCount = d.items ? d.items.length : 0;
+    } catch(e) {
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+        modal.style.display = 'none';
+    }
+}
+
+function closeReturnStockModal() {
+    const modal = document.getElementById('returnStockModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitReturnStock() {
+    const orderId = document.getElementById('returnStockOrderId').value;
+    const count = window._returnStockItemCount || 0;
+    const items = [];
+    for (let i = 0; i < count; i++) {
+        const input = document.getElementById(`returnQty_${i}`);
+        if (!input) continue;
+        const qty = parseInt(input.value) || 0;
+        if (qty > 0) {
+            items.push({
+                sku_id: parseInt(input.dataset.skuId),
+                warehouse_id: parseInt(input.dataset.warehouseId),
+                return_qty: qty
+            });
+        }
+    }
+    if (items.length === 0) {
+        showGlobalAlert('กรุณาระบุจำนวนสินค้าที่ต้องการรับคืน', 'error');
+        return;
+    }
+    const btn = document.getElementById('returnStockSubmitBtn');
+    btn.textContent = 'กำลังบันทึก...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch(`${API_URL}/admin/orders/${orderId}/return-stock`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            closeReturnStockModal();
+            showGlobalAlert(data.message || 'รับสินค้าคืนคลังสำเร็จ', 'success');
+            loadOrders(currentOrdersStatus);
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch(e) {
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+    } finally {
+        btn.textContent = 'ยืนยันรับสินค้าคืน';
+        btn.disabled = false;
+    }
 }
 
 async function markDelivered(orderId) {
@@ -3871,8 +4004,15 @@ function renderRecentOrders(orders) {
     const statusLabels = {
         'pending_payment': 'รอชำระเงิน',
         'under_review': 'รอตรวจสอบ',
+        'preparing': 'ที่ต้องจัดส่ง',
         'paid': 'ชำระแล้ว',
-        'cancelled': 'ยกเลิก'
+        'shipped': 'กำลังจัดส่ง',
+        'delivered': 'จัดส่งสำเร็จ',
+        'failed_delivery': 'จัดส่งไม่สำเร็จ',
+        'rejected': 'ปฏิเสธ',
+        'cancelled': 'ยกเลิก',
+        'pending_refund': 'รอคืนเงิน',
+        'refunded': 'คืนเงินสำเร็จ'
     };
     
     let html = '';
@@ -4012,8 +4152,15 @@ function renderSalesHistoryTable(orders) {
     const statusLabels = {
         'pending_payment': 'รอชำระเงิน',
         'under_review': 'รอตรวจสอบ',
+        'preparing': 'ที่ต้องจัดส่ง',
         'paid': 'ชำระแล้ว',
-        'cancelled': 'ยกเลิก'
+        'shipped': 'กำลังจัดส่ง',
+        'delivered': 'จัดส่งสำเร็จ',
+        'failed_delivery': 'จัดส่งไม่สำเร็จ',
+        'rejected': 'ปฏิเสธ',
+        'cancelled': 'ยกเลิก',
+        'pending_refund': 'รอคืนเงิน',
+        'refunded': 'คืนเงินสำเร็จ'
     };
     
     if (!orders || orders.length === 0) {

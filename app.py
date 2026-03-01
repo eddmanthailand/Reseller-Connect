@@ -9430,9 +9430,15 @@ def cancel_order(order_id):
         if order['status'] not in CANCELLABLE_STATUSES:
             return jsonify({'error': 'ไม่สามารถยกเลิกคำสั่งซื้อนี้ได้'}), 400
         
-        is_shipped = order['status'] == 'shipped'
+        current_status = order['status']
+        # Orders that were shipped/failed_delivery: stock NOT auto-restored (item still in transit or returned)
+        stock_in_transit = current_status in ('shipped', 'failed_delivery')
+        # Orders that were paid/preparing: stock restored automatically (item still in warehouse)
+        needs_refund = current_status in ('paid', 'preparing', 'shipped', 'failed_delivery')
+        # New status after cancel
+        new_status = 'pending_refund' if needs_refund else 'cancelled'
         
-        if not is_shipped:
+        if not stock_in_transit:
             # Get order items and shipments to restore stock (only for non-shipped orders)
             cursor.execute('''
                 SELECT osi.order_item_id, osi.quantity, os.warehouse_id, oi.sku_id
@@ -9468,9 +9474,9 @@ def cancel_order(order_id):
         
         # Update order status
         cursor.execute('''
-            UPDATE orders SET status = 'cancelled', notes = CONCAT(COALESCE(notes, ''), ' [ยกเลิก: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
+            UPDATE orders SET status = %s, notes = CONCAT(COALESCE(notes, ''), ' [ยกเลิก: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        ''', (reason, order_id))
+        ''', (new_status, reason, order_id))
         
         conn.commit()
         
@@ -9506,7 +9512,7 @@ def cancel_order(order_id):
             order_id
         )
         
-        return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ', 'requires_refund': is_shipped}), 200
+        return jsonify({'message': 'ยกเลิกคำสั่งซื้อสำเร็จ', 'requires_refund': needs_refund, 'new_status': new_status, 'stock_in_transit': stock_in_transit}), 200
         
     except Exception as e:
         if conn:
@@ -9621,6 +9627,8 @@ def process_refund(order_id):
         ''', (order_id, refund_amount, shipping_deducted, total_paid,
               bank_name, bank_account_number, bank_account_name, promptpay_number,
               slip_url, notes, admin_id))
+        # Update order status to refunded
+        cursor.execute("UPDATE orders SET status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (order_id,))
         conn.commit()
 
         # Send chat notification with slip
@@ -9713,6 +9721,143 @@ def generate_refund_qr(order_id):
             'amount': amount
         }), 200
     except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/orders/<int:order_id>/return-stock-info', methods=['GET'])
+@admin_required
+def get_return_stock_info(order_id):
+    """Get order items info for return-to-stock modal (pending_refund orders that were shipped)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status,
+                   EXISTS(SELECT 1 FROM order_shipments os WHERE os.order_id = o.id AND os.tracking_number IS NOT NULL AND os.tracking_number != '') as was_shipped
+            FROM orders o WHERE o.id = %s
+        ''', (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['status'] != 'pending_refund':
+            return jsonify({'error': 'ออเดอร์นี้ไม่อยู่ในสถานะรอคืนเงิน'}), 400
+
+        cursor.execute('''
+            SELECT oi.id as order_item_id, oi.sku_id, oi.quantity as ordered_qty,
+                   s.sku_code, s.attributes,
+                   p.name as product_name,
+                   osi.warehouse_id, COALESCE(osi.quantity, oi.quantity) as shipped_qty,
+                   w.name as warehouse_name,
+                   COALESCE(sws.stock, 0) as current_stock
+            FROM order_items oi
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
+            LEFT JOIN order_shipment_items osi ON osi.order_item_id = oi.id
+            LEFT JOIN order_shipments os ON os.id = osi.shipment_id
+            LEFT JOIN warehouses w ON w.id = osi.warehouse_id
+            LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = oi.sku_id AND sws.warehouse_id = osi.warehouse_id
+            WHERE oi.order_id = %s
+            ORDER BY oi.id
+        ''', (order_id,))
+        items = cursor.fetchall()
+
+        cursor.execute('''
+            SELECT sku_id, warehouse_id, SUM(quantity_after - quantity_before) as returned_qty
+            FROM stock_audit_log
+            WHERE reference_id = %s AND reference_type = 'order' AND change_type = 'return_from_order'
+            GROUP BY sku_id, warehouse_id
+        ''', (order_id,))
+        returned_map = {(r['sku_id'], r['warehouse_id']): r['returned_qty'] for r in cursor.fetchall()}
+
+        items_list = []
+        for item in items:
+            already_returned = int(returned_map.get((item['sku_id'], item['warehouse_id']), 0))
+            max_ret = max(0, int(item['shipped_qty'] or 0) - already_returned)
+            items_list.append({
+                'order_item_id': item['order_item_id'],
+                'sku_id': item['sku_id'],
+                'sku_code': item['sku_code'],
+                'attributes': item['attributes'],
+                'product_name': item['product_name'],
+                'ordered_qty': item['ordered_qty'],
+                'shipped_qty': item['shipped_qty'],
+                'warehouse_id': item['warehouse_id'],
+                'warehouse_name': item['warehouse_name'],
+                'current_stock': item['current_stock'],
+                'already_returned': already_returned,
+                'max_returnable': max_ret
+            })
+
+        return jsonify({
+            'order_id': order_id,
+            'order_number': order['order_number'],
+            'was_shipped': order['was_shipped'],
+            'items': items_list
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/orders/<int:order_id>/return-stock', methods=['POST'])
+@admin_required
+def process_return_stock(order_id):
+    """Process partial/full stock return for a pending_refund order"""
+    conn = None
+    cursor = None
+    try:
+        admin_id = session.get('user_id')
+        data = request.get_json(silent=True) or {}
+        items = data.get('items', [])
+
+        if not items:
+            return jsonify({'error': 'กรุณาระบุสินค้าที่ต้องการคืน'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, status, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['status'] != 'pending_refund':
+            return jsonify({'error': 'ออเดอร์นี้ไม่อยู่ในสถานะรอคืนเงิน'}), 400
+
+        returned_count = 0
+        for item in items:
+            sku_id = item.get('sku_id')
+            warehouse_id = item.get('warehouse_id')
+            return_qty = int(item.get('return_qty', 0))
+            if not sku_id or not warehouse_id or return_qty <= 0:
+                continue
+
+            cursor.execute('''
+                INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+            ''', (sku_id, warehouse_id, return_qty))
+
+            cursor.execute('''
+                INSERT INTO stock_audit_log (sku_id, warehouse_id, quantity_before, quantity_after, change_type, reference_id, reference_type, notes, created_by)
+                SELECT %s, %s, stock - %s, stock, 'return_from_order', %s, 'order', %s, %s
+                FROM sku_warehouse_stock WHERE sku_id = %s AND warehouse_id = %s
+            ''', (sku_id, warehouse_id, return_qty, order_id,
+                  f'รับสินค้าคืนคลังจากออเดอร์ {order["order_number"] or "#"+str(order_id)}',
+                  admin_id, sku_id, warehouse_id))
+
+            cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (return_qty, sku_id))
+            returned_count += return_qty
+
+        conn.commit()
+        return jsonify({'message': f'รับสินค้าคืนคลังสำเร็จ {returned_count} ชิ้น'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
         return handle_error(e)
     finally:
         if cursor: cursor.close()

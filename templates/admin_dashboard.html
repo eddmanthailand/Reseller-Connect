@@ -30,6 +30,8 @@
         .order-status.paid { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
         .order-status.rejected { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .order-status.cancelled { background: rgba(107, 114, 128, 0.2); color: #6b7280; }
+        .order-status.pending_refund { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .order-status.refunded { background: rgba(16, 185, 129, 0.2); color: #10b981; }
         .pending-badge { background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px; }
         .pending-badge.chat-badge-animated { 
             background: linear-gradient(135deg, #ef4444, #f97316); 
@@ -2069,6 +2071,7 @@
                         <button class="status-tab" data-status="shipped">กำลังจัดส่ง <span class="count" id="shippedCount" style="display:none;">0</span></button>
                         <button class="status-tab" data-status="delivered">จัดส่งสำเร็จ <span class="count" id="deliveredCount" style="display:none;">0</span></button>
                         <button class="status-tab" data-status="failed_delivery">จัดส่งไม่สำเร็จ <span class="count" id="failedCount" style="display:none;">0</span></button>
+                        <button class="status-tab" data-status="pending_refund" style="color:#f97316;">รอคืนเงิน <span class="count" id="pendingRefundCount" style="display:none;">0</span></button>
                         <button class="status-tab" data-status="cancelled">ยกเลิก <span class="count" id="cancelledCount" style="display:none;">0</span></button>
                     </div>
                 </div>
@@ -2234,6 +2237,31 @@
                     <div style="display:flex;gap:10px;">
                         <button onclick="closeRefundModal()" style="flex:1;padding:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;border-radius:10px;font-size:13px;cursor:pointer;font-weight:500;">ปิด</button>
                         <button onclick="submitRefund()" id="refundSubmitBtn" style="flex:2;padding:11px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#ffffff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">ยืนยันคืนเงิน</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Return Stock Modal -->
+            <div id="returnStockModal" class="modal" style="display:none;position:fixed;inset:0;z-index:10003;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);overflow-y:auto;padding:16px;">
+                <div style="width:100%;max-width:520px;background:linear-gradient(160deg,#1a0a2e,#0d0a1e);border-radius:18px;border:1px solid rgba(139,92,246,0.3);padding:26px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);display:flex;align-items:center;justify-content:center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:15px;font-weight:700;color:#ffffff;">รับสินค้าคืนคลัง</h3>
+                            <div id="returnStockOrderNumber" style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:1px;"></div>
+                        </div>
+                        <button onclick="closeReturnStockModal()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:20px;line-height:1;padding:0;">&times;</button>
+                    </div>
+                    <input type="hidden" id="returnStockOrderId">
+                    <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.65);line-height:1.6;">
+                        ระบุจำนวนสินค้าที่รับคืนจริงต่อ SKU — สามารถรับบางส่วนได้ หากสินค้าชำรุดระหว่างขนส่ง ค่าชดเชยไม่กระทบยอดคืนเงิน
+                    </div>
+                    <div id="returnStockItems" style="max-height:340px;overflow-y:auto;"></div>
+                    <div style="display:flex;gap:10px;margin-top:20px;">
+                        <button onclick="closeReturnStockModal()" style="flex:1;padding:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;border-radius:10px;font-size:13px;cursor:pointer;font-weight:500;">ปิด</button>
+                        <button onclick="submitReturnStock()" id="returnStockSubmitBtn" style="flex:2;padding:11px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);border:none;color:#ffffff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">ยืนยันรับสินค้าคืน</button>
                     </div>
                 </div>
             </div>
