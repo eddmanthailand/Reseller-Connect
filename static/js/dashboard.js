@@ -2421,12 +2421,71 @@ function closeRefundModal() {
 
 function downloadRefundQr() {
     const img = document.getElementById('refundQrImage');
-    const name = document.getElementById('refundQrName').textContent || 'promptpay';
-    const phone = document.getElementById('refundQrPhone').textContent || '';
     if (!img || !img.src || img.src === window.location.href) return;
+
+    const accountName = document.getElementById('refundQrName').textContent.trim() || '';
+    const phone      = document.getElementById('refundQrPhone').textContent.trim() || '';
+    const amount     = parseFloat(document.getElementById('refundAmountVal').value || 0);
+    const orderNum   = document.getElementById('refundOrderNumber').textContent.trim() || '';
+    const amountText = `฿${amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+
+    const QR_SIZE  = 220;
+    const PAD      = 24;
+    const W        = QR_SIZE + PAD * 2;
+    const LINE_H   = 22;
+    const HEADER_H = 54;
+    const FOOTER_H = PAD + LINE_H * 3 + PAD;
+    const H        = HEADER_H + QR_SIZE + FOOTER_H;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // background
+    ctx.fillStyle = '#1a0a2e';
+    ctx.fillRect(0, 0, W, H);
+
+    // header band
+    const grad = ctx.createLinearGradient(0, 0, W, HEADER_H);
+    grad.addColorStop(0, '#7c3aed');
+    grad.addColorStop(1, '#a855f7');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, HEADER_H);
+
+    // header text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PromptPay', W / 2, 22);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText(orderNum, W / 2, 40);
+
+    // QR image
+    ctx.drawImage(img, PAD, HEADER_H, QR_SIZE, QR_SIZE);
+
+    // footer — amount
+    const FY = HEADER_H + QR_SIZE + 16;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'center';
+    ctx.fillText(amountText, W / 2, FY);
+
+    // account name
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(accountName, W / 2, FY + LINE_H);
+
+    // phone
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(phone, W / 2, FY + LINE_H * 2);
+
+    const filename = `QR_คืนเงิน_${orderNum}_${accountName}.png`.replace(/\s+/g, '_');
     const a = document.createElement('a');
-    a.href = img.src;
-    a.download = `QR_${name}_${phone}.png`.replace(/\s+/g, '_');
+    a.href = canvas.toDataURL('image/png');
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
