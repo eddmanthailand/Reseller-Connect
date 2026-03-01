@@ -9785,9 +9785,9 @@ def get_return_stock_info(order_id):
 
         cursor.execute('''
             SELECT oi.id as order_item_id, oi.sku_id, oi.quantity as ordered_qty,
-                   s.sku_code, s.attributes,
+                   s.sku_code,
                    p.name as product_name,
-                   osi.warehouse_id, COALESCE(osi.quantity, oi.quantity) as shipped_qty,
+                   os.warehouse_id, COALESCE(osi.quantity, oi.quantity) as shipped_qty,
                    w.name as warehouse_name,
                    COALESCE(sws.stock, 0) as current_stock
             FROM order_items oi
@@ -9795,8 +9795,8 @@ def get_return_stock_info(order_id):
             JOIN products p ON p.id = s.product_id
             LEFT JOIN order_shipment_items osi ON osi.order_item_id = oi.id
             LEFT JOIN order_shipments os ON os.id = osi.shipment_id
-            LEFT JOIN warehouses w ON w.id = osi.warehouse_id
-            LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = oi.sku_id AND sws.warehouse_id = osi.warehouse_id
+            LEFT JOIN warehouses w ON w.id = os.warehouse_id
+            LEFT JOIN sku_warehouse_stock sws ON sws.sku_id = oi.sku_id AND sws.warehouse_id = os.warehouse_id
             WHERE oi.order_id = %s
             ORDER BY oi.id
         ''', (order_id,))
@@ -9818,7 +9818,7 @@ def get_return_stock_info(order_id):
                 'order_item_id': item['order_item_id'],
                 'sku_id': item['sku_id'],
                 'sku_code': item['sku_code'],
-                'attributes': item['attributes'],
+                'attributes': None,
                 'product_name': item['product_name'],
                 'ordered_qty': item['ordered_qty'],
                 'shipped_qty': item['shipped_qty'],
