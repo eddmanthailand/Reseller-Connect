@@ -1,0 +1,147 @@
+Role & Persona:
+Act as an "Enterprise Software Architect & Lead UI/UX Engineer". We are building a "Unified Marketing Module" (Promotions & Coupons) for our E-commerce PWA.
+Follow the "Conservative Backend, Premium Frontend" philosophy. All Database queries must use ACID Transactions.
+
+Context & Business Logic:
+เราต้องการสร้างระบบโปรโมชันและคูปองที่มีความซับซ้อนระดับ Enterprise โดยแบ่งการทำงานเป็น 2 ส่วน:
+
+Auto-Promotions (โปรโมชันอัตโนมัติ): ลดเป็น %, ส่งฟรี, หรือระบบ GWP (Gift With Purchase / ของแถมตัดสต็อก) ซึ่งระบบจะคำนวณและแถมให้ในตะกร้าอัตโนมัติเมื่อยอดถึงเกณฑ์
+
+Coupon Wallet (คูปองส่วนลด): ลูกค้าต้องกดเก็บ (Claim) ล่วงหน้า และกดเลือกใช้ตอน Checkout
+
+Action Required (Phase 1 - Database Migration):
+โปรดสร้างไฟล์ Python ขึ้นมาใหม่ชื่อ migrate_marketing.py ใน Root Directory เพื่อทำการเพิ่มตารางใหม่และ Alter ตารางเดิมใน PostgreSQL โดยใช้โค้ด Full Script ด้านล่างนี้ เมื่อสร้างไฟล์เสร็จ ให้รันไฟล์นี้ 1 ครั้งเพื่ออัปเดต Database Schema ให้สมบูรณ์
+
+Code for migrate_marketing.py:
+
+Python
+"""
+[Database Migration Script] Unified Marketing Module
+สร้างและอัปเดตตารางสำหรับระบบ Promotions, Coupons (Wallet), และ GWP (ของแถม)
+"""
+import logging
+import psycopg2
+from database import get_db
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+def run_marketing_migration() -> bool:
+    """
+    [Enterprise Standard] ดำเนินการอัปเดต Database Schema แบบ ACID Transaction
+    
+    Returns:
+        bool: True หาก Migration สำเร็จ, False หากเกิดข้อผิดพลาด
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        logging.info("🚀 Starting Marketing Module Migration...")
+
+        # 1. สร้างตาราง Promotions (ระบบโปรโมชันอัตโนมัติ และ ของแถม GWP)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS promotions (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                promo_type VARCHAR(50) NOT NULL, -- 'free_shipping', 'step_discount', 'gwp'
+                condition_min_qty INT DEFAULT 0,
+                condition_min_spend DECIMAL(10,2) DEFAULT 0,
+                reward_type VARCHAR(50), -- 'discount_percent', 'discount_fixed', 'free_item', 'free_shipping'
+                reward_value DECIMAL(10,2) DEFAULT 0,
+                reward_product_id INT REFERENCES products(id) ON DELETE SET NULL, -- สำหรับของแถม (GWP)
+                reward_qty INT DEFAULT 1,
+                target_brand_id INT REFERENCES brands(id) ON DELETE SET NULL,
+                target_category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+                start_date TIMESTAMP,
+                end_date TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        logging.info("✅ Table 'promotions' verified.")
+
+        # 2. สร้างตาราง Coupons (คูปองที่ต้องกดเก็บ)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS coupons (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                discount_type VARCHAR(50) NOT NULL, -- 'fixed', 'percent', 'free_shipping'
+                discount_value DECIMAL(10,2) NOT NULL,
+                max_discount DECIMAL(10,2) DEFAULT 0, -- ลดสูงสุด (สำหรับแบบ percent)
+                min_spend DECIMAL(10,2) DEFAULT 0,
+                total_quota INT DEFAULT 0, -- สิทธิ์ทั้งหมด
+                per_user_limit INT DEFAULT 1, -- จำกัดการเก็บต่อผู้ใช้ 1 คน
+                target_type VARCHAR(50) DEFAULT 'all', -- 'all', 'standard', 'mto'
+                start_date TIMESTAMP,
+                end_date TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        logging.info("✅ Table 'coupons' verified.")
+
+        # 3. สร้างตาราง User Coupons (ระบบกระเป๋าเก็บคูปอง Wallet)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_coupons (
+                id SERIAL PRIMARY KEY,
+                user_id INT REFERENCES users(id) ON DELETE CASCADE,
+                coupon_id INT REFERENCES coupons(id) ON DELETE CASCADE,
+                status VARCHAR(20) DEFAULT 'ready', -- 'ready', 'used', 'expired'
+                collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                used_at TIMESTAMP,
+                used_in_order_id INT, -- จะอัปเดตเป็น FK ภายหลัง
+                UNIQUE(user_id, coupon_id) -- ป้องกันการเก็บคูปองเดียวกันซ้ำ
+            )
+        ''')
+        logging.info("✅ Table 'user_coupons' verified.")
+
+        # 4. อัปเดตตาราง Products (รองรับการทำของแถม GWP ไม่ให้กดซื้อเองได้)
+        cursor.execute('''
+            ALTER TABLE products 
+            ADD COLUMN IF NOT EXISTS is_free_gift BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS gift_condition_desc VARCHAR(255);
+        ''')
+        logging.info("✅ Table 'products' altered (Added GWP fields).")
+
+        # 5. อัปเดตตาราง Cart Items (ระบุว่าสินค้านี้ดึงมาเป็นของแถม ราคาต้อง 0)
+        cursor.execute('''
+            ALTER TABLE cart_items 
+            ADD COLUMN IF NOT EXISTS is_free_gift BOOLEAN DEFAULT FALSE;
+        ''')
+        logging.info("✅ Table 'cart_items' altered (Added is_free_gift).")
+
+        # 6. อัปเดตตาราง Orders และ MTO Orders (บันทึกบัญชีเมื่อมีการใช้คูปองหรือโปรโมชัน)
+        cursor.execute('''
+            ALTER TABLE orders 
+            ADD COLUMN IF NOT EXISTS coupon_id INT REFERENCES coupons(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS coupon_discount DECIMAL(10,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS promotion_discount DECIMAL(10,2) DEFAULT 0;
+            
+            ALTER TABLE mto_orders 
+            ADD COLUMN IF NOT EXISTS coupon_id INT REFERENCES coupons(id) ON DELETE SET NULL,
+            ADD COLUMN IF NOT EXISTS coupon_discount DECIMAL(10,2) DEFAULT 0;
+        ''')
+        logging.info("✅ Tables 'orders' & 'mto_orders' altered (Accounting fields).")
+
+        conn.commit() # 🛡️ ยืนยัน Transaction
+        logging.info("🎉 All Marketing Module Database Migrations completed successfully!")
+        return True
+
+    except Exception as e:
+        conn.rollback() # 🛡️ ป้องกัน Database พังหากมี Error
+        logging.error(f"❌ Migration Error: {str(e)}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+if __name__ == "__main__":
+    run_marketing_migration()
+Next Steps instruction for Replit AI:
+
+สร้างไฟล์ migrate_marketing.py และวางโค้ดด้านบน
+
+รันคำสั่ง python migrate_marketing.py ใน Console
+
+หลังจากรันสำเร็จ ให้แจ้งผลลัพธ์กลับมา และเตรียมตัวเขียน Controller สำหรับ calculate_cart_total() เพื่อรองรับ Logic โปรโมชันใน Phase ต่อไป
