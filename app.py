@@ -5652,7 +5652,7 @@ def get_reseller_dashboard_stats():
         cursor.execute('''
             SELECT status, COUNT(*) as count
             FROM orders
-            WHERE user_id = %s AND status != 'paid' AND status != 'cancelled'
+            WHERE user_id = %s AND status IN ('pending_payment', 'under_review')
             GROUP BY status
         ''', (user_id,))
         pending_orders = {row['status']: row['count'] for row in cursor.fetchall()}
