@@ -531,9 +531,9 @@ function openProductModal(product) {
         optionsHtml = product.options.map(opt => {
             const values = opt.values || [];
             return `
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">${opt.name}</label>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <div class="product-modal-options">
+                <div class="product-modal-option-label">${opt.name}</div>
+                <div class="product-modal-option-buttons">
                     ${values.map((val, idx) => {
                         const valStr = typeof val === 'object' ? val.value : val;
                         const stockKey = `${opt.name}:${valStr}`;
@@ -545,17 +545,11 @@ function openProductModal(product) {
                             return (optionStockMap[sk]?.totalStock || 0) > 0;
                         });
                         return `
-                        <button type="button" class="option-btn ${isFirstAvailable ? 'active' : ''}" 
+                        <button type="button" class="option-btn ${isFirstAvailable ? 'active' : ''} ${isOutOfStock ? 'out-of-stock' : ''}"
                                 data-option="${opt.name}" data-value="${valStr}"
                                 onclick="selectOption(this, '${opt.name}', '${valStr}')"
-                                ${isOutOfStock ? 'disabled' : ''}
-                                style="padding: 8px 16px; border-radius: 8px; border: 1px solid ${isOutOfStock ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.3)'}; 
-                                       background: ${isFirstAvailable ? 'var(--primary)' : 'transparent'}; 
-                                       color: ${isOutOfStock ? 'rgba(255,255,255,0.3)' : 'white'}; 
-                                       cursor: ${isOutOfStock ? 'not-allowed' : 'pointer'};
-                                       text-decoration: ${isOutOfStock ? 'line-through' : 'none'};
-                                       position: relative;">
-                            ${valStr}${isOutOfStock ? ' <span style="font-size:10px;">(หมด)</span>' : ''}
+                                ${isOutOfStock ? 'disabled' : ''}>
+                            ${valStr}${isOutOfStock ? ' <span style="font-size:10px;opacity:0.6;">(หมด)</span>' : ''}
                         </button>
                     `}).join('')}
                 </div>
@@ -576,25 +570,24 @@ function openProductModal(product) {
     let customizationsHtml = '';
     if (product.customizations && product.customizations.length > 0) {
         customizationsHtml = product.customizations.map(c => `
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 10px; font-weight: 500;">
+            <div style="margin-bottom: 18px;">
+                <div style="font-size: 13px; font-weight: 600; color: #1d1d1f; margin-bottom: 10px;">
                     ${c.name} ${c.is_required ? '<span style="color:#ef4444;">*</span>' : ''}
-                </label>
-                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                    ${(c.choices || []).map((ch, idx) => {
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${(c.choices || []).map((ch) => {
                         const hasExtraPrice = ch.extra_price && ch.extra_price > 0;
                         return `
-                        <button type="button" class="customization-btn" 
+                        <button type="button" class="customization-btn"
                                 data-customization="${c.id}" data-choice="${ch.id}"
                                 onclick="toggleCustomization(this, ${c.id}, ${ch.id}, ${c.allow_multiple})"
-                                style="padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); 
-                                       background: rgba(255,255,255,0.05); color: white; cursor: pointer; font-size: 13px;
-                                       transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
-                                       backdrop-filter: blur(5px);">
-                            <span class="customization-check" style="display: none; color: #22c55e; font-weight: bold;">✓</span>
+                                style="padding: 9px 16px; border-radius: 20px; border: 1.5px solid #d2d2d7;
+                                       background: #ffffff; color: #1d1d1f; cursor: pointer; font-size: 13px; font-weight: 500;
+                                       transition: all 0.18s; display: flex; align-items: center; gap: 6px;">
+                            <span class="customization-check" style="display: none; color: #15803d; font-weight: 700;">✓</span>
                             <span>${ch.label}</span>
-                            ${hasExtraPrice ? `<span style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; 
-                                               padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                            ${hasExtraPrice ? `<span style="background: #dcfce7; color: #15803d;
+                                               padding: 2px 7px; border-radius: 12px; font-size: 11px; font-weight: 600;">
                                                +฿${ch.extra_price.toLocaleString()}</span>` : ''}
                         </button>
                     `}).join('')}
@@ -603,43 +596,13 @@ function openProductModal(product) {
         `).join('');
     }
     
-    // Build image gallery HTML
-    let galleryHtml = '';
-    if (product.images && product.images.length > 1) {
-        galleryHtml = `
-            <div style="display: flex; gap: 8px; margin-top: 12px; justify-content: center;">
-                ${product.images.map((img, idx) => `
-                    <img src="${img.image_url}" alt="Product ${idx+1}" 
-                         onclick="changeMainImage('${img.image_url}')"
-                         style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; 
-                                cursor: pointer; border: 2px solid ${idx === 0 ? 'var(--primary)' : 'transparent'};"
-                         class="gallery-thumb">
-                `).join('')}
-            </div>
-        `;
-    }
-    
-    // Size chart HTML
-    let sizeChartHtml = '';
-    if (product.size_chart_image_url) {
-        sizeChartHtml = `
-            <div style="margin-top: 12px;">
-                <button onclick="showSizeChart('${product.size_chart_image_url}')" 
-                        style="background: transparent; border: 1px solid rgba(255,255,255,0.3); 
-                               color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 12px;">
-                    📏 ดูตารางไซส์
-                </button>
-            </div>
-        `;
-    }
-    
-    // Build gallery HTML with proper classes
+    // Build gallery thumbnails
     let modalGalleryHtml = '';
     if (product.images && product.images.length > 1) {
         modalGalleryHtml = `
             <div class="product-modal-gallery">
                 ${product.images.map((img, idx) => `
-                    <img src="${img.image_url}" alt="Product ${idx+1}" 
+                    <img src="${img.image_url}" alt="สินค้า ${idx+1}"
                          onclick="changeMainImage('${img.image_url}')"
                          class="gallery-thumb ${idx === 0 ? 'active' : ''}">
                 `).join('')}
@@ -647,52 +610,79 @@ function openProductModal(product) {
         `;
     }
 
+    // Size chart button
+    let sizeChartHtml = '';
+    if (product.size_chart_image_url) {
+        sizeChartHtml = `
+            <div style="margin-top: 4px;">
+                <button onclick="showSizeChart('${product.size_chart_image_url}')"
+                        style="background: transparent; border: 1.5px solid #d2d2d7; color: #1d1d1f;
+                               padding: 8px 18px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: 500;">
+                    📏 ดูตารางไซส์
+                </button>
+            </div>
+        `;
+    }
+
+    // Description
+    const descHtml = product.description ? `
+        <hr class="product-modal-divider">
+        <div style="font-size: 13px; color: #86868b; line-height: 1.6; white-space: pre-line;">${product.description}</div>
+    ` : '';
+
     document.getElementById('productModalContent').innerHTML = `
         <div class="product-modal-grid">
             <div class="product-modal-images">
-                ${mainImage 
+                ${mainImage
                     ? `<img id="modalMainImage" src="${mainImage}" alt="${product.name}" class="product-modal-main-image">`
-                    : `<div style="width: 100%; height: 200px; background: rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    : `<div style="width: 100%; height: 240px; background: #f2f2f7; display: flex; align-items: center; justify-content: center; border-radius: 12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#aeaeb2" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
                        </div>`
                 }
                 ${modalGalleryHtml}
             </div>
             <div class="product-modal-info">
-                <div class="product-modal-brand">${product.brand_name || ''}</div>
+                ${product.brand_name ? `<div class="product-modal-brand">${product.brand_name}</div>` : ''}
                 <h3 class="product-modal-name">${product.name}</h3>
-                <div class="product-modal-sku">SKU: ${product.parent_sku || '-'}</div>
-                
+                <div class="product-modal-sku">${product.parent_sku || ''}</div>
+
+                <hr class="product-modal-divider">
+
                 <div class="product-modal-price-section">
                     ${discount > 0 ? `
-                        <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคาปกติ</div>
+                        <div class="product-modal-price-label">ราคาปกติ</div>
                         <div class="product-modal-original-price">฿${originalPrice.toLocaleString()}</div>
-                        <div class="product-modal-discount-label">ราคาสำหรับคุณ <span class="product-modal-discount-badge">-${discount}%</span></div>
-                    ` : '<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px;">ราคา</div>'}
-                    <span id="modalPrice" class="product-modal-final-price">฿${price.toLocaleString()}</span>
+                        <div class="product-modal-discount-label">
+                            ราคาสำหรับคุณ
+                            <span class="product-modal-discount-badge">ประหยัด ${discount}%</span>
+                        </div>
+                    ` : `<div class="product-modal-price-label">ราคา</div>`}
+                    <div id="modalPrice" class="product-modal-final-price">฿${price.toLocaleString()}</div>
                 </div>
-                
-                ${optionsHtml}
-                ${customizationsHtml}
+
+                ${optionsHtml ? `<hr class="product-modal-divider">${optionsHtml}` : ''}
+                ${customizationsHtml ? `<hr class="product-modal-divider">${customizationsHtml}` : ''}
                 ${sizeChartHtml}
-                
-                <div id="modalStock" style="font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 12px;">คงเหลือ ${stock} ชิ้น</div>
+                ${descHtml}
+
+                <div id="modalStock" style="font-size: 12px; color: #aeaeb2; margin-top: 16px;">
+                    ${stock > 0 ? `มีสินค้า ${stock} ชิ้น` : '<span style="color:#ef4444; font-weight: 500;">สินค้าหมด</span>'}
+                </div>
             </div>
         </div>
-        
-        <!-- Sticky Footer -->
+
         <div class="product-modal-sticky-footer">
             <div class="sticky-footer-price">
-                <span class="label">ราคา</span>
-                <span id="stickyPrice" class="price">฿${price.toLocaleString()}</span>
+                <div class="label">ราคารวม</div>
+                <div id="stickyPrice" class="price">฿${price.toLocaleString()}</div>
             </div>
             <div class="sticky-footer-qty">
-                <button onclick="changeModalQty(-1)">-</button>
-                <input type="number" id="modalQty" value="1" min="1">
-                <button onclick="changeModalQty(1)">+</button>
+                <button onclick="changeModalQty(-1)" aria-label="ลด">−</button>
+                <input type="number" id="modalQty" value="1" min="1" readonly>
+                <button onclick="changeModalQty(1)" aria-label="เพิ่ม">+</button>
             </div>
             <button onclick="addToCartFromModal()" class="sticky-footer-add-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                 เพิ่มลงตะกร้า
             </button>
         </div>
@@ -714,11 +704,8 @@ function selectOption(btn, optionName, value) {
     const parent = btn.parentElement;
     parent.querySelectorAll('.option-btn').forEach(b => {
         b.classList.remove('active');
-        b.style.background = 'transparent';
     });
     btn.classList.add('active');
-    btn.style.background = 'var(--primary)';
-    
     updateSelectedSku();
 }
 
@@ -738,10 +725,17 @@ function updateSelectedSku() {
     if (matchingSku) {
         selectedSkuId = matchingSku.id;
         const newPrice = `฿${(matchingSku.final_price || matchingSku.price).toLocaleString()}`;
-        document.getElementById('modalPrice').textContent = newPrice;
+        const priceEl = document.getElementById('modalPrice');
+        if (priceEl) priceEl.textContent = newPrice;
         const stickyPriceEl = document.getElementById('stickyPrice');
         if (stickyPriceEl) stickyPriceEl.textContent = newPrice;
-        document.getElementById('modalStock').textContent = `คงเหลือ ${matchingSku.stock || 0} ชิ้น`;
+        const stockEl = document.getElementById('modalStock');
+        if (stockEl) {
+            const s = matchingSku.stock || 0;
+            stockEl.innerHTML = s > 0
+                ? `มีสินค้า ${s} ชิ้น`
+                : '<span style="color:#ef4444; font-weight:500;">สินค้าหมด</span>';
+        }
     }
 }
 
@@ -758,7 +752,8 @@ function changeMainImage(imageUrl) {
         mainImg.src = imageUrl;
     }
     document.querySelectorAll('.gallery-thumb').forEach(thumb => {
-        thumb.style.border = thumb.src === imageUrl ? '2px solid var(--primary)' : '2px solid transparent';
+        const isActive = thumb.src === imageUrl || thumb.src.endsWith(imageUrl);
+        thumb.classList.toggle('active', isActive);
     });
 }
 
@@ -799,29 +794,33 @@ function toggleCustomization(btn, customizationId, choiceId, allowMultiple) {
         const idx = selectedCustomizations[customizationId].indexOf(choiceId);
         if (idx > -1) {
             selectedCustomizations[customizationId].splice(idx, 1);
-            btn.style.background = 'rgba(255,255,255,0.05)';
-            btn.style.borderColor = 'rgba(255,255,255,0.25)';
+            btn.style.background = '#ffffff';
+            btn.style.borderColor = '#d2d2d7';
+            btn.style.color = '#1d1d1f';
             const check = btn.querySelector('.customization-check');
             if (check) check.style.display = 'none';
         } else {
             selectedCustomizations[customizationId].push(choiceId);
-            btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3))';
-            btn.style.borderColor = 'var(--primary)';
+            btn.style.background = '#1d1d1f';
+            btn.style.borderColor = '#1d1d1f';
+            btn.style.color = '#ffffff';
             const check = btn.querySelector('.customization-check');
-            if (check) check.style.display = 'inline';
+            if (check) { check.style.display = 'inline'; check.style.color = '#ffffff'; }
         }
     } else {
         btns.forEach(b => {
-            b.style.background = 'rgba(255,255,255,0.05)';
-            b.style.borderColor = 'rgba(255,255,255,0.25)';
+            b.style.background = '#ffffff';
+            b.style.borderColor = '#d2d2d7';
+            b.style.color = '#1d1d1f';
             const check = b.querySelector('.customization-check');
             if (check) check.style.display = 'none';
         });
         selectedCustomizations[customizationId] = [choiceId];
-        btn.style.background = 'linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3))';
-        btn.style.borderColor = 'var(--primary)';
+        btn.style.background = '#1d1d1f';
+        btn.style.borderColor = '#1d1d1f';
+        btn.style.color = '#ffffff';
         const check = btn.querySelector('.customization-check');
-        if (check) check.style.display = 'inline';
+        if (check) { check.style.display = 'inline'; check.style.color = '#ffffff'; }
     }
 }
 
