@@ -6,8 +6,9 @@ This full-stack reseller/distributor application, built with Flask and Neon Post
 ## Authentication System (Google OAuth)
 - **All users login via Google OAuth** (`/auth/google` → `/auth/google/callback`)
 - **Admin (Super Admin / Assistant Admin)**: Login with Google — email must exist in DB first. Super Admin creates Admin accounts manually.
-- **Reseller**: Login with Google — if email not in DB, auto-creates account and logs in immediately (auto-approve)
+- **Reseller**: Login with Google — if email not in DB, auto-creates account and logs in immediately (auto-approve, no manual approval needed)
 - **Fallback**: Username/Password form available for Admins only (hidden behind toggle on login page)
+- **Note**: Manual registration/approval system (`reseller_applications` table, `/api/register`, `/api/reseller-applications/*`) has been removed — all reseller registration is now via Google OAuth auto-approve
 - **Routes**: `GET /auth/google`, `GET /auth/google/callback`
 - **Dependencies**: `authlib`, `werkzeug.middleware.proxy_fix.ProxyFix` (for HTTPS URL generation behind Gunicorn)
 
