@@ -9,7 +9,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/global-alert.css">
     <style>
         body { font-family: 'Sarabun', sans-serif; scroll-behavior: smooth; }
         .hero-bg { background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%); }
@@ -18,22 +17,44 @@
         .gradient-text { background: linear-gradient(135deg, #7c3aed, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .feature-card { transition: transform 0.3s ease; }
         .feature-card:hover { transform: translateY(-5px); }
-        .glass-card { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
-        .form-input { transition: all 0.3s ease; }
-        .form-input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,0.1); }
         .pulse-btn { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+        .google-btn {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            width: 100%; padding: 16px 24px; border-radius: 14px;
+            background: #fff; color: #333; font-size: 17px; font-weight: 700;
+            text-decoration: none; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transition: transform 0.2s, box-shadow 0.2s; border: 2px solid #e5e7eb;
+        }
+        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+        .google-logo { width: 24px; height: 24px; flex-shrink: 0; }
+        .open-browser-btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 18px; border-radius: 14px;
+            background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
+            font-size: 17px; font-weight: 700; text-decoration: none;
+            box-shadow: 0 6px 20px rgba(34,197,94,0.4);
+            transition: transform 0.2s, box-shadow 0.2s; border: none; cursor: pointer;
+        }
+        .open-browser-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(34,197,94,0.5); }
+        .manual-hint {
+            background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.15);
+            border-radius: 12px; padding: 14px 16px; text-align: left;
+            color: #4b5563; font-size: 13px; line-height: 1.7; margin-top: 14px;
+        }
+        .manual-hint strong { color: #7c3aed; }
+        .webview-section { display: none; }
+        .webview-section.show { display: block; }
+        .normal-section { display: block; }
+        .normal-section.hide { display: none; }
     </style>
     <!-- Facebook Pixel - Dynamic Loading -->
     <script>
-        // Load Facebook Pixel dynamically based on settings
         (async function() {
             try {
                 const response = await fetch('/api/facebook-pixel-settings/public');
                 const data = await response.json();
-                
                 if (data.pixel_id) {
-                    // Initialize Facebook Pixel
                     !function(f,b,e,v,n,t,s)
                     {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
                     n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -42,39 +63,21 @@
                     t.src=v;s=b.getElementsByTagName(e)[0];
                     s.parentNode.insertBefore(t,s)}(window, document,'script',
                     'https://connect.facebook.net/en_US/fbevents.js');
-                    
                     fbq('init', data.pixel_id);
-                    
-                    if (data.track_page_view) {
-                        fbq('track', 'PageView');
-                    }
-                    
-                    // Store settings for later use
+                    if (data.track_page_view) fbq('track', 'PageView');
                     window.fbPixelSettings = data;
-                    console.log('Facebook Pixel initialized:', data.pixel_id);
                 }
-            } catch (error) {
-                console.log('Facebook Pixel not configured');
-            }
-            
-            // Track page visit for internal analytics
+            } catch (e) {}
             try {
                 await fetch('/api/track-visit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        page_name: 'become-reseller',
-                        source: 'facebook'
-                    })
+                    body: JSON.stringify({ page_name: 'become-reseller', source: 'facebook' })
                 });
-            } catch (e) {
-                console.log('Visit tracking failed');
-            }
+            } catch (e) {}
         })();
     </script>
-    <noscript>
-        <img height="1" width="1" style="display:none" id="fbPixelNoscript"/>
-    </noscript>
+    <noscript><img height="1" width="1" style="display:none" id="fbPixelNoscript"/></noscript>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
@@ -85,7 +88,7 @@
                     <span class="text-2xl font-bold gradient-text"><i class="fas fa-store"></i> EKG Shops</span>
                 </div>
                 <div class="flex items-center">
-                    <a href="#register-form" class="btn-gradient text-white px-4 py-2 rounded-lg font-bold shadow-md transition text-sm">สมัครเลย</a>
+                    <a href="#register-section" class="btn-gradient text-white px-4 py-2 rounded-lg font-bold shadow-md transition text-sm">สมัครเลย</a>
                 </div>
             </div>
         </div>
@@ -102,7 +105,7 @@
             <p class="text-lg text-purple-100 mb-6 max-w-2xl mx-auto">
                 ไม่ต้องสต็อกสินค้า ไม่ต้องแพ็คเอง ส่งในนามร้านคุณ<br/>มีระบบจัดการครบวงจร เริ่มต้นได้ทันที!
             </p>
-            <a href="#register-form" class="inline-block bg-yellow-400 hover:bg-yellow-500 text-purple-900 font-bold py-4 px-8 rounded-full shadow-lg text-lg transition transform hover:scale-105 pulse-btn">
+            <a href="#register-section" class="inline-block bg-yellow-400 hover:bg-yellow-500 text-purple-900 font-bold py-4 px-8 rounded-full shadow-lg text-lg transition transform hover:scale-105 pulse-btn">
                 🚀 สมัครฟรี ไม่มีค่าใช้จ่าย
             </a>
         </div>
@@ -110,7 +113,7 @@
 
     <section class="py-12 px-4 bg-white">
         <div class="max-w-5xl mx-auto">
-            <h2 class="text-2xl sm:text-3xl font-bold text-center mb-8">ทำไมต้องเป็นตัวแทนกับเรา?</h2>
+            <h2 class="text-2xl sm:text-3xl font-bold text-center mb-8">ทำไมต้องเป็นสมาชิกกับเรา?</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div class="feature-card text-center p-6 bg-purple-50 rounded-xl">
                     <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
@@ -153,8 +156,8 @@
                         <div class="flex items-start gap-4">
                             <div class="w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
                             <div>
-                                <h4 class="font-bold">สมัครสมาชิก</h4>
-                                <p class="text-gray-500 text-sm">กรอกข้อมูล รอ Admin อนุมัติ</p>
+                                <h4 class="font-bold">สมัครด้วย Google</h4>
+                                <p class="text-gray-500 text-sm">กดปุ่มด้านล่าง เข้าสู่ระบบได้ทันที ไม่ต้องรออนุมัติ</p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4">
@@ -191,7 +194,7 @@
                             <span class="font-bold">฿590</span>
                         </div>
                         <div class="flex justify-between py-2 border-b">
-                            <span>ราคาตัวแทน</span>
+                            <span>ราคาสมาชิก</span>
                             <span class="font-bold text-purple-600">฿350</span>
                         </div>
                         <div class="flex justify-between py-2 bg-green-50 rounded-lg px-3">
@@ -205,101 +208,59 @@
         </div>
     </section>
 
-    <section id="register-form" class="py-12 px-4 bg-white">
-        <div class="max-w-2xl mx-auto">
+    <section id="register-section" class="py-12 px-4 bg-white">
+        <div class="max-w-md mx-auto">
             <div class="text-center mb-8">
                 <h2 class="text-2xl sm:text-3xl font-bold gradient-text">สมัครเป็นสมาชิก</h2>
-                <p class="text-gray-500 mt-2">กรอกข้อมูลด้านล่าง รอ Admin อนุมัติ 1-2 วันทำการ</p>
+                <p class="text-gray-500 mt-2">ใช้บัญชี Google สมัครฟรี เริ่มใช้งานได้ทันที</p>
             </div>
-            
-            <form id="registerForm" class="glass-card rounded-2xl shadow-xl p-6 sm:p-8">
-                <div class="mb-6">
-                    <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                        <i class="fas fa-user text-purple-600"></i> ข้อมูลส่วนตัว
-                    </h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล <span class="text-red-500">*</span></label>
-                            <input type="text" name="full_name" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="ชื่อ นามสกุล">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label>
-                            <input type="tel" name="phone" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="08X-XXX-XXXX">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">LINE ID <span class="text-red-500">*</span></label>
-                            <input type="text" name="line_id" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="@lineid หรือเบอร์โทร">
-                        </div>
+
+            <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100">
+                <div class="flex flex-col gap-4 mb-6">
+                    <div class="flex items-center gap-3 text-sm text-gray-600">
+                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
+                        สมัครฟรี ไม่มีค่าใช้จ่าย
+                    </div>
+                    <div class="flex items-center gap-3 text-sm text-gray-600">
+                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
+                        เข้าใช้งานได้ทันที ไม่ต้องรออนุมัติ
+                    </div>
+                    <div class="flex items-center gap-3 text-sm text-gray-600">
+                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
+                        ราคาส่งตั้งแต่ชิ้นแรก ไม่มีขั้นต่ำ
                     </div>
                 </div>
 
-                <div class="mb-6">
-                    <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                        <i class="fas fa-lock text-purple-600"></i> ข้อมูลเข้าสู่ระบบ
-                    </h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Username <span class="text-red-500">*</span></label>
-                            <input type="text" name="username" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="ชื่อผู้ใช้งาน">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Email <span class="text-red-500">*</span></label>
-                            <input type="email" name="email" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="email@example.com">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน <span class="text-red-500">*</span></label>
-                            <input type="password" name="password" required minlength="6" class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="อย่างน้อย 6 ตัวอักษร">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">ยืนยันรหัสผ่าน <span class="text-red-500">*</span></label>
-                            <input type="password" name="confirm_password" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="กรอกรหัสผ่านอีกครั้ง">
-                        </div>
+                <!-- Normal browser: Google button -->
+                <div class="normal-section" id="normalSection">
+                    <a href="/auth/google" class="google-btn" id="googleBtn">
+                        <svg class="google-logo" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        สมัคร / เข้าสู่ระบบด้วย Google
+                    </a>
+                    <p class="text-center text-gray-400 text-xs mt-4">
+                        มีบัญชีอยู่แล้ว? <a href="/auth/google" class="text-purple-600 hover:underline">เข้าสู่ระบบ</a>
+                    </p>
+                </div>
+
+                <!-- WebView: force open in browser -->
+                <div class="webview-section" id="webviewSection">
+                    <a href="#" class="open-browser-btn" id="openBrowserBtn">
+                        🌐 กดที่นี่เพื่อสมัครสมาชิก
+                    </a>
+                    <div class="manual-hint" id="manualHint" style="display:none;">
+                        <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">หากปุ่มด้านบนไม่ทำงาน</div>
+                        <span id="manualSteps"></span>
                     </div>
+                    <p class="text-center text-gray-400 text-xs mt-4">
+                        มีบัญชีอยู่แล้ว? <a href="#" id="loginLinkWv" class="text-purple-600 hover:underline">เข้าสู่ระบบ</a>
+                    </p>
                 </div>
-
-                <div class="mb-6">
-                    <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                        <i class="fas fa-map-marker-alt text-purple-600"></i> ที่อยู่สำหรับจัดส่ง
-                    </h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่ <span class="text-red-500">*</span></label>
-                            <input type="text" name="address" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="บ้านเลขที่ หมู่ ซอย ถนน">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">ตำบล/แขวง <span class="text-red-500">*</span></label>
-                            <input type="text" name="subdistrict" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="ตำบล/แขวง">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">อำเภอ/เขต <span class="text-red-500">*</span></label>
-                            <input type="text" name="district" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="อำเภอ/เขต">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">จังหวัด <span class="text-red-500">*</span></label>
-                            <input type="text" name="province" required class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="จังหวัด">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">รหัสไปรษณีย์ <span class="text-red-500">*</span></label>
-                            <input type="text" name="postal_code" required pattern="[0-9]{5}" class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="XXXXX">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ (ถ้ามี)</label>
-                    <textarea name="notes" rows="2" class="form-input w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none" placeholder="ข้อความเพิ่มเติม..."></textarea>
-                </div>
-
-                <input type="hidden" name="source" value="facebook">
-
-                <button type="submit" id="submitBtn" class="w-full btn-gradient text-white font-bold py-4 px-6 rounded-xl shadow-lg text-lg transition transform hover:scale-[1.02] flex items-center justify-center gap-2">
-                    <i class="fas fa-paper-plane"></i> ส่งใบสมัคร
-                </button>
-
-                <p class="text-center text-gray-500 text-sm mt-4">
-                    มีบัญชีอยู่แล้ว? <a href="/login" class="text-purple-600 hover:underline font-medium">เข้าสู่ระบบ</a>
-                </p>
-            </form>
+            </div>
         </div>
     </section>
 
@@ -310,72 +271,88 @@
         </div>
     </footer>
 
-    <div id="globalAlert" class="global-alert" style="display: none;">
-        <div class="alert-content">
-            <span class="alert-icon"></span>
-            <span class="alert-message"></span>
-        </div>
-    </div>
-
-    <script src="/static/js/global-alert.js"></script>
     <script>
-        document.getElementById('registerForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            
-            if (data.password !== data.confirm_password) {
-                showAlert('error', 'รหัสผ่านไม่ตรงกัน');
+        const AUTH_URL    = 'https://ekgshops.com/auth/google';
+        const HOST        = 'ekgshops.com';
+        const CHROME_INTENT = 'intent://' + HOST + '/auth/google#Intent;scheme=https;package=com.android.chrome;end';
+        const CHROME_IOS    = 'googlechrome://' + HOST + '/auth/google';
+        const SAFARI_IOS    = 'x-safari-https://' + HOST + '/auth/google';
+
+        function detect() {
+            const ua = navigator.userAgent || '';
+            return {
+                isLINE:      /\bLine\//i.test(ua),
+                isFB:        /FBIAB|FBIOS|FBAV|FBAN|FB_IAB/i.test(ua),
+                isIG:        /\bInstagram\b/i.test(ua),
+                isAndroidWV: /Android/.test(ua) && /\bwv\b/.test(ua),
+                isIOSWV:     /iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua),
+                isAndroid:   /Android/.test(ua),
+                isIOS:       /iPhone|iPad|iPod/.test(ua),
+            };
+        }
+
+        function setup() {
+            const e = detect();
+            const isWebView = e.isLINE || e.isFB || e.isIG || e.isAndroidWV || e.isIOSWV;
+
+            const normalSec   = document.getElementById('normalSection');
+            const webviewSec  = document.getElementById('webviewSection');
+            const openBtn     = document.getElementById('openBrowserBtn');
+            const manualHint  = document.getElementById('manualHint');
+            const manualSteps = document.getElementById('manualSteps');
+            const loginLinkWv = document.getElementById('loginLinkWv');
+
+            if (!isWebView) {
+                // Normal browser: auto-redirect to Google OAuth
+                setTimeout(() => { window.location.href = '/auth/google'; }, 800);
                 return;
             }
-            
-            const submitBtn = document.getElementById('submitBtn');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่ง...';
-            
-            // Track Lead event when form is submitted
-            if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_lead) {
-                fbq('track', 'Lead', {
-                    content_name: 'Reseller Application',
-                    content_category: 'Registration'
-                });
-            }
-            
-            try {
-                const response = await fetch('/api/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    // Track CompleteRegistration event on success
-                    if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_complete_registration) {
-                        fbq('track', 'CompleteRegistration', {
-                            content_name: 'Reseller Application',
-                            status: 'submitted'
-                        });
-                    }
-                    
-                    showAlert('success', 'ส่งใบสมัครสำเร็จ! รอ Admin อนุมัติภายใน 1-2 วันทำการ');
-                    this.reset();
-                    setTimeout(() => {
-                        window.location.href = '/login';
-                    }, 3000);
+
+            // WebView detected: show force-open section
+            normalSec.classList.add('hide');
+            webviewSec.classList.add('show');
+
+            if (e.isAndroid) {
+                openBtn.href = CHROME_INTENT;
+                loginLinkWv.href = CHROME_INTENT;
+                manualHint.style.display = 'block';
+                if (e.isLINE) {
+                    manualSteps.innerHTML = 'กด <strong>เมนู 3 จุด (···)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Chrome"</strong>';
+                } else if (e.isFB || e.isIG) {
+                    manualSteps.innerHTML = 'กด <strong>เมนู 3 จุด (⋮)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดในเบราว์เซอร์ภายนอก"</strong>';
                 } else {
-                    showAlert('error', result.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+                    manualSteps.innerHTML = 'กด <strong>เมนู (⋮)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Chrome"</strong>';
                 }
-            } catch (error) {
-                showAlert('error', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
+            } else if (e.isIOS) {
+                loginLinkWv.href = CHROME_IOS;
+                openBtn.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    window.location.href = CHROME_IOS;
+                    setTimeout(() => { window.location.href = SAFARI_IOS; }, 1500);
+                });
+                manualHint.style.display = 'block';
+                if (e.isLINE) {
+                    manualSteps.innerHTML = 'กด <strong>···</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Safari"</strong> หรือ <strong>"เปิดใน Chrome"</strong>';
+                } else {
+                    manualSteps.innerHTML = 'กด <strong>เมนู</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Safari"</strong> หรือ <strong>"เปิดในเบราว์เซอร์"</strong>';
+                }
+            } else {
+                openBtn.href = AUTH_URL;
+                openBtn.target = '_blank';
+                loginLinkWv.href = AUTH_URL;
+                manualHint.style.display = 'block';
+                manualSteps.innerHTML = 'กด <strong>เมนู</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดในเบราว์เซอร์"</strong>';
             }
-        });
+
+            // Track Lead via FB Pixel when user clicks open-browser button (intent to register)
+            openBtn.addEventListener('click', function() {
+                if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_lead) {
+                    fbq('track', 'Lead', { content_name: 'Reseller Registration', content_category: 'Registration' });
+                }
+            });
+        }
+
+        setup();
     </script>
 </body>
 </html>
