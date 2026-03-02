@@ -1,5 +1,16 @@
 const RESELLER_API_URL = '/api';
 
+function getTierSVG(tier, size = 22) {
+    const configs = {
+        'Bronze':   { fill: '#c07830', stroke: '#8b5520' },
+        'Silver':   { fill: '#8fabbe', stroke: '#607d93' },
+        'Gold':     { fill: '#e8a020', stroke: '#b07808' },
+        'Platinum': { fill: '#18b8d0', stroke: '#0890aa' }
+    };
+    const c = configs[tier] || configs['Bronze'];
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" style="display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 2L20.66 7v10L12 22 3.34 17V7Z" fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 6L17.2 9v6L12 18 6.8 15V9Z" fill="rgba(255,255,255,0.2)" stroke="none"/></svg>`;
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -191,16 +202,15 @@ async function loadCurrentUser() {
     document.getElementById('userAvatar').textContent = displayName.charAt(0).toUpperCase();
     document.getElementById('welcomeText').textContent = `ยินดีต้อนรับ, ${displayName}`;
     
-    const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
     const tierName = currentUser.reseller_tier || 'Bronze';
     
-    document.getElementById('tierIcon').textContent = tierIcons[tierName] || '🏷️';
+    document.getElementById('tierIcon').innerHTML = getTierSVG(tierName, 18);
     document.getElementById('userTier').textContent = tierName;
     
     ['catalog', 'profile'].forEach(prefix => {
         const iconEl = document.getElementById(`${prefix}TierIcon`);
         const nameEl = document.getElementById(`${prefix}TierName`);
-        if (iconEl) iconEl.textContent = tierIcons[tierName] || '🏷️';
+        if (iconEl) iconEl.innerHTML = getTierSVG(tierName, 20);
         if (nameEl) nameEl.textContent = tierName;
     });
 }
@@ -271,7 +281,6 @@ function formatCurrency(amount) {
 function updateTierProgress(tierProgress, totalPurchases) {
     if (!tierProgress) return;
     
-    const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
     const tierDescriptions = { 
         'Bronze': 'ระดับเริ่มต้น', 
         'Silver': 'ระดับเงิน', 
@@ -280,7 +289,7 @@ function updateTierProgress(tierProgress, totalPurchases) {
     };
     
     const currentTier = tierProgress.current_tier || 'Bronze';
-    document.getElementById('homeTierBadgeIcon').textContent = tierIcons[currentTier] || '🥉';
+    document.getElementById('homeTierBadgeIcon').innerHTML = getTierSVG(currentTier, 48);
     document.getElementById('homeTierName').textContent = currentTier;
     document.getElementById('homeTierDescription').textContent = tierProgress.tier_description || tierDescriptions[currentTier] || '';
     document.getElementById('homeTotalPurchases').textContent = formatCurrency(tierProgress.total_purchases || totalPurchases);
@@ -2319,8 +2328,7 @@ async function loadProfile() {
         document.getElementById('profileUsername').textContent = profile.username || '';
         document.getElementById('profileAvatar').textContent = profileDisplayName.charAt(0).toUpperCase();
         
-        const tierIcons = { 'Bronze': '🥉', 'Silver': '🥈', 'Gold': '🥇', 'Platinum': '💎' };
-        document.getElementById('profileTierIcon').textContent = tierIcons[profile.tier_name] || '🏷️';
+        document.getElementById('profileTierIcon').innerHTML = getTierSVG(profile.tier_name || 'Bronze', 20);
         document.getElementById('profileTierName').textContent = profile.tier_name || '-';
         
         document.getElementById('brandName').value = profile.brand_name || '';
