@@ -1,0 +1,204 @@
+สวัสดีครับ ในฐานะ Enterprise Software Architect ปัญหาที่คุณกำลังเจอคือสิ่งที่เรียกว่า "First Touch PWA Syndrome" หรือปัญหาการเข้าใช้งานครั้งแรกบน Progressive Web App ซึ่งเป็น Classic Case ระดับ Enterprise ที่มักเกิดขึ้นจาก 3 สาเหตุหลักที่ทำงานทับซ้อนกันครับ
+
+🔍 วิเคราะห์ปัญหาเบื้องหลัง (Root Cause Analysis)
+Service Worker Interception (สกัดกั้น Request ผิดพลาด):
+ใน sw.js ปัจจุบัน มีการสั่งให้ Service Worker เข้าไปดักจับ (Intercept) ทุกๆ Request ที่เป็น GET รวมถึงเส้นทาง /auth/google และ /api/login ด้วย เมื่อ PWA โหลดครั้งแรก Service Worker อาจจะยัง Activate ไม่สมบูรณ์ หรือไม่สามารถจัดการ Redirect ไปยัง Google ได้ ทำให้ Request เงียบหายไป ต้องกดซ้ำเพื่อให้ Browser ข้ามการทำงานของ SW
+
+PWA Standalone Cookie Sandbox (ปัญหา Session หลุดบน iOS/Safari):
+ใน app.py การตั้งค่า app.config['SESSION_COOKIE_SAMESITE'] = 'None' จะมีปัญหากับ PWA บนมือถือ (โดยเฉพาะ iOS) เมื่อผู้ใช้กด Login ด้วย Google ระบบจะเด้งไปที่เบราว์เซอร์และกลับมาที่ PWA แต่ Cookie ถูกมองว่าเป็น 3rd-party จึงถูกบล็อก (Dropped) ในครั้งแรก
+
+Server Cold Start (กรณีไม่ได้ใช้แบบ Always On):
+ถ้า Server (เช่นบน Replit) มีการ Sleep เมื่อผู้ใช้กดปุ่ม Login ครั้งแรก จะเป็นจังหวะปลุก (Wake up) Server ซึ่งใช้เวลาเกินกำหนดจนฝั่งหน้าบ้านมองว่า Timeout
+
+🛠️ วิธีแก้ไขสถาปัตยกรรม (The Enterprise Fix)
+เพื่อรักษามาตรฐาน Conservative Backend, Premium Frontend เราต้องแก้ที่ระดับโครงสร้างไฟล์ 3 จุดดังนี้ครับ:
+
+1. ไฟล์ static/sw.js (Full File Replacement)
+ต้องเพิ่ม Security Bypass สำหรับ API และระบบ Auth ทั้งหมด เพื่อบังคับให้ Traffic วิ่งตรงเข้า Backend (Network First เสมอ) และไม่ถูก Cache หรือ SW ดักจับ
+
+JavaScript
+// ไฟล์: static/sw.js
+const CACHE_NAME = 'ekg-shops-v17'; // อัปเดต Version เพื่อล้าง Cache เดิม
+const STATIC_ASSETS = [
+  '/static/icons/icon-192x192.png',
+  '/static/icons/icon-512x512.png'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS);
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // 🛡️ Enterprise Standard: Bypass API, Auth และ Webhook เสมอ
+  // ห้ามให้ Service Worker เข้ามาแทรกแซงกระบวนการ Authentication
+  if (url.pathname.startsWith('/api/') || 
+      url.pathname.startsWith('/auth/') || 
+      url.pathname.startsWith('/login')) {
+    return; // ปล่อยให้ Browser ทำงานแบบ Native Network
+  }
+
+  if (event.request.method !== 'GET') return;
+
+  // สำหรับ Static Files ให้ใช้ Cache First
+  if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js') && !url.pathname.endsWith('.css')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network First, Fallback to Cache สำหรับหน้า HTML ทั่วไป
+  event.respondWith(
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
+  );
+});
+
+self.addEventListener('push', (event) => {
+  let data = { title: 'EKG Shops', body: 'มีการแจ้งเตือนใหม่', icon: '/static/icons/icon-192x192.png' };
+
+  if (event.data) {
+    try {
+      data = Object.assign(data, event.data.json());
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/static/icons/icon-192x192.png',
+    badge: '/static/icons/icon-72x72.png',
+    vibrate: [100, 50, 100],
+    data: {
+      url: data.url || '/'
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'แจ้งเตือนระบบ', options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(windowClients => {
+      const urlToOpen = event.notification.data.url;
+      for (let client of windowClients) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+2. การตั้งค่า Backend Configuration ใน app.py
+เนื่องจาก app.py เป็นไฟล์ขนาดใหญ่ ให้คุณไปที่ส่วนต้นของไฟล์ (ประมาณบรรทัดที่ 30) และปรับแก้ SESSION_COOKIE_SAMESITE ใหม่ดังนี้ เพื่อให้การจำ Session ใน PWA ไม่ถูกบล็อกโดย OS Policy:
+
+Python
+# ไฟล์: app.py (แก้ไขเฉพาะส่วน Configuration ต้นไฟล์)
+
+# Configure session cookie for Enterprise PWA Support
+# 🛡️ แก้ไข SameSite เป็น 'Lax' เพื่อไม่ให้ iOS/Safari Drop cookie ตอน Redirect กลับมาจาก Google
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+3. อัปเกรด UX ใน Script ของ templates/login.html
+ถ้า Backend เจอภาวะ Cold Start (หลับอยู่) ป้องกันผู้ใช้สับสนด้วยการทำ Retry Logic และจัดการ Error อย่างมีระดับ:
+
+JavaScript
+// ไฟล์: templates/login.html (นำโค้ดชุดนี้ไปทับ script id="loginForm" บริเวณบรรทัดที่ 260)
+
+        const loginForm = document.getElementById('loginForm');
+        loginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = loginForm.querySelector('button[type="submit"]');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>กำลังเข้าสู่ระบบ...';
+
+            // 🛡️ ทำการ Retry 1 ครั้งแบบโปร่งใส หากเซิร์ฟเวอร์เพิ่งตื่น (Cold Start Timeout)
+            const attemptLogin = async (retries = 1) => {
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: document.getElementById('username').value,
+                            password: document.getElementById('password').value
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+                    
+                    // 🎵 เล่นเสียงตอบรับเบาๆ แบบ Apple UX (ถ้ามีไฟล์เสียง) หรือแสดง Toast สวยๆ
+                    showAlert('เข้าสู่ระบบสำเร็จ!', 'success');
+                    
+                    setTimeout(() => { 
+                        window.location.replace(result.redirect || '/dashboard'); 
+                    }, 800);
+                } catch (error) {
+                    if (retries > 0 && error.message === 'Failed to fetch') {
+                        // พยายามใหม่แบบเงียบๆ
+                        console.log("Server might be waking up. Retrying...");
+                        setTimeout(() => attemptLogin(retries - 1), 1500);
+                    } else {
+                        showAlert(error.message === 'Failed to fetch' ? 'เซิร์ฟเวอร์กำลังเริ่มต้น กรุณาลองใหม่อีกครั้งใน 5 วินาที' : error.message, 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                    }
+                }
+            };
+            
+            await attemptLogin();
+        });
+💡 ขั้นตอนการอัปเดตระบบเพื่อให้เห็นผล 100%:
+เมื่อเซฟไฟล์ทั้งหมดแล้ว ผู้ใช้งานปัจจุบันที่ติดตั้งแอปไปแล้วจะยังมี Cache ตัวเก่าค้างอยู่
+
+ให้ทำการเปิด PWA ขึ้นมา ปิด และเปิดใหม่อีก 1-2 รอบ (เพื่อให้ sw.js ตัวเวอร์ชัน 17 อัปเดตทับของเดิม) หรือแนะนำผู้ใช้ให้ Clear Cache Browser 1 ครั้งครับ
+
+หลังจากการเปลี่ยนนี้ Request /auth/google จะวิ่งทะลุทะลวงจาก PWA ไปยังเซิร์ฟเวอร์โดยตรง ไม่มีอาการคลิกไม่ติดในครั้งแรกอีกต่อไปครับ
