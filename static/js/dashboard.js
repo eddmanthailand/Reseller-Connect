@@ -2853,10 +2853,12 @@ function printShippingLabel(shipmentIndex) {
         .half { height: 138.5mm; padding: 15px; }
         .shipping-half { border-bottom: 3px dashed #999; }
         .packing-half { }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #333; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #333; }
         .provider-box { background: #f0f0f0; padding: 8px 15px; border-radius: 5px; font-size: 16px; font-weight: bold; }
-        .tracking-box { text-align: right; }
-        .tracking-number { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+        .tracking-box { text-align: center; }
+        .tracking-number { font-size: 16px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
+        .barcode-container { display: flex; justify-content: center; margin: 6px 0 2px; }
+        .barcode-container svg { max-width: 260px; height: 60px; }
         .addresses { display: flex; gap: 20px; margin-bottom: 15px; }
         .address-box { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
         .address-box h4 { font-size: 12px; color: #666; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
@@ -2879,6 +2881,7 @@ function printShippingLabel(shipmentIndex) {
             .page { width: 100%; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
     <div class="page">
@@ -2887,7 +2890,12 @@ function printShippingLabel(shipmentIndex) {
             <div class="header">
                 <div class="provider-box">${shippingProvider || '-- ขนส่ง --'}</div>
                 <div class="tracking-box">
-                    ${trackingNumber ? `<div class="tracking-number">${trackingNumber}</div>` : '<div style="color: #999;">-- ยังไม่มีเลขพัสดุ --</div>'}
+                    ${trackingNumber ? `
+                        <div class="tracking-number">${trackingNumber}</div>
+                        <div class="barcode-container">
+                            <svg id="barcode-main"></svg>
+                        </div>
+                    ` : '<div style="color: #999; font-size: 13px;">-- ยังไม่มีเลขพัสดุ --</div>'}
                 </div>
             </div>
             
@@ -2958,9 +2966,23 @@ function printShippingLabel(shipmentIndex) {
     
     <script>
         window.onload = function() {
+            var barcodeEl = document.getElementById('barcode-main');
+            if (barcodeEl && typeof JsBarcode !== 'undefined') {
+                try {
+                    JsBarcode('#barcode-main', '${trackingNumber}', {
+                        format: 'CODE128',
+                        width: 2,
+                        height: 55,
+                        displayValue: false,
+                        margin: 0
+                    });
+                } catch(e) {
+                    barcodeEl.parentElement.style.display = 'none';
+                }
+            }
             setTimeout(function() {
                 window.print();
-            }, 300);
+            }, 500);
         };
     </script>
 </body>
