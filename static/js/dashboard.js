@@ -2239,7 +2239,7 @@ async function viewOrderDetails(orderId) {
                         </div>` : ''}
                         ${parseFloat(order.coupon_discount || 0) > 0 ? `
                         <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
-                            <span>🎟 คูปองส่วนลด</span><span style="color:#f59e0b;">-฿${parseFloat(order.coupon_discount).toLocaleString('th-TH')}</span>
+                            <span>🎟 คูปองส่วนลด</span><span style="color:#4ade80;">-฿${parseFloat(order.coupon_discount).toLocaleString('th-TH')}</span>
                         </div>` : ''}
                         ${parseFloat(order.shipping_fee || 0) > 0 ? `
                         <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
@@ -7537,7 +7537,7 @@ async function loadMtoOrders(status = null) {
                 <td>
                     <div style="font-size: 12px;">
                         <span style="color: #10b981;">มัดจำ: ฿${Number(o.deposit_paid || 0).toLocaleString()}</span>
-                        / <span style="color: #f59e0b;">คงเหลือ: ฿${Number(o.balance_amount || 0).toLocaleString()}</span>
+                        / <span style="color: rgba(255,255,255,0.8);">คงเหลือ: ฿${Number(o.balance_amount || 0).toLocaleString()}</span>
                     </div>
                 </td>
                 <td>${getMtoOrderStatusBadge(o.status)}</td>
@@ -8365,11 +8365,11 @@ function renderChatMessageHtml(msg, otherLastRead) {
                 <div style="padding: 10px;">
                     <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</div>
                     ${hasDiscount ? `
-                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #ffffff;">${tierPrice}</div>
                         <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
                         <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
                     ` : `
-                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #ffffff;">${originalPrice}</div>
                     `}
                 </div>
             </div>
@@ -8693,8 +8693,8 @@ function searchChatProducts() {
                 const isSelected = chatProductSelections.some(s => s.id === p.id);
                 const hasDiscount = p.discount_percent && p.discount_percent > 0;
                 const priceDisplay = hasDiscount
-                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.4; font-size: 11px;">฿${formatNumber(p.min_price)}</span>`
-                    : `<span style="color: #fbbf24; font-weight: 600;">฿${formatNumber(p.min_price)}</span>`;
+                    ? `<span style="color: #ffffff; font-weight: 600;">฿${formatNumber(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.4; font-size: 11px;">฿${formatNumber(p.min_price)}</span>`
+                    : `<span style="color: #ffffff; font-weight: 600;">฿${formatNumber(p.min_price)}</span>`;
                 const stockColor = (p.total_stock || 0) > 0 ? '#34d399' : '#f87171';
                 const stockText = (p.total_stock || 0) > 0 ? `${p.total_stock} ชิ้น` : 'หมด';
                 return `
@@ -9813,7 +9813,7 @@ async function loadCoupons() {
                 <div class="mkt-stat-lbl">กำลังใช้งาน</div>
             </div>
             <div class="mkt-stat-card">
-                <div class="mkt-stat-val" style="color:#fb923c;">${totalUsed}</div>
+                <div class="mkt-stat-val" style="color:#ffffff;">${totalUsed}</div>
                 <div class="mkt-stat-lbl">ใช้ไปแล้ว</div>
             </div>
         `;

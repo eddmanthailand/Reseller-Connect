@@ -2258,9 +2258,9 @@ async function viewResellerOrderDetails(orderId) {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${rf.slip_url ? '12px' : '0'};">
                             <div>
                                 <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 2px;">ยอดคืนเงิน</div>
-                                <div style="font-size: 20px; font-weight: 700; color: ${isDone ? '#34d399' : '#fbbf24'};">฿${rfAmount}</div>
+                                <div style="font-size: 20px; font-weight: 700; color: ${isDone ? '#34d399' : '#ffffff'};">฿${rfAmount}</div>
                             </div>
-                            <span style="background: ${isDone ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}; color: ${isDone ? '#34d399' : '#fbbf24'}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            <span style="background: ${isDone ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}; color: ${isDone ? '#34d399' : '#ffffff'}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
                                 ${isDone ? '✅ คืนเงินสำเร็จ' : '⏳ รอดำเนินการ'}
                             </span>
                         </div>
@@ -2313,7 +2313,7 @@ async function viewResellerOrderDetails(orderId) {
                     ${order.coupon_discount > 0 ? `
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
                         <span>🎟 คูปองส่วนลด</span>
-                        <span style="color: #f59e0b;">-฿${order.coupon_discount.toLocaleString('th-TH')}</span>
+                        <span style="color: #4ade80;">-฿${order.coupon_discount.toLocaleString('th-TH')}</span>
                     </div>` : ''}
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
                         <span>ค่าจัดส่ง</span>
@@ -2321,7 +2321,7 @@ async function viewResellerOrderDetails(orderId) {
                     </div>
                     <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
                         <span>ยอดรวมทั้งหมด</span>
-                        <span style="color: #fbbf24;">฿${grandTotal.toLocaleString('th-TH')}</span>
+                        <span style="color: #ffffff;">฿${grandTotal.toLocaleString('th-TH')}</span>
                     </div>
                 </div>
             </div>
@@ -3569,7 +3569,7 @@ async function loadResellerMtoOrders() {
                         </div>
                         <div class="mto-card-item">
                             <span>มัดจำ (${order.deposit_percent || 50}%)</span>
-                            <span style="color: ${order.deposit_paid ? '#22c55e' : '#fbbf24'}">
+                            <span style="color: ${order.deposit_paid ? '#22c55e' : '#ffffff'}">
                                 ฿${formatNumber(order.deposit_amount || 0)} ${order.deposit_paid ? '✓' : '(รอชำระ)'}
                             </span>
                         </div>
@@ -3695,7 +3695,7 @@ async function viewMtoOrderDetail(orderId) {
             </div>
             <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
                 <span style="color: rgba(255,255,255,0.7);">มัดจำ (${order.deposit_percent || 50}%)</span>
-                <span style="color: ${order.deposit_paid ? '#22c55e' : '#fbbf24'};">
+                <span style="color: ${order.deposit_paid ? '#22c55e' : '#ffffff'};">
                     ฿${formatNumber(order.deposit_amount || 0)} ${order.deposit_paid ? '✓ ชำระแล้ว' : ''}
                 </span>
             </div>
@@ -3961,7 +3961,7 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
                     </div>
                     <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;">
                         <span>ยอดรวม</span>
-                        <span style="color:#fbbf24;">฿${fmtN(grandTotal)}</span>
+                        <span style="color:#ffffff;">฿${fmtN(grandTotal)}</span>
                     </div>
                 </div>
                 <div style="background: rgba(168,85,247,0.15); padding: 7px 12px; text-align: center; font-size: 11px; color: rgba(255,255,255,0.6);">กดเพื่อดูรายละเอียด →</div>
@@ -3985,10 +3985,10 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
                 <div style="padding: 10px;">
                     <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtmlChat(p.name)}</div>
                     ${hasDiscount ? `
-                        <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${tierPrice}</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #ffffff;">${tierPrice}</div>
                         <div style="font-size: 11px; text-decoration: line-through; opacity: 0.5;">${originalPrice}</div>
                         <div style="font-size: 10px; color: #34d399; margin-top: 2px;">ส่วนลด ${p.discount_percent}%</div>
-                    ` : `<div style="font-size: 14px; font-weight: 700; color: #fbbf24;">${originalPrice}</div>`}
+                    ` : `<div style="font-size: 14px; font-weight: 700; color: #ffffff;">${originalPrice}</div>`}
                 </div>
             </div>
         `;
@@ -4250,8 +4250,8 @@ function searchResellerChatProducts() {
                 const isSelected = resellerChatProductSelections.some(s => s.id === p.id);
                 const hasDiscount = p.discount_percent && p.discount_percent > 0;
                 const priceDisplay = hasDiscount
-                    ? `<span style="color: #fbbf24; font-weight: 600;">฿${fmtNum(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.4; font-size: 11px;">฿${fmtNum(p.min_price)}</span>`
-                    : `<span style="color: #fbbf24; font-weight: 600;">฿${fmtNum(p.min_price)}</span>`;
+                    ? `<span style="color: #ffffff; font-weight: 600;">฿${fmtNum(p.tier_min_price)}</span> <span style="text-decoration: line-through; opacity: 0.4; font-size: 11px;">฿${fmtNum(p.min_price)}</span>`
+                    : `<span style="color: #ffffff; font-weight: 600;">฿${fmtNum(p.min_price)}</span>`;
                 const stockColor = (p.total_stock || 0) > 0 ? '#34d399' : '#f87171';
                 const stockText = (p.total_stock || 0) > 0 ? `${p.total_stock} ชิ้น` : 'หมด';
                 return `
@@ -4606,7 +4606,7 @@ async function openResellerChatOrderPicker() {
                     <div style="margin-bottom: 5px;">
                         <span style="background: ${sC[o.status] || '#6b7280'}; color: white; padding: 2px 10px; border-radius: 20px; font-size: 10px; font-weight: 600;">${sL[o.status] || o.status}</span>
                     </div>
-                    <div style="font-size: 14px; font-weight: 700; color: #fbbf24;">฿${Number(o.final_amount || 0).toLocaleString('th-TH')}</div>
+                    <div style="font-size: 14px; font-weight: 700; color: #ffffff;">฿${Number(o.final_amount || 0).toLocaleString('th-TH')}</div>
                 </div>
             </div>
         `).join('');

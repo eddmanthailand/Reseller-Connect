@@ -1140,7 +1140,7 @@ body.sidebar-collapsed .sidebar-toggle {
 
 .order-status.pending_payment {
     background: rgba(245, 158, 11, 0.2);
-    color: #f59e0b;
+    color: #ffffff;
 }
 
 .order-status.under_review {
