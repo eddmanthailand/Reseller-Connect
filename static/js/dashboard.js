@@ -9482,41 +9482,54 @@ async function loadPromotions() {
         const data = await fetch('/api/admin/promotions').then(r => r.json());
         _promoData = Array.isArray(data) ? data : [];
         const active = _promoData.filter(p => p.is_active).length;
+        const inactive = _promoData.length - active;
         document.getElementById('promoStats').innerHTML = `
-            <div class="stat-mini"><div class="val">${_promoData.length}</div><div class="lbl">ทั้งหมด</div></div>
-            <div class="stat-mini"><div class="val" style="color:#22c55e">${active}</div><div class="lbl">เปิดอยู่</div></div>
-            <div class="stat-mini"><div class="val" style="color:#9ca3af">${_promoData.length - active}</div><div class="lbl">ปิดอยู่</div></div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#fff;">${_promoData.length}</div>
+                <div class="mkt-stat-lbl">ทั้งหมด</div>
+            </div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#4ade80;">${active}</div>
+                <div class="mkt-stat-lbl">กำลังใช้งาน</div>
+            </div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#9ca3af;">${inactive}</div>
+                <div class="mkt-stat-lbl">ปิดอยู่</div>
+            </div>
         `;
         if (!_promoData.length) {
-            document.getElementById('promoTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีโปรโมชัน — กดปุ่ม "+ สร้างโปรโมชัน" เพื่อเริ่มต้น</p></div>`;
+            document.getElementById('promoTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีโปรโมชัน — กดปุ่ม "สร้างโปรโมชัน" เพื่อเริ่มต้น</p></div>`;
             return;
         }
-        let rows = _promoData.map(p => `
-            <tr>
-                <td><strong>${p.name}</strong><br><span style="color:rgba(255,255,255,0.4);font-size:11px">${p.target_brand_name ? '📦 '+p.target_brand_name : ''}${p.min_tier_name ? ' · '+p.min_tier_name+'+' : ''}</span></td>
-                <td>${_fmtCondition(p)}</td>
-                <td><strong>${_fmtDiscount(p)}</strong></td>
-                <td>${p.is_stackable ? '<span class="badge-stackable">+คูปองได้</span>' : '<span style="color:rgba(255,255,255,0.3);font-size:11px">เดี่ยว</span>'}</td>
-                <td>${p.end_date ? new Date(p.end_date).toLocaleDateString('th-TH') : '—'}</td>
-                <td>
-                    <label class="toggle-switch">
+        const cards = _promoData.map(p => {
+            const chips = [];
+            if (p.condition_min_spend > 0) chips.push(`<span class="promo-chip chip-condition">ซื้อครบ ฿${Number(p.condition_min_spend).toLocaleString()}</span>`);
+            if (p.condition_min_qty > 0) chips.push(`<span class="promo-chip chip-condition">${p.condition_min_qty} ชิ้น+</span>`);
+            chips.push(`<span class="promo-chip chip-reward">${_fmtDiscount(p)}</span>`);
+            if (p.is_stackable) chips.push(`<span class="promo-chip chip-stackable">+คูปองได้</span>`);
+            if (p.target_brand_name) chips.push(`<span class="promo-chip chip-brand">${p.target_brand_name}</span>`);
+            if (p.min_tier_name) chips.push(`<span class="promo-chip chip-tier">${p.min_tier_name}+</span>`);
+            const dateStr = p.end_date ? `หมดอายุ ${new Date(p.end_date).toLocaleDateString('th-TH')}` : 'ไม่มีกำหนดหมดอายุ';
+            return `
+            <div class="promo-card">
+                <div class="promo-card-top">
+                    <div class="promo-card-name">${p.name}</div>
+                    <label class="toggle-switch" style="flex-shrink:0;">
                         <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="togglePromotion(${p.id}, this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
-                </td>
-                <td>
-                    <button class="action-btn btn-review" onclick="openPromoModal(${p.id})">แก้ไข</button>
-                    <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;margin-left:4px" onclick="deletePromotion(${p.id})">ลบ</button>
-                </td>
-            </tr>
-        `).join('');
-        document.getElementById('promoTableWrap').innerHTML = `
-            <table class="mkt-table">
-                <thead><tr>
-                    <th>ชื่อโปรโมชัน</th><th>เงื่อนไข</th><th>รางวัล</th><th>ซ้อนคูปอง</th><th>สิ้นสุด</th><th>สถานะ</th><th>จัดการ</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
+                </div>
+                <div class="promo-chip-row">${chips.join('')}</div>
+                <div class="promo-card-footer">
+                    <div class="promo-card-date">${dateStr}</div>
+                    <div class="promo-card-actions">
+                        <button class="action-btn btn-review" onclick="openPromoModal(${p.id})">แก้ไข</button>
+                        <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;" onclick="deletePromotion(${p.id})">ลบ</button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+        document.getElementById('promoTableWrap').innerHTML = `<div class="promo-grid">${cards}</div>`;
     } catch (e) {
         document.getElementById('promoTableWrap').innerHTML = `<div class="empty-state"><p>เกิดข้อผิดพลาด</p></div>`;
     }
@@ -9681,49 +9694,63 @@ async function loadCoupons() {
         const data = await fetch('/api/admin/coupons').then(r => r.json());
         _couponData = Array.isArray(data) ? data : [];
         const active = _couponData.filter(c => c.is_active).length;
-        const totalUsed = _couponData.reduce((s, c) => s + (c.used_count || 0), 0);
+        const totalUsed = _couponData.reduce((s, c) => s + (c.usage_count || 0), 0);
         document.getElementById('couponStats').innerHTML = `
-            <div class="stat-mini"><div class="val">${_couponData.length}</div><div class="lbl">ทั้งหมด</div></div>
-            <div class="stat-mini"><div class="val" style="color:#22c55e">${active}</div><div class="lbl">เปิดอยู่</div></div>
-            <div class="stat-mini"><div class="val" style="color:#f59e0b">${totalUsed}</div><div class="lbl">ใช้ไปแล้ว</div></div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#fff;">${_couponData.length}</div>
+                <div class="mkt-stat-lbl">ทั้งหมด</div>
+            </div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#4ade80;">${active}</div>
+                <div class="mkt-stat-lbl">กำลังใช้งาน</div>
+            </div>
+            <div class="mkt-stat-card">
+                <div class="mkt-stat-val" style="color:#fb923c;">${totalUsed}</div>
+                <div class="mkt-stat-lbl">ใช้ไปแล้ว</div>
+            </div>
         `;
         if (!_couponData.length) {
-            document.getElementById('couponTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีคูปอง — กดปุ่ม "+ สร้างคูปอง" เพื่อเริ่มต้น</p></div>`;
+            document.getElementById('couponTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีคูปอง — กดปุ่ม "สร้างคูปอง" เพื่อเริ่มต้น</p></div>`;
             return;
         }
-        let rows = _couponData.map(c => {
-            const quota = c.total_quota > 0 ? `${c.usage_count}/${c.total_quota}` : `${c.usage_count}/∞`;
+        const typeColors = { percent: ['#7c3aed','#a78bfa'], fixed: ['#0e7490','#67e8f9'], free_shipping: ['#065f46','#6ee7b7'] };
+        const typeLabels = { percent: 'ลด %', fixed: 'ลดคงที่', free_shipping: 'ส่งฟรี' };
+        const cards = _couponData.map(c => {
+            const [bg1, bg2] = typeColors[c.discount_type] || ['#4c1d95','#a78bfa'];
+            const typeLabel = typeLabels[c.discount_type] || c.discount_type;
+            const quota = c.total_quota > 0 ? `${c.usage_count || 0}/${c.total_quota}` : `${c.usage_count || 0}/∞`;
             const claimed = c.claimed_count || 0;
+            const dateStr = c.end_date ? `หมดอายุ ${new Date(c.end_date).toLocaleDateString('th-TH')}` : 'ไม่มีกำหนด';
             return `
-            <tr>
-                <td>
-                    <strong style="font-family:monospace;color:#c084fc;">${c.code}</strong>
-                    <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">${c.name}</div>
-                </td>
-                <td>${_fmtCouponDiscount(c)}</td>
-                <td>${c.min_spend > 0 ? '฿'+Number(c.min_spend).toLocaleString() : '—'}</td>
-                <td><span class="coupon-usage">เก็บแล้ว ${claimed} · ใช้ ${quota}</span></td>
-                <td>${c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : '—'}</td>
-                <td>
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${c.is_active ? 'checked' : ''} onchange="toggleCoupon(${c.id}, this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </td>
-                <td>
-                    <button class="action-btn btn-review" onclick="openCouponModal(${c.id})">แก้ไข</button>
-                    <button class="action-btn" style="background:rgba(34,197,94,0.2);color:#22c55e;margin-left:4px" onclick="assignCoupon(${c.id})" title="แจกให้สมาชิกทุกคน">แจก</button>
-                    <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;margin-left:4px" onclick="deleteCoupon(${c.id})">ลบ</button>
-                </td>
-            </tr>`;
+            <div class="coupon-ticket" style="${!c.is_active ? 'opacity:0.5;' : ''}">
+                <div class="coupon-ticket-left" style="background:linear-gradient(135deg,${bg1},${bg2});">
+                    <div class="coupon-ticket-code">${c.code}</div>
+                    <div class="coupon-ticket-type">${typeLabel}</div>
+                </div>
+                <div class="coupon-ticket-right">
+                    <div>
+                        <div class="coupon-ticket-name">${c.name || _fmtCouponDiscount(c)}</div>
+                        <div class="coupon-ticket-desc">${_fmtCouponDiscount(c)}${c.min_spend > 0 ? ' · ขั้นต่ำ ฿'+Number(c.min_spend).toLocaleString() : ''}</div>
+                    </div>
+                    <div class="coupon-ticket-footer">
+                        <div>
+                            <div class="coupon-ticket-meta">${dateStr}</div>
+                            <div class="coupon-ticket-meta">เก็บแล้ว ${claimed} · ใช้แล้ว ${quota}</div>
+                        </div>
+                        <div class="coupon-ticket-actions">
+                            <label class="toggle-switch">
+                                <input type="checkbox" ${c.is_active ? 'checked' : ''} onchange="toggleCoupon(${c.id}, this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <button class="action-btn btn-review" onclick="openCouponModal(${c.id})">แก้ไข</button>
+                            <button class="action-btn" style="background:rgba(34,197,94,0.2);color:#22c55e;" onclick="assignCoupon(${c.id})" title="แจกให้สมาชิกทุกคน">แจก</button>
+                            <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;" onclick="deleteCoupon(${c.id})">ลบ</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
         }).join('');
-        document.getElementById('couponTableWrap').innerHTML = `
-            <table class="mkt-table">
-                <thead><tr>
-                    <th>รหัส / ชื่อ</th><th>ส่วนลด</th><th>ซื้อขั้นต่ำ</th><th>การใช้งาน</th><th>สิ้นสุด</th><th>สถานะ</th><th>จัดการ</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
+        document.getElementById('couponTableWrap').innerHTML = `<div class="coupon-grid">${cards}</div>`;
     } catch (e) {
         document.getElementById('couponTableWrap').innerHTML = `<div class="empty-state"><p>เกิดข้อผิดพลาด</p></div>`;
     }

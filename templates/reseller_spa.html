@@ -1312,15 +1312,16 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 4px;
-            padding: 8px 16px;
+            gap: 3px;
+            padding: 6px 8px;
             color: rgba(255,255,255,0.6);
             text-decoration: none;
-            font-size: 11px;
+            font-size: 10px;
             cursor: pointer;
             transition: color 0.2s;
             position: relative;
             touch-action: manipulation;
+            flex: 1;
         }
 
         .bottom-tab-item.active {
@@ -1328,8 +1329,8 @@
         }
 
         .bottom-tab-item svg {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
         }
 
         .bottom-tab-badge {
@@ -2951,6 +2952,43 @@
                 </div>
             </div>
 
+            <!-- Promo Wallet Page -->
+            <div id="page-promo-wallet" class="page-content">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">โปรโมชัน & คูปอง</h1>
+                        <p class="page-subtitle">ส่วนลดและสิทธิพิเศษสำหรับคุณ</p>
+                    </div>
+                </div>
+
+                <!-- Auto Promotions Section -->
+                <div style="margin-bottom: 28px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:white; display:flex; align-items:center; gap:8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            โปรโมชันอัตโนมัติที่ใช้ได้
+                        </h3>
+                        <button onclick="loadPromoWallet()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:12px;cursor:pointer;padding:4px 8px;border-radius:8px;">รีเฟรช</button>
+                    </div>
+                    <div id="promoWalletAutoList" style="display:flex;flex-direction:column;gap:10px;">
+                        <div style="text-align:center;color:rgba(255,255,255,0.4);padding:20px 0;">กำลังโหลด...</div>
+                    </div>
+                </div>
+
+                <!-- Coupon Wallet Section -->
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:white; display:flex; align-items:center; gap:8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                            กระเป๋าคูปองของฉัน
+                        </h3>
+                    </div>
+                    <div id="promoWalletCouponList" style="display:flex;flex-direction:column;gap:12px;">
+                        <div style="text-align:center;color:rgba(255,255,255,0.4);padding:20px 0;">กำลังโหลด...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Chat Page -->
             <div id="page-chat" class="page-content">
                 <div class="page-header">
@@ -3286,6 +3324,14 @@
                 </svg>
                 <span>ข้อความ</span>
                 <span class="bottom-tab-badge" id="bottomChatBadge" style="display:none;">0</span>
+            </a>
+            <a href="#promo-wallet" class="bottom-tab-item" data-page="promo-wallet" style="position:relative;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/>
+                    <circle cx="7.5" cy="7.5" r="1.5"/>
+                </svg>
+                <span>โปรโมชัน</span>
+                <span class="bottom-tab-badge" id="bottomPromoBadge" style="display:none;">0</span>
             </a>
             <a href="#profile" class="bottom-tab-item" data-page="profile">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">

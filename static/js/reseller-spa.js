@@ -156,6 +156,9 @@ function switchPage(pageName) {
         case 'mto-catalog':
             loadMtoCatalog();
             break;
+        case 'promo-wallet':
+            loadPromoWallet();
+            break;
         case 'chat':
             initResellerChat();
             loadResellerChatUnreadCount();
@@ -1348,6 +1351,113 @@ async function selectWalletCoupon(code) {
     document.getElementById('couponWalletModal').style.display = 'none';
     document.getElementById('couponCodeInput').value = code;
     await applyCouponCode();
+}
+
+async function loadPromoWallet() {
+    const autoList = document.getElementById('promoWalletAutoList');
+    const couponList = document.getElementById('promoWalletCouponList');
+    if (!autoList || !couponList) return;
+
+    autoList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:20px 0;">กำลังโหลด...</div>';
+    couponList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:20px 0;">กำลังโหลด...</div>';
+
+    const [promos, coupons] = await Promise.all([
+        fetch(`${RESELLER_API_URL}/reseller/promotions/active`).then(r => r.json()).catch(() => []),
+        fetch(`${RESELLER_API_URL}/reseller/coupons/wallet`).then(r => r.json()).catch(() => [])
+    ]);
+
+    // Render auto-promotions
+    if (!Array.isArray(promos) || !promos.length) {
+        autoList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.35);padding:20px 0;font-size:13px;">ยังไม่มีโปรโมชันที่ใช้ได้ในขณะนี้</div>';
+    } else {
+        autoList.innerHTML = promos.map(p => {
+            const condParts = [];
+            if (p.condition_min_spend > 0) condParts.push(`ซื้อครบ ฿${Number(p.condition_min_spend).toLocaleString()}`);
+            if (p.condition_min_qty > 0) condParts.push(`จำนวน ${p.condition_min_qty} ชิ้น+`);
+            const condText = condParts.join(' & ') || 'ทุกออเดอร์';
+            const rewardText = p.reward_type === 'discount_percent' ? `ลด ${p.reward_value}%`
+                : p.reward_type === 'discount_fixed' ? `ลด ฿${Number(p.reward_value).toLocaleString()}`
+                : p.reward_type === 'free_item' ? `ของแถม ${p.reward_qty || 1} ชิ้น` : '';
+            const stackText = p.is_stackable ? '<span style="background:rgba(168,85,247,0.2);color:#c084fc;padding:2px 8px;border-radius:10px;font-size:11px;">+ใช้กับคูปองได้</span>' : '';
+            const dateText = p.end_date ? `หมดอายุ ${new Date(p.end_date).toLocaleDateString('th-TH')}` : '';
+            return `
+            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:16px;padding:16px 18px;display:flex;align-items:center;gap:14px;">
+                <div style="width:48px;height:48px;background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;color:white;font-size:14px;margin-bottom:4px;">${p.name}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                        <span style="background:rgba(59,130,246,0.15);color:#93c5fd;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(59,130,246,0.2);">${condText}</span>
+                        <span style="background:rgba(34,197,94,0.15);color:#86efac;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid rgba(34,197,94,0.2);">${rewardText}</span>
+                        ${stackText}
+                    </div>
+                    ${dateText ? `<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;">${dateText}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // Render coupon wallet as ticket cards
+    const readyCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status === 'ready') : [];
+    const otherCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status !== 'ready') : [];
+    const allCoupons = [...readyCoupons, ...otherCoupons];
+
+    // Update badge
+    const badge = document.getElementById('bottomPromoBadge');
+    if (badge) {
+        if (readyCoupons.length > 0) { badge.textContent = readyCoupons.length; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+    }
+
+    if (!allCoupons.length) {
+        couponList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.35);padding:20px 0;font-size:13px;">ยังไม่มีคูปอง</div>';
+        return;
+    }
+
+    const typeColors = { percent: ['#7c3aed','#a78bfa'], fixed: ['#0e7490','#67e8f9'], free_shipping: ['#065f46','#6ee7b7'] };
+    const typeLabels = { percent: 'ลด %', fixed: 'ลดคงที่', free_shipping: 'ส่งฟรี' };
+
+    couponList.innerHTML = allCoupons.map(c => {
+        const isReady = c.status === 'ready';
+        const [bg1, bg2] = typeColors[c.discount_type] || ['#4c1d95','#a78bfa'];
+        const typeLabel = typeLabels[c.discount_type] || c.discount_type;
+        const desc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%${c.max_discount > 0 ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})` : ''}`
+            : c.discount_type === 'fixed' ? `ลด ฿${Number(c.discount_value).toLocaleString()}`
+            : 'ฟรีค่าจัดส่ง';
+        const expires = c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : 'ไม่มีกำหนด';
+        const statusLabel = c.status === 'ready' ? 'พร้อมใช้' : c.status === 'used' ? `ใช้แล้ว${c.used_in_order_number ? ' ('+c.used_in_order_number+')' : ''}` : 'หมดอายุ';
+        const statusColor = isReady ? '#4ade80' : '#9ca3af';
+        const useBtn = isReady ? `<button onclick="usePromoWalletCoupon('${c.code}')" style="background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">ใช้เลย</button>` : '';
+        return `
+        <div style="display:flex;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,${isReady ? '0.12' : '0.06'});${!isReady ? 'opacity:0.5;' : ''}min-height:88px;">
+            <div style="width:100px;flex-shrink:0;background:linear-gradient(135deg,${bg1},${bg2});display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 8px;">
+                <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:800;letter-spacing:0.5px;color:white;text-align:center;word-break:break-all;">${c.code}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:3px;text-align:center;">${typeLabel}</div>
+            </div>
+            <div style="flex:1;background:rgba(255,255,255,0.06);padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;">
+                <div>
+                    <div style="font-weight:700;color:white;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name || desc}</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:2px;">${desc}${c.min_spend > 0 ? ' · ขั้นต่ำ ฿'+Number(c.min_spend).toLocaleString() : ''}</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;">
+                    <div>
+                        <div style="font-size:11px;color:rgba(255,255,255,0.35);">หมดอายุ ${expires}</div>
+                        <div style="font-size:11px;color:${statusColor};font-weight:600;">${statusLabel}</div>
+                    </div>
+                    ${useBtn}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function usePromoWalletCoupon(code) {
+    window.location.hash = 'cart';
+    setTimeout(() => {
+        const input = document.getElementById('couponCodeInput');
+        if (input) { input.value = code; applyCouponCode(); }
+    }, 400);
 }
 
 async function loadProfileCouponWallet() {
