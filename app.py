@@ -7896,6 +7896,21 @@ def get_order_detail(order_id):
         cursor.execute('SELECT name, tracking_url FROM shipping_providers WHERE is_active = TRUE')
         tracking_urls = {p['name']: p['tracking_url'] for p in cursor.fetchall()}
         order['tracking_urls'] = tracking_urls
+
+        # Get refund info if exists
+        cursor.execute('''
+            SELECT refund_amount, slip_url, status, notes, created_at, completed_at,
+                   bank_name, bank_account_number, bank_account_name, promptpay_number
+            FROM order_refunds WHERE order_id = %s
+            ORDER BY created_at DESC LIMIT 1
+        ''', (order_id,))
+        refund_row = cursor.fetchone()
+        if refund_row:
+            r = dict(refund_row)
+            r['refund_amount'] = float(r['refund_amount']) if r['refund_amount'] else 0
+            order['refund'] = r
+        else:
+            order['refund'] = None
         
         return jsonify(order), 200
         

@@ -2243,6 +2243,45 @@ async function viewResellerOrderDetails(orderId) {
             }
         }
         
+        let refundHtml = '';
+        if (order.refund) {
+            const rf = order.refund;
+            const rfAmount = (rf.refund_amount || 0).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const rfDate = rf.completed_at
+                ? new Date(rf.completed_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'})
+                : (rf.created_at ? new Date(rf.created_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'}) : '');
+            const isDone = rf.status === 'completed';
+            refundHtml = `
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5);">การคืนเงิน</h4>
+                    <div style="background: ${isDone ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.1)'}; border: 1px solid ${isDone ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}; border-radius: 12px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${rf.slip_url ? '12px' : '0'};">
+                            <div>
+                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 2px;">ยอดคืนเงิน</div>
+                                <div style="font-size: 20px; font-weight: 700; color: ${isDone ? '#34d399' : '#fbbf24'};">฿${rfAmount}</div>
+                            </div>
+                            <span style="background: ${isDone ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}; color: ${isDone ? '#34d399' : '#fbbf24'}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                                ${isDone ? '✅ คืนเงินสำเร็จ' : '⏳ รอดำเนินการ'}
+                            </span>
+                        </div>
+                        ${rf.slip_url ? `
+                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
+                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">สลิปคืนเงินจาก Admin</div>
+                                <img src="${rf.slip_url}" alt="สลิปคืนเงิน"
+                                    onclick="window.open('${rf.slip_url}', '_blank')"
+                                    style="width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.1);">
+                                ${rfDate ? `<div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 6px; text-align: right;">${rfDate}</div>` : ''}
+                            </div>
+                        ` : `
+                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; font-size: 12px; color: rgba(255,255,255,0.5);">
+                                Admin จะดำเนินการโอนเงินและส่งสลิปในเร็ว ๆ นี้
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
@@ -2309,6 +2348,7 @@ async function viewResellerOrderDetails(orderId) {
                     ${recipientHtml}
                     ${shipmentsHtml}
                     ${slipsHtml}
+                    ${refundHtml}
                     ${actionsHtml}
                     <div style="height: 24px;"></div>
                 </div>

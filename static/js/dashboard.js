@@ -2009,6 +2009,51 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
+        // Build refund section
+        let refundHtml = '';
+        if (order.refund) {
+            const rf = order.refund;
+            const rfAmount = (rf.refund_amount || 0).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const rfDate = rf.completed_at
+                ? new Date(rf.completed_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'})
+                : (rf.created_at ? new Date(rf.created_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'}) : '');
+            const isDone = rf.status === 'completed';
+            const bankInfo = [rf.bank_name, rf.bank_account_name, rf.bank_account_number].filter(Boolean).join(' · ');
+            refundHtml = `
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <h4 style="color: #fff; font-size: 16px; font-weight: 600; margin: 0;">การคืนเงิน</h4>
+                        <span style="background: ${isDone ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#f59e0b,#d97706)'}; color: #fff; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: auto;">
+                            ${isDone ? '✅ คืนเงินสำเร็จ' : '⏳ รอดำเนินการ'}
+                        </span>
+                    </div>
+                    <div style="background: ${isDone ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.08)'}; border: 1px solid ${isDone ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}; border-radius: 12px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ยอดที่คืน</div>
+                                <div style="font-size: 22px; font-weight: 700; color: ${isDone ? '#34d399' : '#fbbf24'};">฿${rfAmount}</div>
+                            </div>
+                            ${rfDate ? `<div style="font-size: 11px; color: rgba(255,255,255,0.4); text-align: right;">${rfDate}</div>` : ''}
+                        </div>
+                        ${bankInfo ? `<div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 12px; padding: 8px 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">โอนไปยัง: ${escapeHtml(bankInfo)}</div>` : ''}
+                        ${rf.slip_url ? `
+                            <div>
+                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">สลิปการคืนเงิน</div>
+                                <img src="${rf.slip_url}" alt="สลิปคืนเงิน"
+                                    onclick="viewSlipFullscreen('${rf.slip_url}')"
+                                    style="width: 100%; max-height: 280px; object-fit: contain; border-radius: 10px; background: rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.1);">
+                            </div>
+                        ` : `
+                            <div style="font-size: 12px; color: rgba(255,255,255,0.45); padding-top: 4px;">
+                                ยังไม่ได้อัปโหลดสลิป
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
         // Build action buttons based on order status
         let actionsHtml = '';
         if (order.status === 'under_review') {
@@ -2209,6 +2254,7 @@ async function viewOrderDetails(orderId) {
                 
                 ${shipmentsHtml}
                 ${slipHtml}
+                ${refundHtml}
                 ${actionsHtml}
             </div>
         `;
