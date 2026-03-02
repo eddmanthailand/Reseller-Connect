@@ -6254,7 +6254,7 @@ def get_reseller_products():
         user = cursor.fetchone()
         tier_id = user['reseller_tier_id'] if user else None
         
-        # Get active products with tier pricing
+        # Get active products with tier pricing and category info
         cursor.execute('''
             SELECT p.id, p.name, p.parent_sku, p.description, p.status,
                    b.name as brand_name,
@@ -6263,7 +6263,12 @@ def get_reseller_products():
                    (SELECT MAX(price) FROM skus WHERE product_id = p.id) as max_price,
                    (SELECT SUM(stock) FROM skus WHERE product_id = p.id) as total_stock,
                    (SELECT COUNT(*) FROM skus WHERE product_id = p.id) as sku_count,
-                   ptp.discount_percent
+                   ptp.discount_percent,
+                   (SELECT STRING_AGG(c.name, '|||' ORDER BY c.name)
+                    FROM product_categories pc JOIN categories c ON c.id = pc.category_id
+                    WHERE pc.product_id = p.id) as category_names_str,
+                   (SELECT STRING_AGG(pc.category_id::text, ',')
+                    FROM product_categories pc WHERE pc.product_id = p.id) as category_ids_str
             FROM products p
             LEFT JOIN brands b ON b.id = p.brand_id
             LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
@@ -6277,6 +6282,10 @@ def get_reseller_products():
             product['min_price'] = float(product['min_price']) if product['min_price'] else 0
             product['max_price'] = float(product['max_price']) if product['max_price'] else 0
             product['discount_percent'] = float(product['discount_percent']) if product['discount_percent'] else 0
+            product['category_names'] = product['category_names_str'].split('|||') if product['category_names_str'] else []
+            product['category_ids'] = [int(x) for x in product['category_ids_str'].split(',')] if product['category_ids_str'] else []
+            del product['category_names_str']
+            del product['category_ids_str']
             
             # Calculate discounted prices
             if product['discount_percent'] > 0:
@@ -6288,9 +6297,21 @@ def get_reseller_products():
             
             products.append(product)
         
+        # Get all active categories that have at least one active product
+        cursor.execute('''
+            SELECT DISTINCT c.id, c.name
+            FROM categories c
+            JOIN product_categories pc ON pc.category_id = c.id
+            JOIN products p ON p.id = pc.product_id
+            WHERE p.status = 'active'
+            ORDER BY c.name
+        ''')
+        categories = [dict(row) for row in cursor.fetchall()]
+        
         return jsonify({
             'tier': user,
-            'products': products
+            'products': products,
+            'categories': categories
         }), 200
         
     except Exception as e:

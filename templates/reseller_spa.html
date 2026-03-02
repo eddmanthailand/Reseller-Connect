@@ -441,6 +441,60 @@
         .search-input::placeholder { color: var(--text-muted); }
         .search-input:focus { outline: none; border-color: var(--primary); }
 
+        .catalog-filter-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .catalog-search-row {
+            display: flex;
+            gap: 10px;
+        }
+        .catalog-filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-select {
+            padding: 9px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            flex: 1;
+            min-width: 120px;
+        }
+        .filter-select option { background: #2d1b4e; color: white; }
+        .filter-select:focus { outline: none; border-color: var(--primary); }
+        .stock-filter-group {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .stock-btn {
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.75);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .stock-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+        .stock-btn.active { background: var(--primary); border-color: var(--primary); color: white; font-weight: 600; }
+        .catalog-result-count {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 12px;
+        }
+
         .customers-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -2134,7 +2188,17 @@
                 box-sizing: border-box;
             }
             .stats-grid { grid-template-columns: 1fr 1fr; }
-            .product-grid { grid-template-columns: 1fr; }
+            .product-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .product-image { height: 140px; padding: 6px; }
+            .product-info { padding: 10px; }
+            .product-name { font-size: 12px; margin-bottom: 6px; }
+            .product-brand { font-size: 11px; margin-bottom: 3px; }
+            .product-price { font-size: 14px; }
+            .product-price-original { font-size: 11px; }
+            .product-discount { font-size: 10px; padding: 1px 5px; }
+            .catalog-filter-row { gap: 6px; }
+            .filter-select { font-size: 12px; padding: 8px 10px; min-width: 100px; }
+            .stock-btn { padding: 7px 10px; font-size: 11px; }
             .customers-grid { grid-template-columns: 1fr; }
             .form-grid, .form-row { grid-template-columns: 1fr; }
             .form-group.full { grid-column: span 1; }
@@ -2371,9 +2435,25 @@
                         <span id="catalogTierName">Bronze</span>
                     </div>
                 </div>
-                <div class="search-bar">
-                    <input type="text" class="search-input" id="productSearch" placeholder="ค้นหาสินค้า...">
+                <div class="catalog-filter-bar">
+                    <div class="catalog-search-row">
+                        <input type="text" class="search-input" id="productSearch" placeholder="ค้นหาชื่อสินค้า, รหัส, แบรนด์, หมวดหมู่..." oninput="filterProducts()">
+                    </div>
+                    <div class="catalog-filter-row">
+                        <select id="productBrandFilter" class="filter-select" onchange="filterProducts()">
+                            <option value="">แบรนด์ทั้งหมด</option>
+                        </select>
+                        <select id="productCategoryFilter" class="filter-select" onchange="filterProducts()">
+                            <option value="">หมวดหมู่ทั้งหมด</option>
+                        </select>
+                        <div class="stock-filter-group">
+                            <button class="stock-btn active" data-stock="all" onclick="setStockFilter(this)">ทั้งหมด</button>
+                            <button class="stock-btn" data-stock="in" onclick="setStockFilter(this)">มีสินค้า</button>
+                            <button class="stock-btn" data-stock="out" onclick="setStockFilter(this)">หมด</button>
+                        </div>
+                    </div>
                 </div>
+                <div class="catalog-result-count" id="catalogResultCount"></div>
                 <div class="product-grid" id="productGrid">
                     <div class="empty-state">
                         <p>กำลังโหลดสินค้า...</p>

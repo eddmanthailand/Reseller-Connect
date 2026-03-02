@@ -376,6 +376,8 @@ function renderFeaturedProducts(products) {
     `).join('');
 }
 
+let activeStockFilter = 'all';
+
 async function loadProducts() {
     try {
         const response = await fetch(`${RESELLER_API_URL}/reseller/products`);
@@ -383,10 +385,63 @@ async function loadProducts() {
         
         const data = await response.json();
         products = data.products || [];
+        buildFilterDropdowns(products, data.categories || []);
         renderProducts(products);
     } catch (error) {
         console.error('Error loading products:', error);
     }
+}
+
+function buildFilterDropdowns(productList, categories) {
+    const brandSel = document.getElementById('productBrandFilter');
+    const catSel = document.getElementById('productCategoryFilter');
+    if (!brandSel || !catSel) return;
+
+    const brands = [...new Map(
+        productList.filter(p => p.brand_name).map(p => [p.brand_name, p.brand_name])
+    ).entries()].map(([k]) => k).sort();
+
+    brandSel.innerHTML = '<option value="">แบรนด์ทั้งหมด</option>' +
+        brands.map(b => `<option value="${b}">${b}</option>`).join('');
+
+    catSel.innerHTML = '<option value="">หมวดหมู่ทั้งหมด</option>' +
+        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+function setStockFilter(btn) {
+    document.querySelectorAll('.stock-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeStockFilter = btn.dataset.stock;
+    filterProducts();
+}
+
+function filterProducts() {
+    const searchVal = (document.getElementById('productSearch')?.value || '').toLowerCase().trim();
+    const brandVal = document.getElementById('productBrandFilter')?.value || '';
+    const catVal = document.getElementById('productCategoryFilter')?.value || '';
+
+    const filtered = products.filter(p => {
+        if (searchVal) {
+            const haystack = [
+                p.name, p.parent_sku, p.brand_name,
+                ...(p.category_names || [])
+            ].filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(searchVal)) return false;
+        }
+        if (brandVal && p.brand_name !== brandVal) return false;
+        if (catVal && !(p.category_ids || []).includes(parseInt(catVal))) return false;
+        if (activeStockFilter === 'in' && !(p.total_stock > 0)) return false;
+        if (activeStockFilter === 'out' && p.total_stock > 0) return false;
+        return true;
+    });
+
+    const countEl = document.getElementById('catalogResultCount');
+    if (countEl) {
+        const hasFilter = searchVal || brandVal || catVal || activeStockFilter !== 'all';
+        countEl.textContent = hasFilter ? `พบ ${filtered.length} รายการ จาก ${products.length} รายการ` : '';
+    }
+
+    renderProducts(filtered);
 }
 
 function renderProducts(productsToRender) {
@@ -833,14 +888,6 @@ async function addToCartFromModal() {
     }
 }
 
-document.getElementById('productSearch')?.addEventListener('input', function() {
-    const search = this.value.toLowerCase();
-    const filtered = products.filter(p => 
-        p.name.toLowerCase().includes(search) || 
-        (p.brand_name && p.brand_name.toLowerCase().includes(search))
-    );
-    renderProducts(filtered);
-});
 
 async function loadCart() {
     const container = document.getElementById('cartContent');
