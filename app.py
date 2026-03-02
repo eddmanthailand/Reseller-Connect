@@ -7940,12 +7940,28 @@ def update_shipment(order_id, shipment_id):
                 current_order_status = cursor.fetchone()
                 
                 if current_order_status and current_order_status['status'] != 'delivered':
-                    # All shipments delivered - update order status only
-                    # (total_purchases was already added at approve_order time)
                     cursor.execute('''
                         UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
+                        WHERE id = %s AND status != 'delivered'
                     ''', (order_id,))
+                    if cursor.rowcount > 0:
+                        cursor.execute('SELECT final_amount, user_id FROM orders WHERE id = %s', (order_id,))
+                        ord_info = cursor.fetchone()
+                        if ord_info and ord_info['final_amount']:
+                            cursor.execute('UPDATE users SET total_purchases = COALESCE(total_purchases,0) + %s WHERE id = %s',
+                                           (ord_info['final_amount'], ord_info['user_id']))
+                            cursor.execute('''SELECT u.id, u.reseller_tier_id, u.tier_manual_override,
+                                (SELECT id FROM reseller_tiers WHERE upgrade_threshold <= u.total_purchases
+                                 AND is_manual_only=FALSE ORDER BY level_rank DESC LIMIT 1) as new_tier_id
+                                FROM users u WHERE u.id = %s''', (ord_info['user_id'],))
+                            u = cursor.fetchone()
+                            if u and u['new_tier_id'] and not u['tier_manual_override'] and u['new_tier_id'] != u['reseller_tier_id']:
+                                cursor.execute('UPDATE users SET reseller_tier_id=%s WHERE id=%s', (u['new_tier_id'], u['id']))
+                                cursor.execute('SELECT name FROM reseller_tiers WHERE id=%s', (u['new_tier_id'],))
+                                t = cursor.fetchone()
+                                if t:
+                                    create_notification(u['id'], 'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
+                                        f'คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}', 'success', 'tier', u['new_tier_id'])
         
         # Check if any shipment is shipped -> update order status to shipped
         elif data.get('status') == 'shipped':
@@ -9194,43 +9210,6 @@ def approve_order(order_id):
                 WHERE order_id = %s AND status = 'pending'
             ''', (admin_id, order_id))
         
-        # Update user's total purchases
-        cursor.execute('''
-            UPDATE users SET total_purchases = COALESCE(total_purchases, 0) + %s
-            WHERE id = %s
-        ''', (order['final_amount'], order['user_id']))
-        
-        # Check for tier upgrade — read AFTER the UPDATE above to get correct new total
-        cursor.execute('''
-            SELECT u.id, u.reseller_tier_id, u.total_purchases, u.tier_manual_override,
-                   (SELECT id FROM reseller_tiers 
-                    WHERE upgrade_threshold <= u.total_purchases
-                    AND is_manual_only = FALSE
-                    ORDER BY level_rank DESC LIMIT 1) as new_tier_id
-            FROM users u WHERE u.id = %s
-        ''', (order['user_id'],))
-        user = cursor.fetchone()
-        
-        if user and user['new_tier_id'] and not user['tier_manual_override']:
-            if user['new_tier_id'] != user['reseller_tier_id']:
-                cursor.execute('''
-                    UPDATE users SET reseller_tier_id = %s WHERE id = %s
-                ''', (user['new_tier_id'], user['id']))
-                
-                # Get tier name
-                cursor.execute('SELECT name FROM reseller_tiers WHERE id = %s', (user['new_tier_id'],))
-                new_tier = cursor.fetchone()
-                
-                # Notify user of tier upgrade
-                create_notification(
-                    user['id'],
-                    'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
-                    f'คุณได้รับการอัพเกรดเป็นระดับ {new_tier["name"]}',
-                    'success',
-                    'tier',
-                    user['new_tier_id']
-                )
-        
         conn.commit()
         
         # Get reseller info for email
@@ -9474,8 +9453,8 @@ def cancel_order(order_id):
         needs_refund = current_status in ('paid', 'preparing', 'shipped', 'failed_delivery')
         # New status after cancel
         new_status = 'pending_refund' if needs_refund else 'cancelled'
-        # If order was already approved (paid_at set), deduct from total_purchases
-        was_paid = order['paid_at'] is not None
+        # If order was already delivered, deduct from total_purchases
+        was_delivered = order['status'] == 'delivered'
         
         if not stock_in_transit:
             # Get order items and shipments to restore stock (only for non-shipped orders)
@@ -9517,8 +9496,8 @@ def cancel_order(order_id):
             WHERE id = %s
         ''', (new_status, reason, order_id))
         
-        # Deduct total_purchases if order was already approved (paid_at was set)
-        if was_paid and order['final_amount']:
+        # Deduct total_purchases only if order was already delivered
+        if was_delivered and order['final_amount']:
             cursor.execute('''
                 UPDATE users SET total_purchases = GREATEST(0, COALESCE(total_purchases, 0) - %s)
                 WHERE id = %s
@@ -10110,7 +10089,7 @@ def mark_order_delivered(order_id):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        cursor.execute('SELECT id, status, user_id, order_number, final_amount FROM orders WHERE id = %s', (order_id,))
         order = cursor.fetchone()
         
         if not order:
@@ -10121,8 +10100,24 @@ def mark_order_delivered(order_id):
         
         cursor.execute('''
             UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            WHERE id = %s AND status != 'delivered'
         ''', (order_id,))
+        
+        if cursor.rowcount > 0 and order['final_amount']:
+            cursor.execute('UPDATE users SET total_purchases = COALESCE(total_purchases,0) + %s WHERE id = %s',
+                           (order['final_amount'], order['user_id']))
+            cursor.execute('''SELECT u.id, u.reseller_tier_id, u.tier_manual_override,
+                (SELECT id FROM reseller_tiers WHERE upgrade_threshold <= u.total_purchases
+                 AND is_manual_only=FALSE ORDER BY level_rank DESC LIMIT 1) as new_tier_id
+                FROM users u WHERE u.id = %s''', (order['user_id'],))
+            u = cursor.fetchone()
+            if u and u['new_tier_id'] and not u['tier_manual_override'] and u['new_tier_id'] != u['reseller_tier_id']:
+                cursor.execute('UPDATE users SET reseller_tier_id=%s WHERE id=%s', (u['new_tier_id'], u['id']))
+                cursor.execute('SELECT name FROM reseller_tiers WHERE id=%s', (u['new_tier_id'],))
+                t = cursor.fetchone()
+                if t:
+                    create_notification(u['id'], 'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
+                        f'คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}', 'success', 'tier', u['new_tier_id'])
         
         # Update all shipments to delivered
         cursor.execute('''
@@ -15072,6 +15067,19 @@ def iship_webhook():
                     UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s AND status != 'delivered'
                 ''', (shipment['order_id'],))
+                if cursor.rowcount > 0:
+                    cursor.execute('SELECT final_amount, user_id FROM orders WHERE id = %s', (shipment['order_id'],))
+                    ord_info = cursor.fetchone()
+                    if ord_info and ord_info['final_amount']:
+                        cursor.execute('UPDATE users SET total_purchases = COALESCE(total_purchases,0) + %s WHERE id = %s',
+                                       (ord_info['final_amount'], ord_info['user_id']))
+                        cursor.execute('''SELECT u.id, u.reseller_tier_id, u.tier_manual_override,
+                            (SELECT id FROM reseller_tiers WHERE upgrade_threshold <= u.total_purchases
+                             AND is_manual_only=FALSE ORDER BY level_rank DESC LIMIT 1) as new_tier_id
+                            FROM users u WHERE u.id = %s''', (ord_info['user_id'],))
+                        u = cursor.fetchone()
+                        if u and u['new_tier_id'] and not u['tier_manual_override'] and u['new_tier_id'] != u['reseller_tier_id']:
+                            cursor.execute('UPDATE users SET reseller_tier_id=%s WHERE id=%s', (u['new_tier_id'], u['id']))
             
             conn.commit()
             
