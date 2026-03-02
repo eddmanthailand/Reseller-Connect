@@ -2183,7 +2183,25 @@ async function viewOrderDetails(orderId) {
                         <h4 style="color: #fff; font-size: 15px; font-weight: 600; margin: 0;">รายการสินค้า</h4>
                     </div>
                     ${itemsHtml || '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px 0;">ไม่มีรายการ</p>'}
-                    <div style="display: flex; justify-content: space-between; padding: 16px 0 0; margin-top: 12px; border-top: 2px solid rgba(255,255,255,0.15);">
+                    <div style="padding: 10px 0 0; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        ${order.discount_amount > 0 ? `
+                        <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
+                            <span>ส่วนลดสมาชิก</span><span style="color:#34d399;">-฿${parseFloat(order.discount_amount).toLocaleString('th-TH')}</span>
+                        </div>` : ''}
+                        ${parseFloat(order.promotion_discount || 0) > 0 ? `
+                        <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
+                            <span>⚡ โปรโมชัน</span><span style="color:#4ade80;">-฿${parseFloat(order.promotion_discount).toLocaleString('th-TH')}</span>
+                        </div>` : ''}
+                        ${parseFloat(order.coupon_discount || 0) > 0 ? `
+                        <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
+                            <span>🎟 คูปองส่วนลด</span><span style="color:#f59e0b;">-฿${parseFloat(order.coupon_discount).toLocaleString('th-TH')}</span>
+                        </div>` : ''}
+                        ${parseFloat(order.shipping_fee || 0) > 0 ? `
+                        <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
+                            <span>ค่าจัดส่ง</span><span>฿${parseFloat(order.shipping_fee).toLocaleString('th-TH')}</span>
+                        </div>` : ''}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 12px 0 0; margin-top: 4px; border-top: 2px solid rgba(255,255,255,0.15);">
                         <span style="color: #fff; font-size: 16px; font-weight: 600;">ยอดรวมทั้งหมด</span>
                         <span style="color: #fff; font-size: 20px; font-weight: 700;">฿${parseFloat(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
                     </div>

@@ -1250,10 +1250,14 @@ async function applyCouponCode() {
     if (!code) { showCouponMsg('กรุณากรอกรหัสคูปอง', '#ef4444'); return; }
     showCouponMsg('กำลังตรวจสอบ...', 'rgba(255,255,255,0.5)');
     try {
+        const cartItems = checkoutData.items || [];
+        const brandIds = [...new Set(cartItems.map(i => i.brand_id).filter(id => id))];
+        const categoryIds = [...new Set(cartItems.map(i => i.category_id).filter(id => id))];
+        const cartQty = cartItems.reduce((s, i) => s + (i.quantity || 0), 0);
         const res = await fetch(`${RESELLER_API_URL}/reseller/cart/preview-discount`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total })
+            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total, brand_ids: brandIds, category_ids: categoryIds, cart_qty: cartQty })
         });
         const data = await res.json();
         if (!res.ok) { showCouponMsg(data.error || 'คูปองไม่ถูกต้อง', '#ef4444'); return; }
@@ -2261,6 +2265,16 @@ async function viewResellerOrderDetails(orderId) {
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
                         <span>ส่วนลดสมาชิก</span>
                         <span style="color: #34d399;">-฿${order.discount_amount.toLocaleString('th-TH')}</span>
+                    </div>` : ''}
+                    ${order.promotion_discount > 0 ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
+                        <span>⚡ โปรโมชัน</span>
+                        <span style="color: #4ade80;">-฿${order.promotion_discount.toLocaleString('th-TH')}</span>
+                    </div>` : ''}
+                    ${order.coupon_discount > 0 ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
+                        <span>🎟 คูปองส่วนลด</span>
+                        <span style="color: #f59e0b;">-฿${order.coupon_discount.toLocaleString('th-TH')}</span>
                     </div>` : ''}
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
                         <span>ค่าจัดส่ง</span>

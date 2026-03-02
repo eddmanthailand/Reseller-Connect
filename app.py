@@ -6491,7 +6491,7 @@ def get_reseller_cart():
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
                    ci.customization_data,
                    s.sku_code, s.stock, p.name as product_name, p.id as product_id,
-                   p.brand_id, p.weight,
+                   p.brand_id, p.category_id, p.weight,
                    b.name as brand_name,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
             FROM cart_items ci
@@ -7398,7 +7398,7 @@ def create_order():
         # Get cart items
         cursor.execute('''
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent, ci.customization_data,
-                   s.stock, s.sku_code, p.name as product_name, p.brand_id
+                   s.stock, s.sku_code, p.name as product_name, p.brand_id, p.category_id
             FROM cart_items ci
             JOIN skus s ON s.id = ci.sku_id
             JOIN products p ON p.id = s.product_id
@@ -7458,7 +7458,8 @@ def create_order():
         # Layer 2 & 3: Apply promotion + coupon discounts
         coupon_code = (data.get('coupon_code') or '').strip()
         cart_brand_ids = list({item.get('brand_id') for item in items if item.get('brand_id')})
-        cart_category_ids = []  # category info not fetched at this point
+        cart_category_ids = list({item.get('category_id') for item in items if item.get('category_id')})
+        cart_total_qty = sum(item['quantity'] for item in items)
 
         cursor.execute('''
             SELECT rt.level_rank FROM users u
@@ -7468,7 +7469,7 @@ def create_order():
         tier_row = cursor.fetchone()
         user_tier_rank = int(tier_row['level_rank']) if tier_row and tier_row['level_rank'] else 1
 
-        applied_promo, promo_discount = _calc_best_promotion(cursor, item_total, cart_brand_ids, cart_category_ids, user_tier_rank)
+        applied_promo, promo_discount = _calc_best_promotion(cursor, item_total, cart_brand_ids, cart_category_ids, user_tier_rank, cart_total_qty)
         applied_coupon, coupon_discount, coupon_error = (None, 0, None)
         if coupon_code:
             if applied_promo is None or applied_promo.get('is_stackable'):
@@ -7734,6 +7735,8 @@ def get_order_detail(order_id):
         order['discount_amount'] = float(order['discount_amount']) if order['discount_amount'] else 0
         order['shipping_fee'] = float(order['shipping_fee']) if order['shipping_fee'] else 0
         order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+        order['promotion_discount'] = float(order['promotion_discount']) if order.get('promotion_discount') else 0
+        order['coupon_discount'] = float(order['coupon_discount']) if order.get('coupon_discount') else 0
         
         # Get order items with variant names
         cursor.execute('''
@@ -15173,7 +15176,7 @@ def iship_webhook():
 
 # ==================== MARKETING MODULE ====================
 
-def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, user_tier_rank):
+def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, user_tier_rank, cart_qty=0):
     """
     Layer 2: Find the single best auto-promotion eligible for this cart.
     Returns: (promotion_row, discount_amount) or (None, 0)
@@ -15199,6 +15202,9 @@ def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, 
             continue
         # Minimum spend check
         if promo['condition_min_spend'] and cart_total < float(promo['condition_min_spend']):
+            continue
+        # Minimum quantity check
+        if promo['condition_min_qty'] and int(promo['condition_min_qty']) > 0 and cart_qty < int(promo['condition_min_qty']):
             continue
         # Brand/category targeting
         if promo['target_brand_id'] and promo['target_brand_id'] not in cart_brand_ids:
@@ -15798,6 +15804,7 @@ def reseller_preview_discount():
         coupon_code = (data.get('coupon_code') or '').strip()
         brand_ids = data.get('brand_ids', [])
         category_ids = data.get('category_ids', [])
+        cart_qty = int(data.get('cart_qty', 0))
 
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -15811,7 +15818,7 @@ def reseller_preview_discount():
         u = cursor.fetchone()
         user_tier_rank = int(u['level_rank']) if u and u['level_rank'] else 1
 
-        promo, promo_discount = _calc_best_promotion(cursor, cart_total, brand_ids, category_ids, user_tier_rank)
+        promo, promo_discount = _calc_best_promotion(cursor, cart_total, brand_ids, category_ids, user_tier_rank, cart_qty)
 
         coupon, coupon_discount, coupon_error = (None, 0, None)
         if coupon_code:
