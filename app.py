@@ -5616,7 +5616,7 @@ def get_reseller_dashboard_stats():
             SELECT COALESCE(SUM(final_amount), 0) as month_total,
                    COUNT(*) as month_orders
             FROM orders
-            WHERE user_id = %s AND status = 'paid'
+            WHERE user_id = %s AND paid_at IS NOT NULL
             AND DATE(paid_at) >= %s AND DATE(paid_at) <= %s
         ''', (user_id, first_of_month, today))
         month_stats = cursor.fetchone()
@@ -5626,7 +5626,7 @@ def get_reseller_dashboard_stats():
             SELECT COALESCE(SUM(final_amount), 0) as all_time_total,
                    COUNT(*) as all_time_orders
             FROM orders
-            WHERE user_id = %s AND status = 'paid'
+            WHERE user_id = %s AND paid_at IS NOT NULL
         ''', (user_id,))
         all_time_stats = cursor.fetchone()
         
@@ -5829,7 +5829,7 @@ def get_reseller_featured_products():
             LEFT JOIN product_tier_pricing ptp ON ptp.product_id = p.id AND ptp.tier_id = %s
             LEFT JOIN skus s ON s.product_id = p.id
             LEFT JOIN order_items oi ON oi.sku_id = s.id
-            LEFT JOIN orders o ON o.id = oi.order_id AND o.status = 'paid'
+            LEFT JOIN orders o ON o.id = oi.order_id AND o.paid_at IS NOT NULL
             WHERE p.status = 'active'
             GROUP BY p.id, p.name, p.parent_sku, b.name, ptp.discount_percent
             HAVING COALESCE(SUM(oi.quantity), 0) > 0
@@ -7901,50 +7901,12 @@ def update_shipment(order_id, shipment_id):
                 current_order_status = cursor.fetchone()
                 
                 if current_order_status and current_order_status['status'] != 'delivered':
-                    # All shipments delivered - update order status
+                    # All shipments delivered - update order status only
+                    # (total_purchases was already added at approve_order time)
                     cursor.execute('''
                         UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP
                         WHERE id = %s
-                        RETURNING user_id, final_amount
                     ''', (order_id,))
-                    order_data = cursor.fetchone()
-                    
-                    if order_data:
-                        # Trigger tier upgrade for reseller
-                        user_id = order_data['user_id']
-                        order_amount = float(order_data['final_amount'] or 0)
-                        
-                        # Get user info
-                        cursor.execute('''
-                            SELECT u.id, u.total_purchases, u.reseller_tier_id, u.tier_manual_override, r.name as role_name
-                            FROM users u
-                            JOIN roles r ON r.id = u.role_id
-                            WHERE u.id = %s
-                        ''', (user_id,))
-                        user = cursor.fetchone()
-                        
-                        if user and user['role_name'] == 'Reseller':
-                            new_total = float(user['total_purchases'] or 0) + order_amount
-                            
-                            # Update total_purchases
-                            cursor.execute('''
-                                UPDATE users SET total_purchases = %s WHERE id = %s
-                            ''', (new_total, user_id))
-                            
-                            # Check tier upgrade if not manual override
-                            if not user.get('tier_manual_override'):
-                                cursor.execute('''
-                                    SELECT id, name, upgrade_threshold 
-                                    FROM reseller_tiers 
-                                    WHERE upgrade_threshold <= %s AND is_manual_only = FALSE
-                                    ORDER BY upgrade_threshold DESC LIMIT 1
-                                ''', (new_total,))
-                                new_tier = cursor.fetchone()
-                                
-                                if new_tier and new_tier['id'] != user['reseller_tier_id']:
-                                    cursor.execute('''
-                                        UPDATE users SET reseller_tier_id = %s WHERE id = %s
-                                    ''', (new_tier['id'], user_id))
         
         # Check if any shipment is shipped -> update order status to shipped
         elif data.get('status') == 'shipped':
@@ -8178,7 +8140,7 @@ def get_dashboard_stats():
         cursor.execute("SELECT CURRENT_DATE as today")
         today = cursor.fetchone()['today']
         
-        # Sales today (paid orders - filtered by brand for Assistant Admin)
+        # Sales today (approved orders with paid_at set - filtered by brand for Assistant Admin)
         if is_assistant_admin and brand_ids_tuple:
             cursor.execute('''
                 SELECT COALESCE(SUM(oi.subtotal), 0) as total,
@@ -8187,7 +8149,7 @@ def get_dashboard_stats():
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid' 
+                WHERE o.paid_at IS NOT NULL
                 AND DATE(o.paid_at) = %s
                 AND p.brand_id IN %s
             ''', (today, brand_ids_tuple))
@@ -8196,7 +8158,7 @@ def get_dashboard_stats():
                 SELECT COALESCE(SUM(final_amount), 0) as total,
                        COUNT(*) as count
                 FROM orders 
-                WHERE status = 'paid' 
+                WHERE paid_at IS NOT NULL
                 AND DATE(paid_at) = %s
             ''', (today,))
         sales_today = cursor.fetchone()
@@ -8210,7 +8172,7 @@ def get_dashboard_stats():
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid' 
+                WHERE o.paid_at IS NOT NULL
                 AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
                 AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND p.brand_id IN %s
@@ -8220,7 +8182,7 @@ def get_dashboard_stats():
                 SELECT COALESCE(SUM(final_amount), 0) as total,
                        COUNT(*) as count
                 FROM orders 
-                WHERE status = 'paid' 
+                WHERE paid_at IS NOT NULL
                 AND EXTRACT(YEAR FROM paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
                 AND EXTRACT(MONTH FROM paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
             ''')
@@ -8235,7 +8197,7 @@ def get_dashboard_stats():
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid'
+                WHERE o.paid_at IS NOT NULL
                 AND p.brand_id IN %s
             ''', (brand_ids_tuple,))
         else:
@@ -8243,7 +8205,7 @@ def get_dashboard_stats():
                 SELECT COALESCE(SUM(final_amount), 0) as total,
                        COUNT(*) as count
                 FROM orders 
-                WHERE status = 'paid'
+                WHERE paid_at IS NOT NULL
             ''')
         sales_all = cursor.fetchone()
         
@@ -8341,7 +8303,7 @@ def get_dashboard_stats():
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid' 
+                WHERE o.paid_at IS NOT NULL
                 AND o.paid_at >= CURRENT_DATE - INTERVAL '6 days'
                 AND p.brand_id IN %s
                 GROUP BY DATE(o.paid_at)
@@ -8353,7 +8315,7 @@ def get_dashboard_stats():
                        COALESCE(SUM(final_amount), 0) as total,
                        COUNT(*) as count
                 FROM orders 
-                WHERE status = 'paid' 
+                WHERE paid_at IS NOT NULL
                 AND paid_at >= CURRENT_DATE - INTERVAL '6 days'
                 GROUP BY DATE(paid_at)
                 ORDER BY DATE(paid_at)
@@ -8429,7 +8391,7 @@ def get_dashboard_stats():
                 JOIN orders o ON o.id = oi.order_id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid'
+                WHERE o.paid_at IS NOT NULL
                 AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
                 AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND p.brand_id IN %s
@@ -8444,7 +8406,7 @@ def get_dashboard_stats():
                 JOIN orders o ON o.id = oi.order_id
                 JOIN skus s ON s.id = oi.sku_id
                 JOIN products p ON p.id = s.product_id
-                WHERE o.status = 'paid'
+                WHERE o.paid_at IS NOT NULL
                 AND EXTRACT(YEAR FROM o.paid_at) = EXTRACT(YEAR FROM CURRENT_DATE)
                 AND EXTRACT(MONTH FROM o.paid_at) = EXTRACT(MONTH FROM CURRENT_DATE)
                 GROUP BY p.id, p.name
@@ -8621,8 +8583,8 @@ def get_sales_history():
             cursor.execute('''
                 SELECT COALESCE(SUM(oi.subtotal), 0) as total,
                        COUNT(DISTINCT o.id) as count,
-                       COUNT(DISTINCT CASE WHEN o.status = 'paid' THEN o.id END) as paid_count,
-                       COALESCE(SUM(CASE WHEN o.status = 'paid' THEN oi.subtotal END), 0) as paid_total
+                       COUNT(DISTINCT CASE WHEN o.paid_at IS NOT NULL THEN o.id END) as paid_count,
+                       COALESCE(SUM(CASE WHEN o.paid_at IS NOT NULL THEN oi.subtotal END), 0) as paid_total
                 FROM orders o
                 JOIN order_items oi ON oi.order_id = o.id
                 JOIN skus s ON s.id = oi.sku_id
@@ -8634,8 +8596,8 @@ def get_sales_history():
             cursor.execute('''
                 SELECT COALESCE(SUM(final_amount), 0) as total,
                        COUNT(*) as count,
-                       COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
-                       COALESCE(SUM(CASE WHEN status = 'paid' THEN final_amount END), 0) as paid_total
+                       COUNT(CASE WHEN paid_at IS NOT NULL THEN 1 END) as paid_count,
+                       COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN final_amount END), 0) as paid_total
                 FROM orders 
                 WHERE DATE(created_at) >= %s AND DATE(created_at) <= %s
             ''', (start, end))
@@ -8738,7 +8700,7 @@ def get_brand_sales():
             LEFT JOIN products p ON p.brand_id = b.id
             LEFT JOIN skus s ON s.product_id = p.id
             LEFT JOIN order_items oi ON oi.sku_id = s.id
-            LEFT JOIN orders o ON o.id = oi.order_id AND o.status = 'paid' 
+            LEFT JOIN orders o ON o.id = oi.order_id AND o.paid_at IS NOT NULL
                 AND DATE(o.paid_at) >= %s AND DATE(o.paid_at) <= %s
         '''
         params = [start, end]
@@ -9175,9 +9137,9 @@ def approve_order(order_id):
         if order['status'] != 'under_review':
             return jsonify({'error': 'Order is not under review'}), 400
         
-        # Update order status to preparing (ready to ship)
+        # Update order status to preparing + set paid_at timestamp
         cursor.execute('''
-            UPDATE orders SET status = 'preparing', updated_at = CURRENT_TIMESTAMP
+            UPDATE orders SET status = 'preparing', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (order_id,))
         
@@ -9199,15 +9161,15 @@ def approve_order(order_id):
             WHERE id = %s
         ''', (order['final_amount'], order['user_id']))
         
-        # Check for tier upgrade
+        # Check for tier upgrade — read AFTER the UPDATE above to get correct new total
         cursor.execute('''
             SELECT u.id, u.reseller_tier_id, u.total_purchases, u.tier_manual_override,
                    (SELECT id FROM reseller_tiers 
-                    WHERE upgrade_threshold <= u.total_purchases + %s 
+                    WHERE upgrade_threshold <= u.total_purchases
                     AND is_manual_only = FALSE
                     ORDER BY level_rank DESC LIMIT 1) as new_tier_id
             FROM users u WHERE u.id = %s
-        ''', (order['final_amount'], order['user_id']))
+        ''', (order['user_id'],))
         user = cursor.fetchone()
         
         if user and user['new_tier_id'] and not user['tier_manual_override']:
@@ -9455,8 +9417,8 @@ def cancel_order(order_id):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
-        # Get order status
-        cursor.execute('SELECT id, status, user_id FROM orders WHERE id = %s', (order_id,))
+        # Get order status + paid_at to know if total_purchases was already added
+        cursor.execute('SELECT id, status, user_id, final_amount, paid_at FROM orders WHERE id = %s', (order_id,))
         order = cursor.fetchone()
         
         if not order:
@@ -9473,6 +9435,8 @@ def cancel_order(order_id):
         needs_refund = current_status in ('paid', 'preparing', 'shipped', 'failed_delivery')
         # New status after cancel
         new_status = 'pending_refund' if needs_refund else 'cancelled'
+        # If order was already approved (paid_at set), deduct from total_purchases
+        was_paid = order['paid_at'] is not None
         
         if not stock_in_transit:
             # Get order items and shipments to restore stock (only for non-shipped orders)
@@ -9513,6 +9477,13 @@ def cancel_order(order_id):
             UPDATE orders SET status = %s, notes = CONCAT(COALESCE(notes, ''), ' [ยกเลิก: ', %s, ']'), updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (new_status, reason, order_id))
+        
+        # Deduct total_purchases if order was already approved (paid_at was set)
+        if was_paid and order['final_amount']:
+            cursor.execute('''
+                UPDATE users SET total_purchases = GREATEST(0, COALESCE(total_purchases, 0) - %s)
+                WHERE id = %s
+            ''', (order['final_amount'], order['user_id']))
         
         conn.commit()
         
