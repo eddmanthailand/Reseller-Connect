@@ -1129,7 +1129,7 @@ function renderCheckout() {
                 <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(251,191,36,0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 </div>
-                <div style="font-weight: 500; margin-bottom: 4px; color: #fbbf24;">ยังไม่ได้ตั้งค่าที่อยู่ร้าน</div>
+                <div style="font-weight: 500; margin-bottom: 4px; color: #ffffff;">ยังไม่ได้ตั้งค่าที่อยู่ร้าน</div>
                 <div style="font-size: 13px; opacity: 0.7; margin-bottom: 16px;">กรุณาไปตั้งค่าที่อยู่ร้านก่อนใช้งาน</div>
                 <button onclick="window.location.hash='profile'" class="btn-primary" style="padding: 10px 20px; font-size: 13px;">
                     🔧 ไปตั้งค่าโปรไฟล์
@@ -1337,7 +1337,7 @@ async function openCouponWalletPicker() {
             return `<div style="background:rgba(255,255,255,0.07);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.5;' : ''}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                     <div>
-                        <div style="font-weight:700;color:#f59e0b;font-size:15px;letter-spacing:1px;">${c.code}</div>
+                        <div style="font-weight:700;color:#ffffff;font-size:15px;letter-spacing:1px;">${c.code}</div>
                         <div style="color:white;font-size:13px;margin-top:2px;">${c.name || desc}</div>
                         <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
                         <div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
@@ -1486,7 +1486,7 @@ async function loadProfileCouponWallet() {
             return `<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.55;' : ''}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:700;color:#f59e0b;font-size:14px;letter-spacing:1px;">${c.code}</div>
+                        <div style="font-weight:700;color:#ffffff;font-size:14px;letter-spacing:1px;">${c.code}</div>
                         <div style="color:white;font-size:13px;margin-top:3px;">${c.name || desc}</div>
                         <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
                         <div style="color:rgba(255,255,255,0.35);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
@@ -1808,7 +1808,7 @@ function validateCheckout() {
     if (!helper) {
         helper = document.createElement('div');
         helper.id = 'checkoutValidationHelper';
-        helper.style.cssText = 'font-size: 12px; color: #fbbf24; margin-top: 8px; text-align: center;';
+        helper.style.cssText = 'font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 8px; text-align: center;';
         btn.parentNode.insertBefore(helper, btn.nextSibling);
     }
     helper.textContent = isValid ? '' : reason;
@@ -2236,7 +2236,7 @@ async function viewResellerOrderDetails(orderId) {
             } else if (!hasSlips) {
                 rejectionNoticeHtml = `
                     <div style="background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                        <div style="color: #f59e0b; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ ยังไม่ได้รับสลิปการชำระเงิน</div>
+                        <div style="color: #ffffff; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ ยังไม่ได้รับสลิปการชำระเงิน</div>
                         <div style="color: rgba(255,255,255,0.7); font-size: 12px;">กรุณาชำระเงินผ่าน PromptPay แล้วส่งสลิปเพื่อให้ admin ตรวจสอบ</div>
                     </div>
                 `;

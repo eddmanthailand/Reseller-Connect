@@ -2032,7 +2032,7 @@ async function viewOrderDetails(orderId) {
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div>
                                 <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ยอดที่คืน</div>
-                                <div style="font-size: 22px; font-weight: 700; color: ${isDone ? '#34d399' : '#fbbf24'};">฿${rfAmount}</div>
+                                <div style="font-size: 22px; font-weight: 700; color: ${isDone ? '#34d399' : '#ffffff'};">฿${rfAmount}</div>
                             </div>
                             ${rfDate ? `<div style="font-size: 11px; color: rgba(255,255,255,0.4); text-align: right;">${rfDate}</div>` : ''}
                         </div>
