@@ -444,7 +444,17 @@ function setupEventListeners() {
                 const submenu = document.getElementById(`${targetPage}-submenu`);
                 if (submenu) {
                     submenu.classList.toggle('open');
+                    // If parent has no real page, auto-navigate to first submenu item when opening
+                    const hasOwnPage = !!document.getElementById(`page-${targetPage}`);
+                    if (!hasOwnPage && submenu.classList.contains('open') && submenu.style.display !== 'none') {
+                        const firstChild = submenu.querySelector('.submenu-item[data-page]');
+                        if (firstChild) {
+                            switchPage(firstChild.dataset.page);
+                            return;
+                        }
+                    }
                 }
+                if (!document.getElementById(`page-${targetPage}`)) return;
             }
             
             switchPage(targetPage);

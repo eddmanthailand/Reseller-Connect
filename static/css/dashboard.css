@@ -2991,6 +2991,32 @@ tr:hover td {
     box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
 }
 
+.form-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    appearance: none;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.2);
+}
+
+.form-select option {
+    background: #1e1b4b;
+    color: white;
+}
+
 .form-label {
     display: block;
     font-size: 13px;
