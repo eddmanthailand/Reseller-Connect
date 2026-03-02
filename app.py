@@ -120,9 +120,10 @@ def google_callback():
 
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.email,
-                   r.name as role_name, u.reseller_tier_id
+                   r.name as role_name, u.reseller_tier_id, rt.name as reseller_tier_name
             FROM users u
             JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
             WHERE LOWER(u.email) = %s
         ''', (email,))
         user = cursor.fetchone()
@@ -132,7 +133,7 @@ def google_callback():
             session.clear()
             session['user_id'] = user['id']
             session['role'] = user['role_name']
-            session['reseller_tier'] = user['reseller_tier_id']
+            session['reseller_tier'] = user['reseller_tier_name'] or 'Bronze'
             session['full_name'] = display_name
             session['username'] = user['username']
             session['_csrf_token'] = secrets.token_hex(32)
@@ -158,9 +159,10 @@ def google_callback():
         if not reseller_role:
             return redirect('/login?error=no_role')
 
-        cursor.execute('SELECT id FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
+        cursor.execute('SELECT id, name FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
         default_tier = cursor.fetchone()
         tier_id = default_tier['id'] if default_tier else None
+        tier_name = default_tier['name'] if default_tier else 'Bronze'
 
         random_password = secrets.token_hex(32)
         password_hash = bcrypt.hashpw(random_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -179,7 +181,7 @@ def google_callback():
         session.clear()
         session['user_id'] = new_user_id
         session['role'] = 'Reseller'
-        session['reseller_tier'] = tier_id
+        session['reseller_tier'] = tier_name
         session['full_name'] = display_name
         session['username'] = username
         session['_csrf_token'] = secrets.token_hex(32)
@@ -1196,12 +1198,28 @@ def reject_reseller_application(app_id):
 @login_required
 def get_current_user():
     """Get current logged in user info"""
+    tier = session.get('reseller_tier')
+    # If tier is stored as numeric ID (legacy sessions), look up the name
+    if tier is not None:
+        try:
+            tier_as_int = int(tier)
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute('SELECT name FROM reseller_tiers WHERE id = %s', (tier_as_int,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if row:
+                tier = row['name']
+                session['reseller_tier'] = tier
+        except (ValueError, TypeError):
+            pass
     return jsonify({
         'id': session.get('user_id'),
         'username': session.get('username'),
         'full_name': session.get('full_name'),
         'role': session.get('role'),
-        'reseller_tier': session.get('reseller_tier')
+        'reseller_tier': tier
     }), 200
 
 @app.route('/api/activity-logs', methods=['GET'])
