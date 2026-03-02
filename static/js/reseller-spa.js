@@ -231,7 +231,7 @@ async function loadDashboardData() {
             document.getElementById('statMonthTotal').textContent = formatCurrency(data.month_stats?.total || 0);
             document.getElementById('statMonthOrders').textContent = `${data.month_stats?.orders || 0} คำสั่งซื้อ`;
             
-            document.getElementById('statTotalSpent').textContent = formatCurrency(data.all_time_stats?.total || 0);
+            document.getElementById('statTotalSpent').textContent = formatCurrency(data.tier_progress?.total_purchases ?? data.all_time_stats?.total ?? 0);
             document.getElementById('statTotalOrders').textContent = `${data.all_time_stats?.orders || 0} คำสั่งซื้อ`;
             
             const pendingTotal = Object.values(data.pending_orders || {}).reduce((a, b) => a + b, 0);
