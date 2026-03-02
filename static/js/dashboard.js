@@ -6210,11 +6210,11 @@ function renderQuickOrderItems() {
             </div>
             <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <button type="button" onclick="updateQuickOrderItemQty(${item.sku_id}, -1)" style="width: 28px; height: 28px; border: none; border-radius: 6px; background: rgba(239,68,68,0.2); color: #ef4444; cursor: pointer; font-size: 16px; font-weight: 700;">-</button>
+                    <button type="button" onclick="updateQuickOrderItemQty(${item.sku_id}, -1)" style="width: 28px; height: 28px; border: none; border-radius: 6px; background: rgba(239,68,68,0.2); color: #ffffff; cursor: pointer; font-size: 16px; font-weight: 700;">-</button>
                     <span style="min-width: 24px; text-align: center; font-weight: 600;">${item.quantity}</span>
                     <button type="button" onclick="updateQuickOrderItemQty(${item.sku_id}, 1)" style="width: 28px; height: 28px; border: none; border-radius: 6px; background: rgba(16,185,129,0.2); color: #10b981; cursor: pointer; font-size: 16px; font-weight: 700;">+</button>
                 </div>
-                <button type="button" onclick="removeQuickOrderItem(${item.sku_id})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 11px; opacity: 0.8;">ลบ</button>
+                <button type="button" onclick="removeQuickOrderItem(${item.sku_id})" style="background: none; border: none; color: #ffffff; cursor: pointer; font-size: 11px; opacity: 0.8;">ลบ</button>
             </div>
         </div>
     `).join('');
