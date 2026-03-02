@@ -273,6 +273,13 @@ def fb_landing_page():
         return redirect(url_for('dashboard'))
     return render_template('fb_landing.html')
 
+@app.route('/join')
+def ad_landing_page():
+    """New ad landing page for Google/Facebook ads"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('ad_landing.html')
+
 @app.route('/dashboard')
 @login_required
 def dashboard():

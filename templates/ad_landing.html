@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="facebook-domain-verification" content="ednx6kokr0rzerxji8jjcywyy65w8l" />
+    <title>EKG Shops - ขายสินค้าออนไลน์ ไม่ต้องสต็อก</title>
+    <meta name="description" content="สมัครสมาชิก EKG Shops ฟรี! ขายสินค้าออนไลน์ ไม่ต้องสต็อก ไม่ต้องแพ็ค ส่งในนามร้านคุณ เริ่มต้นทันทีด้วย Google">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --purple: #7c3aed;
+            --purple-dark: #6d28d9;
+            --pink: #ec4899;
+            --pink-dark: #db2777;
+            --yellow: #fbbf24;
+            --green: #10b981;
+        }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: #f8f7ff;
+            color: #1f2937;
+            scroll-behavior: smooth;
+        }
+
+        /* NAV */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(124,58,237,0.1);
+            padding: 0 20px;
+            height: 60px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-logo { font-size: 20px; font-weight: 800; background: linear-gradient(135deg,var(--purple),var(--pink)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-cta { background: linear-gradient(135deg,var(--purple),var(--pink)); color: #fff; border: none; padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: 'Sarabun', sans-serif; }
+
+        /* HERO */
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(160deg, #4c1d95 0%, #7c3aed 40%, #ec4899 80%, #f59e0b 100%);
+            display: flex; align-items: center; justify-content: center;
+            padding: 80px 20px 40px;
+            position: relative; overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 20%, rgba(251,191,36,0.15) 0%, transparent 50%);
+        }
+        .hero-inner { position: relative; z-index: 1; text-align: center; max-width: 680px; margin: 0 auto; }
+        .hero-badge {
+            display: inline-block; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
+            color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;
+            margin-bottom: 20px; backdrop-filter: blur(4px);
+        }
+        .hero h1 {
+            font-size: clamp(28px, 6vw, 52px); font-weight: 800; color: #fff;
+            line-height: 1.2; margin-bottom: 16px; letter-spacing: -0.5px;
+        }
+        .hero h1 .highlight { color: var(--yellow); }
+        .hero-sub {
+            font-size: clamp(15px, 2.5vw, 18px); color: rgba(255,255,255,0.85);
+            line-height: 1.6; margin-bottom: 32px;
+        }
+
+        /* STATS STRIP */
+        .stats-strip {
+            display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+            margin-bottom: 36px;
+        }
+        .stat-item { text-align: center; color: #fff; }
+        .stat-num { font-size: 26px; font-weight: 800; color: var(--yellow); display: block; }
+        .stat-label { font-size: 12px; color: rgba(255,255,255,0.75); }
+
+        /* CTA CARD */
+        .cta-card {
+            background: rgba(255,255,255,0.98);
+            border-radius: 24px; padding: 32px 28px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            max-width: 400px; margin: 0 auto;
+        }
+        .cta-card h2 { font-size: 20px; font-weight: 800; color: #1f2937; margin-bottom: 6px; }
+        .cta-card p { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
+
+        .benefit-list { list-style: none; margin-bottom: 24px; display: flex; flex-direction: column; gap: 10px; }
+        .benefit-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #374151; }
+        .benefit-list li .check { width: 22px; height: 22px; background: linear-gradient(135deg,var(--purple),var(--pink)); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .benefit-list li .check i { color: #fff; font-size: 10px; }
+
+        .google-btn {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            width: 100%; padding: 16px; border-radius: 14px;
+            background: #fff; color: #333; font-size: 15px; font-weight: 700;
+            text-decoration: none; border: 2px solid #e5e7eb; cursor: pointer;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: all 0.2s; font-family: 'Sarabun', sans-serif;
+        }
+        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); border-color: #d1d5db; }
+        .google-logo { width: 22px; height: 22px; flex-shrink: 0; }
+
+        .open-browser-btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 16px; border-radius: 14px;
+            background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
+            font-size: 16px; font-weight: 700; border: none; cursor: pointer;
+            box-shadow: 0 4px 16px rgba(34,197,94,0.35);
+            transition: all 0.2s; font-family: 'Sarabun', sans-serif; text-decoration: none;
+        }
+        .open-browser-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(34,197,94,0.45); }
+
+        .manual-hint {
+            background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+            padding: 12px 14px; margin-top: 12px; font-size: 13px; color: #4b5563; line-height: 1.6;
+        }
+        .manual-hint strong { color: var(--purple); }
+
+        .webview-section { display: none; }
+        .webview-section.show { display: block; }
+        .normal-section.hide { display: none; }
+
+        .login-link { text-align: center; margin-top: 14px; font-size: 13px; color: #9ca3af; }
+        .login-link a { color: var(--purple); font-weight: 600; text-decoration: none; }
+        .login-link a:hover { text-decoration: underline; }
+
+        /* FEATURES */
+        .section { padding: 64px 20px; }
+        .section-title { text-align: center; font-size: clamp(22px, 4vw, 32px); font-weight: 800; color: #111827; margin-bottom: 8px; }
+        .section-sub { text-align: center; font-size: 15px; color: #6b7280; margin-bottom: 48px; }
+
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; max-width: 900px; margin: 0 auto; }
+        .feature-card {
+            background: #fff; border-radius: 20px; padding: 28px 24px;
+            box-shadow: 0 2px 16px rgba(124,58,237,0.06);
+            border: 1px solid rgba(124,58,237,0.08);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .feature-card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(124,58,237,0.12); }
+        .feature-icon {
+            width: 52px; height: 52px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; margin-bottom: 16px;
+        }
+        .feature-card h3 { font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+        .feature-card p { font-size: 14px; color: #6b7280; line-height: 1.6; }
+
+        /* STEPS */
+        .steps-section { background: linear-gradient(135deg, #faf5ff, #fdf2f8); padding: 64px 20px; }
+        .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; max-width: 800px; margin: 0 auto; }
+        .step-card { text-align: center; }
+        .step-num {
+            width: 52px; height: 52px; border-radius: 50%;
+            background: linear-gradient(135deg,var(--purple),var(--pink)); color: #fff;
+            font-size: 22px; font-weight: 800; display: flex; align-items: center;
+            justify-content: center; margin: 0 auto 16px; box-shadow: 0 6px 20px rgba(124,58,237,0.3);
+        }
+        .step-card h4 { font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 6px; }
+        .step-card p { font-size: 13px; color: #6b7280; }
+
+        /* INCOME EXAMPLE */
+        .income-section { padding: 64px 20px; background: #fff; }
+        .income-card { max-width: 400px; margin: 0 auto; background: linear-gradient(135deg, #4c1d95, #7c3aed); border-radius: 24px; padding: 32px 28px; color: #fff; box-shadow: 0 12px 40px rgba(124,58,237,0.3); }
+        .income-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 24px; text-align: center; }
+        .income-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.15); font-size: 15px; }
+        .income-row:last-of-type { border-bottom: none; }
+        .income-row .label { color: rgba(255,255,255,0.8); }
+        .income-row .value { font-weight: 700; }
+        .income-profit { background: rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; margin-top: 16px; text-align: center; }
+        .income-profit .profit-num { font-size: 32px; font-weight: 800; color: var(--yellow); }
+        .income-profit .profit-label { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+        .income-note { text-align: center; font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 12px; }
+
+        /* BOTTOM CTA */
+        .bottom-cta { padding: 64px 20px; background: linear-gradient(135deg, #4c1d95, #7c3aed, #ec4899); text-align: center; }
+        .bottom-cta h2 { font-size: clamp(24px, 4vw, 36px); font-weight: 800; color: #fff; margin-bottom: 12px; }
+        .bottom-cta p { font-size: 16px; color: rgba(255,255,255,0.8); margin-bottom: 32px; }
+        .bottom-cta-card { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 20px; padding: 28px; max-width: 400px; margin: 0 auto; }
+
+        /* FOOTER */
+        footer { background: #111827; color: #6b7280; padding: 24px 20px; text-align: center; font-size: 13px; }
+        footer .logo { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+
+        /* TRUST BADGES */
+        .trust-strip { background: #fff; padding: 20px; display: flex; justify-content: center; align-items: center; gap: 32px; flex-wrap: wrap; border-top: 1px solid #f3f4f6; border-bottom: 1px solid #f3f4f6; }
+        .trust-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #374151; }
+        .trust-item i { color: var(--purple); font-size: 18px; }
+
+        @media (max-width: 480px) {
+            .stats-strip { gap: 16px; }
+            .cta-card { padding: 24px 20px; }
+        }
+    </style>
+
+    <!-- Facebook Pixel -->
+    <script>
+        (async function() {
+            try {
+                const res = await fetch('/api/facebook-pixel-settings/public');
+                const d = await res.json();
+                if (d.pixel_id) {
+                    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+                    fbq('init', d.pixel_id);
+                    if (d.track_page_view) fbq('track', 'PageView');
+                    window.fbPixelSettings = d;
+                }
+            } catch(e) {}
+            try {
+                await fetch('/api/track-visit', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ page_name: 'join', source: 'ad' })
+                });
+            } catch(e) {}
+        })();
+    </script>
+</head>
+<body>
+
+<nav>
+    <div class="nav-logo"><i class="fas fa-store"></i> EKG Shops</div>
+    <a href="#cta-section" class="nav-cta">สมัครฟรี</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-badge">🔥 เปิดรับสมาชิกใหม่</div>
+        <h1>ขายสินค้าออนไลน์<br/><span class="highlight">ไม่ต้องสต็อก ไม่ต้องแพ็ค</span><br/>รับกำไรทันที</h1>
+        <p class="hero-sub">สมัครสมาชิก EKG Shops ฟรี รับสิทธิ์ซื้อสินค้าราคาส่งทันที<br/>ซื้อใช้เองหรือขายต่อสร้างรายได้ ไม่มีขั้นต่ำ</p>
+
+        <div class="stats-strip">
+            <div class="stat-item">
+                <span class="stat-num">30–50%</span>
+                <span class="stat-label">กำไรต่อชิ้น</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num">฿0</span>
+                <span class="stat-label">ค่าสมัคร</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num">24 ชม.</span>
+                <span class="stat-label">จัดส่งในนามคุณ</span>
+            </div>
+        </div>
+
+        <!-- CTA Card (inline hero) -->
+        <div class="cta-card" id="cta-section">
+            <h2>สมัครสมาชิกฟรี</h2>
+            <p>เริ่มต้นขายได้ทันที ไม่ต้องรออนุมัติ</p>
+
+            <ul class="benefit-list">
+                <li>
+                    <span class="check"><i class="fas fa-check"></i></span>
+                    ราคาส่งตั้งแต่ชิ้นแรก ไม่มีขั้นต่ำ
+                </li>
+                <li>
+                    <span class="check"><i class="fas fa-check"></i></span>
+                    ส่งในนามร้านคุณ ลูกค้าไม่รู้ต้นทาง
+                </li>
+                <li>
+                    <span class="check"><i class="fas fa-check"></i></span>
+                    ยิ่งขายเยอะ ยิ่งได้ราคาถูก อัตโนมัติ
+                </li>
+            </ul>
+
+            <!-- Normal browser -->
+            <div class="normal-section" id="normalSection">
+                <a href="/auth/google" class="google-btn" id="googleBtn">
+                    <svg class="google-logo" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    สมัคร / เข้าสู่ระบบด้วย Google
+                </a>
+                <div class="login-link">มีบัญชีอยู่แล้ว? <a href="/auth/google">เข้าสู่ระบบ</a></div>
+            </div>
+
+            <!-- WebView -->
+            <div class="webview-section" id="webviewSection">
+                <button class="open-browser-btn" id="openBrowserBtn">
+                    🌐 กดที่นี่เพื่อสมัครสมาชิก
+                </button>
+                <div class="manual-hint" id="manualHint" style="display:none">
+                    <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">หากปุ่มด้านบนไม่ทำงาน</div>
+                    <span id="manualSteps"></span>
+                </div>
+                <div class="login-link" style="margin-top:12px">มีบัญชีอยู่แล้ว? <a href="#" id="loginLinkWv">เข้าสู่ระบบ</a></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- TRUST -->
+<div class="trust-strip">
+    <div class="trust-item"><i class="fas fa-shield-alt"></i> ปลอดภัย 100%</div>
+    <div class="trust-item"><i class="fas fa-bolt"></i> เริ่มขายได้ทันที</div>
+    <div class="trust-item"><i class="fas fa-truck"></i> Dropship ครบวงจร</div>
+    <div class="trust-item"><i class="fas fa-headset"></i> ซัพพอร์ตพร้อมดูแล</div>
+</div>
+
+<!-- FEATURES -->
+<section class="section" style="background: #f8f7ff;">
+    <div style="max-width:900px;margin:0 auto;">
+        <h2 class="section-title">ทำไมต้องเลือก EKG Shops?</h2>
+        <p class="section-sub">ครบทุกอย่างที่นักขายออนไลน์ต้องการ</p>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe)"><span>📦</span></div>
+                <h3>ไม่ต้องสต็อกสินค้า</h3>
+                <p>ไม่มีความเสี่ยง ไม่ต้องลงทุนซื้อสินค้ามากักเก็บ ลดต้นทุนได้ 100%</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)"><span>🚚</span></div>
+                <h3>ส่งในนามร้านคุณ</h3>
+                <p>เราแพ็คและส่งให้ โดยไม่มีชื่อเราบนพัสดุ ลูกค้าของคุณไม่รู้ต้นทาง</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#fef3c7,#fde68a)"><span>📈</span></div>
+                <h3>ราคาขั้นบันได</h3>
+                <p>ยิ่งซื้อสะสมเยอะ ยิ่งได้ราคาถูก เลื่อนระดับรับส่วนลดเพิ่มอัตโนมัติ</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0)"><span>📱</span></div>
+                <h3>ระบบจัดการง่าย</h3>
+                <p>แดชบอร์ดสำหรับสมาชิก ดูสินค้า สั่งซื้อ ติดตามสถานะ ผ่านมือถือ</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe)"><span>🎯</span></div>
+                <h3>รูปสินค้าพร้อมขาย</h3>
+                <p>ได้รูปสินค้าคุณภาพสูง พร้อมแคปชั่นสำหรับลง Social Media ทันที</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)"><span>💬</span></div>
+                <h3>แชทกับทีมงานได้เลย</h3>
+                <p>มีระบบแชทในแอป ติดต่อทีมงานได้ตลอดเวลา ไม่ต้องรอนาน</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- STEPS -->
+<section class="steps-section">
+    <div style="max-width:800px;margin:0 auto;">
+        <h2 class="section-title">เริ่มต้นใน 3 ขั้นตอน</h2>
+        <p class="section-sub">ง่าย รวดเร็ว ไม่ซับซ้อน</p>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-num">1</div>
+                <h4>สมัครด้วย Google</h4>
+                <p>กดปุ่มเดียว เข้าสู่ระบบได้ทันที ไม่ต้องรออนุมัติ</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">2</div>
+                <h4>เลือกสินค้าที่ต้องการขาย</h4>
+                <p>ดูสินค้า ราคาส่ง รูปภาพ และรายละเอียดครบถ้วน</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">3</div>
+                <h4>รับกำไรจากส่วนต่าง</h4>
+                <p>สั่งซื้อในนามลูกค้า เราส่งให้ คุณรับกำไร</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- INCOME -->
+<section class="income-section">
+    <div style="max-width:900px;margin:0 auto;">
+        <h2 class="section-title">ตัวอย่างรายได้</h2>
+        <p class="section-sub">กำไรจริงขึ้นอยู่กับสินค้าที่เลือกขาย</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:700px;margin:0 auto;">
+            <div class="income-card">
+                <h3>💰 ตัวอย่างสินค้า A</h3>
+                <div class="income-row">
+                    <span class="label">ราคาขายปลีก</span>
+                    <span class="value">฿590</span>
+                </div>
+                <div class="income-row">
+                    <span class="label">ราคาสมาชิก</span>
+                    <span class="value" style="color:#c4b5fd">฿350</span>
+                </div>
+                <div class="income-profit">
+                    <div class="profit-num">฿240</div>
+                    <div class="profit-label">กำไรต่อชิ้น (~41%)</div>
+                </div>
+                <p class="income-note">*ตัวอย่างเท่านั้น</p>
+            </div>
+            <div class="income-card">
+                <h3>💰 ขายเดือนละ 30 ชิ้น</h3>
+                <div class="income-row">
+                    <span class="label">รายได้รวม</span>
+                    <span class="value">฿17,700</span>
+                </div>
+                <div class="income-row">
+                    <span class="label">ต้นทุนสมาชิก</span>
+                    <span class="value" style="color:#c4b5fd">฿10,500</span>
+                </div>
+                <div class="income-profit">
+                    <div class="profit-num">฿7,200</div>
+                    <div class="profit-label">กำไรต่อเดือน</div>
+                </div>
+                <p class="income-note">*ไม่รวมค่าจัดส่งที่เรียกเก็บจากลูกค้า</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="bottom-cta">
+    <h2>พร้อมเริ่มธุรกิจแล้วหรือยัง?</h2>
+    <p>สมัครฟรีวันนี้ เริ่มขายได้ทันที ไม่มีค่าใช้จ่าย</p>
+    <div class="bottom-cta-card">
+        <!-- Normal browser -->
+        <div class="normal-section" id="normalSection2">
+            <a href="/auth/google" class="google-btn" style="background:#fff;border-color:#e5e7eb;">
+                <svg class="google-logo" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                สมัครฟรี ด้วย Google
+            </a>
+        </div>
+        <!-- WebView -->
+        <div class="webview-section" id="webviewSection2">
+            <button class="open-browser-btn" id="openBrowserBtn2">🌐 กดที่นี่เพื่อสมัครสมาชิก</button>
+        </div>
+        <p style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:14px;">มีบัญชีอยู่แล้ว? <a href="/auth/google" style="color:#c4b5fd">เข้าสู่ระบบ</a></p>
+    </div>
+</section>
+
+<footer>
+    <div class="logo"><i class="fas fa-store"></i> EKG Shops</div>
+    <p>&copy; 2025 EKG Shops. All rights reserved.</p>
+</footer>
+
+<script>
+    const AUTH_URL      = 'https://ekgshops.com/auth/google';
+    const HOST          = 'ekgshops.com';
+    const CHROME_INTENT = 'intent://' + HOST + '/auth/google#Intent;scheme=https;package=com.android.chrome;end';
+    const CHROME_IOS    = 'googlechrome://' + HOST + '/auth/google';
+    const SAFARI_IOS    = 'x-safari-https://' + HOST + '/auth/google';
+
+    function detect() {
+        const ua = navigator.userAgent || '';
+        return {
+            isLINE:      /\bLine\//i.test(ua),
+            isFB:        /FBIAB|FBIOS|FBAV|FBAN|FB_IAB/i.test(ua),
+            isIG:        /\bInstagram\b/i.test(ua),
+            isAndroidWV: /Android/.test(ua) && /\bwv\b/.test(ua),
+            isIOSWV:     /iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua),
+            isAndroid:   /Android/.test(ua),
+            isIOS:       /iPhone|iPad|iPod/.test(ua),
+        };
+    }
+
+    function setupWebView(e, btnId, sectionNormalId, sectionWvId, loginId) {
+        const normalSec  = document.getElementById(sectionNormalId);
+        const wvSec      = document.getElementById(sectionWvId);
+        const openBtn    = document.getElementById(btnId);
+        const loginLink  = loginId ? document.getElementById(loginId) : null;
+        const manualHint = document.getElementById('manualHint');
+        const manualSteps= document.getElementById('manualSteps');
+
+        normalSec.classList.add('hide');
+        wvSec.classList.add('show');
+
+        if (e.isAndroid) {
+            openBtn.onclick = () => window.location.href = CHROME_INTENT;
+            if (loginLink) loginLink.href = CHROME_INTENT;
+            if (manualHint) {
+                manualHint.style.display = 'block';
+                if (e.isLINE) manualSteps.innerHTML = 'กด <strong>เมนู 3 จุด (···)</strong> มุมขวาบน → <strong>"เปิดใน Chrome"</strong>';
+                else if (e.isFB || e.isIG) manualSteps.innerHTML = 'กด <strong>เมนู (⋮)</strong> มุมขวาบน → <strong>"เปิดในเบราว์เซอร์"</strong>';
+                else manualSteps.innerHTML = 'กด <strong>เมนู</strong> มุมขวาบน → <strong>"เปิดใน Chrome"</strong>';
+            }
+        } else if (e.isIOS) {
+            openBtn.onclick = (ev) => { ev.preventDefault(); window.location.href = CHROME_IOS; setTimeout(() => { window.location.href = SAFARI_IOS; }, 1500); };
+            if (loginLink) loginLink.href = CHROME_IOS;
+            if (manualHint) {
+                manualHint.style.display = 'block';
+                manualSteps.innerHTML = e.isLINE ? 'กด <strong>···</strong> มุมขวาบน → <strong>"เปิดใน Safari"</strong>' : 'กด <strong>เมนู</strong> มุมขวาบน → <strong>"เปิดใน Safari"</strong>';
+            }
+        } else {
+            openBtn.href = AUTH_URL;
+            if (loginLink) loginLink.href = AUTH_URL;
+        }
+
+        openBtn.addEventListener('click', () => {
+            if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_lead) {
+                fbq('track', 'Lead', { content_name: 'Reseller Join', content_category: 'Registration' });
+            }
+        });
+    }
+
+    function setup() {
+        const e = detect();
+        const isWebView = e.isLINE || e.isFB || e.isIG || e.isAndroidWV || e.isIOSWV;
+
+        if (!isWebView) {
+            // Normal browser: auto-redirect
+            setTimeout(() => { window.location.href = '/auth/google'; }, 600);
+            return;
+        }
+
+        setupWebView(e, 'openBrowserBtn',  'normalSection',  'webviewSection',  'loginLinkWv');
+        setupWebView(e, 'openBrowserBtn2', 'normalSection2', 'webviewSection2', null);
+    }
+
+    setup();
+</script>
+</body>
+</html>
