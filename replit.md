@@ -47,24 +47,20 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
 - **Deployment:** Gunicorn production server with `gevent` async workers (`--worker-class gevent --workers 2 --worker-connections 1000`). Gevent prevents worker timeouts caused by browser idle keep-alive connections blocking sync workers.
 
-## Planned Integrations
+## Active Integrations
 
-### iShip (ตัวกลางการขนส่ง) - Pending
+### iShip (ตัวกลางการขนส่ง) - ✅ Implemented (Phase 1: Webhook)
 - **Purpose:** Receive shipping status updates via webhook from iShip logistics aggregator
-- **Webhook Endpoint:** `POST /api/webhook/iship`
-- **Payload Fields:** `tracking` (tracking number), `status` (shipped/in_transit/pickup/delivered), `status_desc` (description)
-- **Expected Behavior:**
-  - Match `tracking` to `orders.tracking_number` (or `order_shipments.tracking_number`)
-  - On `delivered` → update order status to 'delivered', send chat notification
-  - On `shipped/in_transit/pickup` → update to 'shipped', send chat notification
-  - Auto-unarchive chat thread and notify reseller via existing `send_order_status_chat()` helper
-- **Integration Notes:**
-  - Use existing `get_db()` (not `get_db_connection()`)
-  - Use existing `send_order_status_chat(reseller_id, order_number, status, extra_info)` for chat notifications
-  - Use existing `send_push_notification()` for push alerts
-  - Tracking number is stored in `order_shipments` table (not directly in `orders`)
-  - May need iShip API key stored as secret `ISHIP_API_KEY`
-  - Webhook should validate request authenticity (e.g., signature or API key header)
+- **Webhook Endpoint:** `POST /api/webhook/iship` (no auth decorator — public but key-verified)
+- **Auth:** Header `X-API-Key: <ISHIP_API_KEY>` or `Authorization: Bearer <ISHIP_API_KEY>`
+- **Secret:** `ISHIP_API_KEY` (stored in Replit Secrets)
+- **Payload Fields:** `tracking` (tracking number), `status` (shipped/in_transit/pickup/delivered/returned/exception/failed), `status_desc` (description)
+- **Status Mapping:**
+  - `delivered` → shipment status=delivered, all-delivered check → order status=delivered, chat notification
+  - `shipped/in_transit/pickup` → shipment status=shipped, order status=shipped (if not already), chat notification
+  - `returned/exception/failed` → chat notification with shipping_issue (no status change)
+- **iShip Dashboard Config:** Set Webhook URL to `https://[production-domain]/api/webhook/iship`
+- **Phase 2 (Pending):** Outbound API — create_order, check-price, printLabel via iShip API
 
 ## External Dependencies
 
