@@ -1373,7 +1373,7 @@ async function loadPromoWallet() {
         autoList.innerHTML = promos.map(p => {
             const condParts = [];
             if (p.condition_min_spend > 0) condParts.push(`ซื้อครบ ฿${Number(p.condition_min_spend).toLocaleString()}`);
-            if (p.condition_min_qty > 0) condParts.push(`จำนวน ${p.condition_min_qty} ชิ้น+`);
+            if (p.condition_min_qty > 0) condParts.push(`จำนวน ${p.condition_min_qty} ชิ้นขึ้นไป`);
             const condText = condParts.join(' & ') || 'ทุกออเดอร์';
             const rewardText = p.reward_type === 'discount_percent' ? `ลด ${p.reward_value}%`
                 : p.reward_type === 'discount_fixed' ? `ลด ฿${Number(p.reward_value).toLocaleString()}`

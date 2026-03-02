@@ -9461,7 +9461,7 @@ function _fmtDiscount(promo) {
 function _fmtCondition(promo) {
     const parts = [];
     if (promo.condition_min_spend > 0) parts.push(`ซื้อครบ ฿${Number(promo.condition_min_spend).toLocaleString()}`);
-    if (promo.condition_min_qty > 0) parts.push(`จำนวน ${promo.condition_min_qty} ชิ้น+`);
+    if (promo.condition_min_qty > 0) parts.push(`จำนวน ${promo.condition_min_qty} ชิ้นขึ้นไป`);
     return parts.join(' & ') || 'ทุกออเดอร์';
 }
 function _fmtCouponDiscount(c) {
@@ -9504,7 +9504,7 @@ async function loadPromotions() {
         const cards = _promoData.map(p => {
             const chips = [];
             if (p.condition_min_spend > 0) chips.push(`<span class="promo-chip chip-condition">ซื้อครบ ฿${Number(p.condition_min_spend).toLocaleString()}</span>`);
-            if (p.condition_min_qty > 0) chips.push(`<span class="promo-chip chip-condition">${p.condition_min_qty} ชิ้น+</span>`);
+            if (p.condition_min_qty > 0) chips.push(`<span class="promo-chip chip-condition">${p.condition_min_qty} ชิ้นขึ้นไป</span>`);
             chips.push(`<span class="promo-chip chip-reward">${_fmtDiscount(p)}</span>`);
             if (p.is_stackable) chips.push(`<span class="promo-chip chip-stackable">+คูปองได้</span>`);
             if (p.target_brand_name) chips.push(`<span class="promo-chip chip-brand">${p.target_brand_name}</span>`);
