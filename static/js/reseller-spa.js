@@ -549,7 +549,8 @@ function openProductModal(product) {
                                 data-option="${opt.name}" data-value="${valStr}"
                                 onclick="selectOption(this, '${opt.name}', '${valStr}')"
                                 ${isOutOfStock ? 'disabled' : ''}>
-                            ${valStr}${isOutOfStock ? ' <span style="font-size:10px;opacity:0.6;">(หมด)</span>' : ''}
+                            <span class="option-btn-label">${valStr}</span>
+                            ${isOutOfStock ? '<span class="option-sold-out-badge">หมด</span>' : ''}
                         </button>
                     `}).join('')}
                 </div>
