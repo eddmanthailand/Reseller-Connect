@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ekg-shops-v16';
+const CACHE_NAME = 'ekg-shops-v17';
 const STATIC_ASSETS = [
   '/static/icons/icon-192x192.png',
   '/static/icons/icon-512x512.png'
@@ -36,6 +36,13 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+
+  // Bypass: ห้าม SW ดักจับ auth redirects และ API calls — ให้ browser จัดการเองทั้งหมด
+  if (url.pathname.startsWith('/api/') ||
+      url.pathname.startsWith('/auth/') ||
+      url.pathname.startsWith('/login')) {
+    return;
+  }
 
   if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js') && !url.pathname.endsWith('.css')) {
     event.respondWith(
