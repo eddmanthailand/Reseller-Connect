@@ -9549,69 +9549,113 @@ async function openPromoModal(id = null) {
 
     const html = `
     <div id="promoModal" class="modal" style="display:flex; z-index:10005;">
-      <div class="modal-content" style="max-width:560px; max-height:90vh; overflow-y:auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h3 style="margin:0; color:white;">${id ? 'แก้ไขโปรโมชัน' : 'สร้างโปรโมชันใหม่'}</h3>
-            <button onclick="closePromoModal()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;">&times;</button>
+      <div class="apple-modal-content">
+
+        <div class="apple-modal-header">
+            <h3 class="apple-modal-title">${id ? 'แก้ไขโปรโมชัน' : 'สร้างโปรโมชันใหม่'}</h3>
+            <button class="apple-modal-close" onclick="closePromoModal()">&times;</button>
         </div>
-        <div class="mkt-form-grid">
-            <div style="grid-column:1/-1">
-                <label class="form-label">ชื่อโปรโมชัน *</label>
-                <input id="pName" class="form-input" value="${promo.name || ''}" placeholder="เช่น ซื้อครบ 1000 ลด 10%">
+
+        <div class="apple-modal-body">
+
+            <div class="apple-section" style="margin-top:16px;">
+                <div class="apple-field">
+                    <label class="apple-field-label">ชื่อโปรโมชัน <span style="color:#ec4899;">*</span></label>
+                    <input id="pName" class="apple-input" value="${promo.name || ''}" placeholder="เช่น ซื้อครบ 1,000 ลด 10%">
+                </div>
             </div>
-            <div>
-                <label class="form-label">ซื้อครบ (บาท)</label>
-                <input id="pMinSpend" class="form-input" type="number" min="0" value="${promo.condition_min_spend || 0}">
+
+            <div class="apple-section">
+                <span class="apple-section-label">เงื่อนไข</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">ซื้อครบ (฿)</label>
+                        <input id="pMinSpend" class="apple-input" type="number" min="0" value="${promo.condition_min_spend || 0}">
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">จำนวนขั้นต่ำ (ชิ้น)</label>
+                        <input id="pMinQty" class="apple-input" type="number" min="0" value="${promo.condition_min_qty || 0}">
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">จำนวนขั้นต่ำ (ชิ้น)</label>
-                <input id="pMinQty" class="form-input" type="number" min="0" value="${promo.condition_min_qty || 0}">
+
+            <div class="apple-section">
+                <span class="apple-section-label">รางวัล</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">ประเภทรางวัล</label>
+                        <select id="pRewardType" class="apple-select" onchange="updatePromoRewardUI()">
+                            <option value="discount_percent" ${promo.reward_type === 'discount_percent' ? 'selected' : ''}>ลดเป็น %</option>
+                            <option value="discount_fixed" ${promo.reward_type === 'discount_fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
+                            <option value="free_item" ${promo.reward_type === 'free_item' ? 'selected' : ''}>ของแถม (GWP)</option>
+                        </select>
+                    </div>
+                    <div id="pRewardValWrap" class="apple-field">
+                        <label class="apple-field-label" id="pRewardValLabel">ส่วนลด (%)</label>
+                        <input id="pRewardVal" class="apple-input" type="number" min="0" value="${promo.reward_value || 0}">
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">ประเภทรางวัล</label>
-                <select id="pRewardType" class="form-select" onchange="updatePromoRewardUI()">
-                    <option value="discount_percent" ${promo.reward_type === 'discount_percent' ? 'selected' : ''}>ลดเป็น %</option>
-                    <option value="discount_fixed" ${promo.reward_type === 'discount_fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
-                    <option value="free_item" ${promo.reward_type === 'free_item' ? 'selected' : ''}>ของแถม (GWP)</option>
-                </select>
+
+            <div class="apple-section">
+                <span class="apple-section-label">เป้าหมาย</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">เฉพาะแบรนด์</label>
+                        <select id="pBrand" class="apple-select">${brandOptions}</select>
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">ระดับสมาชิกขั้นต่ำ</label>
+                        <select id="pTier" class="apple-select">${tierOptions}</select>
+                    </div>
+                </div>
             </div>
-            <div id="pRewardValWrap">
-                <label class="form-label" id="pRewardValLabel">ส่วนลด (%)</label>
-                <input id="pRewardVal" class="form-input" type="number" min="0" value="${promo.reward_value || 0}">
+
+            <div class="apple-section">
+                <span class="apple-section-label">ช่วงเวลา</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">วันเริ่ม</label>
+                        <input id="pStart" class="apple-input" type="datetime-local" value="${promo.start_date ? promo.start_date.substring(0,16) : ''}">
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">วันสิ้นสุด</label>
+                        <input id="pEnd" class="apple-input" type="datetime-local" value="${promo.end_date ? promo.end_date.substring(0,16) : ''}">
+                    </div>
+                </div>
+                <div class="apple-field" style="margin-top:10px;">
+                    <label class="apple-field-label">ลำดับความสำคัญ <span class="apple-field-hint">(ตัวเลขสูง = ใช้ก่อน)</span></label>
+                    <input id="pPriority" class="apple-input" type="number" value="${promo.priority || 0}" min="0">
+                </div>
             </div>
-            <div>
-                <label class="form-label">เฉพาะแบรนด์</label>
-                <select id="pBrand" class="form-select">${brandOptions}</select>
+
+            <div class="apple-section" style="margin-bottom:20px;">
+                <span class="apple-section-label">การตั้งค่า</span>
+                <div class="apple-toggle-card">
+                    <div class="apple-toggle-row">
+                        <div>
+                            <div class="apple-toggle-label">ใช้ร่วมกับคูปองได้</div>
+                            <div class="apple-toggle-desc">ลูกค้าสามารถใช้คูปองซ้อนกับโปรโมชันนี้</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="pStackable" ${promo.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="apple-toggle-row">
+                        <div>
+                            <div class="apple-toggle-label">เปิดใช้งาน</div>
+                            <div class="apple-toggle-desc">โปรโมชันจะแสดงและใช้งานได้ทันที</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="pActive" ${promo.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">ระดับขั้นต่ำ</label>
-                <select id="pTier" class="form-select">${tierOptions}</select>
-            </div>
-            <div>
-                <label class="form-label">วันเริ่ม</label>
-                <input id="pStart" class="form-input" type="datetime-local" value="${promo.start_date ? promo.start_date.substring(0,16) : ''}">
-            </div>
-            <div>
-                <label class="form-label">วันสิ้นสุด</label>
-                <input id="pEnd" class="form-input" type="datetime-local" value="${promo.end_date ? promo.end_date.substring(0,16) : ''}">
-            </div>
-            <div>
-                <label class="form-label">ลำดับความสำคัญ</label>
-                <input id="pPriority" class="form-input" type="number" value="${promo.priority || 0}" min="0">
-            </div>
-            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
-                <label class="toggle-switch"><input type="checkbox" id="pStackable" ${promo.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
-                <span style="color:rgba(255,255,255,0.8); font-size:13px;">ใช้ร่วมคูปองได้</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
-                <label class="toggle-switch"><input type="checkbox" id="pActive" ${promo.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
-                <span style="color:rgba(255,255,255,0.8); font-size:13px;">เปิดใช้งาน</span>
-            </div>
+
         </div>
-        <div style="display:flex; gap:8px; margin-top:20px;">
-            <button class="btn btn-primary" onclick="savePromotion()" style="flex:1;">บันทึก</button>
-            <button onclick="closePromoModal()" style="flex:1; background:rgba(255,255,255,0.1); border:none; color:white; padding:12px; border-radius:8px; cursor:pointer;">ยกเลิก</button>
+
+        <div class="apple-modal-footer">
+            <button class="apple-btn-cancel" onclick="closePromoModal()">ยกเลิก</button>
+            <button class="apple-btn-save" onclick="savePromotion()">บันทึก</button>
         </div>
+
       </div>
     </div>`;
 
@@ -9765,73 +9809,120 @@ async function openCouponModal(id = null) {
 
     const html = `
     <div id="couponModal" class="modal" style="display:flex; z-index:10005;">
-      <div class="modal-content" style="max-width:540px; max-height:90vh; overflow-y:auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h3 style="margin:0; color:white;">${id ? 'แก้ไขคูปอง' : 'สร้างคูปองใหม่'}</h3>
-            <button onclick="closeCouponModal()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;">&times;</button>
+      <div class="apple-modal-content">
+
+        <div class="apple-modal-header">
+            <h3 class="apple-modal-title">${id ? 'แก้ไขคูปอง' : 'สร้างคูปองใหม่'}</h3>
+            <button class="apple-modal-close" onclick="closeCouponModal()">&times;</button>
         </div>
-        <div class="mkt-form-grid">
-            <div>
-                <label class="form-label">รหัสคูปอง * <span style="font-size:11px;color:rgba(255,255,255,0.4)">(ตัวพิมพ์ใหญ่)</span></label>
-                <input id="cCode" class="form-input" value="${c.code || ''}" placeholder="SALE20" style="font-family:monospace;text-transform:uppercase;" ${id ? 'readonly' : ''}>
+
+        <div class="apple-modal-body">
+
+            <div class="apple-section" style="margin-top:16px;">
+                <span class="apple-section-label">รหัส & ชื่อ</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">รหัสคูปอง <span style="color:#ec4899;">*</span></label>
+                        <input id="cCode" class="apple-input apple-input-code" value="${c.code || ''}" placeholder="SALE20" ${id ? 'readonly' : ''}>
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">ชื่อคูปอง</label>
+                        <input id="cName" class="apple-input" value="${c.name || ''}" placeholder="ลด 20% สำหรับสมาชิก">
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">ชื่อคูปอง</label>
-                <input id="cName" class="form-input" value="${c.name || ''}" placeholder="ลด 20% สำหรับสมาชิก">
+
+            <div class="apple-section">
+                <span class="apple-section-label">ส่วนลด</span>
+                <div class="apple-row-2" style="margin-bottom:10px;">
+                    <div class="apple-field">
+                        <label class="apple-field-label">ประเภท</label>
+                        <select id="cType" class="apple-select" onchange="updateCouponUI()">
+                            <option value="percent" ${c.discount_type === 'percent' ? 'selected' : ''}>ลดเป็น %</option>
+                            <option value="fixed" ${c.discount_type === 'fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
+                            <option value="free_shipping" ${c.discount_type === 'free_shipping' ? 'selected' : ''}>ส่งฟรี</option>
+                        </select>
+                    </div>
+                    <div id="cValWrap" class="apple-field">
+                        <label class="apple-field-label" id="cValLabel">มูลค่าส่วนลด</label>
+                        <input id="cVal" class="apple-input" type="number" min="0" value="${c.discount_value || 0}">
+                    </div>
+                </div>
+                <div id="cMaxWrap" class="apple-field">
+                    <label class="apple-field-label">ลดสูงสุด (฿) <span class="apple-field-hint">0 = ไม่จำกัด</span></label>
+                    <input id="cMax" class="apple-input" type="number" min="0" value="${c.max_discount || 0}">
+                </div>
             </div>
-            <div>
-                <label class="form-label">ประเภทส่วนลด</label>
-                <select id="cType" class="form-select" onchange="updateCouponUI()">
-                    <option value="percent" ${c.discount_type === 'percent' ? 'selected' : ''}>ลดเป็น %</option>
-                    <option value="fixed" ${c.discount_type === 'fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
-                    <option value="free_shipping" ${c.discount_type === 'free_shipping' ? 'selected' : ''}>ส่งฟรี</option>
-                </select>
+
+            <div class="apple-section">
+                <span class="apple-section-label">เงื่อนไข</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">ซื้อขั้นต่ำ (฿)</label>
+                        <input id="cMinSpend" class="apple-input" type="number" min="0" value="${c.min_spend || 0}">
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">ระดับสมาชิกขั้นต่ำ</label>
+                        <select id="cTier" class="apple-select">${tierOptions}</select>
+                    </div>
+                </div>
             </div>
-            <div id="cValWrap">
-                <label class="form-label" id="cValLabel">ส่วนลด</label>
-                <input id="cVal" class="form-input" type="number" min="0" value="${c.discount_value || 0}">
+
+            <div class="apple-section">
+                <span class="apple-section-label">ขีดจำกัดการใช้งาน</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">จำนวนสิทธิ์ทั้งหมด <span class="apple-field-hint">0 = ไม่จำกัด</span></label>
+                        <input id="cQuota" class="apple-input" type="number" min="0" value="${c.total_quota || 0}">
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">จำกัดต่อสมาชิก (ครั้ง)</label>
+                        <input id="cPerUser" class="apple-input" type="number" min="1" value="${c.per_user_limit || 1}">
+                    </div>
+                </div>
             </div>
-            <div id="cMaxWrap">
-                <label class="form-label">ลดสูงสุด (฿) <span style="font-size:11px;color:rgba(255,255,255,0.4)">0 = ไม่จำกัด</span></label>
-                <input id="cMax" class="form-input" type="number" min="0" value="${c.max_discount || 0}">
+
+            <div class="apple-section">
+                <span class="apple-section-label">ช่วงเวลา</span>
+                <div class="apple-row-2">
+                    <div class="apple-field">
+                        <label class="apple-field-label">วันเริ่ม</label>
+                        <input id="cStart" class="apple-input" type="datetime-local" value="${c.start_date ? c.start_date.substring(0,16) : ''}">
+                    </div>
+                    <div class="apple-field">
+                        <label class="apple-field-label">วันสิ้นสุด</label>
+                        <input id="cEnd" class="apple-input" type="datetime-local" value="${c.end_date ? c.end_date.substring(0,16) : ''}">
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">ซื้อขั้นต่ำ (฿)</label>
-                <input id="cMinSpend" class="form-input" type="number" min="0" value="${c.min_spend || 0}">
+
+            <div class="apple-section" style="margin-bottom:20px;">
+                <span class="apple-section-label">การตั้งค่า</span>
+                <div class="apple-toggle-card">
+                    <div class="apple-toggle-row">
+                        <div>
+                            <div class="apple-toggle-label">ใช้ร่วมกับโปรโมชันได้</div>
+                            <div class="apple-toggle-desc">ใช้คูปองนี้ซ้อนกับโปรโมชันอัตโนมัติได้</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="cStackable" ${c.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="apple-toggle-row">
+                        <div>
+                            <div class="apple-toggle-label">เปิดใช้งาน</div>
+                            <div class="apple-toggle-desc">คูปองจะสามารถนำไปใช้ได้ทันที</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="cActive" ${c.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="form-label">จำนวนสิทธิ์ทั้งหมด <span style="font-size:11px;color:rgba(255,255,255,0.4)">0 = ไม่จำกัด</span></label>
-                <input id="cQuota" class="form-input" type="number" min="0" value="${c.total_quota || 0}">
-            </div>
-            <div>
-                <label class="form-label">จำกัดต่อสมาชิก</label>
-                <input id="cPerUser" class="form-input" type="number" min="1" value="${c.per_user_limit || 1}">
-            </div>
-            <div>
-                <label class="form-label">ระดับขั้นต่ำ</label>
-                <select id="cTier" class="form-select">${tierOptions}</select>
-            </div>
-            <div>
-                <label class="form-label">วันเริ่ม</label>
-                <input id="cStart" class="form-input" type="datetime-local" value="${c.start_date ? c.start_date.substring(0,16) : ''}">
-            </div>
-            <div>
-                <label class="form-label">วันสิ้นสุด</label>
-                <input id="cEnd" class="form-input" type="datetime-local" value="${c.end_date ? c.end_date.substring(0,16) : ''}">
-            </div>
-            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
-                <label class="toggle-switch"><input type="checkbox" id="cStackable" ${c.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
-                <span style="color:rgba(255,255,255,0.8); font-size:13px;">ใช้ร่วมโปรโมชันได้</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
-                <label class="toggle-switch"><input type="checkbox" id="cActive" ${c.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
-                <span style="color:rgba(255,255,255,0.8); font-size:13px;">เปิดใช้งาน</span>
-            </div>
+
         </div>
-        <div style="display:flex; gap:8px; margin-top:20px;">
-            <button class="btn btn-primary" onclick="saveCoupon()" style="flex:1;">บันทึก</button>
-            <button onclick="closeCouponModal()" style="flex:1; background:rgba(255,255,255,0.1); border:none; color:white; padding:12px; border-radius:8px; cursor:pointer;">ยกเลิก</button>
+
+        <div class="apple-modal-footer">
+            <button class="apple-btn-cancel" onclick="closeCouponModal()">ยกเลิก</button>
+            <button class="apple-btn-save" onclick="saveCoupon()">บันทึก</button>
         </div>
+
       </div>
     </div>`;
 

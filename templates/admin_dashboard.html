@@ -188,6 +188,93 @@
         .coupon-ticket-meta { font-size: 11px; color: rgba(255,255,255,0.35); }
         .coupon-ticket-actions { display: flex; gap: 6px; align-items: center; }
         @media (max-width: 600px) { .coupon-ticket-left { width: 90px; } .coupon-ticket-code { font-size: 11px; } }
+        /* ── Apple Style Modal ── */
+        .apple-modal-content {
+            max-width: 520px; width: 100%; border-radius: 20px;
+            background: linear-gradient(160deg, #1c1535 0%, #130f24 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+            max-height: 92vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .apple-modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 24px 18px; border-bottom: 1px solid rgba(255,255,255,0.07); flex-shrink: 0;
+        }
+        .apple-modal-title { font-size: 18px; font-weight: 700; color: #fff; margin: 0; letter-spacing: -0.3px; }
+        .apple-modal-close {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.7);
+            font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s; line-height: 1;
+        }
+        .apple-modal-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
+        .apple-modal-body { padding: 8px 24px 0; overflow-y: auto; flex: 1; }
+        .apple-modal-footer {
+            padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.07);
+            display: flex; gap: 10px; flex-shrink: 0;
+        }
+        /* Section header */
+        .apple-section { margin-top: 20px; margin-bottom: 2px; }
+        .apple-section:first-child { margin-top: 16px; }
+        .apple-section-label {
+            font-size: 10px; font-weight: 600; letter-spacing: 0.9px; text-transform: uppercase;
+            color: rgba(255,255,255,0.35); margin-bottom: 10px; display: block;
+        }
+        /* Fields */
+        .apple-field { display: flex; flex-direction: column; gap: 5px; }
+        .apple-field-label { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 500; }
+        .apple-field-hint { font-size: 10px; color: rgba(255,255,255,0.3); margin-left: 4px; }
+        .apple-input, .apple-select {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 10px 14px; color: #fff; font-size: 14px;
+            width: 100%; box-sizing: border-box; outline: none;
+            font-family: 'Inter', sans-serif; transition: border-color 0.15s, background 0.15s;
+            -webkit-appearance: none; appearance: none;
+        }
+        .apple-input:focus, .apple-select:focus {
+            border-color: rgba(168,85,247,0.5); background: rgba(168,85,247,0.05);
+        }
+        .apple-input::placeholder { color: rgba(255,255,255,0.2); }
+        .apple-input[readonly] { opacity: 0.6; cursor: default; }
+        .apple-input-code {
+            font-family: 'Courier New', monospace; font-size: 16px; font-weight: 700;
+            letter-spacing: 1.5px; text-transform: uppercase;
+        }
+        .apple-select option { background: #1c1535; color: #fff; }
+        .apple-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media (max-width: 480px) { .apple-row-2 { grid-template-columns: 1fr; } }
+        /* Toggle rows in settings card */
+        .apple-toggle-card {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 14px; overflow: hidden;
+        }
+        .apple-toggle-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 13px 16px; transition: background 0.15s;
+        }
+        .apple-toggle-row:hover { background: rgba(255,255,255,0.04); }
+        .apple-toggle-row + .apple-toggle-row { border-top: 1px solid rgba(255,255,255,0.06); }
+        .apple-toggle-label { font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500; }
+        .apple-toggle-desc { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+        /* Footer buttons */
+        .apple-btn-save {
+            flex: 1; padding: 13px; background: linear-gradient(135deg, #a855f7, #ec4899);
+            border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: opacity 0.15s; letter-spacing: -0.2px;
+        }
+        .apple-btn-save:hover { opacity: 0.9; }
+        .apple-btn-cancel {
+            flex: 1; padding: 13px; background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: rgba(255,255,255,0.7);
+            font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+        }
+        .apple-btn-cancel:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        @media (max-width: 768px) {
+            .apple-modal-content { border-radius: 24px 24px 0 0; max-width: 100%; }
+            .apple-modal-header { padding: 16px 20px 14px; }
+            .apple-modal-body { padding: 8px 20px 0; }
+            .apple-modal-footer { padding: 12px 20px; }
+        }
         /* FAB Button */
         .mkt-fab { position: fixed; bottom: 32px; right: 32px; background: linear-gradient(135deg, #a855f7, #ec4899); color: white; border: none; border-radius: 28px; padding: 14px 22px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 8px 32px rgba(168,85,247,0.45); display: flex; align-items: center; gap: 8px; z-index: 800; transition: all 0.2s; }
         .mkt-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(168,85,247,0.55); }
