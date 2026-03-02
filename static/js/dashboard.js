@@ -3372,7 +3372,7 @@ async function loadFacebookAdsPage() {
     // Set Landing Page URL - use custom domain
     const urlInput = document.getElementById('fbLandingUrl');
     if (urlInput) {
-        urlInput.value = 'https://ekgshops.com/become-reseller';
+        urlInput.value = 'https://ekgshops.com/join';
     }
     
     // Load Pixel settings
