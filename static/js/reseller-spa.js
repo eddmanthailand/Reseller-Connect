@@ -1067,6 +1067,7 @@ async function loadCheckout() {
         const cartData = await cartRes.json();
         checkoutData.items = cartData.items || [];
         checkoutData.total = cartData.total || 0;
+        _appliedCoupon = null;
         
         if (checkoutData.items.length === 0) {
             window.location.hash = 'cart';
@@ -1236,6 +1237,152 @@ async function calculateShippingCost() {
         totalEl.textContent = `฿${checkoutData.total.toLocaleString()}`;
         checkoutData.shippingCost = 0;
         loadPromptPayQR();
+    }
+}
+
+let _appliedCoupon = null;
+
+async function applyCouponCode() {
+    const code = (document.getElementById('couponCodeInput').value || '').trim().toUpperCase();
+    if (!code) { showCouponMsg('กรุณากรอกรหัสคูปอง', '#ef4444'); return; }
+    showCouponMsg('กำลังตรวจสอบ...', 'rgba(255,255,255,0.5)');
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/reseller/cart/preview-discount`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total })
+        });
+        const data = await res.json();
+        if (!res.ok) { showCouponMsg(data.error || 'คูปองไม่ถูกต้อง', '#ef4444'); return; }
+        if (data.coupon_error) { showCouponMsg(data.coupon_error, '#ef4444'); return; }
+        if (!data.coupon) { showCouponMsg('คูปองไม่ถูกต้องหรือหมดอายุแล้ว', '#ef4444'); return; }
+        _appliedCoupon = { code, data };
+        document.getElementById('removeCouponBtn').style.display = 'inline-block';
+        document.getElementById('couponCodeInput').disabled = true;
+        updateSummaryWithDiscount(data);
+        showCouponMsg(`✓ ประหยัด ฿${Number(data.coupon.discount).toLocaleString()}`, '#4ade80');
+    } catch (e) {
+        showCouponMsg('เกิดข้อผิดพลาด กรุณาลองใหม่', '#ef4444');
+    }
+}
+
+function removeCoupon() {
+    _appliedCoupon = null;
+    document.getElementById('couponCodeInput').value = '';
+    document.getElementById('couponCodeInput').disabled = false;
+    document.getElementById('removeCouponBtn').style.display = 'none';
+    document.getElementById('autoPromoRow').style.display = 'none';
+    document.getElementById('couponDiscountRow').style.display = 'none';
+    document.getElementById('couponMessage').textContent = '';
+    const sub = checkoutData.total || 0;
+    const ship = checkoutData.shippingCost || 0;
+    document.getElementById('summaryTotal').textContent = `฿${(sub + ship).toLocaleString()}`;
+}
+
+function showCouponMsg(msg, color) {
+    const el = document.getElementById('couponMessage');
+    if (el) { el.textContent = msg; el.style.color = color; }
+}
+
+function updateSummaryWithDiscount(data) {
+    const ship = checkoutData.shippingCost || 0;
+    const autoRow = document.getElementById('autoPromoRow');
+    const couponRow = document.getElementById('couponDiscountRow');
+    const promo = data.promotion;
+    const coupon = data.coupon;
+    if (promo && promo.discount > 0) {
+        document.getElementById('autoPromoName').textContent = promo.name || 'โปรโมชัน';
+        document.getElementById('autoPromoSaved').textContent = `-฿${Number(promo.discount).toLocaleString()}`;
+        autoRow.style.display = 'flex';
+    } else {
+        autoRow.style.display = 'none';
+    }
+    if (coupon && coupon.discount > 0) {
+        document.getElementById('couponDiscountName').textContent = `คูปอง ${coupon.code || ''}`;
+        document.getElementById('couponDiscountSaved').textContent = `-฿${Number(coupon.discount).toLocaleString()}`;
+        couponRow.style.display = 'flex';
+    } else {
+        couponRow.style.display = 'none';
+    }
+    const finalAmt = data.final_total !== undefined ? data.final_total : (checkoutData.total || 0);
+    document.getElementById('summaryTotal').textContent = `฿${(finalAmt + ship).toLocaleString()}`;
+}
+
+async function openCouponWalletPicker() {
+    const modal = document.getElementById('couponWalletModal');
+    const list = document.getElementById('couponWalletList');
+    modal.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);padding:24px;">กำลังโหลด...</div>';
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/reseller/coupons/wallet`);
+        const coupons = await res.json();
+        if (!Array.isArray(coupons) || !coupons.length) {
+            list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);padding:24px;">ไม่มีคูปองในกระเป๋า</div>';
+            return;
+        }
+        list.innerHTML = coupons.map(c => {
+            const expires = c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : 'ไม่มีกำหนด';
+            const isReady = c.status === 'ready';
+            const statusLabel = c.status === 'used' ? 'ใช้แล้ว' : c.status === 'expired' ? 'หมดอายุ' : '';
+            const desc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%${c.max_discount > 0 ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})` : ''}` :
+                         c.discount_type === 'fixed' ? `ลด ฿${Number(c.discount_value).toLocaleString()}` :
+                         c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : c.discount_type;
+            return `<div style="background:rgba(255,255,255,0.07);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.5;' : ''}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <div style="font-weight:700;color:#f59e0b;font-size:15px;letter-spacing:1px;">${c.code}</div>
+                        <div style="color:white;font-size:13px;margin-top:2px;">${c.name || desc}</div>
+                        <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
+                        <div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
+                    </div>
+                    ${isReady ? `<button onclick="selectWalletCoupon('${c.code}')" style="background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;">เลือก</button>` : `<span style="color:#ef4444;font-size:12px;">${statusLabel}</span>`}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        list.innerHTML = '<div style="text-align:center;color:#ef4444;padding:24px;">โหลดไม่สำเร็จ</div>';
+    }
+}
+
+async function selectWalletCoupon(code) {
+    document.getElementById('couponWalletModal').style.display = 'none';
+    document.getElementById('couponCodeInput').value = code;
+    await applyCouponCode();
+}
+
+async function loadProfileCouponWallet() {
+    const container = document.getElementById('profileCouponWallet');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:16px 0;">กำลังโหลด...</div>';
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/reseller/coupons/wallet`);
+        const coupons = await res.json();
+        if (!Array.isArray(coupons) || !coupons.length) {
+            container.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:16px 0;">ยังไม่มีคูปอง</div>';
+            return;
+        }
+        container.innerHTML = coupons.map(c => {
+            const expires = c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : 'ไม่มีกำหนด';
+            const isReady = c.status === 'ready';
+            const statusColor = isReady ? '#4ade80' : '#ef4444';
+            const statusLabel = c.status === 'ready' ? 'พร้อมใช้' : c.status === 'used' ? `ใช้แล้ว${c.used_in_order_number ? ' ('+c.used_in_order_number+')' : ''}` : 'หมดอายุ';
+            const desc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%${c.max_discount > 0 ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})` : ''}` :
+                         c.discount_type === 'fixed' ? `ลด ฿${Number(c.discount_value).toLocaleString()}` :
+                         c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : c.discount_type;
+            return `<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.55;' : ''}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;color:#f59e0b;font-size:14px;letter-spacing:1px;">${c.code}</div>
+                        <div style="color:white;font-size:13px;margin-top:3px;">${c.name || desc}</div>
+                        <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
+                        <div style="color:rgba(255,255,255,0.35);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
+                    </div>
+                    <span style="font-size:11px;font-weight:600;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center;color:#ef4444;padding:16px 0;">โหลดไม่สำเร็จ</div>';
     }
 }
 
@@ -1608,15 +1755,17 @@ async function placeOrder() {
         document.getElementById('btnPlaceOrder').disabled = true;
         document.getElementById('btnPlaceOrder').innerHTML = '<span>กำลังสร้างคำสั่งซื้อ...</span>';
         
+        const orderPayload = {
+            payment_method: paymentMethod,
+            notes: notes,
+            shipping_fee: checkoutData.shippingCost || 0,
+            ...shippingData
+        };
+        if (_appliedCoupon) orderPayload.coupon_code = _appliedCoupon.code;
         const response = await fetch(`${RESELLER_API_URL}/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                payment_method: paymentMethod,
-                notes: notes,
-                shipping_fee: checkoutData.shippingCost || 0,
-                ...shippingData
-            })
+            body: JSON.stringify(orderPayload)
         });
         
         const result = await response.json();
@@ -2350,6 +2499,7 @@ async function loadProfile() {
         if (profile.province) {
             await setProfileAddressFromText(profile.province, profile.district, profile.subdistrict, profile.postal_code);
         }
+        loadProfileCouponWallet();
     } catch (error) {
         console.error('Error loading profile:', error);
     }

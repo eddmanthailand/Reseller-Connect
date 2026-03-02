@@ -2679,6 +2679,24 @@
                                     <span id="shippingPromoName"></span>
                                     <span id="shippingPromoSaved"></span>
                                 </div>
+                                <div id="autoPromoRow" style="display:none;justify-content:space-between;padding:6px 0;font-size:13px;color:#4ade80;">
+                                    <span id="autoPromoName">โปรโมชัน</span>
+                                    <span id="autoPromoSaved" style="font-weight:600;"></span>
+                                </div>
+                                <div id="couponDiscountRow" style="display:none;justify-content:space-between;padding:6px 0;font-size:13px;color:#f59e0b;">
+                                    <span id="couponDiscountName">คูปอง</span>
+                                    <span id="couponDiscountSaved" style="font-weight:600;"></span>
+                                </div>
+                                <!-- Coupon Input -->
+                                <div style="margin:10px 0;">
+                                    <div style="display:flex;gap:6px;">
+                                        <input id="couponCodeInput" type="text" placeholder="รหัสคูปอง" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 12px;color:white;font-size:13px;outline:none;" oninput="this.value=this.value.toUpperCase()">
+                                        <button onclick="applyCouponCode()" style="background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;">ใช้</button>
+                                        <button onclick="removeCoupon()" id="removeCouponBtn" style="display:none;background:rgba(239,68,68,0.2);border:none;color:#ef4444;padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;">✕</button>
+                                    </div>
+                                    <div id="couponMessage" style="font-size:12px;margin-top:4px;"></div>
+                                    <button onclick="openCouponWalletPicker()" style="background:none;border:none;color:rgba(168,85,247,0.9);font-size:12px;cursor:pointer;padding:4px 0;text-decoration:underline;">เลือกจากกระเป๋าคูปอง</button>
+                                </div>
                                 <div class="summary-divider" style="border-top:1px solid rgba(255,255,255,0.15);margin:10px 0;"></div>
                                 <div class="summary-row total" style="display:flex;justify-content:space-between;padding:6px 0;font-size:16px;font-weight:700;">
                                     <span>ยอดรวมทั้งหมด</span>
@@ -2916,6 +2934,20 @@
                             บันทึกข้อมูล
                         </button>
                     </form>
+
+                    <!-- Coupon Wallet Section -->
+                    <div style="margin-top:32px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                            <h3 class="section-title" style="margin:0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;margin-right:8px;vertical-align:middle;"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                                กระเป๋าคูปอง
+                            </h3>
+                            <button onclick="loadProfileCouponWallet()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:12px;cursor:pointer;">รีเฟรช</button>
+                        </div>
+                        <div id="profileCouponWallet" style="display:flex;flex-direction:column;gap:10px;">
+                            <div style="text-align:center;color:rgba(255,255,255,0.4);padding:16px 0;">กำลังโหลด...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -3216,6 +3248,19 @@
     <!-- Bottom Tab Bar for Mobile -->
     <div class="bottom-tab-bar" id="bottomTabBar">
         <div class="bottom-tab-bar-inner">
+            <!-- Coupon Wallet Picker Modal -->
+            <div id="couponWalletModal" style="display:none;position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);">
+                <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#1e1b4b 0%,#2d1b69 100%);border-radius:20px 20px 0 0;max-height:80vh;overflow-y:auto;padding:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <h3 style="color:white;font-size:16px;font-weight:600;margin:0;">กระเป๋าคูปอง</h3>
+                        <button onclick="document.getElementById('couponWalletModal').style.display='none'" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;opacity:0.7;">✕</button>
+                    </div>
+                    <div id="couponWalletList" style="display:flex;flex-direction:column;gap:10px;padding-bottom:16px;">
+                        <div style="text-align:center;color:rgba(255,255,255,0.5);padding:24px;">กำลังโหลด...</div>
+                    </div>
+                </div>
+            </div>
+
             <a href="#catalog" class="bottom-tab-item active" data-page="catalog">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M6 2 3 7v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-3-5H6z"/><line x1="3" y1="7" x2="21" y2="7"/><path d="M16 11a4 4 0 0 1-8 0"/>

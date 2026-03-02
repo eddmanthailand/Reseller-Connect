@@ -154,7 +154,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName, queryString] = fullHash.split('?');
-        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings'];
+        const validPages = ['home', 'users', 'applications', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings', 'promotions', 'coupons'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
             // Auto-open order detail if order_id param is present
@@ -581,6 +581,10 @@ function switchPage(pageName) {
         loadChatThreadsAndAutoSelect();
         loadChatUnreadCount();
         startChatPolling();
+    } else if (pageName === 'promotions') {
+        loadPromotions();
+    } else if (pageName === 'coupons') {
+        loadCoupons();
     }
 }
 
@@ -9419,3 +9423,468 @@ async function confirmFailedDelivery() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
+
+// ==================== MARKETING MODULE ====================
+
+let _promoData = [], _couponData = [];
+let _mktTiers = [], _mktBrands = [], _mktCategories = [];
+let _editingPromoId = null, _editingCouponId = null;
+
+async function _mktLoadMeta() {
+    if (_mktTiers.length) return;
+    const [t, b, c] = await Promise.all([
+        fetch('/api/reseller-tiers').then(r => r.json()).catch(() => []),
+        fetch('/api/brands').then(r => r.json()).catch(() => []),
+        fetch('/api/categories').then(r => r.json()).catch(() => [])
+    ]);
+    _mktTiers = Array.isArray(t) ? t : [];
+    _mktBrands = Array.isArray(b) ? b : [];
+    _mktCategories = Array.isArray(c) ? c : [];
+}
+
+function _fmtDiscount(promo) {
+    if (promo.reward_type === 'discount_percent') return `ลด ${promo.reward_value}%`;
+    if (promo.reward_type === 'discount_fixed') return `ลด ฿${Number(promo.reward_value).toLocaleString()}`;
+    if (promo.reward_type === 'free_item') return `ของแถม ${promo.reward_qty || 1} ชิ้น`;
+    return promo.reward_type;
+}
+function _fmtCondition(promo) {
+    const parts = [];
+    if (promo.condition_min_spend > 0) parts.push(`ซื้อครบ ฿${Number(promo.condition_min_spend).toLocaleString()}`);
+    if (promo.condition_min_qty > 0) parts.push(`จำนวน ${promo.condition_min_qty} ชิ้น+`);
+    return parts.join(' & ') || 'ทุกออเดอร์';
+}
+function _fmtCouponDiscount(c) {
+    if (c.discount_type === 'percent') {
+        let s = `ลด ${c.discount_value}%`;
+        if (c.max_discount > 0) s += ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})`;
+        return s;
+    }
+    if (c.discount_type === 'fixed') return `ลด ฿${Number(c.discount_value).toLocaleString()}`;
+    if (c.discount_type === 'free_shipping') return 'ส่งฟรี';
+    return c.discount_type;
+}
+
+// ── Promotions ──────────────────────────────────────────────────
+
+async function loadPromotions() {
+    try {
+        const data = await fetch('/api/admin/promotions').then(r => r.json());
+        _promoData = Array.isArray(data) ? data : [];
+        const active = _promoData.filter(p => p.is_active).length;
+        document.getElementById('promoStats').innerHTML = `
+            <div class="stat-mini"><div class="val">${_promoData.length}</div><div class="lbl">ทั้งหมด</div></div>
+            <div class="stat-mini"><div class="val" style="color:#22c55e">${active}</div><div class="lbl">เปิดอยู่</div></div>
+            <div class="stat-mini"><div class="val" style="color:#9ca3af">${_promoData.length - active}</div><div class="lbl">ปิดอยู่</div></div>
+        `;
+        if (!_promoData.length) {
+            document.getElementById('promoTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีโปรโมชัน — กดปุ่ม "+ สร้างโปรโมชัน" เพื่อเริ่มต้น</p></div>`;
+            return;
+        }
+        let rows = _promoData.map(p => `
+            <tr>
+                <td><strong>${p.name}</strong><br><span style="color:rgba(255,255,255,0.4);font-size:11px">${p.target_brand_name ? '📦 '+p.target_brand_name : ''}${p.min_tier_name ? ' · '+p.min_tier_name+'+' : ''}</span></td>
+                <td>${_fmtCondition(p)}</td>
+                <td><strong>${_fmtDiscount(p)}</strong></td>
+                <td>${p.is_stackable ? '<span class="badge-stackable">+คูปองได้</span>' : '<span style="color:rgba(255,255,255,0.3);font-size:11px">เดี่ยว</span>'}</td>
+                <td>${p.end_date ? new Date(p.end_date).toLocaleDateString('th-TH') : '—'}</td>
+                <td>
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="togglePromotion(${p.id}, this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+                <td>
+                    <button class="action-btn btn-review" onclick="openPromoModal(${p.id})">แก้ไข</button>
+                    <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;margin-left:4px" onclick="deletePromotion(${p.id})">ลบ</button>
+                </td>
+            </tr>
+        `).join('');
+        document.getElementById('promoTableWrap').innerHTML = `
+            <table class="mkt-table">
+                <thead><tr>
+                    <th>ชื่อโปรโมชัน</th><th>เงื่อนไข</th><th>รางวัล</th><th>ซ้อนคูปอง</th><th>สิ้นสุด</th><th>สถานะ</th><th>จัดการ</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch (e) {
+        document.getElementById('promoTableWrap').innerHTML = `<div class="empty-state"><p>เกิดข้อผิดพลาด</p></div>`;
+    }
+}
+
+async function openPromoModal(id = null) {
+    _editingPromoId = id;
+    await _mktLoadMeta();
+
+    const tierOptions = `<option value="">ทุกระดับ</option>` + _mktTiers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const brandOptions = `<option value="">ทุกแบรนด์</option>` + _mktBrands.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+
+    let promo = {};
+    if (id) {
+        promo = _promoData.find(p => p.id === id) || {};
+    }
+
+    const html = `
+    <div id="promoModal" class="modal" style="display:flex; z-index:10005;">
+      <div class="modal-content" style="max-width:560px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; color:white;">${id ? 'แก้ไขโปรโมชัน' : 'สร้างโปรโมชันใหม่'}</h3>
+            <button onclick="closePromoModal()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;">&times;</button>
+        </div>
+        <div class="mkt-form-grid">
+            <div style="grid-column:1/-1">
+                <label class="form-label">ชื่อโปรโมชัน *</label>
+                <input id="pName" class="form-input" value="${promo.name || ''}" placeholder="เช่น ซื้อครบ 1000 ลด 10%">
+            </div>
+            <div>
+                <label class="form-label">ซื้อครบ (บาท)</label>
+                <input id="pMinSpend" class="form-input" type="number" min="0" value="${promo.condition_min_spend || 0}">
+            </div>
+            <div>
+                <label class="form-label">จำนวนขั้นต่ำ (ชิ้น)</label>
+                <input id="pMinQty" class="form-input" type="number" min="0" value="${promo.condition_min_qty || 0}">
+            </div>
+            <div>
+                <label class="form-label">ประเภทรางวัล</label>
+                <select id="pRewardType" class="form-select" onchange="updatePromoRewardUI()">
+                    <option value="discount_percent" ${promo.reward_type === 'discount_percent' ? 'selected' : ''}>ลดเป็น %</option>
+                    <option value="discount_fixed" ${promo.reward_type === 'discount_fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
+                    <option value="free_item" ${promo.reward_type === 'free_item' ? 'selected' : ''}>ของแถม (GWP)</option>
+                </select>
+            </div>
+            <div id="pRewardValWrap">
+                <label class="form-label" id="pRewardValLabel">ส่วนลด (%)</label>
+                <input id="pRewardVal" class="form-input" type="number" min="0" value="${promo.reward_value || 0}">
+            </div>
+            <div>
+                <label class="form-label">เฉพาะแบรนด์</label>
+                <select id="pBrand" class="form-select">${brandOptions}</select>
+            </div>
+            <div>
+                <label class="form-label">ระดับขั้นต่ำ</label>
+                <select id="pTier" class="form-select">${tierOptions}</select>
+            </div>
+            <div>
+                <label class="form-label">วันเริ่ม</label>
+                <input id="pStart" class="form-input" type="datetime-local" value="${promo.start_date ? promo.start_date.substring(0,16) : ''}">
+            </div>
+            <div>
+                <label class="form-label">วันสิ้นสุด</label>
+                <input id="pEnd" class="form-input" type="datetime-local" value="${promo.end_date ? promo.end_date.substring(0,16) : ''}">
+            </div>
+            <div>
+                <label class="form-label">ลำดับความสำคัญ</label>
+                <input id="pPriority" class="form-input" type="number" value="${promo.priority || 0}" min="0">
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
+                <label class="toggle-switch"><input type="checkbox" id="pStackable" ${promo.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                <span style="color:rgba(255,255,255,0.8); font-size:13px;">ใช้ร่วมคูปองได้</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
+                <label class="toggle-switch"><input type="checkbox" id="pActive" ${promo.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                <span style="color:rgba(255,255,255,0.8); font-size:13px;">เปิดใช้งาน</span>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+            <button class="btn btn-primary" onclick="savePromotion()" style="flex:1;">บันทึก</button>
+            <button onclick="closePromoModal()" style="flex:1; background:rgba(255,255,255,0.1); border:none; color:white; padding:12px; border-radius:8px; cursor:pointer;">ยกเลิก</button>
+        </div>
+      </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Restore select values
+    if (promo.target_brand_id) document.getElementById('pBrand').value = promo.target_brand_id;
+    if (promo.min_tier_id) document.getElementById('pTier').value = promo.min_tier_id;
+    updatePromoRewardUI();
+}
+
+function updatePromoRewardUI() {
+    const type = document.getElementById('pRewardType').value;
+    const label = document.getElementById('pRewardValLabel');
+    const wrap = document.getElementById('pRewardValWrap');
+    if (type === 'discount_percent') { label.textContent = 'ส่วนลด (%)'; wrap.style.display = ''; }
+    else if (type === 'discount_fixed') { label.textContent = 'ส่วนลด (฿)'; wrap.style.display = ''; }
+    else { wrap.style.display = 'none'; }
+}
+
+function closePromoModal() {
+    const m = document.getElementById('promoModal');
+    if (m) m.remove();
+}
+
+async function savePromotion() {
+    const body = {
+        name: document.getElementById('pName').value.trim(),
+        promo_type: document.getElementById('pRewardType').value,
+        condition_min_spend: parseFloat(document.getElementById('pMinSpend').value) || 0,
+        condition_min_qty: parseInt(document.getElementById('pMinQty').value) || 0,
+        reward_type: document.getElementById('pRewardType').value,
+        reward_value: parseFloat(document.getElementById('pRewardVal').value) || 0,
+        target_brand_id: document.getElementById('pBrand').value || null,
+        min_tier_id: document.getElementById('pTier').value || null,
+        start_date: document.getElementById('pStart').value || null,
+        end_date: document.getElementById('pEnd').value || null,
+        priority: parseInt(document.getElementById('pPriority').value) || 0,
+        is_stackable: document.getElementById('pStackable').checked,
+        is_active: document.getElementById('pActive').checked
+    };
+    if (!body.name) { showGlobalAlert('กรุณาระบุชื่อโปรโมชัน', 'error'); return; }
+    const url = _editingPromoId ? `/api/admin/promotions/${_editingPromoId}` : '/api/admin/promotions';
+    const method = _editingPromoId ? 'PUT' : 'POST';
+    try {
+        const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+        if (res.ok) {
+            showGlobalAlert(_editingPromoId ? 'แก้ไขโปรโมชันเรียบร้อย' : 'สร้างโปรโมชันเรียบร้อย', 'success');
+            closePromoModal();
+            loadPromotions();
+        } else {
+            const d = await res.json();
+            showGlobalAlert(d.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch { showGlobalAlert('เกิดข้อผิดพลาด', 'error'); }
+}
+
+async function togglePromotion(id, isActive) {
+    const promo = _promoData.find(p => p.id === id);
+    if (!promo) return;
+    await fetch(`/api/admin/promotions/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ...promo, is_active: isActive })
+    });
+    loadPromotions();
+}
+
+async function deletePromotion(id) {
+    if (!confirm('ลบโปรโมชันนี้?')) return;
+    const res = await fetch(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+    if (res.ok) { showGlobalAlert('ลบเรียบร้อย', 'success'); loadPromotions(); }
+    else showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+}
+
+// ── Coupons ─────────────────────────────────────────────────────
+
+async function loadCoupons() {
+    try {
+        const data = await fetch('/api/admin/coupons').then(r => r.json());
+        _couponData = Array.isArray(data) ? data : [];
+        const active = _couponData.filter(c => c.is_active).length;
+        const totalUsed = _couponData.reduce((s, c) => s + (c.used_count || 0), 0);
+        document.getElementById('couponStats').innerHTML = `
+            <div class="stat-mini"><div class="val">${_couponData.length}</div><div class="lbl">ทั้งหมด</div></div>
+            <div class="stat-mini"><div class="val" style="color:#22c55e">${active}</div><div class="lbl">เปิดอยู่</div></div>
+            <div class="stat-mini"><div class="val" style="color:#f59e0b">${totalUsed}</div><div class="lbl">ใช้ไปแล้ว</div></div>
+        `;
+        if (!_couponData.length) {
+            document.getElementById('couponTableWrap').innerHTML = `<div class="empty-state"><p>ยังไม่มีคูปอง — กดปุ่ม "+ สร้างคูปอง" เพื่อเริ่มต้น</p></div>`;
+            return;
+        }
+        let rows = _couponData.map(c => {
+            const quota = c.total_quota > 0 ? `${c.usage_count}/${c.total_quota}` : `${c.usage_count}/∞`;
+            const claimed = c.claimed_count || 0;
+            return `
+            <tr>
+                <td>
+                    <strong style="font-family:monospace;color:#c084fc;">${c.code}</strong>
+                    <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:2px;">${c.name}</div>
+                </td>
+                <td>${_fmtCouponDiscount(c)}</td>
+                <td>${c.min_spend > 0 ? '฿'+Number(c.min_spend).toLocaleString() : '—'}</td>
+                <td><span class="coupon-usage">เก็บแล้ว ${claimed} · ใช้ ${quota}</span></td>
+                <td>${c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : '—'}</td>
+                <td>
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${c.is_active ? 'checked' : ''} onchange="toggleCoupon(${c.id}, this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+                <td>
+                    <button class="action-btn btn-review" onclick="openCouponModal(${c.id})">แก้ไข</button>
+                    <button class="action-btn" style="background:rgba(34,197,94,0.2);color:#22c55e;margin-left:4px" onclick="assignCoupon(${c.id})" title="แจกให้สมาชิกทุกคน">แจก</button>
+                    <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;margin-left:4px" onclick="deleteCoupon(${c.id})">ลบ</button>
+                </td>
+            </tr>`;
+        }).join('');
+        document.getElementById('couponTableWrap').innerHTML = `
+            <table class="mkt-table">
+                <thead><tr>
+                    <th>รหัส / ชื่อ</th><th>ส่วนลด</th><th>ซื้อขั้นต่ำ</th><th>การใช้งาน</th><th>สิ้นสุด</th><th>สถานะ</th><th>จัดการ</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch (e) {
+        document.getElementById('couponTableWrap').innerHTML = `<div class="empty-state"><p>เกิดข้อผิดพลาด</p></div>`;
+    }
+}
+
+async function openCouponModal(id = null) {
+    _editingCouponId = id;
+    await _mktLoadMeta();
+    const tierOptions = `<option value="">ทุกระดับ</option>` + _mktTiers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    let c = {};
+    if (id) c = _couponData.find(x => x.id === id) || {};
+
+    const html = `
+    <div id="couponModal" class="modal" style="display:flex; z-index:10005;">
+      <div class="modal-content" style="max-width:540px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; color:white;">${id ? 'แก้ไขคูปอง' : 'สร้างคูปองใหม่'}</h3>
+            <button onclick="closeCouponModal()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;">&times;</button>
+        </div>
+        <div class="mkt-form-grid">
+            <div>
+                <label class="form-label">รหัสคูปอง * <span style="font-size:11px;color:rgba(255,255,255,0.4)">(ตัวพิมพ์ใหญ่)</span></label>
+                <input id="cCode" class="form-input" value="${c.code || ''}" placeholder="SALE20" style="font-family:monospace;text-transform:uppercase;" ${id ? 'readonly' : ''}>
+            </div>
+            <div>
+                <label class="form-label">ชื่อคูปอง</label>
+                <input id="cName" class="form-input" value="${c.name || ''}" placeholder="ลด 20% สำหรับสมาชิก">
+            </div>
+            <div>
+                <label class="form-label">ประเภทส่วนลด</label>
+                <select id="cType" class="form-select" onchange="updateCouponUI()">
+                    <option value="percent" ${c.discount_type === 'percent' ? 'selected' : ''}>ลดเป็น %</option>
+                    <option value="fixed" ${c.discount_type === 'fixed' ? 'selected' : ''}>ลดคงที่ (฿)</option>
+                    <option value="free_shipping" ${c.discount_type === 'free_shipping' ? 'selected' : ''}>ส่งฟรี</option>
+                </select>
+            </div>
+            <div id="cValWrap">
+                <label class="form-label" id="cValLabel">ส่วนลด</label>
+                <input id="cVal" class="form-input" type="number" min="0" value="${c.discount_value || 0}">
+            </div>
+            <div id="cMaxWrap">
+                <label class="form-label">ลดสูงสุด (฿) <span style="font-size:11px;color:rgba(255,255,255,0.4)">0 = ไม่จำกัด</span></label>
+                <input id="cMax" class="form-input" type="number" min="0" value="${c.max_discount || 0}">
+            </div>
+            <div>
+                <label class="form-label">ซื้อขั้นต่ำ (฿)</label>
+                <input id="cMinSpend" class="form-input" type="number" min="0" value="${c.min_spend || 0}">
+            </div>
+            <div>
+                <label class="form-label">จำนวนสิทธิ์ทั้งหมด <span style="font-size:11px;color:rgba(255,255,255,0.4)">0 = ไม่จำกัด</span></label>
+                <input id="cQuota" class="form-input" type="number" min="0" value="${c.total_quota || 0}">
+            </div>
+            <div>
+                <label class="form-label">จำกัดต่อสมาชิก</label>
+                <input id="cPerUser" class="form-input" type="number" min="1" value="${c.per_user_limit || 1}">
+            </div>
+            <div>
+                <label class="form-label">ระดับขั้นต่ำ</label>
+                <select id="cTier" class="form-select">${tierOptions}</select>
+            </div>
+            <div>
+                <label class="form-label">วันเริ่ม</label>
+                <input id="cStart" class="form-input" type="datetime-local" value="${c.start_date ? c.start_date.substring(0,16) : ''}">
+            </div>
+            <div>
+                <label class="form-label">วันสิ้นสุด</label>
+                <input id="cEnd" class="form-input" type="datetime-local" value="${c.end_date ? c.end_date.substring(0,16) : ''}">
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
+                <label class="toggle-switch"><input type="checkbox" id="cStackable" ${c.is_stackable ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                <span style="color:rgba(255,255,255,0.8); font-size:13px;">ใช้ร่วมโปรโมชันได้</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; padding-top:28px;">
+                <label class="toggle-switch"><input type="checkbox" id="cActive" ${c.is_active !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                <span style="color:rgba(255,255,255,0.8); font-size:13px;">เปิดใช้งาน</span>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+            <button class="btn btn-primary" onclick="saveCoupon()" style="flex:1;">บันทึก</button>
+            <button onclick="closeCouponModal()" style="flex:1; background:rgba(255,255,255,0.1); border:none; color:white; padding:12px; border-radius:8px; cursor:pointer;">ยกเลิก</button>
+        </div>
+      </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    if (c.min_tier_id) document.getElementById('cTier').value = c.min_tier_id;
+    updateCouponUI();
+}
+
+function updateCouponUI() {
+    const type = document.getElementById('cType').value;
+    const valWrap = document.getElementById('cValWrap');
+    const maxWrap = document.getElementById('cMaxWrap');
+    const label = document.getElementById('cValLabel');
+    if (type === 'free_shipping') {
+        valWrap.style.display = 'none';
+        maxWrap.style.display = 'none';
+    } else {
+        valWrap.style.display = '';
+        label.textContent = type === 'percent' ? 'ส่วนลด (%)' : 'ส่วนลด (฿)';
+        maxWrap.style.display = type === 'percent' ? '' : 'none';
+    }
+}
+
+function closeCouponModal() {
+    const m = document.getElementById('couponModal');
+    if (m) m.remove();
+}
+
+async function saveCoupon() {
+    const body = {
+        code: (document.getElementById('cCode').value || '').trim().toUpperCase(),
+        name: (document.getElementById('cName').value || '').trim(),
+        discount_type: document.getElementById('cType').value,
+        discount_value: parseFloat(document.getElementById('cVal')?.value) || 0,
+        max_discount: parseFloat(document.getElementById('cMax')?.value) || 0,
+        min_spend: parseFloat(document.getElementById('cMinSpend').value) || 0,
+        total_quota: parseInt(document.getElementById('cQuota').value) || 0,
+        per_user_limit: parseInt(document.getElementById('cPerUser').value) || 1,
+        min_tier_id: document.getElementById('cTier').value || null,
+        start_date: document.getElementById('cStart').value || null,
+        end_date: document.getElementById('cEnd').value || null,
+        is_stackable: document.getElementById('cStackable').checked,
+        is_active: document.getElementById('cActive').checked
+    };
+    if (!body.code) { showGlobalAlert('กรุณาระบุรหัสคูปอง', 'error'); return; }
+    const url = _editingCouponId ? `/api/admin/coupons/${_editingCouponId}` : '/api/admin/coupons';
+    const method = _editingCouponId ? 'PUT' : 'POST';
+    try {
+        const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+        if (res.ok) {
+            showGlobalAlert(_editingCouponId ? 'แก้ไขคูปองเรียบร้อย' : 'สร้างคูปองเรียบร้อย', 'success');
+            closeCouponModal();
+            loadCoupons();
+        } else {
+            const d = await res.json();
+            showGlobalAlert(d.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch { showGlobalAlert('เกิดข้อผิดพลาด', 'error'); }
+}
+
+async function toggleCoupon(id, isActive) {
+    const coupon = _couponData.find(c => c.id === id);
+    if (!coupon) return;
+    await fetch(`/api/admin/coupons/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ...coupon, is_active: isActive })
+    });
+    loadCoupons();
+}
+
+async function deleteCoupon(id) {
+    if (!confirm('ลบคูปองนี้? สมาชิกที่เก็บไว้แล้วจะไม่สามารถใช้ได้อีก')) return;
+    const res = await fetch(`/api/admin/coupons/${id}`, { method: 'DELETE' });
+    if (res.ok) { showGlobalAlert('ลบเรียบร้อย', 'success'); loadCoupons(); }
+    else showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+}
+
+async function assignCoupon(id) {
+    const coupon = _couponData.find(c => c.id === id);
+    if (!coupon) return;
+    if (!confirm(`แจกคูปอง "${coupon.code}" ให้สมาชิกทุกคน?\n(คนที่เก็บแล้วจะไม่ถูกนับซ้ำ)`)) return;
+    try {
+        const res = await fetch(`/api/admin/coupons/${id}/assign`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (res.ok) { showGlobalAlert(`แจกคูปองให้ ${data.assigned} คน เรียบร้อย`, 'success'); loadCoupons(); }
+        else showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+    } catch { showGlobalAlert('เกิดข้อผิดพลาด', 'error'); }
+}
+
+// ==================== END MARKETING MODULE ====================

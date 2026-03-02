@@ -7398,7 +7398,7 @@ def create_order():
         # Get cart items
         cursor.execute('''
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent, ci.customization_data,
-                   s.stock, s.sku_code, p.name as product_name
+                   s.stock, s.sku_code, p.name as product_name, p.brand_id
             FROM cart_items ci
             JOIN skus s ON s.id = ci.sku_id
             JOIN products p ON p.id = s.product_id
@@ -7454,8 +7454,33 @@ def create_order():
         
         item_total = total_amount - total_discount
         shipping_fee = float(data.get('shipping_fee', 0) or 0)
-        final_amount = item_total + shipping_fee
-        
+
+        # Layer 2 & 3: Apply promotion + coupon discounts
+        coupon_code = (data.get('coupon_code') or '').strip()
+        cart_brand_ids = list({item.get('brand_id') for item in items if item.get('brand_id')})
+        cart_category_ids = []  # category info not fetched at this point
+
+        cursor.execute('''
+            SELECT rt.level_rank FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (user_id,))
+        tier_row = cursor.fetchone()
+        user_tier_rank = int(tier_row['level_rank']) if tier_row and tier_row['level_rank'] else 1
+
+        applied_promo, promo_discount = _calc_best_promotion(cursor, item_total, cart_brand_ids, cart_category_ids, user_tier_rank)
+        applied_coupon, coupon_discount, coupon_error = (None, 0, None)
+        if coupon_code:
+            if applied_promo is None or applied_promo.get('is_stackable'):
+                applied_coupon, coupon_discount, coupon_error = _calc_coupon_discount(
+                    cursor, coupon_code, item_total - promo_discount, user_id, user_tier_rank)
+
+        # Check free_shipping coupon
+        free_shipping_coupon = applied_coupon and applied_coupon.get('discount_type') == 'free_shipping'
+        effective_shipping = 0.0 if free_shipping_coupon else shipping_fee
+
+        final_amount = max(0, item_total - promo_discount - coupon_discount) + effective_shipping
+
         # Get default online channel
         cursor.execute("SELECT id FROM sales_channels WHERE name = 'ระบบออนไลน์' LIMIT 1")
         channel = cursor.fetchone()
@@ -7467,10 +7492,13 @@ def create_order():
         # Create order with new order number format (ORD-YYMM-XXXX)
         order_number = generate_order_number(cursor)
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, shipping_fee, final_amount, notes, customer_id)
-            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, shipping_fee, final_amount, notes, customer_id,
+                                coupon_id, coupon_discount, promotion_id, promotion_discount)
+            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, user_id, channel_id, total_amount, total_discount, shipping_fee, final_amount, notes, customer_id))
+        ''', (order_number, user_id, channel_id, total_amount, total_discount, effective_shipping, final_amount, notes, customer_id,
+              applied_coupon['id'] if applied_coupon else None, coupon_discount,
+              applied_promo['id'] if applied_promo else None, promo_discount))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs using cart_item_id as unique key
@@ -7564,7 +7592,15 @@ def create_order():
         
         # Clear cart items
         cursor.execute('DELETE FROM cart_items WHERE cart_id = %s', (cart['cart_id'],))
-        
+
+        # Mark coupon as used (Layer 3)
+        if applied_coupon:
+            cursor.execute('''
+                UPDATE user_coupons SET status='used', used_at=CURRENT_TIMESTAMP, used_in_order_id=%s
+                WHERE user_id=%s AND coupon_id=%s AND status='ready'
+            ''', (order['id'], user_id, applied_coupon['id']))
+            cursor.execute('UPDATE coupons SET usage_count = usage_count + 1 WHERE id=%s', (applied_coupon['id'],))
+
         conn.commit()
         
         # Add shipment count to response
@@ -15134,6 +15170,686 @@ def iship_webhook():
             conn.close()
 
 # ==================== END iSHIP WEBHOOK ====================
+
+# ==================== MARKETING MODULE ====================
+
+def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, user_tier_rank):
+    """
+    Layer 2: Find the single best auto-promotion eligible for this cart.
+    Returns: (promotion_row, discount_amount) or (None, 0)
+    """
+    now_sql = 'CURRENT_TIMESTAMP'
+    cursor.execute(f'''
+        SELECT p.*, rt.level_rank as min_tier_rank
+        FROM promotions p
+        LEFT JOIN reseller_tiers rt ON rt.id = p.min_tier_id
+        WHERE p.is_active = TRUE
+          AND (p.start_date IS NULL OR p.start_date <= {now_sql})
+          AND (p.end_date IS NULL OR p.end_date >= {now_sql})
+        ORDER BY p.priority DESC, p.id
+    ''')
+    promotions = cursor.fetchall()
+
+    best_promo = None
+    best_discount = 0
+
+    for promo in promotions:
+        # Tier check
+        if promo['min_tier_rank'] and user_tier_rank < promo['min_tier_rank']:
+            continue
+        # Minimum spend check
+        if promo['condition_min_spend'] and cart_total < float(promo['condition_min_spend']):
+            continue
+        # Brand/category targeting
+        if promo['target_brand_id'] and promo['target_brand_id'] not in cart_brand_ids:
+            continue
+        if promo['target_category_id'] and promo['target_category_id'] not in cart_category_ids:
+            continue
+
+        # Calculate discount value
+        reward_type = promo['reward_type']
+        reward_value = float(promo['reward_value'] or 0)
+        if reward_type == 'discount_percent':
+            discount = round(cart_total * reward_value / 100, 2)
+        elif reward_type == 'discount_fixed':
+            discount = min(reward_value, cart_total)
+        elif reward_type == 'free_item':
+            discount = 0  # GWP: value tracked separately
+        else:
+            discount = 0
+
+        if discount > best_discount or (discount == best_discount and best_promo is None):
+            best_discount = discount
+            best_promo = promo
+
+    return (dict(best_promo) if best_promo else None, best_discount)
+
+
+def _calc_coupon_discount(cursor, coupon_code, cart_total, user_id, user_tier_rank):
+    """
+    Layer 3: Validate and calculate coupon discount.
+    Returns: (coupon_row, discount_amount, error_message)
+    """
+    if not coupon_code:
+        return (None, 0, None)
+
+    cursor.execute('''
+        SELECT c.*, rt.level_rank as min_tier_rank
+        FROM coupons c
+        LEFT JOIN reseller_tiers rt ON rt.id = c.min_tier_id
+        WHERE UPPER(c.code) = UPPER(%s)
+    ''', (coupon_code,))
+    coupon = cursor.fetchone()
+
+    if not coupon:
+        return (None, 0, 'ไม่พบคูปองนี้')
+    if not coupon['is_active']:
+        return (None, 0, 'คูปองนี้ไม่ได้เปิดใช้งาน')
+    if coupon['start_date'] and coupon['start_date'] > __import__('datetime').datetime.now():
+        return (None, 0, 'คูปองยังไม่เริ่มใช้งาน')
+    if coupon['end_date'] and coupon['end_date'] < __import__('datetime').datetime.now():
+        return (None, 0, 'คูปองหมดอายุแล้ว')
+    if coupon['total_quota'] > 0 and coupon['usage_count'] >= coupon['total_quota']:
+        return (None, 0, 'คูปองถูกใช้ครบแล้ว')
+    if coupon['min_spend'] and cart_total < float(coupon['min_spend']):
+        return (None, 0, f'ต้องซื้อขั้นต่ำ {float(coupon["min_spend"]):,.0f} บาท')
+    if coupon['min_tier_rank'] and user_tier_rank < coupon['min_tier_rank']:
+        return (None, 0, 'ระดับสมาชิกของคุณไม่ตรงกับเงื่อนไขคูปองนี้')
+
+    # Check user has claimed this coupon
+    cursor.execute('''
+        SELECT id, status FROM user_coupons
+        WHERE user_id = %s AND coupon_id = %s
+    ''', (user_id, coupon['id']))
+    uc = cursor.fetchone()
+    if not uc:
+        return (None, 0, 'คุณยังไม่ได้เก็บคูปองนี้')
+    if uc['status'] == 'used':
+        return (None, 0, 'คูปองนี้ถูกใช้แล้ว')
+    if uc['status'] == 'expired':
+        return (None, 0, 'คูปองหมดอายุแล้ว')
+
+    discount_type = coupon['discount_type']
+    discount_value = float(coupon['discount_value'])
+    max_discount = float(coupon['max_discount'] or 0)
+
+    if discount_type == 'percent':
+        discount = round(cart_total * discount_value / 100, 2)
+        if max_discount > 0:
+            discount = min(discount, max_discount)
+    elif discount_type == 'fixed':
+        discount = min(discount_value, cart_total)
+    elif discount_type == 'free_shipping':
+        discount = 0  # Applied at shipping level
+    else:
+        discount = 0
+
+    return (dict(coupon), discount, None)
+
+
+# ── Admin: Promotions ──────────────────────────────────────
+
+@app.route('/api/admin/promotions', methods=['GET'])
+@admin_required
+def admin_get_promotions():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT p.*,
+                   rt.name as min_tier_name,
+                   b.name as target_brand_name,
+                   cat.name as target_category_name,
+                   sk.sku_code as reward_sku_code,
+                   pr.name as reward_product_name
+            FROM promotions p
+            LEFT JOIN reseller_tiers rt ON rt.id = p.min_tier_id
+            LEFT JOIN brands b ON b.id = p.target_brand_id
+            LEFT JOIN categories cat ON cat.id = p.target_category_id
+            LEFT JOIN skus sk ON sk.id = p.reward_sku_id
+            LEFT JOIN products pr ON pr.id = sk.product_id
+            ORDER BY p.is_active DESC, p.priority DESC, p.created_at DESC
+        ''')
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            for f in ['condition_min_spend', 'reward_value']:
+                if r[f] is not None:
+                    r[f] = float(r[f])
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/promotions', methods=['POST'])
+@admin_required
+def admin_create_promotion():
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            INSERT INTO promotions (name, promo_type, condition_min_spend, condition_min_qty,
+                reward_type, reward_value, reward_sku_id, reward_qty,
+                target_brand_id, target_category_id, min_tier_id,
+                is_stackable, priority, start_date, end_date, is_active)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING *
+        ''', (
+            data.get('name'), data.get('promo_type', 'discount_percent'),
+            data.get('condition_min_spend', 0), data.get('condition_min_qty', 0),
+            data.get('reward_type', 'discount_percent'), data.get('reward_value', 0),
+            data.get('reward_sku_id'), data.get('reward_qty', 1),
+            data.get('target_brand_id'), data.get('target_category_id'), data.get('min_tier_id'),
+            data.get('is_stackable', False), data.get('priority', 0),
+            data.get('start_date'), data.get('end_date'), data.get('is_active', True)
+        ))
+        promo = dict(cursor.fetchone())
+        conn.commit()
+        return jsonify(promo), 201
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/promotions/<int:promo_id>', methods=['PUT'])
+@admin_required
+def admin_update_promotion(promo_id):
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            UPDATE promotions SET
+                name=%s, promo_type=%s, condition_min_spend=%s, condition_min_qty=%s,
+                reward_type=%s, reward_value=%s, reward_sku_id=%s, reward_qty=%s,
+                target_brand_id=%s, target_category_id=%s, min_tier_id=%s,
+                is_stackable=%s, priority=%s, start_date=%s, end_date=%s, is_active=%s
+            WHERE id=%s RETURNING *
+        ''', (
+            data.get('name'), data.get('promo_type'),
+            data.get('condition_min_spend', 0), data.get('condition_min_qty', 0),
+            data.get('reward_type'), data.get('reward_value', 0),
+            data.get('reward_sku_id'), data.get('reward_qty', 1),
+            data.get('target_brand_id'), data.get('target_category_id'), data.get('min_tier_id'),
+            data.get('is_stackable', False), data.get('priority', 0),
+            data.get('start_date'), data.get('end_date'), data.get('is_active', True),
+            promo_id
+        ))
+        promo = cursor.fetchone()
+        if not promo:
+            return jsonify({'error': 'ไม่พบโปรโมชัน'}), 404
+        conn.commit()
+        return jsonify(dict(promo)), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/promotions/<int:promo_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_promotion(promo_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM promotions WHERE id=%s', (promo_id,))
+        conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ── Admin: Coupons ─────────────────────────────────────────
+
+@app.route('/api/admin/coupons', methods=['GET'])
+@admin_required
+def admin_get_coupons():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT c.*,
+                   rt.name as min_tier_name,
+                   COUNT(uc.id) as claimed_count,
+                   COUNT(CASE WHEN uc.status='used' THEN 1 END) as used_count
+            FROM coupons c
+            LEFT JOIN reseller_tiers rt ON rt.id = c.min_tier_id
+            LEFT JOIN user_coupons uc ON uc.coupon_id = c.id
+            GROUP BY c.id, rt.name
+            ORDER BY c.is_active DESC, c.created_at DESC
+        ''')
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            for f in ['discount_value', 'max_discount', 'min_spend']:
+                if r[f] is not None:
+                    r[f] = float(r[f])
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/coupons', methods=['POST'])
+@admin_required
+def admin_create_coupon():
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        code = (data.get('code') or '').strip().upper()
+        if not code:
+            return jsonify({'error': 'กรุณาระบุรหัสคูปอง'}), 400
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            INSERT INTO coupons (code, name, discount_type, discount_value, max_discount,
+                min_spend, total_quota, per_user_limit, target_type, min_tier_id,
+                is_stackable, start_date, end_date, is_active)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING *
+        ''', (
+            code, data.get('name'), data.get('discount_type', 'fixed'),
+            data.get('discount_value', 0), data.get('max_discount', 0),
+            data.get('min_spend', 0), data.get('total_quota', 0),
+            data.get('per_user_limit', 1), data.get('target_type', 'all'),
+            data.get('min_tier_id'), data.get('is_stackable', False),
+            data.get('start_date'), data.get('end_date'), data.get('is_active', True)
+        ))
+        coupon = dict(cursor.fetchone())
+        conn.commit()
+        return jsonify(coupon), 201
+    except psycopg2.errors.UniqueViolation:
+        if conn: conn.rollback()
+        return jsonify({'error': 'รหัสคูปองนี้ถูกใช้ไปแล้ว'}), 400
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/coupons/<int:coupon_id>', methods=['PUT'])
+@admin_required
+def admin_update_coupon(coupon_id):
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            UPDATE coupons SET
+                name=%s, discount_type=%s, discount_value=%s, max_discount=%s,
+                min_spend=%s, total_quota=%s, per_user_limit=%s, target_type=%s,
+                min_tier_id=%s, is_stackable=%s, start_date=%s, end_date=%s, is_active=%s
+            WHERE id=%s RETURNING *
+        ''', (
+            data.get('name'), data.get('discount_type'), data.get('discount_value'),
+            data.get('max_discount', 0), data.get('min_spend', 0),
+            data.get('total_quota', 0), data.get('per_user_limit', 1),
+            data.get('target_type', 'all'), data.get('min_tier_id'),
+            data.get('is_stackable', False),
+            data.get('start_date'), data.get('end_date'), data.get('is_active', True),
+            coupon_id
+        ))
+        coupon = cursor.fetchone()
+        if not coupon:
+            return jsonify({'error': 'ไม่พบคูปอง'}), 404
+        conn.commit()
+        return jsonify(dict(coupon)), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/coupons/<int:coupon_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_coupon(coupon_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM user_coupons WHERE coupon_id=%s', (coupon_id,))
+        cursor.execute('DELETE FROM coupons WHERE id=%s', (coupon_id,))
+        conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/coupons/<int:coupon_id>/assign', methods=['POST'])
+@admin_required
+def admin_assign_coupon(coupon_id):
+    """Directly give a coupon to one or all resellers without them claiming it"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        user_ids = data.get('user_ids', [])  # empty = all resellers
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('SELECT id FROM coupons WHERE id=%s', (coupon_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ไม่พบคูปอง'}), 404
+
+        if not user_ids:
+            cursor.execute("SELECT id FROM users WHERE role='reseller' AND is_active=TRUE")
+            user_ids = [r['id'] for r in cursor.fetchall()]
+
+        assigned = 0
+        for uid in user_ids:
+            cursor.execute('''
+                INSERT INTO user_coupons (user_id, coupon_id, status)
+                VALUES (%s, %s, 'ready')
+                ON CONFLICT (user_id, coupon_id) DO NOTHING
+            ''', (uid, coupon_id))
+            if cursor.rowcount > 0:
+                assigned += 1
+        conn.commit()
+        return jsonify({'assigned': assigned}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/coupons/<int:coupon_id>/users', methods=['GET'])
+@admin_required
+def admin_get_coupon_users(coupon_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT uc.*, u.full_name, u.email,
+                   rt.name as tier_name, o.order_number as used_in_order_number
+            FROM user_coupons uc
+            JOIN users u ON u.id = uc.user_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            LEFT JOIN orders o ON o.id = uc.used_in_order_id
+            WHERE uc.coupon_id = %s
+            ORDER BY uc.collected_at DESC
+        ''', (coupon_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ── Reseller: Promotions & Coupons ────────────────────────
+
+@app.route('/api/reseller/promotions/active', methods=['GET'])
+@login_required
+def reseller_get_active_promotions():
+    """Return all currently active auto-promotions for display purposes"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT p.id, p.name, p.promo_type, p.condition_min_spend, p.condition_min_qty,
+                   p.reward_type, p.reward_value, p.reward_qty, p.is_stackable,
+                   p.start_date, p.end_date,
+                   rt.name as min_tier_name, b.name as target_brand_name,
+                   sk.sku_code as reward_sku_code, pr.name as reward_product_name
+            FROM promotions p
+            LEFT JOIN reseller_tiers rt ON rt.id = p.min_tier_id
+            LEFT JOIN brands b ON b.id = p.target_brand_id
+            LEFT JOIN skus sk ON sk.id = p.reward_sku_id
+            LEFT JOIN products pr ON pr.id = sk.product_id
+            WHERE p.is_active = TRUE
+              AND (p.start_date IS NULL OR p.start_date <= CURRENT_TIMESTAMP)
+              AND (p.end_date IS NULL OR p.end_date >= CURRENT_TIMESTAMP)
+            ORDER BY p.priority DESC, p.condition_min_spend
+        ''')
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            for f in ['condition_min_spend', 'reward_value']:
+                if r[f] is not None:
+                    r[f] = float(r[f])
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/reseller/coupons/available', methods=['GET'])
+@login_required
+def reseller_get_available_coupons():
+    """Coupons the user can still claim"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT c.id, c.code, c.name, c.discount_type, c.discount_value, c.max_discount,
+                   c.min_spend, c.total_quota, c.usage_count, c.per_user_limit,
+                   c.start_date, c.end_date, c.is_stackable,
+                   rt.name as min_tier_name,
+                   COALESCE(uc_count.times_claimed, 0) as times_claimed,
+                   (uc_mine.id IS NOT NULL) as already_claimed
+            FROM coupons c
+            LEFT JOIN reseller_tiers rt ON rt.id = c.min_tier_id
+            LEFT JOIN (
+                SELECT coupon_id, COUNT(*) as times_claimed
+                FROM user_coupons WHERE user_id = %s
+                GROUP BY coupon_id
+            ) uc_count ON uc_count.coupon_id = c.id
+            LEFT JOIN user_coupons uc_mine ON uc_mine.coupon_id = c.id AND uc_mine.user_id = %s
+            WHERE c.is_active = TRUE
+              AND (c.start_date IS NULL OR c.start_date <= CURRENT_TIMESTAMP)
+              AND (c.end_date IS NULL OR c.end_date >= CURRENT_TIMESTAMP)
+              AND (c.total_quota = 0 OR c.usage_count < c.total_quota)
+            ORDER BY c.created_at DESC
+        ''', (user_id, user_id))
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            for f in ['discount_value', 'max_discount', 'min_spend']:
+                if r[f] is not None:
+                    r[f] = float(r[f])
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/reseller/coupons/wallet', methods=['GET'])
+@login_required
+def reseller_get_coupon_wallet():
+    """Coupons the user has already claimed"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT uc.id, uc.status, uc.collected_at, uc.used_at,
+                   c.id as coupon_id, c.code, c.name, c.discount_type,
+                   c.discount_value, c.max_discount, c.min_spend,
+                   c.end_date, c.is_stackable,
+                   o.order_number as used_in_order_number
+            FROM user_coupons uc
+            JOIN coupons c ON c.id = uc.coupon_id
+            LEFT JOIN orders o ON o.id = uc.used_in_order_id
+            WHERE uc.user_id = %s
+            ORDER BY
+                CASE uc.status WHEN 'ready' THEN 0 WHEN 'used' THEN 1 ELSE 2 END,
+                uc.collected_at DESC
+        ''', (user_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            for f in ['discount_value', 'max_discount', 'min_spend']:
+                if r[f] is not None:
+                    r[f] = float(r[f])
+            # Mark expired
+            import datetime
+            if r['status'] == 'ready' and r['end_date'] and r['end_date'] < datetime.datetime.now():
+                r['status'] = 'expired'
+        return jsonify(rows), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/reseller/coupons/<int:coupon_id>/claim', methods=['POST'])
+@login_required
+def reseller_claim_coupon(coupon_id):
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('SELECT * FROM coupons WHERE id=%s', (coupon_id,))
+        coupon = cursor.fetchone()
+        if not coupon:
+            return jsonify({'error': 'ไม่พบคูปอง'}), 404
+        if not coupon['is_active']:
+            return jsonify({'error': 'คูปองนี้ไม่ได้เปิดใช้งาน'}), 400
+        if coupon['total_quota'] > 0 and coupon['usage_count'] >= coupon['total_quota']:
+            return jsonify({'error': 'คูปองถูกเก็บครบแล้ว'}), 400
+
+        cursor.execute('''
+            SELECT COUNT(*) as cnt FROM user_coupons WHERE user_id=%s AND coupon_id=%s
+        ''', (user_id, coupon_id))
+        existing = cursor.fetchone()['cnt']
+        if existing >= coupon['per_user_limit']:
+            return jsonify({'error': 'คุณเก็บคูปองนี้ครบแล้ว'}), 400
+
+        cursor.execute('''
+            INSERT INTO user_coupons (user_id, coupon_id, status)
+            VALUES (%s, %s, 'ready')
+            ON CONFLICT (user_id, coupon_id) DO NOTHING
+        ''', (user_id, coupon_id))
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'คุณเก็บคูปองนี้ไปแล้ว'}), 400
+
+        conn.commit()
+        return jsonify({'success': True, 'message': 'เก็บคูปองสำเร็จ'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/reseller/cart/preview-discount', methods=['POST'])
+@login_required
+def reseller_preview_discount():
+    """Preview promotion + coupon discounts for current cart total"""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json()
+        cart_total = float(data.get('cart_total', 0))
+        coupon_code = (data.get('coupon_code') or '').strip()
+        brand_ids = data.get('brand_ids', [])
+        category_ids = data.get('category_ids', [])
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Get user tier rank
+        cursor.execute('''
+            SELECT rt.level_rank FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (user_id,))
+        u = cursor.fetchone()
+        user_tier_rank = int(u['level_rank']) if u and u['level_rank'] else 1
+
+        promo, promo_discount = _calc_best_promotion(cursor, cart_total, brand_ids, category_ids, user_tier_rank)
+
+        coupon, coupon_discount, coupon_error = (None, 0, None)
+        if coupon_code:
+            # Coupon can stack if promotion is stackable OR no promotion applied
+            if promo is None or promo.get('is_stackable'):
+                coupon, coupon_discount, coupon_error = _calc_coupon_discount(
+                    cursor, coupon_code, cart_total - promo_discount, user_id, user_tier_rank)
+            else:
+                coupon_error = 'โปรโมชันที่ใช้อยู่ไม่รองรับการใช้คูปองร่วมกัน'
+
+        total_discount = promo_discount + coupon_discount
+        final_total = max(0, cart_total - total_discount)
+
+        return jsonify({
+            'cart_total': cart_total,
+            'promotion': {
+                'id': promo['id'] if promo else None,
+                'name': promo['name'] if promo else None,
+                'discount': promo_discount
+            } if promo else None,
+            'coupon': {
+                'id': coupon['id'] if coupon else None,
+                'code': coupon['code'] if coupon else None,
+                'discount': coupon_discount,
+                'is_free_shipping': coupon['discount_type'] == 'free_shipping' if coupon else False
+            } if coupon else None,
+            'coupon_error': coupon_error,
+            'total_discount': total_discount,
+            'final_total': final_total
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ==================== END MARKETING MODULE ====================
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
