@@ -3364,6 +3364,39 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Promotions Page -->
+            <div id="page-promotions" class="page-content">
+                <div class="page-header">
+                    <h1>โปรโมชันอัตโนมัติ</h1>
+                    <p>จัดการโปรโมชันที่ระบบคำนวณให้อัตโนมัติเมื่อยอดถึงเกณฑ์</p>
+                </div>
+                <div class="mkt-header">
+                    <div class="stats-row" id="promoStats" style="margin-bottom:0; flex-wrap: wrap;"></div>
+                    <button class="btn btn-primary" onclick="openPromoModal()">+ สร้างโปรโมชัน</button>
+                </div>
+                <div id="promoTableWrap">
+                    <div class="empty-state"><p>กำลังโหลด...</p></div>
+                </div>
+            </div>
+
+            <!-- Coupons Page -->
+            <div id="page-coupons" class="page-content">
+                <div class="page-header">
+                    <h1>คูปองส่วนลด</h1>
+                    <p>สร้างคูปองที่สมาชิกต้องกดเก็บก่อนใช้งาน</p>
+                </div>
+                <div class="mkt-header">
+                    <div class="stats-row" id="couponStats" style="margin-bottom:0; flex-wrap: wrap;"></div>
+                    <div style="display:flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="openCouponModal()">+ สร้างคูปอง</button>
+                    </div>
+                </div>
+                <div id="couponTableWrap">
+                    <div class="empty-state"><p>กำลังโหลด...</p></div>
+                </div>
+            </div>
+
         </main>
 
     </div>
@@ -3722,38 +3755,6 @@
             </div>
         </div>
     </div>
-
-            <!-- Promotions Page -->
-            <div id="page-promotions" class="page-content">
-                <div class="page-header">
-                    <h1>โปรโมชันอัตโนมัติ</h1>
-                    <p>จัดการโปรโมชันที่ระบบคำนวณให้อัตโนมัติเมื่อยอดถึงเกณฑ์</p>
-                </div>
-                <div class="mkt-header">
-                    <div class="stats-row" id="promoStats" style="margin-bottom:0; flex-wrap: wrap;"></div>
-                    <button class="btn btn-primary" onclick="openPromoModal()">+ สร้างโปรโมชัน</button>
-                </div>
-                <div id="promoTableWrap">
-                    <div class="empty-state"><p>กำลังโหลด...</p></div>
-                </div>
-            </div>
-
-            <!-- Coupons Page -->
-            <div id="page-coupons" class="page-content">
-                <div class="page-header">
-                    <h1>คูปองส่วนลด</h1>
-                    <p>สร้างคูปองที่สมาชิกต้องกดเก็บก่อนใช้งาน</p>
-                </div>
-                <div class="mkt-header">
-                    <div class="stats-row" id="couponStats" style="margin-bottom:0; flex-wrap: wrap;"></div>
-                    <div style="display:flex; gap: 8px;">
-                        <button class="btn btn-primary" onclick="openCouponModal()">+ สร้างคูปอง</button>
-                    </div>
-                </div>
-                <div id="couponTableWrap">
-                    <div class="empty-state"><p>กำลังโหลด...</p></div>
-                </div>
-            </div>
 
     <!-- Chat Product Search Modal (root level) -->
     <div id="chatProductModal" class="modal" style="display: none;">
