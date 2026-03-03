@@ -1954,7 +1954,22 @@ def get_products():
                 LEFT JOIN options o ON ov.option_id = o.id
                 WHERE s.product_id = %s
                 GROUP BY s.id, s.sku_code, s.price, s.stock
-                ORDER BY s.id
+                ORDER BY
+                    CASE SUBSTRING(s.sku_code FROM '[^-]*$')
+                        WHEN 'XS'       THEN 1
+                        WHEN 'S'        THEN 2
+                        WHEN 'M'        THEN 3
+                        WHEN 'L'        THEN 4
+                        WHEN 'XL'       THEN 5
+                        WHEN '2XL'      THEN 6
+                        WHEN '3XL'      THEN 7
+                        WHEN '4XL'      THEN 8
+                        WHEN '5XL'      THEN 9
+                        WHEN 'FREESIZE' THEN 10
+                        WHEN 'ONESIZE'  THEN 11
+                        ELSE 99
+                    END,
+                    s.sku_code
             ''', (product['id'],))
             product['skus'] = [dict(row) for row in cursor.fetchall()]
         
@@ -10793,6 +10808,7 @@ def get_product_skus_with_stock(product_id):
         options = cursor.fetchall()
         
         # Get SKUs with variant values and warehouse stock
+        # ORDER BY size suffix (XS<S<M<L<XL<2XL<3XL) then sku_code for consistent display
         cursor.execute('''
             SELECT s.id, s.sku_code, s.stock as total_stock, s.price,
                    json_agg(DISTINCT jsonb_build_object('option_name', o.name, 'value', ov.value)) as variant_values
@@ -10802,7 +10818,22 @@ def get_product_skus_with_stock(product_id):
             LEFT JOIN options o ON ov.option_id = o.id
             WHERE s.product_id = %s
             GROUP BY s.id, s.sku_code, s.stock, s.price
-            ORDER BY s.id
+            ORDER BY
+                CASE SUBSTRING(s.sku_code FROM '[^-]*$')
+                    WHEN 'XS'       THEN 1
+                    WHEN 'S'        THEN 2
+                    WHEN 'M'        THEN 3
+                    WHEN 'L'        THEN 4
+                    WHEN 'XL'       THEN 5
+                    WHEN '2XL'      THEN 6
+                    WHEN '3XL'      THEN 7
+                    WHEN '4XL'      THEN 8
+                    WHEN '5XL'      THEN 9
+                    WHEN 'FREESIZE' THEN 10
+                    WHEN 'ONESIZE'  THEN 11
+                    ELSE 99
+                END,
+                s.sku_code
         ''', (product_id,))
         skus_raw = cursor.fetchall()
         
