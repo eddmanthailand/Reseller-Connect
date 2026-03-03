@@ -1641,7 +1641,7 @@
                         <div style="position: relative; margin-bottom: 20px;">
                             <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหาสินค้า</label>
                             <input type="text" id="transferProductSearch" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ Parent SKU..." oninput="searchProductForTransfer(this.value)">
-                            <div id="transferProductResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 100; margin-top: 4px;"></div>
+                            <div id="transferProductResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 1000; margin-top: 4px;"></div>
                         </div>
                         
                         <!-- Selected Product Card -->
@@ -1783,7 +1783,7 @@
                         <div style="position: relative; margin-bottom: 20px;">
                             <label class="form-label" style="font-size: 14px; margin-bottom: 8px; display: block;">ค้นหาสินค้า</label>
                             <input type="text" id="productSearchForAdjust" class="form-input" style="padding: 14px 16px; font-size: 15px; width: 100%;" placeholder="พิมพ์ชื่อสินค้าหรือ Parent SKU..." oninput="searchProductForAdjust(this.value)">
-                            <div id="productSearchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 100; margin-top: 4px;"></div>
+                            <div id="productSearchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 1000; margin-top: 4px;"></div>
                         </div>
                         
                         <!-- Selected Product Card -->
@@ -3153,7 +3153,7 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                                 </button>
                             </div>
-                            <div id="resellerPickerDropdown" style="display: none; position: absolute; left: 0; right: 0; top: 100%; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+                            <div id="resellerPickerDropdown" style="display: none; position: absolute; left: 0; right: 0; top: 100%; background: rgba(30,30,40,0.98); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
                                 <div style="padding: 8px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">กำลังโหลด...</div>
                             </div>
                             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
