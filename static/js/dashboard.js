@@ -9960,3 +9960,111 @@ async function confirmDistribute() {
 }
 
 // ==================== END MARKETING MODULE ====================
+
+// ==================== STOCK REPORT ====================
+
+const _SIZE_ORDER = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL','FREESIZE','FREE SIZE','ONE SIZE','ONESIZE'];
+
+function _srParseVariant(variantName) {
+    const opts = {};
+    (variantName || '').split(' / ').forEach(part => {
+        const idx = part.indexOf(':');
+        if (idx > 0) {
+            opts[part.substring(0, idx).trim().toLowerCase()] = part.substring(idx + 1).trim();
+        }
+    });
+    const size = opts['ไซส์'] || opts['size'] || opts['ไซ'] || null;
+    const color = opts['สี'] || opts['color'] || opts['ลาย'] || opts['pattern'] || null;
+    return { size, color };
+}
+
+function _srSortSizes(sizes) {
+    return [...sizes].sort((a, b) => {
+        const ai = _SIZE_ORDER.indexOf(a.toUpperCase());
+        const bi = _SIZE_ORDER.indexOf(b.toUpperCase());
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1;
+        if (bi >= 0) return 1;
+        return a.localeCompare(b);
+    });
+}
+
+function openStockReport() {
+    const products = filteredProducts || [];
+    if (!products.length) { showGlobalAlert('ไม่มีสินค้าที่จะสร้างรายงาน', 'error'); return; }
+
+    const allSizesSet = new Set();
+    const rows = [];
+
+    products.forEach(p => {
+        const skus = p.skus || [];
+        const colorMap = {};
+
+        skus.forEach(sku => {
+            const { size, color } = _srParseVariant(sku.variant_name || '');
+            const sizeKey = size ? size.toUpperCase() : 'ไม่มีขนาด';
+            const colorKey = color || '__none__';
+            if (sizeKey !== 'ไม่มีขนาด') allSizesSet.add(sizeKey);
+            else allSizesSet.add('ไม่มีขนาด');
+            if (!colorMap[colorKey]) colorMap[colorKey] = {};
+            colorMap[colorKey][sizeKey] = (colorMap[colorKey][sizeKey] || 0) + (sku.stock || 0);
+        });
+
+        const colors = Object.keys(colorMap);
+        const multiColor = colors.filter(c => c !== '__none__').length > 1;
+
+        colors.forEach(colorKey => {
+            const label = multiColor && colorKey !== '__none__'
+                ? `${p.name} <span class="sr-color-label">(${colorKey})</span>`
+                : p.name;
+            rows.push({ label, sizeStock: colorMap[colorKey] });
+        });
+
+        if (skus.length === 0) rows.push({ label: p.name, sizeStock: {} });
+    });
+
+    const sortedSizes = _srSortSizes([...allSizesSet]);
+
+    const colTotals = {};
+    sortedSizes.forEach(s => { colTotals[s] = 0; });
+    let grandTotal = 0;
+
+    const tbody = rows.map(row => {
+        let rowTotal = 0;
+        const cells = sortedSizes.map(s => {
+            const v = row.sizeStock[s] || 0;
+            rowTotal += v;
+            colTotals[s] += v;
+            return v > 0 ? `<td>${v}</td>` : `<td class="dash">-</td>`;
+        }).join('');
+        grandTotal += rowTotal;
+        return `<tr><td>${row.label}</td>${cells}<td class="total-col">${rowTotal || '-'}</td></tr>`;
+    }).join('');
+
+    const sumCells = sortedSizes.map(s => `<td>${colTotals[s] || '-'}</td>`).join('');
+    const thead = `<thead><tr><th>รายการสินค้า</th>${sortedSizes.map(s => `<th>${s}</th>`).join('')}<th>รวม (ตัว)</th></tr></thead>`;
+    const tfoot = `<tfoot><tr class="sum-row"><td>รวมทั้งหมด</td>${sumCells}<td>${grandTotal}</td></tr></tfoot>`;
+
+    const dateStr = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+    const brandEl = document.getElementById('filterBrand');
+    const brandLabel = brandEl && brandEl.value ? ` · แบรนด์: ${brandEl.options[brandEl.selectedIndex].text}` : '';
+    const statusTab = document.querySelector('.status-tab.active');
+    const statusLabel = statusTab ? ` · สถานะ: ${statusTab.textContent.replace(/\d+/g, '').trim()}` : '';
+    const searchVal = (document.getElementById('searchProduct')?.value || '').trim();
+    const searchLabel = searchVal ? ` · ค้นหา: "${searchVal}"` : '';
+
+    document.getElementById('srMeta').textContent =
+        `สร้างเมื่อ: ${dateStr} · แสดง ${rows.length} รายการ${brandLabel}${statusLabel}${searchLabel}`;
+    document.getElementById('srTable').innerHTML = thead + `<tbody>${tbody}</tbody>` + tfoot;
+    document.getElementById('stockReportModal').classList.add('open');
+}
+
+function closeStockReport() {
+    document.getElementById('stockReportModal').classList.remove('open');
+}
+
+function printStockReport() {
+    window.print();
+}
+
+// ==================== END STOCK REPORT ====================
