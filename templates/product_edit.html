@@ -895,6 +895,10 @@
     <script>
         let optionIndex = 0;
         let warehousesList = [];
+
+        // Cache: sku_code → {price, stock} — เก็บข้อมูล SKU เดิมจาก API
+        // ใช้ restore สต็อก/ราคาหลังจาก rebuild ตาราง variant ใหม่
+        let _cachedSkuData = {};
         
         // Get product ID from URL
         const urlParts = window.location.pathname.split('/');
@@ -1528,9 +1532,17 @@
                 }
             }
 
+            // บันทึกสถานะตารางปัจจุบันก่อน rebuild
+            // รวมกับ _cachedSkuData จาก API เพื่อให้ข้อมูลครบที่สุด
+            const tableSnapshot = _captureTableData();
+            const mergedCache = Object.assign({}, _cachedSkuData, tableSnapshot);
+
             const variants = generateCartesianProduct(options);
             displayVariantsTable(variants, options);
             document.getElementById('variants-section').style.display = 'block';
+
+            // Restore stock และ price จาก cache (exact → variant → suffix match)
+            _applySkuDataToTable(mergedCache);
         });
 
         function collectOptionsData() {
@@ -2166,21 +2178,97 @@
         function populateExistingSkus(skus) {
             const tbody = document.querySelector('#variants-table tbody');
             if (!tbody) return;
-            
+
+            // บันทึกลง cache เพื่อใช้ restore ภายหลัง
             skus.forEach(sku => {
-                const existingRow = Array.from(tbody.querySelectorAll('tr')).find(row => {
-                    const skuCodeInput = row.querySelector('.sku-code');
-                    return skuCodeInput && skuCodeInput.value === sku.sku_code;
-                });
-                
-                if (existingRow) {
-                    const priceInput = existingRow.querySelector('.sku-price');
-                    if (priceInput) {
-                        priceInput.value = sku.price || 0;
+                if (sku.sku_code) {
+                    _cachedSkuData[sku.sku_code] = {
+                        price: sku.price || 0,
+                        stock: sku.stock || 0
+                    };
+                }
+            });
+
+            _applySkuDataToTable(_cachedSkuData);
+        }
+
+        // ดึงข้อมูล {sku_code → {price, stock}} จากตารางที่แสดงอยู่ในปัจจุบัน
+        function _captureTableData() {
+            const tbody = document.querySelector('#variants-table tbody');
+            if (!tbody) return {};
+            const map = {};
+            tbody.querySelectorAll('tr').forEach(row => {
+                const codeInput = row.querySelector('.sku-code');
+                const priceInput = row.querySelector('.sku-price');
+                const stockCell = row.querySelector('.sku-stock-display');
+                if (codeInput && codeInput.value) {
+                    map[codeInput.value] = {
+                        price: parseFloat(priceInput?.value) || 0,
+                        stock: parseInt(stockCell?.textContent) || 0
+                    };
+                }
+            });
+            return map;
+        }
+
+        // เติม price/stock ลงในตารางจาก map {sku_code → {price, stock}}
+        // ลำดับการ match: 1) exact  2) variant-values  3) size-suffix
+        function _applySkuDataToTable(stockMap) {
+            const tbody = document.querySelector('#variants-table tbody');
+            if (!tbody || !Object.keys(stockMap).length) return;
+
+            // สร้าง lookup เพิ่มเติม: segments-set → entry (สำหรับ variant match)
+            const segmentEntries = Object.entries(stockMap).map(([code, data]) => ({
+                code,
+                data,
+                segs: new Set(code.toUpperCase().split('-')),
+                used: false
+            }));
+
+            tbody.querySelectorAll('tr').forEach(row => {
+                const codeInput = row.querySelector('.sku-code');
+                if (!codeInput) return;
+                const newCode = codeInput.value;
+
+                let found = null;
+
+                // 1. Exact match
+                if (stockMap[newCode] !== undefined) {
+                    found = stockMap[newCode];
+                }
+
+                // 2. Variant-values match — ทุก segment ของ code ใหม่ต้องอยู่ใน code เดิม
+                if (!found) {
+                    const newSegs = new Set(newCode.toUpperCase().split('-'));
+                    const entry = segmentEntries.find(e =>
+                        !e.used &&
+                        [...newSegs].every(seg => e.segs.has(seg))
+                    );
+                    if (entry) {
+                        entry.used = true;
+                        found = entry.data;
                     }
-                    const stockCell = existingRow.querySelector('.sku-stock-display');
+                }
+
+                // 3. Suffix match — เฉพาะ segment สุดท้าย (ไซส์) ตรงกัน
+                if (!found) {
+                    const newSuffix = newCode.split('-').pop().toUpperCase();
+                    const entry = segmentEntries.find(e =>
+                        !e.used &&
+                        e.segs.has(newSuffix)
+                    );
+                    if (entry) {
+                        entry.used = true;
+                        found = entry.data;
+                    }
+                }
+
+                if (found) {
+                    const priceInput = row.querySelector('.sku-price');
+                    const stockCell = row.querySelector('.sku-stock-display');
+                    if (priceInput) priceInput.value = found.price;
                     if (stockCell) {
-                        const stock = sku.stock || 0;
+                        const stock = found.stock;
                         stockCell.textContent = stock;
                         stockCell.style.color = stock <= 0 ? '#ef4444' : stock <= 5 ? '#f59e0b' : '#10b981';
                         stockCell.style.fontWeight = '600';
