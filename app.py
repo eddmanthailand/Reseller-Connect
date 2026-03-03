@@ -9007,17 +9007,22 @@ def restore_quick_order_stock(order_id):
 @app.route('/api/admin/customers', methods=['GET'])
 @admin_required
 def get_customers():
-    """Get all customers with aggregated order stats"""
+    """Get all customers — UNION of quick-order customers + reseller contact books"""
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # === Quick-order / admin customers ===
         cursor.execute('''
             SELECT
+                'admin_' || c.id::text AS uid,
+                'admin' AS source_type,
                 c.id, c.name, c.phone, c.address, c.province, c.district,
                 c.subdistrict, c.postal_code, c.source, c.tags, c.note,
                 c.created_at, c.updated_at,
+                NULL::text AS reseller_name,
                 COUNT(DISTINCT o.id) AS order_count,
                 COALESCE(SUM(o.final_amount), 0) AS total_spent,
                 MAX(o.created_at) AS last_order_at,
@@ -9026,18 +9031,47 @@ def get_customers():
             LEFT JOIN orders o ON o.customer_id = c.id AND o.is_quick_order = TRUE
                 AND o.status NOT IN ('cancelled', 'returned', 'stock_restored')
             GROUP BY c.id
-            ORDER BY last_order_at DESC NULLS LAST, c.created_at DESC
         ''')
-        rows = cursor.fetchall()
+        admin_rows = [dict(r) for r in cursor.fetchall()]
+
+        # === Reseller contact-book customers ===
+        cursor.execute('''
+            SELECT
+                'rc_' || rc.id::text AS uid,
+                'reseller' AS source_type,
+                rc.id,
+                rc.full_name AS name,
+                rc.phone,
+                rc.address,
+                rc.province,
+                rc.district,
+                rc.subdistrict,
+                rc.postal_code,
+                'reseller'::text AS source,
+                '{}'::text[] AS tags,
+                rc.notes AS note,
+                rc.created_at,
+                rc.updated_at,
+                u.full_name AS reseller_name,
+                0::bigint AS order_count,
+                0::numeric AS total_spent,
+                NULL::timestamp AS last_order_at,
+                '{}'::text[] AS platforms
+            FROM reseller_customers rc
+            JOIN users u ON u.id = rc.reseller_id
+        ''')
+        reseller_rows = [dict(r) for r in cursor.fetchall()]
+
+        all_rows = admin_rows + reseller_rows
         customers = []
-        for row in rows:
-            c = dict(row)
-            c['total_spent'] = float(c['total_spent'])
-            c['order_count'] = int(c['order_count'])
-            c['platforms'] = c['platforms'] or []
-            c['tags'] = c['tags'] or []
-            # Auto-label based on order_count
-            if not c['tags']:
+        for c in all_rows:
+            c['total_spent'] = float(c['total_spent'] or 0)
+            c['order_count'] = int(c['order_count'] or 0)
+            c['platforms'] = list(c['platforms'] or [])
+            c['tags'] = list(c['tags'] or [])
+            if c['source_type'] == 'reseller':
+                c['auto_tag'] = 'reseller'
+            elif not c['tags']:
                 if c['order_count'] == 0:
                     c['auto_tag'] = 'inactive'
                 elif c['order_count'] >= 3:
@@ -9045,8 +9079,13 @@ def get_customers():
                 else:
                     c['auto_tag'] = 'new'
             else:
-                c['auto_tag'] = c['tags'][0] if c['tags'] else 'new'
+                c['auto_tag'] = c['tags'][0]
             customers.append(c)
+
+        # Sort: most recent first (handle datetime vs None)
+        import datetime as _dt
+        _epoch = _dt.datetime(2000, 1, 1)
+        customers.sort(key=lambda x: (x['last_order_at'] or x['updated_at'] or x['created_at'] or _epoch), reverse=True)
         return jsonify(customers), 200
     except Exception as e:
         return handle_error(e)

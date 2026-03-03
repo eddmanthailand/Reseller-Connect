@@ -10393,8 +10393,8 @@ const PLATFORM_LABEL = {
     shopee: '🛍️ Shopee', lazada: '📦 Lazada', tiktok: '🎵 TikTok',
     line: '💬 LINE', facebook: '📘 Facebook', onsale: '🏪 หน้าร้าน', other: '🔹 อื่นๆ'
 };
-const TAG_LABEL = { frequent: '🌟 ประจำ', new: '🆕 ใหม่', inactive: '💤 ไม่ active' };
-const TAG_COLOR = { frequent: '#f59e0b', new: '#10b981', inactive: '#6b7280' };
+const TAG_LABEL = { frequent: '🌟 ประจำ', new: '🆕 ใหม่', inactive: '💤 ไม่ active', reseller: '👤 ตัวแทน' };
+const TAG_COLOR = { frequent: '#f59e0b', new: '#10b981', inactive: '#6b7280', reseller: '#7c3aed' };
 
 async function loadCustomers() {
     try {
@@ -10437,6 +10437,7 @@ function renderCustomersTable(customers) {
     const rows = customers.map(c => {
         const tagLabel = TAG_LABEL[c.auto_tag] || '';
         const tagColor = TAG_COLOR[c.auto_tag] || '#6b7280';
+        const isReseller = c.source_type === 'reseller';
         const platforms = (c.platforms || []).map(p =>
             `<span style="font-size:11px;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;white-space:nowrap;">${PLATFORM_LABEL[p] || p}</span>`
         ).join(' ');
@@ -10444,21 +10445,25 @@ function renderCustomersTable(customers) {
             ? new Date(c.last_order_at).toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'2-digit' })
             : '—';
         const spent = c.total_spent > 0 ? `฿${c.total_spent.toLocaleString('th-TH', { maximumFractionDigits: 0 })}` : '—';
+        const subText = isReseller
+            ? `<div style="font-size:11px;color:#a78bfa;margin-top:2px;">ตัวแทน: ${c.reseller_name || '—'}</div>`
+            : (c.note ? `<div style="font-size:11px;opacity:0.5;margin-top:2px;">${c.note}</div>` : '');
+        const editBtn = isReseller
+            ? `<span style="font-size:11px;opacity:0.35;">จัดการโดยตัวแทน</span>`
+            : `<button onclick="openEditCustomerModal(${c.id})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">แก้ไข</button>`;
         return `<tr>
             <td>
                 <div style="font-weight:600;font-size:14px;">${c.name || '<span style="opacity:0.4">ไม่มีชื่อ</span>'}</div>
-                ${c.note ? `<div style="font-size:11px;opacity:0.5;margin-top:2px;">${c.note}</div>` : ''}
+                ${subText}
             </td>
             <td style="font-size:13px;">${c.phone || '—'}</td>
             <td style="font-size:12px;opacity:0.8;">${[c.province, c.district].filter(Boolean).join(', ') || '—'}</td>
-            <td style="text-align:center;">${c.order_count}</td>
-            <td style="text-align:right;font-weight:600;">${spent}</td>
+            <td style="text-align:center;">${isReseller ? '—' : c.order_count}</td>
+            <td style="text-align:right;font-weight:600;">${isReseller ? '—' : spent}</td>
             <td style="display:flex;flex-wrap:wrap;gap:4px;padding-top:10px;">${platforms || '—'}</td>
             <td style="font-size:12px;">${lastOrder}</td>
             <td><span style="font-size:11px;background:${tagColor}22;color:${tagColor};padding:3px 8px;border-radius:20px;white-space:nowrap;">${tagLabel}</span></td>
-            <td>
-                <button onclick="openEditCustomerModal(${c.id})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">แก้ไข</button>
-            </td>
+            <td>${editBtn}</td>
         </tr>`;
     }).join('');
 
