@@ -1443,6 +1443,7 @@ async function loadPromoWallet() {
                 <div>
                     <div style="font-weight:700;color:white;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name || desc}</div>
                     <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:2px;">${desc}${c.min_spend > 0 ? ' · ขั้นต่ำ ฿'+Number(c.min_spend).toLocaleString() : ''}</div>
+                    ${c.applies_to && c.applies_to !== 'all' ? `<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:3px;">${c.applies_to === 'brand' ? '🏷️' : '📦'} ${(c.applies_to_names && c.applies_to_names.length) ? c.applies_to_names.slice(0,2).join(', ') + (c.applies_to_names.length > 2 ? ` +${c.applies_to_names.length-2}` : '') : 'เฉพาะบางรายการ'}</div>` : ''}
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;">
                     <div>
@@ -1489,6 +1490,7 @@ async function loadProfileCouponWallet() {
                         <div style="font-weight:700;color:#ffffff;font-size:14px;letter-spacing:1px;">${c.code}</div>
                         <div style="color:white;font-size:13px;margin-top:3px;">${c.name || desc}</div>
                         <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
+                        ${c.applies_to && c.applies_to !== 'all' ? `<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">${c.applies_to === 'brand' ? '🏷️' : '📦'} ${(c.applies_to_names && c.applies_to_names.length) ? c.applies_to_names.slice(0,2).join(', ') + (c.applies_to_names.length > 2 ? ` +${c.applies_to_names.length-2}` : '') : 'เฉพาะบางรายการ'}</div>` : ''}
                         <div style="color:rgba(255,255,255,0.35);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
                     </div>
                     <span style="font-size:11px;font-weight:600;color:${statusColor};white-space:nowrap;">${statusLabel}</span>

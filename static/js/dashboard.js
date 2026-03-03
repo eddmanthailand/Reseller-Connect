@@ -9542,6 +9542,7 @@ async function loadCoupons() {
                     <div>
                         <div class="coupon-ticket-name">${c.name || _fmtCouponDiscount(c)}</div>
                         <div class="coupon-ticket-desc">${_fmtCouponDiscount(c)}${c.min_spend > 0 ? ' · ขั้นต่ำ ฿'+Number(c.min_spend).toLocaleString() : ''}</div>
+                        ${c.applies_to && c.applies_to !== 'all' ? `<div style="margin-top:3px;font-size:10px;color:rgba(255,255,255,0.5);">${c.applies_to === 'brand' ? '🏷️ แบรนด์' : '📦 สินค้า'}: ${(c.applies_to_names && c.applies_to_names.length) ? c.applies_to_names.slice(0,2).join(', ') + (c.applies_to_names.length > 2 ? ` +${c.applies_to_names.length-2}` : '') : (c.applies_to_ids?.length || 0) + ' รายการ'}</div>` : ''}
                     </div>
                     <div class="coupon-ticket-footer">
                         <div>
@@ -9636,6 +9637,25 @@ async function openCouponModal(id = null) {
             </div>
 
             <div class="apple-section">
+                <span class="apple-section-label">ใช้ได้กับ</span>
+                <div class="apple-field" style="margin-bottom:10px;">
+                    <label class="apple-field-label">ขอบเขตสินค้า</label>
+                    <select id="cAppliesTo" class="apple-select" onchange="updateCouponAppliesTo()">
+                        <option value="all" ${(!c.applies_to || c.applies_to === 'all') ? 'selected' : ''}>ทั้งหมด</option>
+                        <option value="brand" ${c.applies_to === 'brand' ? 'selected' : ''}>เฉพาะแบรนด์</option>
+                        <option value="product" ${c.applies_to === 'product' ? 'selected' : ''}>เฉพาะสินค้า</option>
+                    </select>
+                </div>
+                <div id="cAppliesToPanel" style="display:none;">
+                    <div id="cAppliesToSearch" style="margin-bottom:8px;">
+                        <input id="cAppliesToSearchInput" class="apple-input" placeholder="ค้นหา..." oninput="filterCouponAppliesTo(this.value)" style="margin-bottom:6px;">
+                    </div>
+                    <div id="cAppliesToList" style="max-height:180px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:rgba(255,255,255,0.04);"></div>
+                </div>
+                <div id="cAppliesToSelected" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+
+            <div class="apple-section">
                 <span class="apple-section-label">ขีดจำกัดการใช้งาน</span>
                 <div class="apple-row-2">
                     <div class="apple-field">
@@ -9696,6 +9716,94 @@ async function openCouponModal(id = null) {
     document.body.insertAdjacentHTML('beforeend', html);
     if (c.min_tier_id) document.getElementById('cTier').value = c.min_tier_id;
     updateCouponUI();
+    _couponAppliesToItems = [];
+    _couponSelectedIds = new Set((c.applies_to_ids || []).map(Number));
+    updateCouponAppliesTo();
+}
+
+let _couponAppliesToItems = [];
+let _couponSelectedIds = new Set();
+
+async function updateCouponAppliesTo() {
+    const val = document.getElementById('cAppliesTo')?.value;
+    const panel = document.getElementById('cAppliesToPanel');
+    if (!panel) return;
+    if (val === 'all') {
+        panel.style.display = 'none';
+        _renderCouponAppliesToSelected();
+        return;
+    }
+    panel.style.display = 'block';
+    const list = document.getElementById('cAppliesToList');
+    list.innerHTML = '<div style="padding:12px;text-align:center;color:rgba(255,255,255,0.4);font-size:12px;">กำลังโหลด...</div>';
+    try {
+        if (val === 'brand') {
+            const r = await fetch('/api/brands', { credentials: 'include' });
+            const data = await r.json();
+            _couponAppliesToItems = (Array.isArray(data) ? data : (data.brands || [])).map(b => ({ id: b.id, name: b.name }));
+        } else {
+            const r = await fetch('/api/admin/products?limit=200', { credentials: 'include' });
+            const data = await r.json();
+            _couponAppliesToItems = (Array.isArray(data) ? data : (data.products || [])).map(p => ({ id: p.id, name: p.name }));
+        }
+        _renderCouponAppliesToList('');
+    } catch(e) {
+        list.innerHTML = '<div style="padding:12px;text-align:center;color:#ef4444;font-size:12px;">โหลดไม่สำเร็จ</div>';
+    }
+    _renderCouponAppliesToSelected();
+}
+
+function filterCouponAppliesTo(q) {
+    _renderCouponAppliesToList(q.toLowerCase());
+}
+
+function _renderCouponAppliesToList(q) {
+    const list = document.getElementById('cAppliesToList');
+    if (!list) return;
+    const filtered = q ? _couponAppliesToItems.filter(x => x.name.toLowerCase().includes(q)) : _couponAppliesToItems;
+    if (!filtered.length) {
+        list.innerHTML = '<div style="padding:12px;text-align:center;color:rgba(255,255,255,0.4);font-size:12px;">ไม่พบรายการ</div>';
+        return;
+    }
+    list.innerHTML = filtered.map(item => `
+        <div onclick="toggleCouponAppliesItem(${item.id}, ${JSON.stringify(item.name).replace(/"/g,'&quot;')})"
+             style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background 0.1s;border-bottom:1px solid rgba(255,255,255,0.05);"
+             onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+            <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${_couponSelectedIds.has(item.id) ? '#a855f7' : 'rgba(255,255,255,0.3)'};background:${_couponSelectedIds.has(item.id) ? '#a855f7' : 'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;">
+                ${_couponSelectedIds.has(item.id) ? '<svg width="10" height="10" viewBox="0 0 12 12"><polyline points="1,6 5,10 11,2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>' : ''}
+            </div>
+            <span style="font-size:13px;color:rgba(255,255,255,0.9);">${item.name}</span>
+        </div>`).join('');
+}
+
+function toggleCouponAppliesItem(id, name) {
+    if (_couponSelectedIds.has(id)) {
+        _couponSelectedIds.delete(id);
+    } else {
+        _couponSelectedIds.add(id);
+    }
+    const q = document.getElementById('cAppliesToSearchInput')?.value?.toLowerCase() || '';
+    _renderCouponAppliesToList(q);
+    _renderCouponAppliesToSelected();
+}
+
+function _renderCouponAppliesToSelected() {
+    const sel = document.getElementById('cAppliesToSelected');
+    if (!sel) return;
+    const val = document.getElementById('cAppliesTo')?.value;
+    if (val === 'all' || _couponSelectedIds.size === 0) {
+        sel.innerHTML = val === 'all' ? '<span style="font-size:12px;color:rgba(255,255,255,0.4);">ใช้ได้กับสินค้าทุกรายการ</span>' : '';
+        return;
+    }
+    const allItems = _couponAppliesToItems;
+    const tags = [..._couponSelectedIds].map(id => {
+        const item = allItems.find(x => x.id === id);
+        const name = item ? item.name : `#${id}`;
+        return `<span style="background:rgba(168,85,247,0.25);border:1px solid rgba(168,85,247,0.4);border-radius:20px;padding:3px 10px;font-size:12px;color:#d8b4fe;display:flex;align-items:center;gap:4px;">
+            ${name} <span onclick="toggleCouponAppliesItem(${id}, '')" style="cursor:pointer;opacity:0.7;font-size:14px;line-height:1;">&times;</span>
+        </span>`;
+    }).join('');
+    sel.innerHTML = tags || '';
 }
 
 function updateCouponUI() {
@@ -9719,6 +9827,7 @@ function closeCouponModal() {
 }
 
 async function saveCoupon() {
+    const appliesTo = document.getElementById('cAppliesTo')?.value || 'all';
     const body = {
         code: (document.getElementById('cCode').value || '').trim().toUpperCase(),
         name: (document.getElementById('cName').value || '').trim(),
@@ -9732,7 +9841,9 @@ async function saveCoupon() {
         start_date: document.getElementById('cStart').value || null,
         end_date: document.getElementById('cEnd').value || null,
         is_stackable: document.getElementById('cStackable').checked,
-        is_active: document.getElementById('cActive').checked
+        is_active: document.getElementById('cActive').checked,
+        applies_to: appliesTo,
+        applies_to_ids: appliesTo !== 'all' ? [..._couponSelectedIds] : []
     };
     if (!body.code) { showGlobalAlert('กรุณาระบุรหัสคูปอง', 'error'); return; }
     const url = _editingCouponId ? `/api/admin/coupons/${_editingCouponId}` : '/api/admin/coupons';

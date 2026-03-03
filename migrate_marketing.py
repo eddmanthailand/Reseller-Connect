@@ -106,6 +106,13 @@ def run_marketing_migration():
         ''')
         logging.info("Table 'mto_orders' altered.")
 
+        cursor.execute('''
+            ALTER TABLE coupons
+            ADD COLUMN IF NOT EXISTS applies_to VARCHAR(20) NOT NULL DEFAULT 'all',
+            ADD COLUMN IF NOT EXISTS applies_to_ids INTEGER[] NOT NULL DEFAULT '{}'
+        ''')
+        logging.info("Table 'coupons' altered: applies_to, applies_to_ids added.")
+
         conn.commit()
         logging.info("Marketing Module Migration completed successfully!")
         return True

@@ -7118,6 +7118,7 @@ def create_order():
         coupon_code = (data.get('coupon_code') or '').strip()
         cart_brand_ids = list({item.get('brand_id') for item in items if item.get('brand_id')})
         cart_category_ids = list({item.get('category_id') for item in items if item.get('category_id')})
+        cart_product_ids = list({item.get('product_id') for item in items if item.get('product_id')})
         cart_total_qty = sum(item['quantity'] for item in items)
 
         cursor.execute('''
@@ -7133,7 +7134,8 @@ def create_order():
         if coupon_code:
             if applied_promo is None or applied_promo.get('is_stackable'):
                 applied_coupon, coupon_discount, coupon_error = _calc_coupon_discount(
-                    cursor, coupon_code, item_total - promo_discount, user_id, user_tier_rank)
+                    cursor, coupon_code, item_total - promo_discount, user_id, user_tier_rank,
+                    cart_brand_ids=cart_brand_ids, cart_product_ids=cart_product_ids)
 
         # Check free_shipping coupon
         free_shipping_coupon = applied_coupon and applied_coupon.get('discount_type') == 'free_shipping'
@@ -14930,13 +14932,50 @@ def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, 
     return (dict(best_promo) if best_promo else None, best_discount)
 
 
-def _calc_coupon_discount(cursor, coupon_code, cart_total, user_id, user_tier_rank):
+def _enrich_applies_to_names(cursor, rows):
+    """Add applies_to_names list to each coupon row based on applies_to and applies_to_ids."""
+    brand_ids_needed = set()
+    product_ids_needed = set()
+    for r in rows:
+        ids = list(r.get('applies_to_ids') or [])
+        if r.get('applies_to') == 'brand' and ids:
+            brand_ids_needed.update(int(x) for x in ids)
+        elif r.get('applies_to') == 'product' and ids:
+            product_ids_needed.update(int(x) for x in ids)
+
+    brand_name_map = {}
+    product_name_map = {}
+
+    if brand_ids_needed:
+        cursor.execute('SELECT id, name FROM brands WHERE id = ANY(%s)', (list(brand_ids_needed),))
+        brand_name_map = {row['id']: row['name'] for row in cursor.fetchall()}
+
+    if product_ids_needed:
+        cursor.execute('SELECT id, name FROM products WHERE id = ANY(%s)', (list(product_ids_needed),))
+        product_name_map = {row['id']: row['name'] for row in cursor.fetchall()}
+
+    for r in rows:
+        ids = [int(x) for x in (r.get('applies_to_ids') or [])]
+        at = r.get('applies_to', 'all') or 'all'
+        if at == 'brand':
+            r['applies_to_names'] = [brand_name_map.get(i, f'Brand#{i}') for i in ids]
+        elif at == 'product':
+            r['applies_to_names'] = [product_name_map.get(i, f'Product#{i}') for i in ids]
+        else:
+            r['applies_to_names'] = []
+
+
+def _calc_coupon_discount(cursor, coupon_code, cart_total, user_id, user_tier_rank, cart_brand_ids=None, cart_product_ids=None):
     """
     Layer 3: Validate and calculate coupon discount.
     Returns: (coupon_row, discount_amount, error_message)
     """
     if not coupon_code:
         return (None, 0, None)
+    if cart_brand_ids is None:
+        cart_brand_ids = []
+    if cart_product_ids is None:
+        cart_product_ids = []
 
     cursor.execute('''
         SELECT c.*, rt.level_rank as min_tier_rank
@@ -14960,6 +14999,16 @@ def _calc_coupon_discount(cursor, coupon_code, cart_total, user_id, user_tier_ra
         return (None, 0, f'ต้องซื้อขั้นต่ำ {float(coupon["min_spend"]):,.0f} บาท')
     if coupon['min_tier_rank'] and user_tier_rank < coupon['min_tier_rank']:
         return (None, 0, 'ระดับสมาชิกของคุณไม่ตรงกับเงื่อนไขคูปองนี้')
+
+    # Check applies_to restriction
+    applies_to = coupon.get('applies_to', 'all') or 'all'
+    applies_to_ids = list(coupon.get('applies_to_ids') or [])
+    if applies_to == 'brand' and applies_to_ids:
+        if not set(applies_to_ids) & set(int(x) for x in cart_brand_ids if x):
+            return (None, 0, 'คูปองนี้ใช้ได้เฉพาะสินค้าบางแบรนด์เท่านั้น')
+    elif applies_to == 'product' and applies_to_ids:
+        if not set(applies_to_ids) & set(int(x) for x in cart_product_ids if x):
+            return (None, 0, 'คูปองนี้ใช้ได้เฉพาะสินค้าที่กำหนดเท่านั้น')
 
     # Check user has claimed this coupon
     cursor.execute('''
@@ -15150,6 +15199,7 @@ def admin_get_coupons():
             for f in ['discount_value', 'max_discount', 'min_spend']:
                 if r[f] is not None:
                     r[f] = float(r[f])
+        _enrich_applies_to_names(cursor, rows)
         return jsonify(rows), 200
     except Exception as e:
         return handle_error(e)
@@ -15170,11 +15220,13 @@ def admin_create_coupon():
             return jsonify({'error': 'กรุณาระบุรหัสคูปอง'}), 400
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        applies_to = data.get('applies_to', 'all') or 'all'
+        applies_to_ids = [int(x) for x in (data.get('applies_to_ids') or []) if x]
         cursor.execute('''
             INSERT INTO coupons (code, name, discount_type, discount_value, max_discount,
                 min_spend, total_quota, per_user_limit, target_type, min_tier_id,
-                is_stackable, start_date, end_date, is_active)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                is_stackable, start_date, end_date, is_active, applies_to, applies_to_ids)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING *
         ''', (
             code, data.get('name'), data.get('discount_type', 'fixed'),
@@ -15182,7 +15234,8 @@ def admin_create_coupon():
             data.get('min_spend', 0), data.get('total_quota', 0),
             data.get('per_user_limit', 1), data.get('target_type', 'all'),
             data.get('min_tier_id'), data.get('is_stackable', False),
-            data.get('start_date'), data.get('end_date'), data.get('is_active', True)
+            data.get('start_date'), data.get('end_date'), data.get('is_active', True),
+            applies_to, applies_to_ids
         ))
         coupon = dict(cursor.fetchone())
         conn.commit()
@@ -15207,11 +15260,14 @@ def admin_update_coupon(coupon_id):
         data = request.get_json()
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        applies_to = data.get('applies_to', 'all') or 'all'
+        applies_to_ids = [int(x) for x in (data.get('applies_to_ids') or []) if x]
         cursor.execute('''
             UPDATE coupons SET
                 name=%s, discount_type=%s, discount_value=%s, max_discount=%s,
                 min_spend=%s, total_quota=%s, per_user_limit=%s, target_type=%s,
-                min_tier_id=%s, is_stackable=%s, start_date=%s, end_date=%s, is_active=%s
+                min_tier_id=%s, is_stackable=%s, start_date=%s, end_date=%s, is_active=%s,
+                applies_to=%s, applies_to_ids=%s
             WHERE id=%s RETURNING *
         ''', (
             data.get('name'), data.get('discount_type'), data.get('discount_value'),
@@ -15220,7 +15276,7 @@ def admin_update_coupon(coupon_id):
             data.get('target_type', 'all'), data.get('min_tier_id'),
             data.get('is_stackable', False),
             data.get('start_date'), data.get('end_date'), data.get('is_active', True),
-            coupon_id
+            applies_to, applies_to_ids, coupon_id
         ))
         coupon = cursor.fetchone()
         if not coupon:
@@ -15374,7 +15430,7 @@ def reseller_get_available_coupons():
         cursor.execute('''
             SELECT c.id, c.code, c.name, c.discount_type, c.discount_value, c.max_discount,
                    c.min_spend, c.total_quota, c.usage_count, c.per_user_limit,
-                   c.start_date, c.end_date, c.is_stackable,
+                   c.start_date, c.end_date, c.is_stackable, c.applies_to, c.applies_to_ids,
                    rt.name as min_tier_name,
                    COALESCE(uc_count.times_claimed, 0) as times_claimed,
                    (uc_mine.id IS NOT NULL) as already_claimed
@@ -15397,6 +15453,7 @@ def reseller_get_available_coupons():
             for f in ['discount_value', 'max_discount', 'min_spend']:
                 if r[f] is not None:
                     r[f] = float(r[f])
+        _enrich_applies_to_names(cursor, rows)
         return jsonify(rows), 200
     except Exception as e:
         return handle_error(e)
@@ -15419,7 +15476,7 @@ def reseller_get_coupon_wallet():
             SELECT uc.id, uc.status, uc.collected_at, uc.used_at,
                    c.id as coupon_id, c.code, c.name, c.discount_type,
                    c.discount_value, c.max_discount, c.min_spend,
-                   c.end_date, c.is_stackable,
+                   c.end_date, c.is_stackable, c.is_active, c.applies_to, c.applies_to_ids,
                    o.order_number as used_in_order_number
             FROM user_coupons uc
             JOIN coupons c ON c.id = uc.coupon_id
@@ -15438,6 +15495,7 @@ def reseller_get_coupon_wallet():
             import datetime
             if r['status'] == 'ready' and r['end_date'] and r['end_date'] < datetime.datetime.now():
                 r['status'] = 'expired'
+        _enrich_applies_to_names(cursor, rows)
         return jsonify(rows), 200
     except Exception as e:
         return handle_error(e)
@@ -15503,6 +15561,7 @@ def reseller_preview_discount():
         coupon_code = (data.get('coupon_code') or '').strip()
         brand_ids = data.get('brand_ids', [])
         category_ids = data.get('category_ids', [])
+        product_ids = data.get('product_ids', [])
         cart_qty = int(data.get('cart_qty', 0))
 
         conn = get_db()
@@ -15524,7 +15583,8 @@ def reseller_preview_discount():
             # Coupon can stack if promotion is stackable OR no promotion applied
             if promo is None or promo.get('is_stackable'):
                 coupon, coupon_discount, coupon_error = _calc_coupon_discount(
-                    cursor, coupon_code, cart_total - promo_discount, user_id, user_tier_rank)
+                    cursor, coupon_code, cart_total - promo_discount, user_id, user_tier_rank,
+                    cart_brand_ids=brand_ids, cart_product_ids=product_ids)
             else:
                 coupon_error = 'โปรโมชันที่ใช้อยู่ไม่รองรับการใช้คูปองร่วมกัน'
 
