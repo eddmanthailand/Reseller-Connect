@@ -8543,7 +8543,7 @@ def get_brand_sales():
 def parse_shipping_label():
     """Use Gemini Vision to extract info from a Shopee/Lazada shipping label image"""
     try:
-        import google.generativeai as genai
+        from google import genai as google_genai
         import base64
 
         gemini_key = os.environ.get('GEMINI_API_KEY')
@@ -8565,8 +8565,7 @@ def parse_shipping_label():
         image_data = image_file.read()
         mime_type = image_file.mimetype or f'image/{ext}'
 
-        genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        client = google_genai.Client(api_key=gemini_key)
 
         prompt = """วิเคราะห์ใบปะหน้าพัสดุนี้และดึงข้อมูลต่อไปนี้เป็น JSON:
 {
@@ -8583,8 +8582,14 @@ def parse_shipping_label():
 ถ้าไม่พบข้อมูลใดให้ใส่ null
 ตอบเป็น JSON เท่านั้น ไม่ต้องมีคำอธิบายเพิ่มเติม"""
 
-        image_part = {'mime_type': mime_type, 'data': image_data}
-        response = model.generate_content([prompt, image_part])
+        from google.genai import types as genai_types
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                genai_types.Part.from_bytes(data=image_data, mime_type=mime_type),
+                prompt
+            ]
+        )
 
         raw = response.text.strip()
         if raw.startswith('```'):
