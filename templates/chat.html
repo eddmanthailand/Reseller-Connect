@@ -1017,6 +1017,7 @@
             <div class="chat-input-wrap">
                 <div class="quick-replies-bar" id="quickRepliesBar"></div>
                 <div id="adminOrderPreviewBar" style="display:none; padding:8px 12px; border-top:1px solid rgba(255,255,255,0.08); background:rgba(168,85,247,0.08);"></div>
+                <div id="adminCouponPreviewBar" style="display:none; padding:8px 12px; border-top:1px solid rgba(56,239,125,0.2); background:rgba(17,153,142,0.1); align-items:center; gap:8px; justify-content:space-between;"></div>
                 <div class="attachment-preview-bar" id="attachPreviewBar"></div>
                 <div class="input-row">
                     <div class="input-side-btns">
@@ -1050,6 +1051,12 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                         </div>
                                         <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">คำสั่งซื้อ</span>
+                                    </div>
+                                    <div onclick="openAdminChatCouponPicker(); closeAdminChatPlusMenu();" style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;padding:8px 6px;border-radius:12px;transition:background 0.15s;min-width:64px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+                                        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#11998e,#38ef7d);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(17,153,142,0.45);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                                        </div>
+                                        <span style="font-size:11px;color:rgba(255,255,255,0.85);white-space:nowrap;font-weight:500;">คูปอง</span>
                                     </div>
                                 </div>
                             </div>
@@ -1089,6 +1096,21 @@
             <button onclick="closeAdminChatOrderPicker()" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">&times;</button>
         </div>
         <div id="adminChatOrderPickerList" style="max-height:55vh; overflow-y:auto; padding-bottom:8px;"></div>
+    </div>
+</div>
+
+<!-- Admin Chat Coupon Picker Modal -->
+<div id="adminChatCouponModal" style="display:none; position:fixed; inset:0; z-index:10001; align-items:flex-end; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px);" onclick="if(event.target===this)this.style.display='none'">
+    <div style="width:100%; max-width:640px; margin:0 auto; background:linear-gradient(160deg,#0d1f1e,#0d0a1e); border-radius:22px 22px 0 0; border-top:1px solid rgba(56,239,125,0.2); box-shadow:0 -8px 32px rgba(0,0,0,0.5);">
+        <div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 0;"></div>
+        <div style="padding:14px 20px 12px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:16px;font-weight:700;margin:0;color:white;">🎟️ เลือกคูปอง</h3>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:rgba(56,239,125,0.8);">จะ assign ให้สมาชิกอัตโนมัติ</span>
+                <button onclick="document.getElementById('adminChatCouponModal').style.display='none'" style="background:rgba(255,255,255,0.1);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">&times;</button>
+            </div>
+        </div>
+        <div id="adminChatCouponList" style="max-height:55vh; overflow-y:auto; padding-bottom:8px;"></div>
     </div>
 </div>
 
@@ -1538,9 +1560,40 @@ function renderMsgsWithSep(msgs, otherLastRead, startDate) {
     return html;
 }
 
+function renderCouponCard(c, isAdmin) {
+    const fmtDisc = c.discount_type === 'percent'
+        ? `ลด ${c.discount_value}%${c.max_discount ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString('th-TH')})` : ''}`
+        : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง'
+        : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+    const expiry = c.end_date ? `หมดอายุ ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}` : '';
+    const minSpend = c.min_spend ? `ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}` : '';
+    const adminNote = isAdmin ? `<div style="font-size:10px;color:#34d399;margin-top:6px;text-align:center;">✓ คูปองถูกเพิ่มเข้า wallet ของสมาชิกแล้ว</div>` : '';
+    return `<div style="background:linear-gradient(135deg,rgba(17,153,142,0.2),rgba(56,239,125,0.1));border:1.5px dashed rgba(56,239,125,0.5);border-radius:14px;overflow:hidden;min-width:220px;max-width:260px;">
+        <div style="background:linear-gradient(135deg,#11998e,#38ef7d);padding:10px 14px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">🎟️</span>
+            <div>
+                <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;">${esc(c.code)}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.85);">${esc(c.name)}</div>
+            </div>
+        </div>
+        <div style="padding:10px 14px;">
+            <div style="font-size:13px;font-weight:700;color:#38ef7d;margin-bottom:4px;">${fmtDisc}</div>
+            ${minSpend ? `<div style="font-size:11px;color:rgba(255,255,255,0.55);">${minSpend}</div>` : ''}
+            ${expiry ? `<div style="font-size:11px;color:rgba(255,255,255,0.45);">${expiry}</div>` : ''}
+            ${adminNote}
+        </div>
+    </div>`;
+}
+
 function renderMsg(msg, otherLastRead) {
     const isMine = Number(msg.sender_id) === Number(currentUserId);
     const isRead = isMine && msg.id <= otherLastRead;
+
+    let couponHtml = '';
+    if (msg.coupon) {
+        const isAdminMsg = msg.sender_type === 'admin';
+        couponHtml = renderCouponCard(msg.coupon, isAdminMsg);
+    }
 
     let productHtml = '';
     if (msg.product) {
@@ -1619,15 +1672,18 @@ function renderMsg(msg, otherLastRead) {
     ).join('');
 
     const hasOrderCard = !!orderHtml;
+    const hasCouponCard = !!couponHtml;
     return `<div class="msg-row ${isMine ? 'me' : 'them'}">
         ${!isMine ? `<div class="msg-avatar-small">${currentMemberInitial}</div>` : ''}
         <div class="msg-bubble-wrap">
-            <div class="msg-bubble" style="${hasOrderCard ? 'padding:0;overflow:hidden;' : ''}">
+            <div class="msg-bubble" style="${hasOrderCard ? 'padding:0;overflow:hidden;' : hasCouponCard ? 'padding:0;background:transparent;box-shadow:none;' : ''}">
                 ${msg.is_broadcast ? `<div class="broadcast-label" style="${hasOrderCard ? 'padding:6px 11px 0;' : ''}">📢 Broadcast</div>` : ''}
                 ${orderHtml}
+                ${couponHtml}
                 ${productHtml}
-                ${msg.content && !hasOrderCard ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
+                ${msg.content && !hasOrderCard && !hasCouponCard ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
                 ${hasOrderCard && msg.content ? `<div class="msg-text" style="padding:4px 11px 8px;font-size:11px;color:rgba(255,255,255,0.7);">${esc(msg.content)}</div>` : ''}
+                ${hasCouponCard && msg.content ? `<div class="msg-text" style="margin-top:6px;font-size:12px;color:rgba(255,255,255,0.7);">${esc(msg.content)}</div>` : ''}
                 ${attachHtml ? `<div style="${hasOrderCard ? 'padding:0 11px 8px;' : ''}">${attachHtml}</div>` : ''}
             </div>
             <div class="msg-time">${fmtMsgTime(msg.created_at)}${isRead ? ' <span class="msg-read">อ่านแล้ว</span>' : ''}</div>
@@ -1658,11 +1714,33 @@ function fmtMsgTime(dateStr) {
 function fmtNum(n) { return Number(n||0).toLocaleString('th-TH'); }
 
 // ── Send Message ──
+let adminSelectedChatCoupon = null;
+
 async function sendMessage() {
     if (!currentThreadId) return;
     const input = document.getElementById('msgInput');
     const content = input.value.trim();
-    if (!content && pendingAttachments.length === 0 && selectedProducts.length === 0 && !adminSelectedChatOrder) return;
+    if (!content && pendingAttachments.length === 0 && selectedProducts.length === 0 && !adminSelectedChatOrder && !adminSelectedChatCoupon) return;
+
+    if (adminSelectedChatCoupon) {
+        const body = { content: content || '', coupon_id: adminSelectedChatCoupon.id };
+        const r = await fetch(`${API}/chat/threads/${currentThreadId}/messages`, {
+            method: 'POST', headers: csrfHeaders(), credentials: 'include',
+            body: JSON.stringify(body)
+        });
+        if (r.ok) {
+            input.value = '';
+            input.style.height = 'auto';
+            adminSelectedChatCoupon = null;
+            const bar = document.getElementById('adminCouponPreviewBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        } else {
+            const err = await r.json();
+            toast(err.error || 'ส่งไม่สำเร็จ', 'error');
+            return;
+        }
+        stopPolling(); runPoll(); return;
+    }
 
     if (adminSelectedChatOrder) {
         const body = { content: content || '', order_id: adminSelectedChatOrder.id };
@@ -1896,6 +1974,61 @@ document.addEventListener('click', function(e) {
 function autoResizeInput(el) {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Admin Coupon Picker ──
+async function openAdminChatCouponPicker() {
+    const modal = document.getElementById('adminChatCouponModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const list = document.getElementById('adminChatCouponList');
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);">
+        <div style="width:24px;height:24px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:chatSpinAnim 0.6s linear infinite;margin:0 auto 12px;"></div>
+        <div style="font-size:13px;">กำลังโหลด...</div></div>`;
+    try {
+        const r = await fetch(`${API}/admin/coupons`, { credentials: 'include' });
+        const coupons = await r.json();
+        const active = (Array.isArray(coupons) ? coupons : (coupons.coupons || [])).filter(c => c.is_active);
+        if (!active.length) {
+            list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);"><div style="font-size:32px;margin-bottom:10px;">🎟️</div><div>ยังไม่มีคูปอง</div></div>`;
+            return;
+        }
+        const fmtDisc = c => c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+        list.innerHTML = active.map(c => `
+            <div onclick="selectAdminChatCoupon(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+                 style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;"
+                 onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#38ef7d;">${esc(c.code)}</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);">${esc(c.name)}</div>
+                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                    <div style="font-size:12px;font-weight:600;color:#38ef7d;">${fmtDisc(c)}</div>
+                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</div>` : ''}
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = `<div style="text-align:center;padding:40px;color:#f87171;">โหลดข้อมูลไม่สำเร็จ</div>`;
+    }
+}
+
+function selectAdminChatCoupon(c) {
+    adminSelectedChatCoupon = c;
+    document.getElementById('adminChatCouponModal').style.display = 'none';
+    const bar = document.getElementById('adminCouponPreviewBar');
+    if (!bar) return;
+    const fmtDisc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+            <span style="font-size:16px;">🎟️</span>
+            <div style="min-width:0;">
+                <div style="font-size:12px;font-weight:700;color:#38ef7d;">${esc(c.code)}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.6);">${fmtDisc} · จะ assign ให้สมาชิกอัตโนมัติ</div>
+            </div>
+        </div>
+        <button onclick="adminSelectedChatCoupon=null;this.parentElement.style.display='none';" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>`;
 }
 
 // ── File Upload ──

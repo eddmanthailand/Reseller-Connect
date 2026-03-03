@@ -13481,7 +13481,7 @@ def get_chat_messages(thread_id):
         limit = request.args.get('limit', 50, type=int)
         
         msg_select = '''
-                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id, cm.order_id,
+                SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id, cm.order_id, cm.coupon_id,
                        u.full_name as sender_name,
                        r.name as sender_role,
                        (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
@@ -13578,6 +13578,19 @@ def get_chat_messages(thread_id):
                     od['shipping_fee'] = float(od['shipping_fee'] or 0)
                     od['final_amount'] = float(od['final_amount'] or 0)
                     msg['order'] = od
+            if msg.get('coupon_id'):
+                cursor.execute('''
+                    SELECT id, code, name, discount_type, discount_value, max_discount, min_spend, end_date
+                    FROM coupons WHERE id = %s
+                ''', (msg['coupon_id'],))
+                coupon_row = cursor.fetchone()
+                if coupon_row:
+                    cd = dict(coupon_row)
+                    cd['discount_value'] = float(cd['discount_value'] or 0)
+                    cd['max_discount'] = float(cd['max_discount'] or 0) if cd['max_discount'] else None
+                    cd['min_spend'] = float(cd['min_spend'] or 0) if cd['min_spend'] else None
+                    cd['end_date'] = cd['end_date'].isoformat() if cd['end_date'] else None
+                    msg['coupon'] = cd
         
         # Mark as read
         if messages:
@@ -13645,17 +13658,27 @@ def send_chat_message(thread_id):
         attachments = data.get('attachments', [])
         product_id = data.get('product_id', None)
         order_id = data.get('order_id', None)
+        coupon_id = data.get('coupon_id', None)
         
-        if not content and not attachments and not product_id and not order_id:
+        if not content and not attachments and not product_id and not order_id and not coupon_id:
             return jsonify({'error': 'Message content, attachments or product required'}), 400
         
         sender_type = 'reseller' if role_name == 'Reseller' else 'admin'
         
+        # If admin sends a coupon, auto-assign it to the reseller
+        if coupon_id and sender_type == 'admin':
+            reseller_id = thread['reseller_id']
+            cursor.execute('''
+                INSERT INTO user_coupons (user_id, coupon_id, status)
+                VALUES (%s, %s, 'ready')
+                ON CONFLICT (user_id, coupon_id) DO NOTHING
+            ''', (reseller_id, coupon_id))
+        
         # Insert message
         cursor.execute('''
-            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id, order_id)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at
-        ''', (thread_id, user_id, sender_type, content, product_id, order_id))
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id, order_id, coupon_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at
+        ''', (thread_id, user_id, sender_type, content, product_id, order_id, coupon_id))
         result = cursor.fetchone()
         message_id = result['id']
         
@@ -13674,6 +13697,8 @@ def send_chat_message(thread_id):
             preview = '[🧾 คำสั่งซื้อ]'
         elif product_id:
             preview = '[📦 สินค้า]'
+        elif coupon_id:
+            preview = '[🎟️ คูปอง]'
         else:
             preview = '[รูปภาพ]'
         cursor.execute('''

@@ -3994,25 +3994,47 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
         `;
     }
 
-    const hasOrderCard = !!orderCardHtml;
-    const bubbleStyle = hasOrderCard
+    let couponCardHtml = '';
+    if (msg.coupon) {
+        const c = msg.coupon;
+        const fmtDisc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+        couponCardHtml = `
+            <div style="border-radius:14px;overflow:hidden;margin-bottom:${msg.content ? '8px' : '0'};min-width:220px;max-width:280px;">
+                <div style="background:linear-gradient(135deg,#11998e,#38ef7d);padding:12px 16px 10px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">คูปองส่วนลด</div>
+                    <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;">${escapeHtmlChat(c.code)}</div>
+                    <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">${fmtDisc}</div>
+                </div>
+                <div style="background:rgba(17,153,142,0.15);border:1px dashed rgba(56,239,125,0.4);border-top:none;border-radius:0 0 14px 14px;padding:10px 16px;">
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);">${escapeHtmlChat(c.name || '')}</div>
+                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</div>` : ''}
+                    ${!isMine ? '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ คูปองถูกเพิ่มเข้า wallet ของคุณแล้ว</div>' : '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ ส่งคูปองให้ Admin แล้ว</div>'}
+                </div>
+            </div>`;
+    }
+
+    const hasSpecialCard = !!(orderCardHtml || couponCardHtml);
+    const bubbleStyle = hasSpecialCard
         ? `max-width: 85%; padding: 0; border-radius: 16px; overflow: hidden; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: #3a3a3c; border-bottom-left-radius: 4px;'}`
         : `max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}`;
 
+    const hasOrderCard = !!orderCardHtml;
     return `
         <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
             <div style="${bubbleStyle}">
                 ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px; padding: 4px 12px 0;">📢 ประกาศ</div>' : ''}
+                ${couponCardHtml}
                 ${orderCardHtml}
                 ${productCardHtml}
-                ${msg.content && !hasOrderCard ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
-                ${hasOrderCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.content && !hasSpecialCard ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${hasSpecialCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
                 ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                     att.file_type && att.file_type.startsWith('image/') 
                         ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer; ${hasOrderCard ? 'margin: 8px 12px;' : ''}" onclick="window.open('${att.file_url}', '_blank')">`
                         : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa; ${hasOrderCard ? 'padding: 0 12px;' : ''}">📎 ${escapeHtmlChat(att.file_name)}</a>`
                 ).join('') : ''}
-                <div style="font-size: 10px; opacity: 0.5; margin-top: 4px; text-align: right; ${hasOrderCard ? 'padding: 0 10px 8px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
+                <div style="font-size: 10px; opacity: 0.5; margin-top: 4px; text-align: right; ${hasSpecialCard ? 'padding: 0 10px 8px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
             </div>
         </div>
     `;
@@ -4152,7 +4174,7 @@ async function sendResellerChatMessage() {
     const input = document.getElementById('resellerChatInput');
     const content = input.value.trim();
     
-    if (!content && resellerPendingAttachments.length === 0 && !resellerSelectedChatProduct && !resellerSelectedChatOrder) return;
+    if (!content && resellerPendingAttachments.length === 0 && !resellerSelectedChatProduct && !resellerSelectedChatOrder && !resellerSelectedChatCoupon) return;
     
     try {
         const body = {
@@ -4164,6 +4186,9 @@ async function sendResellerChatMessage() {
         }
         if (resellerSelectedChatOrder) {
             body.order_id = resellerSelectedChatOrder.id;
+        }
+        if (resellerSelectedChatCoupon) {
+            body.coupon_id = resellerSelectedChatCoupon.id;
         }
         
         const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
@@ -4179,10 +4204,12 @@ async function sendResellerChatMessage() {
             resellerPendingAttachments = [];
             resellerSelectedChatProduct = null;
             resellerSelectedChatOrder = null;
+            resellerSelectedChatCoupon = null;
             document.getElementById('resellerChatAttachmentPreview').style.display = 'none';
             document.getElementById('resellerChatAttachmentPreview').innerHTML = '';
             document.getElementById('resellerChatProductPreview').style.display = 'none';
             document.getElementById('resellerChatOrderPreview').style.display = 'none';
+            document.getElementById('resellerChatCouponPreview').style.display = 'none';
             await loadResellerChatMessages();
         } else {
             const error = await response.json();
@@ -4632,5 +4659,64 @@ function selectResellerChatOrder(id, orderNumber, status, finalAmount) {
 function removeResellerChatOrder() {
     resellerSelectedChatOrder = null;
     const preview = document.getElementById('resellerChatOrderPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+/* ─── Chat Coupon Picker (Reseller) ─────────────────────────────────── */
+let resellerSelectedChatCoupon = null;
+
+async function openResellerChatCouponPicker() {
+    const modal = document.getElementById('resellerChatCouponModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const list = document.getElementById('resellerChatCouponList');
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);">
+        <div style="width:24px;height:24px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.6s linear infinite;margin:0 auto 12px;"></div>
+        <div style="font-size:13px;">กำลังโหลด...</div></div>`;
+    try {
+        const r = await fetch('/api/reseller/coupons/wallet', { credentials: 'include' });
+        const data = await r.json();
+        const coupons = Array.isArray(data) ? data : (data.coupons || []);
+        const active = coupons.filter(c => c.is_active && !c.is_used);
+        if (!active.length) {
+            list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);"><div style="font-size:32px;margin-bottom:10px;">🎟️</div><div>ยังไม่มีคูปองใน wallet</div></div>`;
+            return;
+        }
+        const fmtDisc = c => c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+        list.innerHTML = active.map(c => `
+            <div onclick="selectResellerChatCoupon(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+                 style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;"
+                 onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'"
+                 ontouchstart="this.style.background='rgba(255,255,255,0.05)'" ontouchend="this.style.background='transparent'">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#38ef7d;">${escapeHtmlChat(c.code)}</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.65);">${escapeHtmlChat(c.name || '')}</div>
+                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                    <div style="font-size:12px;font-weight:600;color:#38ef7d;">${fmtDisc(c)}</div>
+                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</div>` : ''}
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        list.innerHTML = `<div style="text-align:center;padding:40px;color:#f87171;">โหลดข้อมูลไม่สำเร็จ</div>`;
+    }
+}
+
+function selectResellerChatCoupon(c) {
+    resellerSelectedChatCoupon = c;
+    document.getElementById('resellerChatCouponModal').style.display = 'none';
+    const fmtDisc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+    const preview = document.getElementById('resellerChatCouponPreview');
+    const text = document.getElementById('resellerChatCouponPreviewText');
+    if (preview && text) {
+        text.textContent = `${c.code} · ${fmtDisc}`;
+        preview.style.display = 'block';
+    }
+}
+
+function removeResellerChatCoupon() {
+    resellerSelectedChatCoupon = null;
+    const preview = document.getElementById('resellerChatCouponPreview');
     if (preview) preview.style.display = 'none';
 }
