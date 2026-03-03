@@ -590,6 +590,8 @@ function switchPage(pageName) {
         loadPromotions();
     } else if (pageName === 'coupons') {
         loadCoupons();
+    } else if (pageName === 'customers') {
+        loadCustomers();
     }
 }
 
@@ -10379,5 +10381,280 @@ function closeStockReport() {
 function printStockReport() {
     window.print();
 }
+
+// ==================== CUSTOMER DATA PAGE ====================
+
+let _allCustomers = [];
+let _customerBrands = [];
+let _customerProducts = [];
+let _phoneCheckTimer = null;
+
+const PLATFORM_LABEL = {
+    shopee: '🛍️ Shopee', lazada: '📦 Lazada', tiktok: '🎵 TikTok',
+    line: '💬 LINE', facebook: '📘 Facebook', onsale: '🏪 หน้าร้าน', other: '🔹 อื่นๆ'
+};
+const TAG_LABEL = { frequent: '🌟 ประจำ', new: '🆕 ใหม่', inactive: '💤 ไม่ active' };
+const TAG_COLOR = { frequent: '#f59e0b', new: '#10b981', inactive: '#6b7280' };
+
+async function loadCustomers() {
+    try {
+        const res = await fetch('/api/admin/customers');
+        if (!res.ok) throw new Error(await res.text());
+        _allCustomers = await res.json();
+        renderCustomersTable(_allCustomers);
+    } catch (e) {
+        document.getElementById('customersTableContainer').innerHTML =
+            `<div style="text-align:center;padding:40px;color:#f87171;">โหลดข้อมูลล้มเหลว: ${e.message}</div>`;
+    }
+}
+
+function filterCustomers() {
+    const q = (document.getElementById('customerSearchInput')?.value || '').toLowerCase();
+    const platform = document.getElementById('customerPlatformFilter')?.value || '';
+    const tag = document.getElementById('customerTagFilter')?.value || '';
+
+    const filtered = _allCustomers.filter(c => {
+        const matchQ = !q || (c.name || '').toLowerCase().includes(q) ||
+            (c.phone || '').includes(q) || (c.province || '').toLowerCase().includes(q) ||
+            (c.district || '').toLowerCase().includes(q) || (c.note || '').toLowerCase().includes(q);
+        const matchPlatform = !platform || (c.platforms || []).includes(platform);
+        const matchTag = !tag || c.auto_tag === tag || (c.tags || []).includes(tag);
+        return matchQ && matchPlatform && matchTag;
+    });
+    renderCustomersTable(filtered);
+}
+
+function renderCustomersTable(customers) {
+    const badge = document.getElementById('customerCountBadge');
+    if (badge) badge.textContent = `${customers.length} คน`;
+
+    if (!customers.length) {
+        document.getElementById('customersTableContainer').innerHTML =
+            `<div style="text-align:center;padding:60px;opacity:0.5;">ไม่พบลูกค้า</div>`;
+        return;
+    }
+
+    const rows = customers.map(c => {
+        const tagLabel = TAG_LABEL[c.auto_tag] || '';
+        const tagColor = TAG_COLOR[c.auto_tag] || '#6b7280';
+        const platforms = (c.platforms || []).map(p =>
+            `<span style="font-size:11px;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;white-space:nowrap;">${PLATFORM_LABEL[p] || p}</span>`
+        ).join(' ');
+        const lastOrder = c.last_order_at
+            ? new Date(c.last_order_at).toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'2-digit' })
+            : '—';
+        const spent = c.total_spent > 0 ? `฿${c.total_spent.toLocaleString('th-TH', { maximumFractionDigits: 0 })}` : '—';
+        return `<tr>
+            <td>
+                <div style="font-weight:600;font-size:14px;">${c.name || '<span style="opacity:0.4">ไม่มีชื่อ</span>'}</div>
+                ${c.note ? `<div style="font-size:11px;opacity:0.5;margin-top:2px;">${c.note}</div>` : ''}
+            </td>
+            <td style="font-size:13px;">${c.phone || '—'}</td>
+            <td style="font-size:12px;opacity:0.8;">${[c.province, c.district].filter(Boolean).join(', ') || '—'}</td>
+            <td style="text-align:center;">${c.order_count}</td>
+            <td style="text-align:right;font-weight:600;">${spent}</td>
+            <td style="display:flex;flex-wrap:wrap;gap:4px;padding-top:10px;">${platforms || '—'}</td>
+            <td style="font-size:12px;">${lastOrder}</td>
+            <td><span style="font-size:11px;background:${tagColor}22;color:${tagColor};padding:3px 8px;border-radius:20px;white-space:nowrap;">${tagLabel}</span></td>
+            <td>
+                <button onclick="openEditCustomerModal(${c.id})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">แก้ไข</button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('customersTableContainer').innerHTML = `
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);text-align:left;">
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;width:180px;">ชื่อ</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">เบอร์โทร</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">พื้นที่</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:center;">ออเดอร์</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:right;">ยอดรวม</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">แพลตฟอร์ม</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">สั่งล่าสุด</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">ประเภท</th>
+                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>
+        </div>`;
+
+    document.querySelectorAll('#customersTableContainer tbody tr').forEach((tr, i) => {
+        tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+        tr.querySelectorAll('td').forEach(td => { td.style.padding = '10px 12px'; td.style.verticalAlign = 'middle'; });
+        tr.style.transition = 'background 0.15s';
+        tr.addEventListener('mouseenter', () => tr.style.background = 'rgba(255,255,255,0.04)');
+        tr.addEventListener('mouseleave', () => tr.style.background = '');
+    });
+}
+
+function openAddCustomerModal() {
+    document.getElementById('editCustomerId').value = '';
+    document.getElementById('addCustomerModalTitle').textContent = 'เพิ่มลูกค้าใหม่';
+    document.getElementById('custName').value = '';
+    document.getElementById('custPhone').value = '';
+    document.getElementById('custAddress').value = '';
+    document.getElementById('custSubdistrict').value = '';
+    document.getElementById('custDistrict').value = '';
+    document.getElementById('custProvince').value = '';
+    document.getElementById('custPostal').value = '';
+    document.getElementById('custSource').value = 'manual';
+    document.getElementById('custNote').value = '';
+    document.getElementById('custDuplicateWarning').style.display = 'none';
+    document.getElementById('customerScanStatus').style.display = 'none';
+    document.getElementById('addCustomerModal').style.display = 'flex';
+
+    const phoneInput = document.getElementById('custPhone');
+    phoneInput.oninput = () => {
+        clearTimeout(_phoneCheckTimer);
+        _phoneCheckTimer = setTimeout(() => checkCustomerPhoneDuplicate(phoneInput.value), 600);
+    };
+}
+
+function openEditCustomerModal(id) {
+    const c = _allCustomers.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('editCustomerId').value = c.id;
+    document.getElementById('addCustomerModalTitle').textContent = 'แก้ไขข้อมูลลูกค้า';
+    document.getElementById('custName').value = c.name || '';
+    document.getElementById('custPhone').value = c.phone || '';
+    document.getElementById('custAddress').value = c.address || '';
+    document.getElementById('custSubdistrict').value = c.subdistrict || '';
+    document.getElementById('custDistrict').value = c.district || '';
+    document.getElementById('custProvince').value = c.province || '';
+    document.getElementById('custPostal').value = c.postal_code || '';
+    document.getElementById('custSource').value = c.source || 'manual';
+    document.getElementById('custNote').value = c.note || '';
+    document.getElementById('custDuplicateWarning').style.display = 'none';
+    document.getElementById('customerScanStatus').style.display = 'none';
+    document.getElementById('addCustomerModal').style.display = 'flex';
+
+    const phoneInput = document.getElementById('custPhone');
+    const origPhone = c.phone || '';
+    phoneInput.oninput = () => {
+        clearTimeout(_phoneCheckTimer);
+        if (phoneInput.value !== origPhone) {
+            _phoneCheckTimer = setTimeout(() => checkCustomerPhoneDuplicate(phoneInput.value), 600);
+        } else {
+            document.getElementById('custDuplicateWarning').style.display = 'none';
+        }
+    };
+}
+
+function closeAddCustomerModal() {
+    document.getElementById('addCustomerModal').style.display = 'none';
+}
+
+async function checkCustomerPhoneDuplicate(phone) {
+    if (!phone || phone.length < 9) {
+        document.getElementById('custDuplicateWarning').style.display = 'none';
+        return;
+    }
+    try {
+        const res = await fetch(`/api/admin/customers/check-phone?phone=${encodeURIComponent(phone)}`);
+        const data = await res.json();
+        const warn = document.getElementById('custDuplicateWarning');
+        if (data.exists) {
+            warn.style.display = 'block';
+            warn.innerHTML = `<strong>⚠️ เบอร์นี้มีในระบบแล้ว</strong> (${data.name || 'ไม่มีชื่อ'}) — จะอัปเดตข้อมูลลูกค้าเดิม`;
+        } else {
+            warn.style.display = 'none';
+        }
+    } catch {}
+}
+
+async function handleCustomerLabelUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('customerScanStatus');
+    statusEl.style.display = 'block';
+    statusEl.textContent = '⏳ กำลังอ่านข้อมูลจากรูป...';
+
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+        const res = await fetch('/api/admin/quick-order/parse-label', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'ล้มเหลว');
+
+        if (data.customer_name) document.getElementById('custName').value = data.customer_name;
+        if (data.customer_phone) document.getElementById('custPhone').value = data.customer_phone;
+        if (data.address) document.getElementById('custAddress').value = data.address;
+        if (data.subdistrict) document.getElementById('custSubdistrict').value = data.subdistrict;
+        if (data.district) document.getElementById('custDistrict').value = data.district;
+        if (data.province) document.getElementById('custProvince').value = data.province;
+        if (data.postal_code) document.getElementById('custPostal').value = data.postal_code;
+        if (data.platform) document.getElementById('custSource').value = data.platform;
+
+        statusEl.style.color = '#34d399';
+        statusEl.textContent = '✅ อ่านข้อมูลสำเร็จ ตรวจสอบและบันทึกได้เลย';
+
+        if (data.customer_phone) {
+            checkCustomerPhoneDuplicate(data.customer_phone);
+        }
+    } catch (e) {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = '❌ อ่านไม่ได้: ' + e.message;
+    }
+    input.value = '';
+}
+
+async function saveCustomer() {
+    const btn = document.getElementById('btnSaveCustomer');
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+
+    const payload = {
+        id: document.getElementById('editCustomerId').value || null,
+        name: document.getElementById('custName').value.trim(),
+        phone: document.getElementById('custPhone').value.trim(),
+        address: document.getElementById('custAddress').value.trim(),
+        subdistrict: document.getElementById('custSubdistrict').value.trim(),
+        district: document.getElementById('custDistrict').value.trim(),
+        province: document.getElementById('custProvince').value.trim(),
+        postal_code: document.getElementById('custPostal').value.trim(),
+        source: document.getElementById('custSource').value,
+        note: document.getElementById('custNote').value.trim()
+    };
+
+    if (!payload.name && !payload.phone) {
+        showAlert('กรุณากรอกชื่อหรือเบอร์โทรอย่างน้อย 1 อย่าง', 'error');
+        btn.disabled = false;
+        btn.textContent = 'บันทึกลูกค้า';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/admin/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'บันทึกล้มเหลว');
+        showAlert('บันทึกข้อมูลลูกค้าสำเร็จ', 'success');
+        closeAddCustomerModal();
+        loadCustomers();
+    } catch (e) {
+        showAlert(e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'บันทึกลูกค้า';
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('addCustomerModal');
+        if (modal && modal.style.display !== 'none') closeAddCustomerModal();
+    }
+});
+
+// ==================== END CUSTOMER DATA PAGE ====================
 
 // ==================== END STOCK REPORT ====================

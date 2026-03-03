@@ -8716,16 +8716,38 @@ def create_quick_order():
         if notes:
             order_notes.append(notes)
         final_notes = ' | '.join(order_notes) if order_notes else None
-        
+
+        # Upsert customer by phone (or name-only) and link to order
+        customer_id = None
+        if customer_name or customer_phone:
+            phone_val = (customer_phone or '').strip() or None
+            name_val = (customer_name or '').strip() or None
+            src = platform or 'manual'
+            if phone_val:
+                cursor.execute('''
+                    INSERT INTO customers (name, phone, source)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (phone) WHERE phone IS NOT NULL AND phone <> ''
+                    DO UPDATE SET
+                        name = COALESCE(EXCLUDED.name, customers.name),
+                        updated_at = CURRENT_TIMESTAMP
+                    RETURNING id
+                ''', (name_val, phone_val, src))
+            else:
+                cursor.execute('''
+                    INSERT INTO customers (name, source) VALUES (%s, %s) RETURNING id
+                ''', (name_val, src))
+            customer_id = cursor.fetchone()['id']
+
         # Generate order number
         order_number = generate_order_number(cursor)
         
         # Create order
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, is_quick_order, platform)
-            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s, TRUE, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, is_quick_order, platform, customer_id)
+            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s, TRUE, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes, platform))
+        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes, platform, customer_id))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs
@@ -9067,7 +9089,7 @@ def upsert_customer():
             cursor.execute('''
                 INSERT INTO customers (name, phone, address, province, district, subdistrict, postal_code, source, note)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (phone)
+                ON CONFLICT (phone) WHERE phone IS NOT NULL AND phone <> ''
                 DO UPDATE SET
                     name = COALESCE(EXCLUDED.name, customers.name),
                     address = COALESCE(EXCLUDED.address, customers.address),
