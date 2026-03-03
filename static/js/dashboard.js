@@ -10279,7 +10279,7 @@ async function confirmDistribute() {
 
 const _SIZE_ORDER = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL','FREESIZE','FREE SIZE','ONE SIZE','ONESIZE'];
 
-function _srParseVariant(variantName) {
+function _srParseVariant(variantName, skuCode) {
     const opts = {};
     (variantName || '').split(' / ').forEach(part => {
         const idx = part.indexOf(':');
@@ -10287,8 +10287,15 @@ function _srParseVariant(variantName) {
             opts[part.substring(0, idx).trim().toLowerCase()] = part.substring(idx + 1).trim();
         }
     });
-    const size = opts['ขนาด'] || opts['ไซส์'] || opts['size'] || opts['ไซ'] || opts['sz'] || null;
+    let size = opts['ขนาด'] || opts['ไซส์'] || opts['size'] || opts['ไซ'] || opts['sz'] || null;
     const color = opts['สี'] || opts['color'] || opts['ลาย'] || opts['pattern'] || null;
+
+    if (!size && skuCode) {
+        const parts = (skuCode || '').split('-');
+        const last = (parts[parts.length - 1] || '').toUpperCase();
+        if (_SIZE_ORDER.indexOf(last) >= 0) size = last;
+    }
+
     return { size, color };
 }
 
@@ -10317,7 +10324,7 @@ function openStockReport() {
         const colorMap = {};
 
         skus.forEach(sku => {
-            const { size, color } = _srParseVariant(sku.variant_name || '');
+            const { size, color } = _srParseVariant(sku.variant_name || '', sku.sku_code || '');
             const sizeKey = size ? size.toUpperCase() : 'No Size';
             const colorKey = color || '__none__';
             allSizesSet.add(sizeKey);
