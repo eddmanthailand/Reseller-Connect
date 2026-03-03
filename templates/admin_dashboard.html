@@ -318,8 +318,9 @@
         .sr-table tr.sum-row:hover td { background:#1d1d1f; }
         .sr-color-label { font-size:11px; color:#6e6e73; font-weight:400; }
         @media print {
+            html, body { background: white !important; background-image: none !important; }
             body > *:not(#stockReportModal) { display:none !important; }
-            #stockReportModal { position:static; display:block !important; }
+            #stockReportModal { position:static; display:block !important; background:white !important; }
             .sr-actions { display:none !important; }
             .sr-header { border-bottom:2px solid #000; }
             .sr-table th { background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
