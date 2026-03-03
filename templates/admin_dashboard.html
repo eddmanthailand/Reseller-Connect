@@ -323,8 +323,14 @@
             body > *:not(#stockReportModal) { display:none !important; }
             #stockReportModal { position:static; display:block !important; background:white !important; }
             .sr-actions { display:none !important; }
-            .sr-header { border-bottom:2px solid #000; }
-            .sr-table th { background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+            .sr-header { border-bottom:2px solid #000; padding:20px 0 12px; }
+            .sr-table-wrap { padding:16px 0; }
+            .sr-table { table-layout:fixed; width:100%; }
+            .sr-table th { background:#eee !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; width:60px; padding:7px 4px; font-size:10px; }
+            .sr-table th:first-child { width:auto; text-align:left; }
+            .sr-table th:last-child { width:70px; }
+            .sr-table td { width:60px; padding:7px 4px; font-size:11px; }
+            .sr-table td:first-child { width:auto; }
             .sr-table tr.sum-row td { background:#333 !important; color:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         }
     </style>
