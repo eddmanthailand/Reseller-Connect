@@ -15351,15 +15351,57 @@ def admin_delete_coupon(coupon_id):
         if conn: conn.close()
 
 
+@app.route('/api/admin/coupons/<int:coupon_id>/assign-preview', methods=['GET'])
+@admin_required
+def admin_assign_coupon_preview(coupon_id):
+    """Preview how many resellers would receive this coupon (excluding those who already have it ready)"""
+    conn = None
+    cursor = None
+    try:
+        tier_ids_raw = request.args.get('tier_ids', '')
+        tier_ids = [int(x) for x in tier_ids_raw.split(',') if x.strip().isdigit()]
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id FROM coupons WHERE id=%s', (coupon_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ไม่พบคูปอง'}), 404
+        if tier_ids:
+            cursor.execute('''
+                SELECT COUNT(*) as cnt FROM users u
+                WHERE u.role='reseller' AND u.is_active=TRUE
+                  AND u.reseller_tier_id = ANY(%s)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_coupons uc
+                      WHERE uc.user_id=u.id AND uc.coupon_id=%s AND uc.status='ready'
+                  )
+            ''', (tier_ids, coupon_id))
+        else:
+            cursor.execute('''
+                SELECT COUNT(*) as cnt FROM users u
+                WHERE u.role='reseller' AND u.is_active=TRUE
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_coupons uc
+                      WHERE uc.user_id=u.id AND uc.coupon_id=%s AND uc.status='ready'
+                  )
+            ''', (coupon_id,))
+        count = cursor.fetchone()['cnt']
+        return jsonify({'count': count}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/admin/coupons/<int:coupon_id>/assign', methods=['POST'])
 @admin_required
 def admin_assign_coupon(coupon_id):
-    """Directly give a coupon to one or all resellers without them claiming it"""
+    """Directly give a coupon to resellers filtered by tier, skipping those who already have it (ready)"""
     conn = None
     cursor = None
     try:
         data = request.get_json()
-        user_ids = data.get('user_ids', [])  # empty = all resellers
+        tier_ids = data.get('tier_ids', [])  # empty = all tiers
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -15367,9 +15409,26 @@ def admin_assign_coupon(coupon_id):
         if not cursor.fetchone():
             return jsonify({'error': 'ไม่พบคูปอง'}), 404
 
-        if not user_ids:
-            cursor.execute("SELECT id FROM users WHERE role='reseller' AND is_active=TRUE")
-            user_ids = [r['id'] for r in cursor.fetchall()]
+        if tier_ids:
+            cursor.execute('''
+                SELECT u.id FROM users u
+                WHERE u.role='reseller' AND u.is_active=TRUE
+                  AND u.reseller_tier_id = ANY(%s)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_coupons uc
+                      WHERE uc.user_id=u.id AND uc.coupon_id=%s AND uc.status='ready'
+                  )
+            ''', (tier_ids, coupon_id))
+        else:
+            cursor.execute('''
+                SELECT u.id FROM users u
+                WHERE u.role='reseller' AND u.is_active=TRUE
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_coupons uc
+                      WHERE uc.user_id=u.id AND uc.coupon_id=%s AND uc.status='ready'
+                  )
+            ''', (coupon_id,))
+        user_ids = [r['id'] for r in cursor.fetchall()]
 
         assigned = 0
         for uid in user_ids:

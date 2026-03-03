@@ -3825,5 +3825,39 @@
             </div>
         </div>
     </div>
+
+    <!-- ═══ Distribute Coupon Modal ═══ -->
+    <div id="distributeCouponModal" style="display:none;position:fixed;inset:0;z-index:10010;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);padding:16px;" onclick="if(event.target===this)closeDistributeModal()">
+        <div style="width:100%;max-width:420px;background:linear-gradient(160deg,#1a0a2e,#0d0a1e);border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;">
+            <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-size:11px;color:rgba(168,85,247,0.8);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">แจกคูปอง</div>
+                    <h3 id="distributeCouponTitle" style="font-size:16px;font-weight:700;color:#fff;margin:0;"></h3>
+                </div>
+                <button onclick="closeDistributeModal()" style="background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.7);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">&times;</button>
+            </div>
+            <div style="padding:18px 20px;">
+                <div style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;">กลุ่มเป้าหมาย</div>
+                <div style="margin-bottom:6px;">
+                    <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);">
+                        <input type="checkbox" id="distributeAllTiers" style="width:16px;height:16px;accent-color:#a855f7;" onchange="document.querySelectorAll('.distribute-tier-cb').forEach(cb=>cb.checked=false);_updateDistributePreview();">
+                        <span style="font-size:13px;color:#a78bfa;font-weight:600;">ทุกระดับสมาชิก</span>
+                    </label>
+                </div>
+                <div id="distributeTierList" style="display:flex;flex-direction:column;gap:6px;"></div>
+                <div style="margin-top:16px;padding:12px 14px;background:rgba(255,255,255,0.04);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px;">จำนวนที่จะได้รับ</div>
+                    <div id="distributePreviewText" style="font-size:13px;"></div>
+                </div>
+                <div style="margin-top:10px;padding:8px 12px;background:rgba(74,222,128,0.06);border-radius:8px;border:1px solid rgba(74,222,128,0.15);">
+                    <div style="font-size:11px;color:rgba(74,222,128,0.7);">✓ ข้ามสมาชิกที่มีคูปองนี้ใน Wallet อยู่แล้ว (ยังไม่ได้ใช้) โดยอัตโนมัติ</div>
+                </div>
+            </div>
+            <div style="padding:0 20px 18px;display:flex;gap:8px;justify-content:flex-end;">
+                <button onclick="closeDistributeModal()" style="padding:9px 18px;background:rgba(255,255,255,0.08);border:none;border-radius:10px;color:rgba(255,255,255,0.7);font-size:13px;cursor:pointer;">ยกเลิก</button>
+                <button id="distributeConfirmBtn" onclick="confirmDistribute()" style="padding:9px 22px;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.2s;">แจก</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

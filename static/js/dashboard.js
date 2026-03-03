@@ -9532,10 +9532,12 @@ async function loadCoupons() {
             const quota = c.total_quota > 0 ? `${c.usage_count || 0}/${c.total_quota}` : `${c.usage_count || 0}/∞`;
             const claimed = c.claimed_count || 0;
             const dateStr = c.end_date ? `หมดอายุ ${new Date(c.end_date).toLocaleDateString('th-TH')}` : 'ไม่มีกำหนด';
+            const codeLen = (c.code || '').length;
+            const codeFontSize = codeLen <= 8 ? '13px' : codeLen <= 12 ? '11px' : codeLen <= 16 ? '9px' : '8px';
             return `
             <div class="coupon-ticket" style="${!c.is_active ? 'opacity:0.5;' : ''}">
                 <div class="coupon-ticket-left" style="background:linear-gradient(135deg,${bg1},${bg2});">
-                    <div class="coupon-ticket-code">${c.code}</div>
+                    <div class="coupon-ticket-code" style="font-size:${codeFontSize};line-height:1.3;">${c.code}</div>
                     <div class="coupon-ticket-type">${typeLabel}</div>
                 </div>
                 <div class="coupon-ticket-right">
@@ -9555,8 +9557,8 @@ async function loadCoupons() {
                                 <span class="toggle-slider"></span>
                             </label>
                             <button class="action-btn btn-review" onclick="openCouponModal(${c.id})">แก้ไข</button>
-                            <button class="action-btn" style="background:rgba(34,197,94,0.2);color:#22c55e;" onclick="assignCoupon(${c.id})" title="แจกให้สมาชิกทุกคน">แจก</button>
-                            <button class="action-btn" style="background:rgba(239,68,68,0.2);color:#ef4444;" onclick="deleteCoupon(${c.id})">ลบ</button>
+                            <button class="action-btn" style="background:rgba(34,197,94,0.25);color:#fff;" onclick="openDistributeModal(${c.id})" title="แจกให้สมาชิก">แจก</button>
+                            <button class="action-btn" style="background:rgba(239,68,68,0.25);color:#fff;" onclick="deleteCoupon(${c.id})">ลบ</button>
                         </div>
                     </div>
                 </div>
@@ -9879,18 +9881,82 @@ async function deleteCoupon(id) {
     else showGlobalAlert('เกิดข้อผิดพลาด', 'error');
 }
 
-async function assignCoupon(id) {
+let _distributeCouponId = null;
+
+async function openDistributeModal(id) {
+    _distributeCouponId = id;
     const coupon = _couponData.find(c => c.id === id);
     if (!coupon) return;
-    if (!confirm(`แจกคูปอง "${coupon.code}" ให้สมาชิกทุกคน?\n(คนที่เก็บแล้วจะไม่ถูกนับซ้ำ)`)) return;
+    await _mktLoadMeta();
+    const modal = document.getElementById('distributeCouponModal');
+    if (!modal) return;
+    document.getElementById('distributeCouponTitle').textContent = `แจกคูปอง: ${coupon.code}`;
+    const tierList = document.getElementById('distributeTierList');
+    tierList.innerHTML = _mktTiers.map(t => `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+            <input type="checkbox" value="${t.id}" class="distribute-tier-cb" style="width:16px;height:16px;accent-color:#a855f7;"
+                   onchange="document.getElementById('distributeAllTiers').checked=false;_updateDistributePreview();">
+            <span style="font-size:13px;color:#fff;">${t.name}</span>
+        </label>`).join('');
+    document.getElementById('distributePreviewText').textContent = 'เลือกระดับสมาชิกเพื่อดูจำนวน';
+    document.getElementById('distributeConfirmBtn').textContent = 'แจก';
+    document.getElementById('distributeConfirmBtn').disabled = false;
+    modal.style.display = 'flex';
+    await _updateDistributePreview();
+}
+
+async function _updateDistributePreview() {
+    const cbs = document.querySelectorAll('.distribute-tier-cb:checked');
+    const tierIds = Array.from(cbs).map(cb => cb.value);
+    const params = tierIds.length ? `?tier_ids=${tierIds.join(',')}` : '';
     try {
-        const res = await fetch(`/api/admin/coupons/${id}/assign`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
+        const r = await fetch(`/api/admin/coupons/${_distributeCouponId}/assign-preview${params}`);
+        const d = await r.json();
+        const count = d.count || 0;
+        const tierLabel = tierIds.length ? `ระดับที่เลือก` : 'ทุกระดับ';
+        document.getElementById('distributePreviewText').innerHTML =
+            `<span style="color:rgba(255,255,255,0.6);">${tierLabel} — </span><span style="color:#a78bfa;font-weight:700;">${count} คน</span><span style="color:rgba(255,255,255,0.4);font-size:11px;"> ที่จะได้รับ (ข้ามคนที่มีอยู่แล้ว)</span>`;
+        const btn = document.getElementById('distributeConfirmBtn');
+        btn.textContent = count > 0 ? `แจก ${count} คน` : 'ไม่มีสมาชิกที่ต้องแจก';
+        btn.disabled = count === 0;
+    } catch {
+        document.getElementById('distributePreviewText').textContent = 'โหลดจำนวนไม่สำเร็จ';
+    }
+}
+
+function closeDistributeModal() {
+    const modal = document.getElementById('distributeCouponModal');
+    if (modal) modal.style.display = 'none';
+    _distributeCouponId = null;
+}
+
+async function confirmDistribute() {
+    if (!_distributeCouponId) return;
+    const cbs = document.querySelectorAll('.distribute-tier-cb:checked');
+    const tierIds = Array.from(cbs).map(cb => parseInt(cb.value));
+    const btn = document.getElementById('distributeConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'กำลังแจก...';
+    try {
+        const res = await fetch(`/api/admin/coupons/${_distributeCouponId}/assign`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ tier_ids: tierIds })
         });
         const data = await res.json();
-        if (res.ok) { showGlobalAlert(`แจกคูปองให้ ${data.assigned} คน เรียบร้อย`, 'success'); loadCoupons(); }
-        else showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
-    } catch { showGlobalAlert('เกิดข้อผิดพลาด', 'error'); }
+        if (res.ok) {
+            closeDistributeModal();
+            showGlobalAlert(`แจกคูปองให้ ${data.assigned} คน เรียบร้อย`, 'success');
+            loadCoupons();
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+            btn.disabled = false;
+            btn.textContent = 'แจก';
+        }
+    } catch {
+        showGlobalAlert('เกิดข้อผิดพลาด', 'error');
+        btn.disabled = false;
+        btn.textContent = 'แจก';
+    }
 }
 
 // ==================== END MARKETING MODULE ====================
