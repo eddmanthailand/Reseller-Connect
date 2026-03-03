@@ -8982,6 +8982,146 @@ def restore_quick_order_stock(order_id):
         if conn: conn.close()
 
 
+@app.route('/api/admin/customers', methods=['GET'])
+@admin_required
+def get_customers():
+    """Get all customers with aggregated order stats"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT
+                c.id, c.name, c.phone, c.address, c.province, c.district,
+                c.subdistrict, c.postal_code, c.source, c.tags, c.note,
+                c.created_at, c.updated_at,
+                COUNT(DISTINCT o.id) AS order_count,
+                COALESCE(SUM(o.final_amount), 0) AS total_spent,
+                MAX(o.created_at) AS last_order_at,
+                ARRAY_REMOVE(ARRAY_AGG(DISTINCT o.platform), NULL) AS platforms
+            FROM customers c
+            LEFT JOIN orders o ON o.customer_id = c.id AND o.is_quick_order = TRUE
+                AND o.status NOT IN ('cancelled', 'returned', 'stock_restored')
+            GROUP BY c.id
+            ORDER BY last_order_at DESC NULLS LAST, c.created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        customers = []
+        for row in rows:
+            c = dict(row)
+            c['total_spent'] = float(c['total_spent'])
+            c['order_count'] = int(c['order_count'])
+            c['platforms'] = c['platforms'] or []
+            c['tags'] = c['tags'] or []
+            # Auto-label based on order_count
+            if not c['tags']:
+                if c['order_count'] == 0:
+                    c['auto_tag'] = 'inactive'
+                elif c['order_count'] >= 3:
+                    c['auto_tag'] = 'frequent'
+                else:
+                    c['auto_tag'] = 'new'
+            else:
+                c['auto_tag'] = c['tags'][0] if c['tags'] else 'new'
+            customers.append(c)
+        return jsonify(customers), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/customers', methods=['POST'])
+@admin_required
+def upsert_customer():
+    """Create or update customer by phone (upsert)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        phone = (data.get('phone') or '').strip()
+        name = (data.get('name') or '').strip() or None
+        address = (data.get('address') or '').strip() or None
+        province = (data.get('province') or '').strip() or None
+        district = (data.get('district') or '').strip() or None
+        subdistrict = (data.get('subdistrict') or '').strip() or None
+        postal_code = (data.get('postal_code') or '').strip() or None
+        source = data.get('source') or 'manual'
+        note = (data.get('note') or '').strip() or None
+        customer_id = data.get('id')
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        if customer_id:
+            cursor.execute('''
+                UPDATE customers SET name=%s, phone=%s, address=%s, province=%s, district=%s,
+                    subdistrict=%s, postal_code=%s, source=%s, note=%s, updated_at=CURRENT_TIMESTAMP
+                WHERE id=%s RETURNING id
+            ''', (name, phone or None, address, province, district, subdistrict, postal_code, source, note, customer_id))
+            row = cursor.fetchone()
+            cid = row['id'] if row else customer_id
+        elif phone:
+            cursor.execute('''
+                INSERT INTO customers (name, phone, address, province, district, subdistrict, postal_code, source, note)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (phone)
+                DO UPDATE SET
+                    name = COALESCE(EXCLUDED.name, customers.name),
+                    address = COALESCE(EXCLUDED.address, customers.address),
+                    province = COALESCE(EXCLUDED.province, customers.province),
+                    district = COALESCE(EXCLUDED.district, customers.district),
+                    subdistrict = COALESCE(EXCLUDED.subdistrict, customers.subdistrict),
+                    postal_code = COALESCE(EXCLUDED.postal_code, customers.postal_code),
+                    source = COALESCE(EXCLUDED.source, customers.source),
+                    note = COALESCE(EXCLUDED.note, customers.note),
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING id
+            ''', (name, phone, address, province, district, subdistrict, postal_code, source, note))
+            cid = cursor.fetchone()['id']
+        else:
+            cursor.execute('''
+                INSERT INTO customers (name, address, province, district, subdistrict, postal_code, source, note)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+            ''', (name, address, province, district, subdistrict, postal_code, source, note))
+            cid = cursor.fetchone()['id']
+
+        conn.commit()
+        return jsonify({'message': 'บันทึกสำเร็จ', 'id': cid}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/customers/check-phone', methods=['GET'])
+@admin_required
+def check_customer_phone():
+    """Check if phone already exists in customers"""
+    conn = None
+    cursor = None
+    try:
+        phone = request.args.get('phone', '').strip()
+        if not phone:
+            return jsonify({'exists': False}), 200
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, name FROM customers WHERE phone = %s', (phone,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify({'exists': True, 'id': row['id'], 'name': row['name']}), 200
+        return jsonify({'exists': False}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/admin/orders/counts', methods=['GET'])
 @admin_required
 def get_order_counts():
