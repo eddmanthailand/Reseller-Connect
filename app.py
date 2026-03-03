@@ -8551,6 +8551,8 @@ def create_quick_order():
         customer_phone = data.get('customer_phone')
         notes = data.get('notes')
         items = data.get('items', [])
+        platform = data.get('platform')
+        tracking_number = data.get('tracking_number', '').strip() if data.get('tracking_number') else None
         
         if not sales_channel_id:
             return jsonify({'error': 'กรุณาเลือกช่องทางขาย'}), 400
@@ -8631,10 +8633,10 @@ def create_quick_order():
         
         # Create order
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes)
-            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, is_quick_order, platform)
+            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s, TRUE, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes))
+        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes, platform))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs
@@ -8678,12 +8680,20 @@ def create_quick_order():
                     remaining_qty -= allocate_qty
         
         # Create shipments per warehouse
+        shipment_status_init = 'shipped' if tracking_number else 'pending'
         for wh_id, shipment_items in warehouse_shipments.items():
-            cursor.execute('''
-                INSERT INTO order_shipments (order_id, warehouse_id, status)
-                VALUES (%s, %s, 'pending')
-                RETURNING id
-            ''', (order['id'], wh_id))
+            if tracking_number:
+                cursor.execute('''
+                    INSERT INTO order_shipments (order_id, warehouse_id, status, tracking_number, shipped_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    RETURNING id
+                ''', (order['id'], wh_id, shipment_status_init, tracking_number))
+            else:
+                cursor.execute('''
+                    INSERT INTO order_shipments (order_id, warehouse_id, status)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                ''', (order['id'], wh_id, shipment_status_init))
             shipment_id = cursor.fetchone()['id']
             
             for ship_item in shipment_items:
@@ -8712,6 +8722,12 @@ def create_quick_order():
                 conn.rollback()
                 return jsonify({'error': 'สต็อกสินค้าไม่เพียงพอ กรุณาลองใหม่อีกครั้ง'}), 400
         
+        # If tracking number provided, update order status to shipped
+        if tracking_number:
+            cursor.execute('''
+                UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP WHERE id = %s
+            ''', (order['id'],))
+        
         conn.commit()
         
         return jsonify({
@@ -8729,6 +8745,153 @@ def create_quick_order():
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/admin/quick-orders', methods=['GET'])
+@admin_required
+def get_quick_orders():
+    """Get all quick orders with shipment info"""
+    conn = None
+    cursor = None
+    try:
+        status_filter = request.args.get('status')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        query = '''
+            SELECT o.id, o.order_number, o.status, o.total_amount, o.final_amount,
+                   o.notes, o.created_at, o.platform,
+                   sc.name as channel_name,
+                   u.full_name as created_by_name,
+                   (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
+                   (SELECT os.tracking_number FROM order_shipments os WHERE os.order_id = o.id ORDER BY os.id ASC LIMIT 1) as tracking_number,
+                   (SELECT os.shipping_provider FROM order_shipments os WHERE os.order_id = o.id ORDER BY os.id ASC LIMIT 1) as shipping_provider,
+                   (SELECT os.status FROM order_shipments os WHERE os.order_id = o.id ORDER BY os.id ASC LIMIT 1) as shipment_status
+            FROM orders o
+            LEFT JOIN sales_channels sc ON sc.id = o.channel_id
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.is_quick_order = TRUE
+        '''
+        params = []
+        if status_filter:
+            query += ' AND o.status = %s'
+            params.append(status_filter)
+        query += ' ORDER BY o.created_at DESC'
+        cursor.execute(query, params)
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            order['total_amount'] = float(order['total_amount']) if order['total_amount'] else 0
+            order['final_amount'] = float(order['final_amount']) if order['final_amount'] else 0
+            orders.append(order)
+        return jsonify(orders), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/quick-orders/<int:order_id>/status', methods=['POST'])
+@admin_required
+def update_quick_order_status(order_id):
+    """Update quick order status: shipped / delivered / returned"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        new_status = data.get('status')
+        tracking_number = data.get('tracking_number', '').strip() if data.get('tracking_number') else None
+        if new_status not in ('shipped', 'delivered', 'returned'):
+            return jsonify({'error': 'สถานะไม่ถูกต้อง'}), 400
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, status, is_quick_order FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        if not order or not order['is_quick_order']:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if new_status == 'shipped':
+            if not tracking_number:
+                return jsonify({'error': 'กรุณากรอกเลข Tracking'}), 400
+            cursor.execute('''
+                UPDATE order_shipments
+                SET tracking_number = %s, status = 'shipped', shipped_at = CURRENT_TIMESTAMP
+                WHERE order_id = %s
+            ''', (tracking_number, order_id))
+            cursor.execute('''
+                UPDATE orders SET status = 'shipped', updated_at = CURRENT_TIMESTAMP WHERE id = %s
+            ''', (order_id,))
+        elif new_status == 'delivered':
+            cursor.execute('''
+                UPDATE order_shipments SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE order_id = %s
+            ''', (order_id,))
+            cursor.execute('''
+                UPDATE orders SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = %s
+            ''', (order_id,))
+        elif new_status == 'returned':
+            cursor.execute('''
+                UPDATE order_shipments SET status = 'returned' WHERE order_id = %s
+            ''', (order_id,))
+            cursor.execute('''
+                UPDATE orders SET status = 'returned', updated_at = CURRENT_TIMESTAMP WHERE id = %s
+            ''', (order_id,))
+        conn.commit()
+        return jsonify({'message': 'อัปเดตสถานะสำเร็จ'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/quick-orders/<int:order_id>/restore-stock', methods=['POST'])
+@admin_required
+def restore_quick_order_stock(order_id):
+    """Restore stock for a returned quick order"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, status, is_quick_order FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        if not order or not order['is_quick_order']:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['status'] != 'returned':
+            return jsonify({'error': 'สามารถคืนสต็อกได้เฉพาะออเดอร์ที่มีสถานะ "ตีกลับ" เท่านั้น'}), 400
+        cursor.execute('''
+            SELECT oi.sku_id, SUM(oi.quantity) as qty
+            FROM order_items oi WHERE oi.order_id = %s GROUP BY oi.sku_id
+        ''', (order_id,))
+        items = cursor.fetchall()
+        for item in items:
+            cursor.execute('UPDATE skus SET stock = stock + %s WHERE id = %s', (item['qty'], item['sku_id']))
+            cursor.execute('''
+                SELECT warehouse_id, SUM(quantity) as qty
+                FROM order_shipment_items osi
+                JOIN order_shipments os ON os.id = osi.shipment_id
+                JOIN order_items oi2 ON oi2.id = osi.order_item_id
+                WHERE os.order_id = %s AND oi2.sku_id = %s
+                GROUP BY warehouse_id
+            ''', (order_id, item['sku_id']))
+            wh_rows = cursor.fetchall()
+            for wh in wh_rows:
+                cursor.execute('''
+                    INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = sku_warehouse_stock.stock + EXCLUDED.stock
+                ''', (item['sku_id'], wh['warehouse_id'], wh['qty']))
+        cursor.execute('''
+            UPDATE orders SET status = 'stock_restored', updated_at = CURRENT_TIMESTAMP WHERE id = %s
+        ''', (order_id,))
+        conn.commit()
+        return jsonify({'message': 'คืนสต็อกสำเร็จ'}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
 
 @app.route('/api/admin/orders/counts', methods=['GET'])
 @admin_required
@@ -8848,7 +9011,7 @@ def get_all_orders():
                 LEFT JOIN sales_channels sc ON sc.id = o.channel_id
             '''
             params = []
-            conditions = []
+            conditions = ['(o.is_quick_order = FALSE OR o.is_quick_order IS NULL)']
             if status_filter:
                 conditions.append('o.status = %s')
                 params.append(status_filter)
@@ -14889,6 +15052,15 @@ def iship_webhook():
             except Exception as ce:
                 print(f"[iSHIP] Chat notification error: {ce}")
         elif status in ['returned', 'exception', 'failed']:
+            if status == 'returned':
+                cursor.execute('''
+                    UPDATE order_shipments SET status = 'returned'
+                    WHERE id = %s AND status NOT IN ('delivered', 'returned')
+                ''', (shipment['shipment_id'],))
+                cursor.execute('''
+                    UPDATE orders SET status = 'returned', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s AND status NOT IN ('delivered', 'returned', 'stock_restored')
+                ''', (shipment['order_id'],))
             extra = f"({status_desc})" if status_desc else ""
             conn.commit()
             try:

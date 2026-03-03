@@ -2174,22 +2174,44 @@
                     <p>ตรวจสอบและจัดการคำสั่งซื้อของตัวแทน</p>
                 </div>
 
-                <div class="orders-header">
-                    <div class="status-tabs" id="orderStatusTabs">
-                        <button class="status-tab active" data-status="">ทั้งหมด</button>
-                        <button class="status-tab" data-status="pending_payment">รอชำระเงิน <span class="count" id="pendingPaymentCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="under_review">รอตรวจสอบ <span class="count" id="reviewCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="preparing">ที่ต้องจัดส่ง <span class="count" id="preparingCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="shipped">กำลังจัดส่ง <span class="count" id="shippedCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="delivered">จัดส่งสำเร็จ <span class="count" id="deliveredCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="failed_delivery">จัดส่งไม่สำเร็จ <span class="count" id="failedCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="pending_refund" style="color:rgba(255,255,255,0.8);">รอคืนเงิน <span class="count" id="pendingRefundCount" style="display:none;">0</span></button>
-                        <button class="status-tab" data-status="cancelled">ยกเลิก <span class="count" id="cancelledCount" style="display:none;">0</span></button>
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button id="ordersModeBtnReseller" class="btn" onclick="switchOrdersMode('reseller')" style="padding: 8px 18px; font-size: 13px; border-radius: 20px;">ออเดอร์ตัวแทน</button>
+                    <button id="ordersModeBtnQuick" class="btn" onclick="switchOrdersMode('quick')" style="padding: 8px 18px; font-size: 13px; border-radius: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">⚡ ขายด่วน</button>
+                </div>
+
+                <div id="ordersResellerSection">
+                    <div class="orders-header">
+                        <div class="status-tabs" id="orderStatusTabs">
+                            <button class="status-tab active" data-status="">ทั้งหมด</button>
+                            <button class="status-tab" data-status="pending_payment">รอชำระเงิน <span class="count" id="pendingPaymentCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="under_review">รอตรวจสอบ <span class="count" id="reviewCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="preparing">ที่ต้องจัดส่ง <span class="count" id="preparingCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="shipped">กำลังจัดส่ง <span class="count" id="shippedCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="delivered">จัดส่งสำเร็จ <span class="count" id="deliveredCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="failed_delivery">จัดส่งไม่สำเร็จ <span class="count" id="failedCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="pending_refund" style="color:rgba(255,255,255,0.8);">รอคืนเงิน <span class="count" id="pendingRefundCount" style="display:none;">0</span></button>
+                            <button class="status-tab" data-status="cancelled">ยกเลิก <span class="count" id="cancelledCount" style="display:none;">0</span></button>
+                        </div>
+                    </div>
+                    <div id="ordersContainer">
+                        <div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>
                     </div>
                 </div>
 
-                <div id="ordersContainer">
-                    <div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>
+                <div id="ordersQuickSection" style="display:none;">
+                    <div class="orders-header">
+                        <div class="status-tabs" id="quickOrderStatusTabs">
+                            <button class="status-tab active" data-status="" onclick="loadQuickOrders('')">ทั้งหมด</button>
+                            <button class="status-tab" data-status="paid" onclick="loadQuickOrders('paid')">รอจัดส่ง</button>
+                            <button class="status-tab" data-status="shipped" onclick="loadQuickOrders('shipped')">กำลังจัดส่ง</button>
+                            <button class="status-tab" data-status="delivered" onclick="loadQuickOrders('delivered')">จัดส่งสำเร็จ</button>
+                            <button class="status-tab" data-status="returned" onclick="loadQuickOrders('returned')">ตีกลับ</button>
+                            <button class="status-tab" data-status="stock_restored" onclick="loadQuickOrders('stock_restored')">คืนสต็อกแล้ว</button>
+                        </div>
+                    </div>
+                    <div id="quickOrdersContainer">
+                        <div style="text-align: center; padding: 40px; opacity: 0.6;">กำลังโหลดข้อมูล...</div>
+                    </div>
                 </div>
             </div>
 
@@ -2415,10 +2437,30 @@
                             <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">ข้อมูลคำสั่งซื้อ</h3>
                             
                             <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">แพลตฟอร์ม</label>
+                                <select id="quickOrderPlatform" class="form-select">
+                                    <option value="">-- เลือกแพลตฟอร์ม --</option>
+                                    <option value="shopee">🛍️ Shopee</option>
+                                    <option value="lazada">📦 Lazada</option>
+                                    <option value="tiktok">🎵 TikTok Shop</option>
+                                    <option value="line">💬 LINE</option>
+                                    <option value="facebook">📘 Facebook</option>
+                                    <option value="onsale">🏪 หน้าร้าน</option>
+                                    <option value="other">อื่นๆ</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 12px;">
                                 <label style="font-size: 13px; margin-bottom: 6px; display: block;">ช่องทางขาย *</label>
                                 <select id="quickOrderChannel" class="form-select">
                                     <option value="">-- เลือกช่องทาง --</option>
                                 </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 13px; margin-bottom: 6px; display: block;">เลข Tracking (ถ้ามี)</label>
+                                <input type="text" id="quickOrderTracking" class="form-input" placeholder="เช่น TH123456789">
+                                <p style="font-size: 11px; opacity: 0.6; margin-top: 4px;">กรอกเพื่อตั้งสถานะเป็น "กำลังจัดส่ง" ทันที</p>
                             </div>
                             
                             <div class="form-group" style="margin-bottom: 12px;">

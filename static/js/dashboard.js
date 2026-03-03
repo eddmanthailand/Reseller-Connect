@@ -6230,6 +6230,8 @@ function updateQuickOrderSummary() {
 
 async function createQuickOrder() {
     const channelId = document.getElementById('quickOrderChannel').value;
+    const platform = document.getElementById('quickOrderPlatform').value;
+    const trackingNumber = document.getElementById('quickOrderTracking').value.trim();
     const customerName = document.getElementById('quickOrderCustomerName').value.trim();
     const customerPhone = document.getElementById('quickOrderCustomerPhone').value.trim();
     const notes = document.getElementById('quickOrderNotes').value.trim();
@@ -6254,6 +6256,8 @@ async function createQuickOrder() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sales_channel_id: parseInt(channelId),
+                platform: platform || null,
+                tracking_number: trackingNumber || null,
                 customer_name: customerName || null,
                 customer_phone: customerPhone || null,
                 notes: notes || null,
@@ -6268,8 +6272,11 @@ async function createQuickOrder() {
         const result = await response.json();
         
         if (response.ok) {
-            showGlobalAlert(`สร้างคำสั่งซื้อสำเร็จ! เลขที่: ${result.order_number}`, 'success');
+            const statusMsg = trackingNumber ? ' (สถานะ: กำลังจัดส่ง)' : '';
+            showGlobalAlert(`สร้างคำสั่งซื้อสำเร็จ! เลขที่: ${result.order_number}${statusMsg}`, 'success');
             quickOrderItems = [];
+            document.getElementById('quickOrderPlatform').value = '';
+            document.getElementById('quickOrderTracking').value = '';
             document.getElementById('quickOrderCustomerName').value = '';
             document.getElementById('quickOrderCustomerPhone').value = '';
             document.getElementById('quickOrderNotes').value = '';
@@ -6298,6 +6305,197 @@ document.addEventListener('change', function(e) {
         updateQuickOrderSummary();
     }
 });
+
+// ─── Quick Orders (in orders page) ──────────────────────────────────────────
+
+let currentOrdersMode = 'reseller';
+let currentQuickOrdersStatus = '';
+
+function switchOrdersMode(mode) {
+    currentOrdersMode = mode;
+    const resellerSection = document.getElementById('ordersResellerSection');
+    const quickSection = document.getElementById('ordersQuickSection');
+    const btnReseller = document.getElementById('ordersModeBtnReseller');
+    const btnQuick = document.getElementById('ordersModeBtnQuick');
+
+    if (mode === 'reseller') {
+        resellerSection.style.display = '';
+        quickSection.style.display = 'none';
+        btnReseller.style.background = '';
+        btnReseller.style.border = '';
+        btnQuick.style.background = 'rgba(255,255,255,0.1)';
+        btnQuick.style.border = '1px solid rgba(255,255,255,0.2)';
+    } else {
+        resellerSection.style.display = 'none';
+        quickSection.style.display = '';
+        btnQuick.style.background = '';
+        btnQuick.style.border = '';
+        btnReseller.style.background = 'rgba(255,255,255,0.1)';
+        btnReseller.style.border = '1px solid rgba(255,255,255,0.2)';
+        loadQuickOrders(currentQuickOrdersStatus);
+    }
+}
+
+function _platformBadge(platform) {
+    const map = {
+        shopee: { label: 'Shopee', color: '#ee4d2d' },
+        lazada: { label: 'Lazada', color: '#0f146d' },
+        tiktok: { label: 'TikTok', color: '#010101' },
+        line: { label: 'LINE', color: '#06c755' },
+        facebook: { label: 'Facebook', color: '#1877f2' },
+        onsale: { label: 'หน้าร้าน', color: '#7c3aed' },
+        other: { label: 'อื่นๆ', color: '#6b7280' }
+    };
+    if (!platform) return '';
+    const p = map[platform] || { label: platform, color: '#6b7280' };
+    return `<span style="background:${p.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-right:6px;">${p.label}</span>`;
+}
+
+async function loadQuickOrders(status = '') {
+    currentQuickOrdersStatus = status;
+    const container = document.getElementById('quickOrdersContainer');
+    container.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.6;">กำลังโหลดข้อมูล...</div>';
+
+    document.querySelectorAll('#quickOrderStatusTabs .status-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.status === status);
+    });
+
+    try {
+        let url = `${API_URL}/admin/quick-orders`;
+        if (status) url += `?status=${status}`;
+        const res = await fetch(url);
+        const orders = await res.json();
+        renderQuickOrders(orders);
+    } catch (e) {
+        container.innerHTML = '<div class="empty-state">ไม่สามารถโหลดข้อมูลได้</div>';
+    }
+}
+
+function renderQuickOrders(orders) {
+    const container = document.getElementById('quickOrdersContainer');
+    if (!orders || orders.length === 0) {
+        container.innerHTML = '<div class="empty-state">ไม่มีออเดอร์ขายด่วน</div>';
+        return;
+    }
+
+    const statusLabels = {
+        paid: 'รอจัดส่ง', shipped: 'กำลังจัดส่ง', delivered: 'จัดส่งสำเร็จ',
+        returned: 'ตีกลับ', stock_restored: 'คืนสต็อกแล้ว', cancelled: 'ยกเลิก'
+    };
+    const statusColors = {
+        paid: '#f59e0b', shipped: '#0ea5e9', delivered: '#10b981',
+        returned: '#ef4444', stock_restored: '#6b7280', cancelled: '#6b7280'
+    };
+
+    let html = `<table class="orders-table"><thead><tr>
+        <th>เลขที่</th><th>แพลตฟอร์ม / ช่องทาง</th><th>Tracking</th>
+        <th>สินค้า</th><th>ยอดรวม</th><th>สถานะ</th><th>วันที่</th><th style="text-align:center;">Actions</th>
+    </tr></thead><tbody>`;
+
+    orders.forEach(order => {
+        const statusLabel = statusLabels[order.status] || order.status;
+        const statusColor = statusColors[order.status] || '#6b7280';
+        const orderDate = new Date(order.created_at).toLocaleDateString('th-TH');
+        const orderNo = order.order_number || `#${order.id}`;
+        const tracking = order.tracking_number || '-';
+        const trackingLink = order.tracking_number && order.platform === 'lazada'
+            ? `<a href="https://track.lazada.co.th/tracking?tradeOrderId=${order.tracking_number}" target="_blank" style="color:#0ea5e9;font-size:12px;">${order.tracking_number} ↗</a>`
+            : order.tracking_number
+                ? `<span style="font-size:12px;font-family:monospace;">${order.tracking_number}</span>`
+                : '<span style="opacity:0.4;font-size:12px;">ยังไม่มี</span>';
+
+        let actions = `<button class="action-btn btn-review" onclick="viewQuickOrderDetails(${order.id})" style="padding:5px 10px;font-size:12px;">ดู</button>`;
+
+        if (order.status === 'paid') {
+            actions += `<button class="action-btn" onclick="showQuickOrderShipModal(${order.id})" style="padding:5px 10px;font-size:12px;background:rgba(14,165,233,0.2);color:#0ea5e9;border:1px solid rgba(14,165,233,0.3);border-radius:6px;cursor:pointer;margin-left:4px;">จัดส่ง</button>`;
+        }
+        if (order.status === 'shipped') {
+            actions += `<button class="action-btn" onclick="confirmQuickOrderDelivered(${order.id})" style="padding:5px 10px;font-size:12px;background:rgba(16,185,129,0.2);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;cursor:pointer;margin-left:4px;">รับแล้ว</button>`;
+            actions += `<button class="action-btn" onclick="confirmQuickOrderReturned(${order.id})" style="padding:5px 10px;font-size:12px;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;cursor:pointer;margin-left:4px;">ตีกลับ</button>`;
+        }
+        if (order.status === 'returned') {
+            actions += `<button class="action-btn" onclick="showRestoreStockModal(${order.id}, '${orderNo}')" style="padding:5px 10px;font-size:12px;background:rgba(168,85,247,0.2);color:#a855f7;border:1px solid rgba(168,85,247,0.3);border-radius:6px;cursor:pointer;margin-left:4px;">คืนสต็อก</button>`;
+        }
+
+        html += `<tr>
+            <td style="font-weight:600;font-size:13px;">${orderNo}</td>
+            <td>${_platformBadge(order.platform)}<span style="font-size:12px;opacity:0.8;">${order.channel_name || '-'}</span></td>
+            <td>${trackingLink}</td>
+            <td style="font-size:12px;">${order.item_count} รายการ</td>
+            <td style="font-weight:600;">฿${formatNumber(order.final_amount)}</td>
+            <td><span style="background:${statusColor}22;color:${statusColor};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;">${statusLabel}</span></td>
+            <td style="font-size:12px;">${orderDate}</td>
+            <td style="text-align:center;">${actions}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function viewQuickOrderDetails(orderId) {
+    viewOrderDetails(orderId);
+}
+
+function showQuickOrderShipModal(orderId) {
+    const tracking = prompt('กรอกเลข Tracking No. สำหรับการจัดส่ง:');
+    if (!tracking || !tracking.trim()) return;
+    updateQuickOrderStatus(orderId, 'shipped', tracking.trim());
+}
+
+async function confirmQuickOrderDelivered(orderId) {
+    if (!confirm('ยืนยันว่าสินค้าจัดส่งสำเร็จแล้ว?')) return;
+    await updateQuickOrderStatus(orderId, 'delivered');
+}
+
+async function confirmQuickOrderReturned(orderId) {
+    if (!confirm('ยืนยันว่าสินค้าถูกตีกลับ?\nระบบจะเปลี่ยนสถานะเป็น "ตีกลับ" และคุณสามารถคืนสต็อกได้ภายหลัง')) return;
+    await updateQuickOrderStatus(orderId, 'returned');
+}
+
+async function updateQuickOrderStatus(orderId, newStatus, trackingNumber = null) {
+    try {
+        const body = { status: newStatus };
+        if (trackingNumber) body.tracking_number = trackingNumber;
+        const res = await fetch(`${API_URL}/admin/quick-orders/${orderId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const result = await res.json();
+        if (res.ok) {
+            showGlobalAlert(result.message || 'อัปเดตสำเร็จ', 'success');
+            loadQuickOrders(currentQuickOrdersStatus);
+        } else {
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (e) {
+        showGlobalAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    }
+}
+
+function showRestoreStockModal(orderId, orderNo) {
+    if (!confirm(`คืนสต็อกสำหรับออเดอร์ ${orderNo}?\n\nสินค้าที่ถูกตีกลับจะถูกเพิ่มกลับเข้า warehouse ต้นทาง\nการดำเนินการนี้ไม่สามารถยกเลิกได้`)) return;
+    restoreQuickOrderStock(orderId);
+}
+
+async function restoreQuickOrderStock(orderId) {
+    try {
+        const res = await fetch(`${API_URL}/admin/quick-orders/${orderId}/restore-stock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await res.json();
+        if (res.ok) {
+            showGlobalAlert('คืนสต็อกสำเร็จ', 'success');
+            loadQuickOrders(currentQuickOrdersStatus);
+        } else {
+            showGlobalAlert(result.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (e) {
+        showGlobalAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    }
+}
 
 async function requestNewSlip(orderId) {
     const reason = prompt('เหตุผลในการขอสลิปใหม่:', 'สลิปไม่ชัด');
