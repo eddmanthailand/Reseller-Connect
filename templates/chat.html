@@ -1986,28 +1986,56 @@ async function openAdminChatCouponPicker() {
         <div style="width:24px;height:24px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:chatSpinAnim 0.6s linear infinite;margin:0 auto 12px;"></div>
         <div style="font-size:13px;">กำลังโหลด...</div></div>`;
     try {
-        const r = await fetch(`${API}/admin/coupons`, { credentials: 'include' });
-        const coupons = await r.json();
+        const [couponRes, walletRes] = await Promise.all([
+            fetch(`${API}/admin/coupons`, { credentials: 'include' }),
+            currentThreadId ? fetch(`${API}/chat/threads/${currentThreadId}/reseller-coupon-wallet`, { credentials: 'include' }) : Promise.resolve(null)
+        ]);
+        const coupons = await couponRes.json();
+        const walletMap = walletRes && walletRes.ok ? await walletRes.json() : {};
         const active = (Array.isArray(coupons) ? coupons : (coupons.coupons || [])).filter(c => c.is_active);
         if (!active.length) {
             list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);"><div style="font-size:32px;margin-bottom:10px;">🎟️</div><div>ยังไม่มีคูปอง</div></div>`;
             return;
         }
         const fmtDisc = c => c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
-        list.innerHTML = active.map(c => `
+        const fmtDate = d => new Date(d).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+        list.innerHTML = active.map(c => {
+            const wallet = walletMap[c.id];
+            let walletBadge = '';
+            if (wallet) {
+                if (wallet.status === 'ready') {
+                    const since = wallet.collected_at ? ` (รับไว้ ${fmtDate(wallet.collected_at)})` : '';
+                    walletBadge = `<div style="margin-top:5px;display:inline-flex;align-items:center;gap:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);border-radius:8px;padding:3px 8px;">
+                        <span style="font-size:11px;">⚠️</span>
+                        <span style="font-size:11px;color:#fbbf24;font-weight:600;">อยู่ใน Wallet แล้ว ยังไม่ได้ใช้${since}</span>
+                    </div>`;
+                } else if (wallet.status === 'used') {
+                    const orderRef = wallet.used_in_order_number ? ` · ออเดอร์ ${wallet.used_in_order_number}` : '';
+                    const usedDate = wallet.used_at ? ` เมื่อ ${fmtDate(wallet.used_at)}` : '';
+                    walletBadge = `<div style="margin-top:5px;display:inline-flex;align-items:center;gap:4px;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:3px 8px;">
+                        <span style="font-size:11px;">✅</span>
+                        <span style="font-size:11px;color:#4ade80;font-weight:600;">ใช้แล้ว${usedDate}${orderRef}</span>
+                    </div>`;
+                }
+            }
+            return `
             <div onclick="selectAdminChatCoupon(${JSON.stringify(c).replace(/"/g,'&quot;')})"
-                 style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;"
+                 style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background 0.15s;"
                  onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-                <div>
-                    <div style="font-size:13px;font-weight:700;color:#38ef7d;">${esc(c.code)}</div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.65);">${esc(c.name)}</div>
-                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:700;color:#38ef7d;">${esc(c.code)}</div>
+                        <div style="font-size:12px;color:rgba(255,255,255,0.65);">${esc(c.name)}</div>
+                        ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                        ${walletBadge}
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:12px;font-weight:600;color:#38ef7d;">${fmtDisc(c)}</div>
+                        ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);">ถึง ${fmtDate(c.end_date)}</div>` : ''}
+                    </div>
                 </div>
-                <div style="text-align:right;flex-shrink:0;margin-left:12px;">
-                    <div style="font-size:12px;font-weight:600;color:#38ef7d;">${fmtDisc(c)}</div>
-                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</div>` : ''}
-                </div>
-            </div>`).join('');
+            </div>`;
+        }).join('');
     } catch(e) {
         list.innerHTML = `<div style="text-align:center;padding:40px;color:#f87171;">โหลดข้อมูลไม่สำเร็จ</div>`;
     }

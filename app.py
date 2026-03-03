@@ -13375,6 +13375,46 @@ def unarchive_chat_thread(thread_id):
         if cursor: cursor.close()
         if conn: conn.close()
 
+@app.route('/api/chat/threads/<int:thread_id>/reseller-coupon-wallet', methods=['GET'])
+@login_required
+def get_thread_reseller_coupon_wallet(thread_id):
+    """Return wallet status of all coupons for the reseller in this thread (admin only)"""
+    conn = None
+    cursor = None
+    try:
+        if session.get('role') == 'Reseller':
+            return jsonify({'error': 'Forbidden'}), 403
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({}), 200
+        reseller_id = thread['reseller_id']
+        cursor.execute('''
+            SELECT uc.coupon_id, uc.status, uc.used_at, uc.collected_at,
+                   o.order_number as used_in_order_number
+            FROM user_coupons uc
+            LEFT JOIN orders o ON o.id = uc.used_in_order_id
+            WHERE uc.user_id = %s
+        ''', (reseller_id,))
+        rows = cursor.fetchall()
+        result = {}
+        for r in rows:
+            result[r['coupon_id']] = {
+                'status': r['status'],
+                'used_at': r['used_at'].isoformat() if r['used_at'] else None,
+                'collected_at': r['collected_at'].isoformat() if r['collected_at'] else None,
+                'used_in_order_number': r['used_in_order_number']
+            }
+        return jsonify(result), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/chat/products/search', methods=['GET'])
 @login_required
 def search_chat_products():

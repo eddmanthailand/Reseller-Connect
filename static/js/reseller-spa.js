@@ -1404,8 +1404,8 @@ async function loadPromoWallet() {
 
     // Render coupon wallet as ticket cards
     const readyCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status === 'ready') : [];
-    const otherCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status !== 'ready') : [];
-    const allCoupons = [...readyCoupons, ...otherCoupons];
+    const usedCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status === 'used') : [];
+    const expiredCoupons = Array.isArray(coupons) ? coupons.filter(c => c.status !== 'ready' && c.status !== 'used') : [];
 
     // Update badge
     const badge = document.getElementById('bottomPromoBadge');
@@ -1414,27 +1414,22 @@ async function loadPromoWallet() {
         else { badge.style.display = 'none'; }
     }
 
-    if (!allCoupons.length) {
-        couponList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.35);padding:20px 0;font-size:13px;">ยังไม่มีคูปอง</div>';
-        return;
-    }
-
     const typeColors = { percent: ['#7c3aed','#a78bfa'], fixed: ['#0e7490','#67e8f9'], free_shipping: ['#065f46','#6ee7b7'] };
     const typeLabels = { percent: 'ลด %', fixed: 'ลดคงที่', free_shipping: 'ส่งฟรี' };
+    const fmtWalletDate = d => d ? new Date(d).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '';
 
-    couponList.innerHTML = allCoupons.map(c => {
-        const isReady = c.status === 'ready';
+    const renderCouponTicket = (c, isReady) => {
         const [bg1, bg2] = typeColors[c.discount_type] || ['#4c1d95','#a78bfa'];
         const typeLabel = typeLabels[c.discount_type] || c.discount_type;
         const desc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%${c.max_discount > 0 ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})` : ''}`
             : c.discount_type === 'fixed' ? `ลด ฿${Number(c.discount_value).toLocaleString()}`
             : 'ฟรีค่าจัดส่ง';
         const expires = c.end_date ? new Date(c.end_date).toLocaleDateString('th-TH') : 'ไม่มีกำหนด';
-        const statusLabel = c.status === 'ready' ? 'พร้อมใช้' : c.status === 'used' ? `ใช้แล้ว${c.used_in_order_number ? ' ('+c.used_in_order_number+')' : ''}` : 'หมดอายุ';
+        const statusLabel = isReady ? 'พร้อมใช้' : c.status === 'used' ? 'ใช้แล้ว' : 'หมดอายุ';
         const statusColor = isReady ? '#4ade80' : '#9ca3af';
         const useBtn = isReady ? `<button onclick="usePromoWalletCoupon('${c.code}')" style="background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">ใช้เลย</button>` : '';
         return `
-        <div style="display:flex;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,${isReady ? '0.12' : '0.06'});${!isReady ? 'opacity:0.5;' : ''}min-height:88px;">
+        <div style="display:flex;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,${isReady ? '0.12' : '0.06'});${!isReady ? 'opacity:0.55;' : ''}min-height:88px;">
             <div style="width:100px;flex-shrink:0;background:linear-gradient(135deg,${bg1},${bg2});display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 8px;">
                 <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:800;letter-spacing:0.5px;color:white;text-align:center;word-break:break-all;">${c.code}</div>
                 <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:3px;text-align:center;">${typeLabel}</div>
@@ -1454,7 +1449,57 @@ async function loadPromoWallet() {
                 </div>
             </div>
         </div>`;
-    }).join('');
+    };
+
+    // Active coupons
+    if (!readyCoupons.length && !usedCoupons.length && !expiredCoupons.length) {
+        couponList.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.35);padding:20px 0;font-size:13px;">ยังไม่มีคูปอง</div>';
+        return;
+    }
+
+    let html = '';
+
+    if (readyCoupons.length) {
+        html += readyCoupons.map(c => renderCouponTicket(c, true)).join('');
+    } else {
+        html += '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:16px 0;font-size:13px;">ไม่มีคูปองที่พร้อมใช้งาน</div>';
+    }
+
+    // History section
+    if (usedCoupons.length || expiredCoupons.length) {
+        html += `<div style="margin-top:20px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
+                <span style="font-size:12px;color:rgba(255,255,255,0.35);font-weight:600;white-space:nowrap;">📋 ประวัติการใช้คูปอง</span>
+                <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
+            </div>
+        </div>`;
+        // Used coupons with detail
+        usedCoupons.forEach(c => {
+            const desc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%${c.max_discount > 0 ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString()})` : ''}`
+                : c.discount_type === 'fixed' ? `ลด ฿${Number(c.discount_value).toLocaleString()}`
+                : 'ฟรีค่าจัดส่ง';
+            const usedDate = c.used_at ? fmtWalletDate(c.used_at) : '';
+            const orderNum = c.used_in_order_number ? `#${c.used_in_order_number}` : '';
+            html += `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:14px;opacity:0.7;">
+                <div style="width:36px;height:36px;background:rgba(74,222,128,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">✅</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-family:'Courier New',monospace;font-size:12px;font-weight:800;color:rgba(255,255,255,0.7);letter-spacing:1px;">${escapeHtmlChat(c.code)}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;">${escapeHtmlChat(c.name || desc)}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:11px;color:#4ade80;font-weight:600;">ใช้แล้ว</div>
+                    ${usedDate ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px;">${usedDate}</div>` : ''}
+                    ${orderNum ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">ออเดอร์ ${orderNum}</div>` : ''}
+                </div>
+            </div>`;
+        });
+        // Expired coupons
+        expiredCoupons.forEach(c => html += renderCouponTicket(c, false));
+    }
+
+    couponList.innerHTML = html;
 }
 
 function usePromoWalletCoupon(code) {
