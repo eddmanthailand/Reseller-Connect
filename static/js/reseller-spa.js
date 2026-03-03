@@ -1253,11 +1253,12 @@ async function applyCouponCode() {
         const cartItems = checkoutData.items || [];
         const brandIds = [...new Set(cartItems.map(i => i.brand_id).filter(id => id))];
         const categoryIds = [...new Set(cartItems.map(i => i.category_id).filter(id => id))];
+        const productIds = [...new Set(cartItems.map(i => i.product_id).filter(id => id))];
         const cartQty = cartItems.reduce((s, i) => s + (i.quantity || 0), 0);
         const res = await fetch(`${RESELLER_API_URL}/reseller/cart/preview-discount`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total, brand_ids: brandIds, category_ids: categoryIds, cart_qty: cartQty })
+            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total, brand_ids: brandIds, category_ids: categoryIds, product_ids: productIds, cart_qty: cartQty })
         });
         const data = await res.json();
         if (!res.ok) { showCouponMsg(data.error || 'คูปองไม่ถูกต้อง', '#ef4444'); return; }
@@ -1337,9 +1338,10 @@ async function openCouponWalletPicker() {
             return `<div style="background:rgba(255,255,255,0.07);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.5;' : ''}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                     <div>
-                        <div style="font-weight:700;color:#ffffff;font-size:15px;letter-spacing:1px;">${c.code}</div>
+                        <div style="font-weight:700;color:#ffffff;font-size:${_ccFz(c.code)};letter-spacing:1px;word-break:break-all;">${c.code}</div>
                         <div style="color:white;font-size:13px;margin-top:2px;">${c.name || desc}</div>
                         <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
+                        ${c.applies_to && c.applies_to !== 'all' ? `<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">${c.applies_to === 'brand' ? '🏷️' : '📦'} ${(c.applies_to_names && c.applies_to_names.length) ? c.applies_to_names.slice(0,2).join(', ') + (c.applies_to_names.length > 2 ? ` +${c.applies_to_names.length-2}` : '') : 'เฉพาะบางรายการ'}</div>` : ''}
                         <div style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:2px;">หมดอายุ: ${expires}</div>
                     </div>
                     ${isReady ? `<button onclick="selectWalletCoupon('${c.code}')" style="background:linear-gradient(135deg,#a855f7,#ec4899);border:none;color:white;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;">เลือก</button>` : `<span style="color:#ef4444;font-size:12px;">${statusLabel}</span>`}
@@ -1431,7 +1433,7 @@ async function loadPromoWallet() {
         return `
         <div style="display:flex;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,${isReady ? '0.12' : '0.06'});${!isReady ? 'opacity:0.55;' : ''}min-height:88px;">
             <div style="width:100px;flex-shrink:0;background:linear-gradient(135deg,${bg1},${bg2});display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 8px;">
-                <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:800;letter-spacing:0.5px;color:white;text-align:center;word-break:break-all;">${c.code}</div>
+                <div style="font-family:'Courier New',monospace;font-size:${_ccFz(c.code,true)};font-weight:800;letter-spacing:0.5px;color:white;text-align:center;word-break:break-all;line-height:1.3;">${c.code}</div>
                 <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:3px;text-align:center;">${typeLabel}</div>
             </div>
             <div style="flex:1;background:rgba(255,255,255,0.06);padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;">
@@ -1532,7 +1534,7 @@ async function loadProfileCouponWallet() {
             return `<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;${!isReady ? 'opacity:0.55;' : ''}">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:700;color:#ffffff;font-size:14px;letter-spacing:1px;">${c.code}</div>
+                        <div style="font-weight:700;color:#ffffff;font-size:${_ccFz(c.code)};letter-spacing:1px;word-break:break-all;">${c.code}</div>
                         <div style="color:white;font-size:13px;margin-top:3px;">${c.name || desc}</div>
                         <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:2px;">${desc}${c.min_spend > 0 ? ` · ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString()}` : ''}</div>
                         ${c.applies_to && c.applies_to !== 'all' ? `<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">${c.applies_to === 'brand' ? '🏷️' : '📦'} ${(c.applies_to_names && c.applies_to_names.length) ? c.applies_to_names.slice(0,2).join(', ') + (c.applies_to_names.length > 2 ? ` +${c.applies_to_names.length-2}` : '') : 'เฉพาะบางรายการ'}</div>` : ''}
@@ -4203,6 +4205,12 @@ function setupResellerChatScroll() {
             loadOlderResellerMessages();
         }
     });
+}
+
+function _ccFz(code, panelMode) {
+    const n = (code || '').length;
+    if (panelMode) return n <= 7 ? '13px' : n <= 10 ? '11px' : n <= 14 ? '9px' : '8px';
+    return n <= 10 ? '15px' : n <= 14 ? '13px' : '11px';
 }
 
 function escapeHtmlChat(str) {

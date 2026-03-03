@@ -9533,7 +9533,7 @@ async function loadCoupons() {
             const claimed = c.claimed_count || 0;
             const dateStr = c.end_date ? `หมดอายุ ${new Date(c.end_date).toLocaleDateString('th-TH')}` : 'ไม่มีกำหนด';
             const codeLen = (c.code || '').length;
-            const codeFontSize = codeLen <= 8 ? '13px' : codeLen <= 12 ? '11px' : codeLen <= 16 ? '9px' : '8px';
+            const codeFontSize = codeLen <= 7 ? '13px' : codeLen <= 10 ? '11px' : codeLen <= 14 ? '9px' : '8px';
             return `
             <div class="coupon-ticket" style="${!c.is_active ? 'opacity:0.5;' : ''}">
                 <div class="coupon-ticket-left" style="background:linear-gradient(135deg,${bg1},${bg2});">
