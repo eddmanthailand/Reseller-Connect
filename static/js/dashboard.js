@@ -9973,7 +9973,7 @@ function _srParseVariant(variantName) {
             opts[part.substring(0, idx).trim().toLowerCase()] = part.substring(idx + 1).trim();
         }
     });
-    const size = opts['ไซส์'] || opts['size'] || opts['ไซ'] || null;
+    const size = opts['ขนาด'] || opts['ไซส์'] || opts['size'] || opts['ไซ'] || opts['sz'] || null;
     const color = opts['สี'] || opts['color'] || opts['ลาย'] || opts['pattern'] || null;
     return { size, color };
 }
