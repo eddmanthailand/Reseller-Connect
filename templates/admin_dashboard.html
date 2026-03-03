@@ -2399,6 +2399,19 @@
             <!-- Quick Order Page -->
             <div id="page-quick-order" class="page-content">
 
+                <!-- Label OCR Result Card (hidden by default) -->
+                <div id="labelOcrResult" style="display:none; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px 20px; margin-bottom:20px; position:relative;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span style="font-weight:700; font-size:14px; color:#10b981;">อ่านใบปะหน้าสำเร็จ</span>
+                        <button onclick="dismissOcrResult()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:18px;line-height:1;">✕</button>
+                    </div>
+                    <div id="labelOcrData" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:14px;"></div>
+                    <button onclick="applyOcrToForm()" class="btn" style="width:100%; padding:10px; font-size:13px;">
+                        ✓ ใช้ข้อมูลนี้กรอกฟอร์ม
+                    </button>
+                </div>
+
                 <div class="page-header">
                     <h1>
                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
@@ -2434,8 +2447,23 @@
                     
                     <div>
                         <div class="card" style="margin-bottom: 16px;">
-                            <h3 style="font-size: 16px; margin-bottom: 16px; font-weight: 600;">ข้อมูลคำสั่งซื้อ</h3>
-                            
+                            <h3 style="font-size: 16px; margin-bottom: 14px; font-weight: 600;">ข้อมูลคำสั่งซื้อ</h3>
+
+                            <!-- Label OCR Upload -->
+                            <div style="margin-bottom: 16px;">
+                                <input type="file" id="labelImageInput" accept="image/*" style="display:none;" onchange="handleLabelImageUpload(this)">
+                                <button type="button" onclick="document.getElementById('labelImageInput').click()" id="btnScanLabel"
+                                    style="width:100%;padding:10px;background:rgba(99,102,241,0.15);border:1px dashed rgba(99,102,241,0.5);color:rgba(255,255,255,0.85);border-radius:10px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                    📷 อ่านใบปะหน้าอัตโนมัติ
+                                </button>
+                                <div id="labelScanStatus" style="display:none; text-align:center; padding:8px; font-size:12px; color:#a78bfa; margin-top:6px;">
+                                    <span id="labelScanMsg">กำลังอ่านใบปะหน้า...</span>
+                                </div>
+                            </div>
+
+                            <div style="border-top:1px solid rgba(255,255,255,0.1); margin-bottom:14px;"></div>
+
                             <div class="form-group" style="margin-bottom: 12px;">
                                 <label style="font-size: 13px; margin-bottom: 6px; display: block;">แพลตฟอร์ม</label>
                                 <select id="quickOrderPlatform" class="form-select">

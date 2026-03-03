@@ -6497,6 +6497,120 @@ async function restoreQuickOrderStock(orderId) {
     }
 }
 
+// ─── Label OCR (Gemini Vision) ───────────────────────────────────────────────
+
+let _ocrExtracted = null;
+
+async function handleLabelImageUpload(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const statusDiv = document.getElementById('labelScanStatus');
+    const statusMsg = document.getElementById('labelScanMsg');
+    const resultCard = document.getElementById('labelOcrResult');
+    const btn = document.getElementById('btnScanLabel');
+
+    statusDiv.style.display = 'block';
+    statusMsg.textContent = 'กำลังส่งรูปให้ AI อ่าน...';
+    resultCard.style.display = 'none';
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        statusMsg.textContent = 'กำลังวิเคราะห์ใบปะหน้า...';
+        const res = await fetch(`${API_URL}/admin/quick-order/parse-label`, {
+            method: 'POST',
+            body: formData
+        });
+        const result = await res.json();
+
+        if (!res.ok) {
+            showGlobalAlert(result.error || 'ไม่สามารถอ่านใบปะหน้าได้', 'error');
+            return;
+        }
+
+        _ocrExtracted = result.data;
+        renderOcrResultCard(result.data);
+
+    } catch (e) {
+        showGlobalAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    } finally {
+        statusDiv.style.display = 'none';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        input.value = '';
+    }
+}
+
+function renderOcrResultCard(data) {
+    const platformLabels = {
+        shopee: '🛍️ Shopee', lazada: '📦 Lazada',
+        tiktok: '🎵 TikTok', other: 'อื่นๆ'
+    };
+    const fields = [
+        { label: 'แพลตฟอร์ม', value: platformLabels[data.platform] || data.platform },
+        { label: 'Tracking', value: data.tracking_number },
+        { label: 'ชื่อลูกค้า', value: data.customer_name },
+        { label: 'เบอร์โทร', value: data.customer_phone },
+        { label: 'ที่อยู่', value: data.address },
+        { label: 'จังหวัด', value: data.province },
+        { label: 'รหัสไปรษณีย์', value: data.postal_code },
+    ].filter(f => f.value && f.value !== 'null');
+
+    const dataDiv = document.getElementById('labelOcrData');
+    dataDiv.innerHTML = fields.map(f => `
+        <div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.5);margin-bottom:3px;">${f.label}</div>
+            <div style="font-weight:600;color:#ffffff;font-size:13px;">${f.value}</div>
+        </div>
+    `).join('');
+
+    document.getElementById('labelOcrResult').style.display = 'block';
+    document.getElementById('labelOcrResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function applyOcrToForm() {
+    if (!_ocrExtracted) return;
+    const d = _ocrExtracted;
+
+    if (d.platform) {
+        const platformSelect = document.getElementById('quickOrderPlatform');
+        if (platformSelect) platformSelect.value = d.platform;
+    }
+    if (d.tracking_number) {
+        const trackingInput = document.getElementById('quickOrderTracking');
+        if (trackingInput) trackingInput.value = d.tracking_number;
+    }
+    if (d.customer_name) {
+        const nameInput = document.getElementById('quickOrderCustomerName');
+        if (nameInput) nameInput.value = d.customer_name;
+    }
+    if (d.customer_phone) {
+        const phoneInput = document.getElementById('quickOrderCustomerPhone');
+        if (phoneInput) phoneInput.value = d.customer_phone;
+    }
+    if (d.address) {
+        const notesInput = document.getElementById('quickOrderNotes');
+        if (notesInput) {
+            const existing = notesInput.value.trim();
+            const addrLine = `ที่อยู่: ${d.address}`;
+            notesInput.value = existing ? `${existing}\n${addrLine}` : addrLine;
+        }
+    }
+
+    updateQuickOrderSummary();
+    document.getElementById('labelOcrResult').style.display = 'none';
+    showGlobalAlert('กรอกข้อมูลจากใบปะหน้าสำเร็จ', 'success');
+    _ocrExtracted = null;
+}
+
+function dismissOcrResult() {
+    document.getElementById('labelOcrResult').style.display = 'none';
+    _ocrExtracted = null;
+}
+
 async function requestNewSlip(orderId) {
     const reason = prompt('เหตุผลในการขอสลิปใหม่:', 'สลิปไม่ชัด');
     if (!reason) return;

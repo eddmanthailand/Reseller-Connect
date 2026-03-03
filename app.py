@@ -8538,6 +8538,95 @@ def get_brand_sales():
 
 # ==================== ADMIN ORDER MANAGEMENT ====================
 
+@app.route('/api/admin/quick-order/parse-label', methods=['POST'])
+@admin_required
+def parse_shipping_label():
+    """Use Gemini Vision to extract info from a Shopee/Lazada shipping label image"""
+    try:
+        import google.generativeai as genai
+        import base64
+
+        gemini_key = os.environ.get('GEMINI_API_KEY')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่พบ GEMINI_API_KEY กรุณาตั้งค่า API Key ก่อน'}), 500
+
+        if 'image' not in request.files:
+            return jsonify({'error': 'กรุณาแนบรูปภาพใบปะหน้า'}), 400
+
+        image_file = request.files['image']
+        if not image_file.filename:
+            return jsonify({'error': 'ไม่พบไฟล์รูปภาพ'}), 400
+
+        allowed = {'jpg', 'jpeg', 'png', 'webp', 'gif'}
+        ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else ''
+        if ext not in allowed:
+            return jsonify({'error': 'รองรับเฉพาะไฟล์รูปภาพ (jpg, jpeg, png, webp)'}), 400
+
+        image_data = image_file.read()
+        mime_type = image_file.mimetype or f'image/{ext}'
+
+        genai.configure(api_key=gemini_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        prompt = """วิเคราะห์ใบปะหน้าพัสดุนี้และดึงข้อมูลต่อไปนี้เป็น JSON:
+{
+  "platform": "shopee หรือ lazada หรือ other (ระบุจากโลโก้/สีบนใบปะหน้า)",
+  "tracking_number": "เลข tracking/หมายเลขพัสดุ (ตัวอักษรและตัวเลข เช่น TH123456789)",
+  "customer_name": "ชื่อผู้รับ",
+  "customer_phone": "เบอร์โทรผู้รับ (ถ้ามี)",
+  "address": "ที่อยู่จัดส่งเต็ม",
+  "province": "จังหวัด",
+  "district": "อำเภอ/เขต",
+  "subdistrict": "ตำบล/แขวง",
+  "postal_code": "รหัสไปรษณีย์"
+}
+ถ้าไม่พบข้อมูลใดให้ใส่ null
+ตอบเป็น JSON เท่านั้น ไม่ต้องมีคำอธิบายเพิ่มเติม"""
+
+        image_part = {'mime_type': mime_type, 'data': image_data}
+        response = model.generate_content([prompt, image_part])
+
+        raw = response.text.strip()
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        import json as _json
+        extracted = _json.loads(raw)
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        customer_id = None
+        if extracted.get('customer_name') or extracted.get('customer_phone'):
+            cursor.execute('''
+                INSERT INTO customers (name, phone, address, province, district, subdistrict, postal_code)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (
+                extracted.get('customer_name'),
+                extracted.get('customer_phone'),
+                extracted.get('address'),
+                extracted.get('province'),
+                extracted.get('district'),
+                extracted.get('subdistrict'),
+                extracted.get('postal_code')
+            ))
+            customer_id = cursor.fetchone()['id']
+            conn.commit()
+        cursor.close()
+        conn.close()
+
+        extracted['customer_id'] = customer_id
+        return jsonify({'success': True, 'data': extracted}), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'ไม่สามารถอ่านใบปะหน้าได้: {str(e)}'}), 500
+
+
 @app.route('/api/admin/quick-order', methods=['POST'])
 @admin_required
 def create_quick_order():
