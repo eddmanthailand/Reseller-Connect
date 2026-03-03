@@ -1568,18 +1568,18 @@ function renderCouponCard(c, isAdmin) {
     const expiry = c.end_date ? `หมดอายุ ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}` : '';
     const minSpend = c.min_spend ? `ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}` : '';
     const adminNote = isAdmin ? `<div style="font-size:10px;color:#34d399;margin-top:6px;text-align:center;">✓ คูปองถูกเพิ่มเข้า wallet ของสมาชิกแล้ว</div>` : '';
-    return `<div style="background:linear-gradient(135deg,rgba(17,153,142,0.2),rgba(56,239,125,0.1));border:1.5px dashed rgba(56,239,125,0.5);border-radius:14px;overflow:hidden;min-width:220px;max-width:260px;">
+    return `<div style="width:100%;border-radius:14px;overflow:hidden;">
         <div style="background:linear-gradient(135deg,#11998e,#38ef7d);padding:10px 14px;display:flex;align-items:center;gap:8px;">
             <span style="font-size:18px;">🎟️</span>
-            <div>
-                <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;">${esc(c.code)}</div>
-                <div style="font-size:10px;color:rgba(255,255,255,0.85);">${esc(c.name)}</div>
+            <div style="min-width:0;flex:1;">
+                <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:1px;word-break:break-all;">${esc(c.code)}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.name)}</div>
             </div>
         </div>
-        <div style="padding:10px 14px;">
+        <div style="background:rgba(17,153,142,0.25);border:1.5px dashed rgba(56,239,125,0.5);border-top:none;border-radius:0 0 14px 14px;padding:10px 14px;">
             <div style="font-size:13px;font-weight:700;color:#38ef7d;margin-bottom:4px;">${fmtDisc}</div>
-            ${minSpend ? `<div style="font-size:11px;color:rgba(255,255,255,0.55);">${minSpend}</div>` : ''}
-            ${expiry ? `<div style="font-size:11px;color:rgba(255,255,255,0.45);">${expiry}</div>` : ''}
+            ${minSpend ? `<div style="font-size:11px;color:rgba(255,255,255,0.7);">${minSpend}</div>` : ''}
+            ${expiry ? `<div style="font-size:11px;color:rgba(255,255,255,0.55);">${expiry}</div>` : ''}
             ${adminNote}
         </div>
     </div>`;
@@ -1676,15 +1676,15 @@ function renderMsg(msg, otherLastRead) {
     return `<div class="msg-row ${isMine ? 'me' : 'them'}">
         ${!isMine ? `<div class="msg-avatar-small">${currentMemberInitial}</div>` : ''}
         <div class="msg-bubble-wrap">
-            <div class="msg-bubble" style="${hasOrderCard ? 'padding:0;overflow:hidden;' : hasCouponCard ? 'padding:0;background:transparent;box-shadow:none;' : ''}">
-                ${msg.is_broadcast ? `<div class="broadcast-label" style="${hasOrderCard ? 'padding:6px 11px 0;' : ''}">📢 Broadcast</div>` : ''}
+            <div class="msg-bubble" style="${hasOrderCard ? 'padding:0;overflow:hidden;' : hasCouponCard ? 'padding:0;overflow:hidden;border-radius:16px;' : ''}">
+                ${msg.is_broadcast ? `<div class="broadcast-label" style="${hasOrderCard || hasCouponCard ? 'padding:6px 11px 0;' : ''}">📢 Broadcast</div>` : ''}
                 ${orderHtml}
                 ${couponHtml}
                 ${productHtml}
                 ${msg.content && !hasOrderCard && !hasCouponCard ? `<div class="msg-text">${esc(msg.content)}</div>` : ''}
                 ${hasOrderCard && msg.content ? `<div class="msg-text" style="padding:4px 11px 8px;font-size:11px;color:rgba(255,255,255,0.7);">${esc(msg.content)}</div>` : ''}
-                ${hasCouponCard && msg.content ? `<div class="msg-text" style="margin-top:6px;font-size:12px;color:rgba(255,255,255,0.7);">${esc(msg.content)}</div>` : ''}
-                ${attachHtml ? `<div style="${hasOrderCard ? 'padding:0 11px 8px;' : ''}">${attachHtml}</div>` : ''}
+                ${hasCouponCard && msg.content ? `<div class="msg-text" style="padding:6px 12px 10px;font-size:12px;color:rgba(255,255,255,0.85);">${esc(msg.content)}</div>` : ''}
+                ${attachHtml ? `<div style="${hasOrderCard || hasCouponCard ? 'padding:0 11px 8px;' : ''}">${attachHtml}</div>` : ''}
             </div>
             <div class="msg-time">${fmtMsgTime(msg.created_at)}${isRead ? ' <span class="msg-read">อ่านแล้ว</span>' : ''}</div>
         </div>

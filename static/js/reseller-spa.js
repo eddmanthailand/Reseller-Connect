@@ -3999,44 +3999,58 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
     let couponCardHtml = '';
     if (msg.coupon) {
         const c = msg.coupon;
-        const fmtDisc = c.discount_type === 'percent' ? `ลด ${c.discount_value}%` : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง' : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+        const fmtDisc = c.discount_type === 'percent'
+            ? `ลด ${c.discount_value}%${c.max_discount ? ` (สูงสุด ฿${Number(c.max_discount).toLocaleString('th-TH')})` : ''}`
+            : c.discount_type === 'free_shipping' ? 'ฟรีค่าจัดส่ง'
+            : `ลด ฿${Number(c.discount_value).toLocaleString('th-TH')}`;
+        const couponNote = isMine
+            ? '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ ส่งคูปองให้ Admin แล้ว</div>'
+            : '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ คูปองถูกเพิ่มเข้า wallet ของคุณแล้ว</div>';
         couponCardHtml = `
-            <div style="border-radius:14px;overflow:hidden;margin-bottom:${msg.content ? '8px' : '0'};min-width:220px;max-width:280px;">
+            <div style="width:100%;border-radius:14px;overflow:hidden;">
                 <div style="background:linear-gradient(135deg,#11998e,#38ef7d);padding:12px 16px 10px;">
                     <div style="font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">คูปองส่วนลด</div>
-                    <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;">${escapeHtmlChat(c.code)}</div>
+                    <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:2px;word-break:break-all;">${escapeHtmlChat(c.code)}</div>
                     <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.9);">${fmtDisc}</div>
                 </div>
-                <div style="background:rgba(17,153,142,0.15);border:1px dashed rgba(56,239,125,0.4);border-top:none;border-radius:0 0 14px 14px;padding:10px 16px;">
-                    <div style="font-size:12px;color:rgba(255,255,255,0.65);">${escapeHtmlChat(c.name || '')}</div>
-                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
-                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</div>` : ''}
-                    ${!isMine ? '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ คูปองถูกเพิ่มเข้า wallet ของคุณแล้ว</div>' : '<div style="font-size:11px;color:#38ef7d;margin-top:6px;font-weight:600;">✓ ส่งคูปองให้ Admin แล้ว</div>'}
+                <div style="background:rgba(17,153,142,0.25);border:1px dashed rgba(56,239,125,0.45);border-top:none;border-radius:0 0 14px 14px;padding:10px 16px;">
+                    <div style="font-size:12px;color:rgba(255,255,255,0.8);">${escapeHtmlChat(c.name || '')}</div>
+                    ${c.min_spend ? `<div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">ขั้นต่ำ ฿${Number(c.min_spend).toLocaleString('th-TH')}</div>` : ''}
+                    ${c.end_date ? `<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;">ถึง ${new Date(c.end_date).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</div>` : ''}
+                    ${couponNote}
                 </div>
             </div>`;
     }
 
-    const hasSpecialCard = !!(orderCardHtml || couponCardHtml);
-    const bubbleStyle = hasSpecialCard
-        ? `max-width: 85%; padding: 0; border-radius: 16px; overflow: hidden; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: #3a3a3c; border-bottom-left-radius: 4px;'}`
-        : `max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}`;
-
     const hasOrderCard = !!orderCardHtml;
+    const hasCouponCard = !!couponCardHtml;
+    const hasSpecialCard = !!(orderCardHtml || couponCardHtml);
+
+    let bubbleStyle;
+    if (hasCouponCard && !hasOrderCard) {
+        bubbleStyle = `width: min(290px, calc(100vw - 72px)); padding: 0; background: transparent; ${isMine ? 'border-bottom-right-radius: 4px;' : 'border-bottom-left-radius: 4px;'}`;
+    } else if (hasOrderCard) {
+        bubbleStyle = `max-width: 85%; padding: 0; border-radius: 16px; overflow: hidden; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); border-bottom-right-radius: 4px;' : 'background: #3a3a3c; border-bottom-left-radius: 4px;'}`;
+    } else {
+        bubbleStyle = `max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}`;
+    }
+
     return `
         <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
             <div style="${bubbleStyle}">
-                ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px; padding: 4px 12px 0;">📢 ประกาศ</div>' : ''}
+                ${msg.is_broadcast ? `<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px; ${hasOrderCard ? 'padding: 4px 12px 0;' : hasCouponCard ? 'padding: 4px 0 4px;' : ''}">📢 ประกาศ</div>` : ''}
                 ${couponCardHtml}
                 ${orderCardHtml}
                 ${productCardHtml}
                 ${msg.content && !hasSpecialCard ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
-                ${hasSpecialCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
-                ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
-                    att.file_type && att.file_type.startsWith('image/') 
+                ${hasOrderCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${hasCouponCard && !hasOrderCard && msg.content ? `<div style="margin-top:6px;font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word;color:rgba(255,255,255,0.85);background:rgba(17,153,142,0.15);border:1px solid rgba(56,239,125,0.2);border-radius:10px;padding:8px 12px;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att =>
+                    att.file_type && att.file_type.startsWith('image/')
                         ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer; ${hasOrderCard ? 'margin: 8px 12px;' : ''}" onclick="window.open('${att.file_url}', '_blank')">`
                         : `<a href="${att.file_url}" target="_blank" style="display: block; margin-top: 8px; color: #60a5fa; ${hasOrderCard ? 'padding: 0 12px;' : ''}">📎 ${escapeHtmlChat(att.file_name)}</a>`
                 ).join('') : ''}
-                <div style="font-size: 10px; opacity: 0.5; margin-top: 4px; text-align: right; ${hasSpecialCard ? 'padding: 0 10px 8px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
+                <div style="font-size: 10px; opacity: 0.6; text-align: right; ${hasOrderCard ? 'padding: 0 10px 8px;' : hasCouponCard ? 'margin-top: 4px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
             </div>
         </div>
     `;
