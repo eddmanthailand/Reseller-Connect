@@ -505,8 +505,6 @@
         const isWebView = e.isLINE || e.isFB || e.isIG || e.isAndroidWV || e.isIOSWV;
 
         if (!isWebView) {
-            // Normal browser: auto-redirect
-            setTimeout(() => { window.location.href = '/auth/google'; }, 600);
             return;
         }
 
