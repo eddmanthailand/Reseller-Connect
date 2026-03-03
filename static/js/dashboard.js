@@ -9980,6 +9980,8 @@ function _srParseVariant(variantName) {
 
 function _srSortSizes(sizes) {
     return [...sizes].sort((a, b) => {
+        if (a === 'No Size') return 1;
+        if (b === 'No Size') return -1;
         const ai = _SIZE_ORDER.indexOf(a.toUpperCase());
         const bi = _SIZE_ORDER.indexOf(b.toUpperCase());
         if (ai >= 0 && bi >= 0) return ai - bi;
@@ -10002,10 +10004,9 @@ function openStockReport() {
 
         skus.forEach(sku => {
             const { size, color } = _srParseVariant(sku.variant_name || '');
-            const sizeKey = size ? size.toUpperCase() : 'ไม่มีขนาด';
+            const sizeKey = size ? size.toUpperCase() : 'No Size';
             const colorKey = color || '__none__';
-            if (sizeKey !== 'ไม่มีขนาด') allSizesSet.add(sizeKey);
-            else allSizesSet.add('ไม่มีขนาด');
+            allSizesSet.add(sizeKey);
             if (!colorMap[colorKey]) colorMap[colorKey] = {};
             colorMap[colorKey][sizeKey] = (colorMap[colorKey][sizeKey] || 0) + (sku.stock || 0);
         });
