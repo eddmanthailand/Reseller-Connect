@@ -16289,6 +16289,11 @@ def _agent_build_system_prompt(settings):
 - query_unread_chat: แชทที่ยังไม่ได้อ่าน
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
 - search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query) — ใช้เมื่อต้องการข้อมูลภายนอก เช่น ราคาตลาด ข่าวสาร ข้อมูลทั่วไป
+- chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
+- chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart (เดือนปัจจุบัน)
+- chart_order_status: กราฟสัดส่วนสถานะออเดอร์ Pie chart
+- chart_top_products: กราฟสินค้าขายดี Bar chart (params: limit=10)
+- chart_low_stock: กราฟสต็อกสินค้าใกล้หมด Horizontal Bar (params: threshold=10)
 
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
@@ -16297,7 +16302,8 @@ def _agent_build_system_prompt(settings):
 - send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
-READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
+READ (ข้อมูลทั่วไป): {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
+READ (กราฟ): {{"type":"answer","tool":"chart_xxx","params":{{...}},"message":"หัวข้อกราฟ"}}
 WRITE: {{"type":"plan","tool":"tool_name","params":{{...}},"message":"อธิบายสิ่งที่จะทำ"}}
 ต้องการข้อมูลเพิ่ม: {{"type":"clarify","message":"คำถามกลับ"}}
 สนทนาทั่วไป: {{"type":"chat","message":"ข้อความ"}}
@@ -16531,6 +16537,159 @@ def _agent_execute_read_tool(tool, params, cursor):
             lines.append(f"• {r['order_number']} [{mto_status_labels.get(r['status'], r['status'])}] ตัวแทน: {r['reseller_name'] or '-'} ครบกำหนด: {deadline}")
         return {'text': f"🏭 ออเดอร์ MTO ค้างอยู่ ({len(rows)} รายการ):\n" + "\n".join(lines)}
 
+    elif tool == 'chart_sales_trend':
+        import datetime as _dt2
+        days = int(params.get('days', 7))
+        cursor.execute('''
+            SELECT DATE(created_at) as day,
+                   COUNT(*) as orders,
+                   COALESCE(SUM(final_amount),0) as total
+            FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored')
+              AND is_quick_order = FALSE
+              AND DATE(created_at) >= CURRENT_DATE - INTERVAL %s
+            GROUP BY day ORDER BY day
+        ''', (f'{days} days',))
+        rows = cursor.fetchall()
+        labels = [r['day'].strftime('%d/%m') for r in rows]
+        amounts = [float(r['total']) for r in rows]
+        orders  = [int(r['orders']) for r in rows]
+        chart = {
+            'type': 'line',
+            'data': {
+                'labels': labels,
+                'datasets': [
+                    {'label': 'ยอดขาย (฿)', 'data': amounts, 'borderColor': '#8b5cf6', 'backgroundColor': 'rgba(139,92,246,0.1)', 'fill': True, 'tension': 0.4, 'yAxisID': 'y', 'pointRadius': 4, 'pointBackgroundColor': '#8b5cf6'},
+                    {'label': 'จำนวนออเดอร์', 'data': orders, 'borderColor': '#ec4899', 'backgroundColor': 'rgba(236,72,153,0.1)', 'fill': False, 'tension': 0.4, 'yAxisID': 'y1', 'pointRadius': 4, 'pointBackgroundColor': '#ec4899', 'borderDash': [5,3]}
+                ]
+            },
+            'options': {
+                'responsive': True, 'interaction': {'mode': 'index', 'intersect': False},
+                'plugins': {'legend': {'position': 'bottom', 'labels': {'font': {'size': 11}, 'usePointStyle': True}}},
+                'scales': {
+                    'y':  {'type': 'linear', 'display': True, 'position': 'left',  'ticks': {'callback': '__BAHT__', 'font': {'size': 10}}, 'grid': {'color': 'rgba(0,0,0,0.05)'}},
+                    'y1': {'type': 'linear', 'display': True, 'position': 'right', 'ticks': {'font': {'size': 10}}, 'grid': {'drawOnChartArea': False}}
+                }
+            }
+        }
+        return {'text': f'📈 กราฟยอดขาย {days} วันที่ผ่านมา', 'chart': chart}
+
+    elif tool == 'chart_sales_by_brand':
+        cursor.execute('''
+            SELECT b.name as brand_name, COALESCE(SUM(oi.subtotal),0) as total
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            JOIN products p ON p.id = oi.product_id
+            JOIN brands b ON b.id = p.brand_id
+            WHERE o.status NOT IN ('cancelled','returned','stock_restored')
+              AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
+              AND o.is_quick_order = FALSE
+            GROUP BY b.name ORDER BY total DESC LIMIT 8
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีข้อมูลยอดขายแบรนด์เดือนนี้'}
+        labels = [r['brand_name'] for r in rows]
+        data   = [float(r['total']) for r in rows]
+        colors = ['#8b5cf6','#ec4899','#06b6d4','#10b981','#f59e0b','#ef4444','#6366f1','#84cc16']
+        chart = {
+            'type': 'doughnut',
+            'data': {'labels': labels, 'datasets': [{'data': data, 'backgroundColor': colors[:len(data)], 'borderWidth': 2, 'borderColor': '#fff', 'hoverOffset': 8}]},
+            'options': {
+                'responsive': True, 'cutout': '60%',
+                'plugins': {'legend': {'position': 'right', 'labels': {'font': {'size': 11}, 'usePointStyle': True, 'padding': 12}}}
+            }
+        }
+        total = sum(data)
+        return {'text': f'🍩 ยอดขายแยกแบรนด์เดือนนี้ รวม ฿{total:,.0f}', 'chart': chart}
+
+    elif tool == 'chart_order_status':
+        cursor.execute('''
+            SELECT status, COUNT(*) as cnt FROM orders
+            WHERE is_quick_order = FALSE GROUP BY status ORDER BY cnt DESC
+        ''')
+        rows = cursor.fetchall()
+        sl = {'pending_payment': 'รอชำระ','processing': 'จัดเตรียม','shipped': 'จัดส่ง','delivered': 'ส่งถึง','cancelled': 'ยกเลิก','returned': 'คืนสินค้า','stock_restored': 'คืนสต็อก'}
+        sc = {'pending_payment': '#f59e0b','processing': '#3b82f6','shipped': '#06b6d4','delivered': '#10b981','cancelled': '#ef4444','returned': '#f97316','stock_restored': '#8b5cf6'}
+        labels = [sl.get(r['status'], r['status']) for r in rows]
+        data   = [int(r['cnt']) for r in rows]
+        bgcolors = [sc.get(r['status'], '#9ca3af') for r in rows]
+        chart = {
+            'type': 'pie',
+            'data': {'labels': labels, 'datasets': [{'data': data, 'backgroundColor': bgcolors, 'borderWidth': 2, 'borderColor': '#fff', 'hoverOffset': 6}]},
+            'options': {
+                'responsive': True,
+                'plugins': {'legend': {'position': 'right', 'labels': {'font': {'size': 11}, 'usePointStyle': True, 'padding': 12}}}
+            }
+        }
+        return {'text': f'🥧 สัดส่วนสถานะออเดอร์ทั้งหมด ({sum(data):,} ออเดอร์)', 'chart': chart}
+
+    elif tool == 'chart_top_products':
+        limit = int(params.get('limit', 10))
+        cursor.execute('''
+            SELECT p.name, COALESCE(SUM(oi.qty),0) as sold, COALESCE(SUM(oi.subtotal),0) as revenue
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            JOIN products p ON p.id = oi.product_id
+            WHERE o.status NOT IN ('cancelled','returned','stock_restored')
+              AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
+            GROUP BY p.name ORDER BY sold DESC LIMIT %s
+        ''', (limit,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีข้อมูลยอดขายสินค้าเดือนนี้'}
+        labels  = [r['name'][:20] for r in rows]
+        sold    = [int(r['sold']) for r in rows]
+        revenue = [float(r['revenue']) for r in rows]
+        chart = {
+            'type': 'bar',
+            'data': {
+                'labels': labels,
+                'datasets': [
+                    {'label': 'ชิ้นที่ขายได้', 'data': sold, 'backgroundColor': 'rgba(139,92,246,0.75)', 'borderColor': '#8b5cf6', 'borderWidth': 1.5, 'borderRadius': 6, 'yAxisID': 'y'},
+                    {'label': 'รายได้ (฿)', 'data': revenue, 'backgroundColor': 'rgba(236,72,153,0.2)', 'borderColor': '#ec4899', 'borderWidth': 1.5, 'borderRadius': 6, 'type': 'line', 'tension': 0.4, 'yAxisID': 'y1', 'pointRadius': 4}
+                ]
+            },
+            'options': {
+                'responsive': True, 'indexAxis': 'x',
+                'plugins': {'legend': {'position': 'bottom', 'labels': {'font': {'size': 10}, 'usePointStyle': True}}},
+                'scales': {
+                    'x':  {'ticks': {'font': {'size': 9}}, 'grid': {'display': False}},
+                    'y':  {'ticks': {'font': {'size': 10}}, 'grid': {'color': 'rgba(0,0,0,0.05)'}},
+                    'y1': {'display': True, 'position': 'right', 'ticks': {'callback': '__BAHT__', 'font': {'size': 10}}, 'grid': {'drawOnChartArea': False}}
+                }
+            }
+        }
+        return {'text': f'🏆 สินค้าขายดีสุด {len(rows)} อันดับเดือนนี้', 'chart': chart}
+
+    elif tool == 'chart_low_stock':
+        threshold = int(params.get('threshold', 10))
+        cursor.execute('''
+            SELECT p.name, s.sku_code, s.stock
+            FROM skus s JOIN products p ON p.id = s.product_id
+            WHERE s.stock <= %s AND p.is_active = TRUE
+            ORDER BY s.stock ASC LIMIT 15
+        ''', (threshold,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'✅ ไม่มีสินค้าสต็อกต่ำกว่า {threshold} ชิ้น'}
+        labels = [f"{r['name'][:15]} ({r['sku_code']})" for r in rows]
+        stocks = [int(r['stock']) for r in rows]
+        bgcolors = ['#ef4444' if s == 0 else '#f97316' if s <= 3 else '#f59e0b' if s <= 5 else '#84cc16' for s in stocks]
+        chart = {
+            'type': 'bar',
+            'data': {'labels': labels, 'datasets': [{'label': 'สต็อกคงเหลือ (ชิ้น)', 'data': stocks, 'backgroundColor': bgcolors, 'borderRadius': 5, 'borderSkipped': False}]},
+            'options': {
+                'responsive': True, 'indexAxis': 'y',
+                'plugins': {'legend': {'display': False}},
+                'scales': {
+                    'x': {'ticks': {'stepSize': 1, 'font': {'size': 10}}, 'grid': {'color': 'rgba(0,0,0,0.05)'}},
+                    'y': {'ticks': {'font': {'size': 9}}, 'grid': {'display': False}}
+                }
+            }
+        }
+        return {'text': f'⚠️ สต็อกสินค้าใกล้หมด {len(rows)} รายการ (≤{threshold} ชิ้น)', 'chart': chart}
+
     elif tool == 'search_web':
         query = params.get('query', '').strip()
         if not query:
@@ -16632,6 +16791,8 @@ def agent_chat():
 
         if itype == 'answer':
             result = _agent_execute_read_tool(tool, params, cursor)
+            if result.get('chart'):
+                return jsonify({'type': 'chart', 'message': result['text'], 'chart': result['chart'], 'model_used': model_used}), 200
             return jsonify({'type': 'answer', 'message': result['text'], 'model_used': model_used}), 200
 
         elif itype == 'plan':

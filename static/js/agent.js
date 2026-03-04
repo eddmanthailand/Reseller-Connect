@@ -176,6 +176,8 @@ function _agentPush(msg) {
     _agentRenderMessages();
 }
 
+const _agentChartConfigs = {};
+
 function _agentRenderMessages() {
     const el = document.getElementById('agentMessages');
     if (!el) return;
@@ -184,6 +186,7 @@ function _agentRenderMessages() {
         if (m.role === 'user')    return _agentBubbleUser(m, i);
         if (m.role === 'plan')    return _agentPlanCard(m, i);
         if (m.role === 'success') return _agentSuccessCard(m, i);
+        if (m.role === 'chart')   return _agentChartCard(m, i);
         return '';
     }).join('');
     if (_agentLoading) {
@@ -193,6 +196,45 @@ function _agentRenderMessages() {
         </div>`;
     }
     _agentScrollBottom();
+    requestAnimationFrame(_agentInitCharts);
+}
+
+function _agentInitCharts() {
+    const bahtFmt = v => '฿' + Number(v).toLocaleString('th-TH', {maximumFractionDigits: 0});
+    Object.entries(_agentChartConfigs).forEach(([id, cfg]) => {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const existing = typeof Chart !== 'undefined' && Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const config = JSON.parse(JSON.stringify(cfg));
+        (function fixCallbacks(obj) {
+            if (!obj || typeof obj !== 'object') return;
+            Object.keys(obj).forEach(k => {
+                if (k === 'callback' && obj[k] === '__BAHT__') { obj[k] = bahtFmt; }
+                else fixCallbacks(obj[k]);
+            });
+        })(config);
+        if (typeof Chart !== 'undefined') new Chart(canvas, config);
+    });
+}
+
+function _agentChartCard(m, i) {
+    const id = `agent-chart-${i}`;
+    _agentChartConfigs[id] = m.chartConfig;
+    return `<div class="agent-bubble-ai">
+        <div class="agent-bubble-icon"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+        <div style="flex:1;min-width:0;">
+            <div class="agent-bubble-text" style="margin-bottom:10px;">${_esc(m.text)}</div>
+            <div style="background:#fff;border-radius:14px;padding:14px 12px;box-shadow:0 1px 6px rgba(0,0,0,0.08);border:1px solid rgba(0,0,0,0.06);">
+                <canvas id="${id}" style="max-height:220px;width:100%;display:block;"></canvas>
+            </div>
+            <div class="agent-feedback-row" style="margin-top:6px;">
+                <button class="agent-fb-btn" onclick="agentFeedback(${i},1)" title="ดีมาก">👍</button>
+                <button class="agent-fb-btn" onclick="agentFeedback(${i},-1)" title="ไม่ตรง">👎</button>
+                ${m.model ? _agentModelBadge(m.model) : ''}
+            </div>
+        </div>
+    </div>`;
 }
 
 function _agentModelBadge(model) {
@@ -308,7 +350,9 @@ async function agentSend() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
 
-        if (data.type === 'plan') {
+        if (data.type === 'chart') {
+            _agentMessages.push({ role: 'chart', text: data.message, chartConfig: data.chart, model: data.model_used });
+        } else if (data.type === 'plan') {
             _agentMessages.push({ role: 'plan', text: data.message, plan: data.plan, log_id: data.log_id, tool: data.tool, params: data.params, approved: false, model: data.model_used });
         } else {
             _agentMessages.push({ role: 'ai', text: data.message, model: data.model_used });
