@@ -8616,29 +8616,22 @@ def parse_shipping_label():
         import json as _json
         extracted = _json.loads(raw)
 
-        conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        customer_id = None
-        if extracted.get('customer_name') or extracted.get('customer_phone'):
-            cursor.execute('''
-                INSERT INTO customers (name, phone, address, province, district, subdistrict, postal_code)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (
-                extracted.get('customer_name'),
-                extracted.get('customer_phone'),
-                extracted.get('address'),
-                extracted.get('province'),
-                extracted.get('district'),
-                extracted.get('subdistrict'),
-                extracted.get('postal_code')
-            ))
-            customer_id = cursor.fetchone()['id']
-            conn.commit()
-        cursor.close()
-        conn.close()
+        phone_val = (extracted.get('customer_phone') or '').strip() or None
+        customer_status = 'new'
+        existing_customer = None
+        if phone_val:
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor.execute('SELECT id, name FROM customers WHERE phone = %s', (phone_val,))
+            row = cursor.fetchone()
+            if row:
+                existing_customer = dict(row)
+                customer_status = 'existing'
+            cursor.close()
+            conn.close()
 
-        extracted['customer_id'] = customer_id
+        extracted['customer_status'] = customer_status
+        extracted['existing_customer'] = existing_customer
         return jsonify({'success': True, 'data': extracted}), 200
 
     except Exception as e:
@@ -8662,6 +8655,13 @@ def create_quick_order():
         items = data.get('items', [])
         platform = data.get('platform')
         tracking_number = data.get('tracking_number', '').strip() if data.get('tracking_number') else None
+        shipping_name = (data.get('shipping_name') or '').strip() or None
+        shipping_phone = (data.get('shipping_phone') or '').strip() or None
+        shipping_address = (data.get('shipping_address') or '').strip() or None
+        shipping_province = (data.get('shipping_province') or '').strip() or None
+        shipping_district = (data.get('shipping_district') or '').strip() or None
+        shipping_subdistrict = (data.get('shipping_subdistrict') or '').strip() or None
+        shipping_postal = (data.get('shipping_postal') or '').strip() or None
         
         if not sales_channel_id:
             return jsonify({'error': 'กรุณาเลือกช่องทางขาย'}), 400
@@ -8739,6 +8739,7 @@ def create_quick_order():
 
         # Upsert customer by phone (or name-only) and link to order
         customer_id = None
+        customer_status = 'none'
         if customer_name or customer_phone:
             phone_val = (customer_phone or '').strip() or None
             name_val = (customer_name or '').strip() or None
@@ -8751,23 +8752,32 @@ def create_quick_order():
                     DO UPDATE SET
                         name = COALESCE(EXCLUDED.name, customers.name),
                         updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
+                    RETURNING id, (xmax = 0) AS is_new
                 ''', (name_val, phone_val, src))
-            else:
+                row = cursor.fetchone()
+                customer_id = row['id']
+                customer_status = 'new' if row['is_new'] else 'existing'
+            elif name_val:
                 cursor.execute('''
                     INSERT INTO customers (name, source) VALUES (%s, %s) RETURNING id
                 ''', (name_val, src))
-            customer_id = cursor.fetchone()['id']
+                customer_id = cursor.fetchone()['id']
+                customer_status = 'new'
 
         # Generate order number
         order_number = generate_order_number(cursor)
         
-        # Create order
+        # Create order with shipping address
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount, notes, is_quick_order, platform, customer_id)
-            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s, TRUE, %s, %s)
+            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, final_amount,
+                notes, is_quick_order, platform, customer_id,
+                shipping_name, shipping_phone, shipping_address, shipping_province,
+                shipping_district, shipping_subdistrict, shipping_postal)
+            VALUES (%s, %s, %s, 'paid', %s, 0, %s, %s, TRUE, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes, platform, customer_id))
+        ''', (order_number, session.get('user_id'), sales_channel_id, total_amount, total_amount, final_notes, platform, customer_id,
+              shipping_name or customer_name, shipping_phone or customer_phone,
+              shipping_address, shipping_province, shipping_district, shipping_subdistrict, shipping_postal))
         order = dict(cursor.fetchone())
         
         # Create order items and track their IDs
@@ -8864,7 +8874,8 @@ def create_quick_order():
         return jsonify({
             'message': 'สร้างคำสั่งซื้อสำเร็จ',
             'order_number': order['order_number'],
-            'order_id': order['id']
+            'order_id': order['id'],
+            'customer_status': customer_status
         }), 201
         
     except Exception as e:

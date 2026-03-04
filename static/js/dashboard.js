@@ -6240,6 +6240,11 @@ async function createQuickOrder() {
     const customerName = document.getElementById('quickOrderCustomerName').value.trim();
     const customerPhone = document.getElementById('quickOrderCustomerPhone').value.trim();
     const notes = document.getElementById('quickOrderNotes').value.trim();
+    const shippingAddress = (document.getElementById('qoShippingAddress')?.value || '').trim();
+    const shippingSubdistrict = (document.getElementById('qoShippingSubdistrict')?.value || '').trim();
+    const shippingDistrict = (document.getElementById('qoShippingDistrict')?.value || '').trim();
+    const shippingProvince = (document.getElementById('qoShippingProvince')?.value || '').trim();
+    const shippingPostal = (document.getElementById('qoShippingPostal')?.value || '').trim();
     
     if (!channelId) {
         showGlobalAlert('กรุณาเลือกช่องทางขาย', 'error');
@@ -6266,6 +6271,13 @@ async function createQuickOrder() {
                 customer_name: customerName || null,
                 customer_phone: customerPhone || null,
                 notes: notes || null,
+                shipping_name: customerName || null,
+                shipping_phone: customerPhone || null,
+                shipping_address: shippingAddress || null,
+                shipping_subdistrict: shippingSubdistrict || null,
+                shipping_district: shippingDistrict || null,
+                shipping_province: shippingProvince || null,
+                shipping_postal: shippingPostal || null,
                 items: quickOrderItems.map(item => ({
                     sku_id: item.sku_id,
                     quantity: item.quantity,
@@ -6278,7 +6290,8 @@ async function createQuickOrder() {
         
         if (response.ok) {
             const statusMsg = trackingNumber ? ' (สถานะ: กำลังจัดส่ง)' : '';
-            showGlobalAlert(`สร้างคำสั่งซื้อสำเร็จ! เลขที่: ${result.order_number}${statusMsg}`, 'success');
+            const custMsg = result.customer_status === 'new' ? ' · บันทึกลูกค้าใหม่แล้ว' : result.customer_status === 'existing' ? ' · อัปเดตลูกค้าเดิม' : '';
+            showGlobalAlert(`สร้างคำสั่งซื้อสำเร็จ! เลขที่: ${result.order_number}${statusMsg}${custMsg}`, 'success');
             quickOrderItems = [];
             document.getElementById('quickOrderPlatform').value = '';
             document.getElementById('quickOrderTracking').value = '';
@@ -6286,6 +6299,14 @@ async function createQuickOrder() {
             document.getElementById('quickOrderCustomerPhone').value = '';
             document.getElementById('quickOrderNotes').value = '';
             document.getElementById('quickOrderChannel').value = '';
+            const sect = document.getElementById('qoAddressSection');
+            if (sect) { sect.style.display = 'none'; }
+            ['qoShippingAddress','qoShippingSubdistrict','qoShippingDistrict','qoShippingProvince','qoShippingPostal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            const badge = document.getElementById('qoCustomerBadge');
+            if (badge) badge.style.display = 'none';
             renderQuickOrderItems();
             updateQuickOrderSummary();
         } else {
@@ -6616,32 +6637,71 @@ function renderOcrResultCard(data) {
     document.getElementById('labelOcrResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+let _qoPhoneLookupTimer = null;
+
+function qoPhoneInputChanged(phone) {
+    clearTimeout(_qoPhoneLookupTimer);
+    const badge = document.getElementById('qoCustomerBadge');
+    if (!phone || phone.length < 9) {
+        if (badge) badge.style.display = 'none';
+        return;
+    }
+    _qoPhoneLookupTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/admin/customers/check-phone?phone=${encodeURIComponent(phone)}`);
+            const data = await res.json();
+            if (!badge) return;
+            if (data.exists) {
+                badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:11px;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.4);color:#34d399;border-radius:20px;padding:3px 10px;margin-top:5px;';
+                badge.innerHTML = `✓ ลูกค้าเก่า — ${data.name || 'ไม่ระบุชื่อ'}`;
+                const nameInput = document.getElementById('quickOrderCustomerName');
+                if (nameInput && !nameInput.value.trim() && data.name) nameInput.value = data.name;
+            } else {
+                badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:11px;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.3);color:rgba(255,255,255,0.5);border-radius:20px;padding:3px 10px;margin-top:5px;';
+                badge.innerHTML = '+ ลูกค้าใหม่';
+            }
+        } catch(e) {}
+    }, 600);
+}
+
 function applyOcrToForm() {
     if (!_ocrExtracted) return;
     const d = _ocrExtracted;
 
     if (d.platform) {
-        const platformSelect = document.getElementById('quickOrderPlatform');
-        if (platformSelect) platformSelect.value = d.platform;
+        const el = document.getElementById('quickOrderPlatform');
+        if (el) el.value = d.platform;
     }
     if (d.tracking_number) {
-        const trackingInput = document.getElementById('quickOrderTracking');
-        if (trackingInput) trackingInput.value = d.tracking_number;
+        const el = document.getElementById('quickOrderTracking');
+        if (el) el.value = d.tracking_number;
     }
     if (d.customer_name) {
-        const nameInput = document.getElementById('quickOrderCustomerName');
-        if (nameInput) nameInput.value = d.customer_name;
+        const el = document.getElementById('quickOrderCustomerName');
+        if (el) el.value = d.customer_name;
     }
     if (d.customer_phone) {
-        const phoneInput = document.getElementById('quickOrderCustomerPhone');
-        if (phoneInput) phoneInput.value = d.customer_phone;
+        const el = document.getElementById('quickOrderCustomerPhone');
+        if (el) el.value = d.customer_phone;
+        qoPhoneInputChanged(d.customer_phone);
     }
-    if (d.address) {
-        const notesInput = document.getElementById('quickOrderNotes');
-        if (notesInput) {
-            const existing = notesInput.value.trim();
-            const addrLine = `ที่อยู่: ${d.address}`;
-            notesInput.value = existing ? `${existing}\n${addrLine}` : addrLine;
+
+    const hasAddress = d.address || d.province || d.district || d.subdistrict || d.postal_code;
+    if (hasAddress) {
+        const sect = document.getElementById('qoAddressSection');
+        if (sect) sect.style.display = 'block';
+        if (d.address)       { const el = document.getElementById('qoShippingAddress');     if (el) el.value = d.address; }
+        if (d.subdistrict)   { const el = document.getElementById('qoShippingSubdistrict'); if (el) el.value = d.subdistrict; }
+        if (d.district)      { const el = document.getElementById('qoShippingDistrict');    if (el) el.value = d.district; }
+        if (d.province)      { const el = document.getElementById('qoShippingProvince');    if (el) el.value = d.province; }
+        if (d.postal_code)   { const el = document.getElementById('qoShippingPostal');      if (el) el.value = d.postal_code; }
+    }
+
+    if (d.customer_status === 'existing' && d.existing_customer) {
+        const badge = document.getElementById('qoCustomerBadge');
+        if (badge) {
+            badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:11px;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.4);color:#34d399;border-radius:20px;padding:3px 10px;margin-top:5px;';
+            badge.innerHTML = `✓ ลูกค้าเก่า — ${d.existing_customer.name || 'ไม่ระบุชื่อ'}`;
         }
     }
 

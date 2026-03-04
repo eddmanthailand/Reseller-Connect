@@ -2515,11 +2515,26 @@
                                 <input type="text" id="quickOrderCustomerName" class="form-input" placeholder="ชื่อลูกค้า">
                             </div>
                             
-                            <div class="form-group" style="margin-bottom: 12px;">
+                            <div class="form-group" style="margin-bottom: 4px;">
                                 <label style="font-size: 13px; margin-bottom: 6px; display: block;">เบอร์โทร</label>
-                                <input type="text" id="quickOrderCustomerPhone" class="form-input" placeholder="0xx-xxx-xxxx">
+                                <input type="text" id="quickOrderCustomerPhone" class="form-input" placeholder="0xx-xxx-xxxx"
+                                    oninput="qoPhoneInputChanged(this.value)">
                             </div>
-                            
+                            <div id="qoCustomerBadge" style="display:none; margin-bottom:10px;"></div>
+
+                            <div id="qoAddressSection" style="display:none; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:12px; margin-bottom:12px;">
+                                <div style="font-size:11px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">📍 ที่อยู่จัดส่ง</div>
+                                <input type="text" id="qoShippingAddress" class="form-input" placeholder="บ้านเลขที่ ถนน หมู่บ้าน" style="margin-bottom:6px; font-size:13px;">
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
+                                    <input type="text" id="qoShippingSubdistrict" class="form-input" placeholder="ตำบล/แขวง" style="font-size:13px;">
+                                    <input type="text" id="qoShippingDistrict" class="form-input" placeholder="อำเภอ/เขต" style="font-size:13px;">
+                                </div>
+                                <div style="display:grid; grid-template-columns:1fr 90px; gap:6px;">
+                                    <input type="text" id="qoShippingProvince" class="form-input" placeholder="จังหวัด" style="font-size:13px;">
+                                    <input type="text" id="qoShippingPostal" class="form-input" placeholder="รหัสฯ" style="font-size:13px;">
+                                </div>
+                            </div>
+
                             <div class="form-group" style="margin-bottom: 12px;">
                                 <label style="font-size: 13px; margin-bottom: 6px; display: block;">หมายเหตุ</label>
                                 <textarea id="quickOrderNotes" class="form-input" rows="2" placeholder="หมายเหตุเพิ่มเติม"></textarea>
