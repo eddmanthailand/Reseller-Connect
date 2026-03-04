@@ -16252,56 +16252,79 @@ def reseller_preview_discount():
 # ==================== END MARKETING MODULE ====================
 
 
-# ==================== AI AGENT ====================
+# ==================== AI AGENT (SUPERADMIN ONLY) ====================
 
-AGENT_SYSTEM_PROMPT = """คุณเป็น AI ผู้ช่วยสำหรับระบบจัดการร้านค้า EKG Shops ชื่อ "ผู้ช่วย AI"
-ช่วย Admin จัดการร้านค้าผ่านคำสั่งภาษาไทย
+def _agent_superadmin_required():
+    return session.get('role') == 'Super Admin'
+
+def _agent_load_settings(cursor):
+    cursor.execute('SELECT * FROM agent_settings WHERE id = 1')
+    row = cursor.fetchone()
+    if row:
+        return dict(row)
+    return {'agent_name': 'น้องเอก', 'tone': 'friendly', 'ending_particle': 'ครับ', 'custom_prompt': ''}
+
+def _agent_build_system_prompt(settings):
+    name = settings.get('agent_name', 'น้องเอก')
+    particle = settings.get('ending_particle', 'ครับ')
+    tone_map = {'friendly': 'เป็นกันเอง สุภาพ', 'formal': 'เป็นทางการ มืออาชีพ', 'concise': 'กระชับสั้น ตรงประเด็น'}
+    tone_desc = tone_map.get(settings.get('tone', 'friendly'), 'เป็นกันเอง สุภาพ')
+    custom = settings.get('custom_prompt', '') or ''
+    return f"""คุณชื่อ "{name}" เป็น AI ผู้ช่วยส่วนตัวของ Superadmin ระบบร้านค้า EKG Shops
+น้ำเสียง: {tone_desc} ใช้คำลงท้าย "{particle}" เสมอ
+{('บุคลิกพิเศษ: ' + custom) if custom else ''}
 
 === TOOLS ที่ใช้ได้ ===
-[อ่านข้อมูล — ตอบได้เลย ไม่ต้อง approve]
-- query_sales_today: ยอดขายวันนี้ / สัปดาห์นี้ / เดือนนี้
-- query_low_stock: สินค้าสต็อกต่ำ / ใกล้หมด
-- query_stock_product: เช็คสต็อกสินค้าเฉพาะตัว
+[READ — ตอบได้ทันที ไม่ต้อง approve]
+- query_sales_today: ยอดขายวันนี้/สัปดาห์/เดือน
+- query_sales_by_brand: ยอดขายแยกตามแบรนด์
+- query_top_products: สินค้าขายดี
+- query_low_stock: สินค้าสต็อกต่ำ/ใกล้หมด (params: threshold=5)
+- query_stock_product: สต็อกสินค้าเฉพาะตัว (params: product_name)
 - query_order_counts: จำนวนออเดอร์ทุกสถานะ
+- query_pending_orders: ออเดอร์ที่รอดำเนินการ (params: limit=10)
+- query_order_detail: รายละเอียดออเดอร์เฉพาะใบ (params: order_number หรือ order_id)
+- query_customer: ค้นหาข้อมูลลูกค้า (params: name หรือ phone)
+- query_resellers: รายชื่อตัวแทนและสถิติ (params: tier="Gold" optional)
+- query_unread_chat: แชทที่ยังไม่ได้อ่าน
+- query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
 
-[แก้ไขข้อมูล — ต้อง Admin อนุมัติก่อนทุกครั้ง]
-- adjust_stock: เพิ่มหรือลดสต็อก SKU
+[WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
+- adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
+- update_order_status: เปลี่ยนสถานะออเดอร์ (params: order_number, new_status="processing"/"shipped"/"delivered"/"cancelled")
+- toggle_product: เปิด/ปิดการขายสินค้า (params: product_name, active=true/false)
+- send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 
-=== รูปแบบตอบกลับ (JSON เท่านั้น ห้ามมีข้อความอื่น) ===
-กรณีตอบข้อมูล (read):
-{"type":"answer","tool":"tool_name","params":{...},"message":"สรุปสั้น"}
-
-กรณีสร้าง plan (write, ต้อง approve):
-{"type":"plan","tool":"adjust_stock","params":{"product_name":"...","color":"...","size":"...","quantity":20,"direction":"add"},"message":"สรุปสิ่งที่จะทำ"}
-
-กรณีต้องการข้อมูลเพิ่ม:
-{"type":"clarify","message":"คำถามกลับ"}
-
-กรณีสนทนาทั่วไป:
-{"type":"chat","message":"ข้อความ"}
+=== รูปแบบตอบกลับ (JSON เท่านั้น) ===
+READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
+WRITE: {{"type":"plan","tool":"tool_name","params":{{...}},"message":"อธิบายสิ่งที่จะทำ"}}
+ต้องการข้อมูลเพิ่ม: {{"type":"clarify","message":"คำถามกลับ"}}
+สนทนาทั่วไป: {{"type":"chat","message":"ข้อความ"}}
 
 === กฎสำคัญ ===
 - ตอบเป็น JSON เสมอ ห้ามมีข้อความอื่นนอก JSON
-- params.direction สำหรับ adjust_stock: "add" = เพิ่ม, "subtract" = ลด
-- ถ้าชื่อสินค้า/สี/ไซส์ไม่ชัดเจน ให้ type=clarify ถามกลับ
-- ห้ามทำ action ลบข้อมูลทุกกรณี
-- ถ้าพูดเรื่องทั่วไปที่ไม่เกี่ยวกับงาน ให้ type=chat ตอบสั้นๆ"""
+- ห้ามลบข้อมูลทุกกรณี
+- ถ้าชื่อ/รหัสไม่ชัดเจน ให้ clarify ถามกลับ
+- ถ้าถามนอกเรื่องงาน ให้ type=chat ตอบสั้นๆ"""
 
 
-def _agent_call_gemini(message, context_page):
-    import json as _json
+def _agent_call_gemini(message, context_page, settings, image_data=None, image_mime=None):
+    import json as _json, base64 as _b64
     try:
         from google import genai as google_genai
-        from google.genai import types as genai_types
         gemini_key = os.environ.get('GEMINI_API_KEY')
         if not gemini_key:
             return {'type': 'chat', 'message': 'ไม่พบ GEMINI_API_KEY'}
         client = google_genai.Client(api_key=gemini_key)
-        full_prompt = f"{AGENT_SYSTEM_PROMPT}\n\n=== หน้าปัจจุบันของ Admin: {context_page} ===\n\nคำสั่ง Admin: {message}"
-        resp = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[full_prompt]
-        )
+        system_prompt = _agent_build_system_prompt(settings)
+        full_text = f"{system_prompt}\n\n=== หน้าปัจจุบัน: {context_page} ===\n\nคำสั่ง: {message}"
+        if image_data:
+            from google.genai import types as genai_types
+            img_bytes = _b64.b64decode(image_data)
+            contents = [full_text, genai_types.Part.from_bytes(data=img_bytes, mime_type=image_mime or 'image/jpeg')]
+        else:
+            contents = [full_text]
+        resp = client.models.generate_content(model='gemini-2.5-flash', contents=contents)
         raw = resp.text.strip()
         if raw.startswith('```'):
             raw = raw.split('```')[1]
@@ -16316,27 +16339,60 @@ def _agent_call_gemini(message, context_page):
 def _agent_execute_read_tool(tool, params, cursor):
     import datetime as _dt
     today = _dt.date.today()
+    status_labels = {
+        'pending_payment': 'รอชำระ', 'processing': 'กำลังจัดเตรียม',
+        'shipped': 'จัดส่งแล้ว', 'delivered': 'ส่งถึงแล้ว',
+        'cancelled': 'ยกเลิก', 'returned': 'คืนสินค้า', 'stock_restored': 'คืนสต็อก'
+    }
 
     if tool == 'query_sales_today':
-        cursor.execute('''
-            SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total
-            FROM orders
-            WHERE status NOT IN ('cancelled','returned','stock_restored')
-            AND DATE(created_at) = %s AND is_quick_order = FALSE
-        ''', (today,))
-        row = cursor.fetchone()
-        cursor.execute('''
-            SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total
-            FROM orders
-            WHERE status NOT IN ('cancelled','returned','stock_restored')
-            AND DATE(created_at) >= DATE_TRUNC('week', CURRENT_DATE)
-            AND is_quick_order = FALSE
-        ''')
+        cursor.execute('''SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored') AND DATE(created_at) = %s AND is_quick_order = FALSE''', (today,))
+        day = cursor.fetchone()
+        cursor.execute('''SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored') AND DATE(created_at) >= DATE_TRUNC('week', CURRENT_DATE) AND is_quick_order = FALSE''')
         week = cursor.fetchone()
-        return {
-            'text': f"ยอดขายวันนี้: {int(row['cnt'])} ออเดอร์ รวม ฿{float(row['total']):,.0f}\n"
-                    f"สัปดาห์นี้: {int(week['cnt'])} ออเดอร์ รวม ฿{float(week['total']):,.0f}"
-        }
+        cursor.execute('''SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored') AND DATE(created_at) >= DATE_TRUNC('month', CURRENT_DATE) AND is_quick_order = FALSE''')
+        month = cursor.fetchone()
+        return {'text': f"📊 ยอดขายวันนี้: {int(day['cnt'])} ออเดอร์ ฿{float(day['total']):,.0f}\n"
+                        f"สัปดาห์นี้: {int(week['cnt'])} ออเดอร์ ฿{float(week['total']):,.0f}\n"
+                        f"เดือนนี้: {int(month['cnt'])} ออเดอร์ ฿{float(month['total']):,.0f}"}
+
+    elif tool == 'query_sales_by_brand':
+        cursor.execute('''
+            SELECT b.name as brand_name, COUNT(DISTINCT o.id) as order_cnt, COALESCE(SUM(oi.subtotal),0) as total
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            JOIN products p ON p.id = oi.product_id
+            JOIN brands b ON b.id = p.brand_id
+            WHERE o.status NOT IN ('cancelled','returned','stock_restored')
+            AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
+            AND o.is_quick_order = FALSE
+            GROUP BY b.name ORDER BY total DESC LIMIT 8
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีข้อมูลยอดขายแยกแบรนด์เดือนนี้'}
+        lines = [f"• {r['brand_name']}: {int(r['order_cnt'])} ออเดอร์ ฿{float(r['total']):,.0f}" for r in rows]
+        return {'text': "📦 ยอดขายแยกแบรนด์ (เดือนนี้):\n" + "\n".join(lines)}
+
+    elif tool == 'query_top_products':
+        limit = int(params.get('limit', 5))
+        cursor.execute('''
+            SELECT p.name as product_name, SUM(oi.quantity) as total_qty, COALESCE(SUM(oi.subtotal),0) as revenue
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            JOIN products p ON p.id = oi.product_id
+            WHERE o.status NOT IN ('cancelled','returned','stock_restored')
+            AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
+            GROUP BY p.name ORDER BY total_qty DESC LIMIT %s
+        ''', (limit,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีข้อมูลสินค้าขายดีเดือนนี้'}
+        lines = [f"{i+1}. {r['product_name']} — {int(r['total_qty'])} ชิ้น ฿{float(r['revenue']):,.0f}" for i, r in enumerate(rows)]
+        return {'text': f"🏆 Top {limit} สินค้าขายดี (เดือนนี้):\n" + "\n".join(lines)}
 
     elif tool == 'query_low_stock':
         threshold = int(params.get('threshold', 5))
@@ -16348,40 +16404,129 @@ def _agent_execute_read_tool(tool, params, cursor):
         ''', (threshold,))
         rows = cursor.fetchall()
         if not rows:
-            return {'text': f'ไม่มีสินค้าที่สต็อกต่ำกว่า {threshold} ชิ้น'}
+            return {'text': f'✅ ไม่มีสินค้าสต็อกต่ำกว่า {threshold} ชิ้น'}
         lines = [f"• {r['product_name']} [{r['sku_code']}] — {r['stock']} ชิ้น" for r in rows]
-        return {'text': f"สินค้าสต็อกต่ำกว่า {threshold} ชิ้น ({len(rows)} รายการ):\n" + "\n".join(lines)}
+        return {'text': f"⚠️ สินค้าสต็อกต่ำกว่า {threshold} ชิ้น ({len(rows)} รายการ):\n" + "\n".join(lines)}
 
     elif tool == 'query_stock_product':
         name = params.get('product_name', '')
-        cursor.execute('''
-            SELECT p.name as product_name, s.sku_code, s.stock
-            FROM skus s JOIN products p ON p.id = s.product_id
-            WHERE p.name ILIKE %s
-            ORDER BY s.sku_code
-            LIMIT 20
-        ''', (f'%{name}%',))
+        cursor.execute('''SELECT p.name as product_name, s.sku_code, s.stock FROM skus s JOIN products p ON p.id = s.product_id
+            WHERE p.name ILIKE %s ORDER BY s.sku_code LIMIT 20''', (f'%{name}%',))
         rows = cursor.fetchall()
         if not rows:
             return {'text': f'ไม่พบสินค้าที่ชื่อใกล้เคียง "{name}"'}
         lines = [f"• {r['sku_code']} — {r['stock']} ชิ้น" for r in rows]
-        product_name = rows[0]['product_name']
-        return {'text': f"สต็อก {product_name}:\n" + "\n".join(lines)}
+        return {'text': f"📦 สต็อก {rows[0]['product_name']}:\n" + "\n".join(lines)}
 
     elif tool == 'query_order_counts':
+        cursor.execute('''SELECT status, COUNT(*) as cnt FROM orders WHERE is_quick_order = FALSE GROUP BY status ORDER BY cnt DESC''')
+        rows = cursor.fetchall()
+        lines = [f"• {status_labels.get(r['status'], r['status'])}: {r['cnt']} รายการ" for r in rows]
+        return {'text': "📋 จำนวนออเดอร์ทุกสถานะ:\n" + "\n".join(lines)}
+
+    elif tool == 'query_pending_orders':
+        limit = int(params.get('limit', 10))
         cursor.execute('''
-            SELECT status, COUNT(*) as cnt FROM orders
-            WHERE is_quick_order = FALSE
-            GROUP BY status ORDER BY cnt DESC
+            SELECT o.order_number, u.full_name as reseller_name, o.final_amount, o.status, o.created_at
+            FROM orders o LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.status IN ('pending_payment','processing') AND o.is_quick_order = FALSE
+            ORDER BY o.created_at DESC LIMIT %s
+        ''', (limit,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': '✅ ไม่มีออเดอร์ที่รอดำเนินการ'}
+        lines = [f"• {r['order_number']} — {r['reseller_name'] or 'ไม่ระบุ'} ฿{float(r['final_amount']):,.0f} [{status_labels.get(r['status'], r['status'])}]" for r in rows]
+        return {'text': f"⏳ ออเดอร์รอดำเนินการ ({len(rows)} รายการ):\n" + "\n".join(lines)}
+
+    elif tool == 'query_order_detail':
+        order_num = str(params.get('order_number', '') or params.get('order_id', ''))
+        if order_num.isdigit():
+            cursor.execute('''SELECT o.*, u.full_name as reseller_name FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE o.id = %s''', (int(order_num),))
+        else:
+            cursor.execute('''SELECT o.*, u.full_name as reseller_name FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE o.order_number ILIKE %s''', (f'%{order_num}%',))
+        order = cursor.fetchone()
+        if not order:
+            return {'text': f'ไม่พบออเดอร์ {order_num}'}
+        cursor.execute('''SELECT oi.product_name, oi.sku_code, oi.quantity, oi.unit_price FROM order_items oi WHERE oi.order_id = %s''', (order['id'],))
+        items = cursor.fetchall()
+        item_lines = [f"  • {it['product_name']} ({it['sku_code']}) x{it['quantity']} ฿{float(it['unit_price']):,.0f}" for it in items]
+        return {'text': f"📋 ออเดอร์ {order['order_number']}\n"
+                        f"ตัวแทน: {order['reseller_name'] or '-'}\n"
+                        f"สถานะ: {status_labels.get(order['status'], order['status'])}\n"
+                        f"ยอดรวม: ฿{float(order['final_amount']):,.0f}\n"
+                        f"สินค้า:\n" + "\n".join(item_lines)}
+
+    elif tool == 'query_customer':
+        q = str(params.get('name', '') or params.get('phone', ''))
+        cursor.execute('''SELECT name, phone, email, address, created_at FROM customers
+            WHERE name ILIKE %s OR phone ILIKE %s ORDER BY created_at DESC LIMIT 5''', (f'%{q}%', f'%{q}%'))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'ไม่พบลูกค้าที่ค้นหา "{q}"'}
+        lines = [f"• {r['name']} | {r['phone'] or '-'} | {r['email'] or '-'}" for r in rows]
+        return {'text': f"👤 ผลค้นหาลูกค้า \"{q}\":\n" + "\n".join(lines)}
+
+    elif tool == 'query_resellers':
+        tier_filter = params.get('tier', '')
+        if tier_filter:
+            cursor.execute('''
+                SELECT u.full_name, u.email, rt.name as tier_name,
+                       COUNT(o.id) as order_cnt, COALESCE(SUM(o.final_amount),0) as total_spend
+                FROM users u LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+                LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN ('cancelled','returned')
+                WHERE u.role_name = 'Reseller' AND rt.name ILIKE %s
+                GROUP BY u.full_name, u.email, rt.name ORDER BY total_spend DESC LIMIT 10
+            ''', (f'%{tier_filter}%',))
+        else:
+            cursor.execute('''
+                SELECT u.full_name, u.email, rt.name as tier_name,
+                       COUNT(o.id) as order_cnt, COALESCE(SUM(o.final_amount),0) as total_spend
+                FROM users u LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+                LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN ('cancelled','returned')
+                WHERE u.role_name = 'Reseller'
+                GROUP BY u.full_name, u.email, rt.name ORDER BY total_spend DESC LIMIT 10
+            ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ไม่พบข้อมูลตัวแทน'}
+        lines = [f"• {r['full_name']} [{r['tier_name'] or '-'}] {int(r['order_cnt'])} ออเดอร์ ฿{float(r['total_spend']):,.0f}" for r in rows]
+        return {'text': f"👥 รายชื่อตัวแทน{' (' + tier_filter + ')' if tier_filter else ''}:\n" + "\n".join(lines)}
+
+    elif tool == 'query_unread_chat':
+        cursor.execute('''
+            SELECT ct.id as thread_id, u.full_name as reseller_name, ct.last_message_preview,
+                   ct.last_message_at,
+                   (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE) as unread_cnt
+            FROM chat_threads ct JOIN users u ON u.id = ct.reseller_id
+            WHERE ct.is_archived = FALSE
+            HAVING (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE) > 0
+            ORDER BY ct.last_message_at DESC LIMIT 10
         ''')
         rows = cursor.fetchall()
-        status_labels = {
-            'pending_payment': 'รอชำระ', 'processing': 'กำลังจัดเตรียม',
-            'shipped': 'จัดส่งแล้ว', 'delivered': 'ส่งถึงแล้ว',
-            'cancelled': 'ยกเลิก', 'returned': 'คืนสินค้า'
-        }
-        lines = [f"• {status_labels.get(r['status'], r['status'])}: {r['cnt']} รายการ" for r in rows]
-        return {'text': "จำนวนออเดอร์ทุกสถานะ:\n" + "\n".join(lines)}
+        if not rows:
+            return {'text': '✅ ไม่มีแชทที่รอตอบ'}
+        lines = [f"• {r['reseller_name']} — {int(r['unread_cnt'])} ข้อความ: \"{(r['last_message_preview'] or '')[:40]}\"" for r in rows]
+        return {'text': f"💬 แชทที่รอตอบ ({len(rows)} ห้อง):\n" + "\n".join(lines)}
+
+    elif tool == 'query_mto_status':
+        cursor.execute('''
+            SELECT mo.order_number, u.full_name as reseller_name, mo.status, mo.production_deadline,
+                   COUNT(moi.id) as item_cnt
+            FROM mto_orders mo LEFT JOIN users u ON u.id = mo.reseller_id
+            LEFT JOIN mto_order_items moi ON moi.mto_order_id = mo.id
+            WHERE mo.status NOT IN ('delivered','cancelled')
+            GROUP BY mo.order_number, u.full_name, mo.status, mo.production_deadline
+            ORDER BY mo.production_deadline ASC NULLS LAST LIMIT 10
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': '✅ ไม่มีออเดอร์ MTO ค้างอยู่'}
+        mto_status_labels = {'pending': 'รอยืนยัน', 'confirmed': 'ยืนยันแล้ว', 'in_production': 'กำลังผลิต', 'ready': 'พร้อมส่ง', 'shipped': 'จัดส่งแล้ว'}
+        lines = []
+        for r in rows:
+            deadline = r['production_deadline'].strftime('%d/%m/%Y') if r['production_deadline'] else '-'
+            lines.append(f"• {r['order_number']} [{mto_status_labels.get(r['status'], r['status'])}] ตัวแทน: {r['reseller_name'] or '-'} ครบกำหนด: {deadline}")
+        return {'text': f"🏭 ออเดอร์ MTO ค้างอยู่ ({len(rows)} รายการ):\n" + "\n".join(lines)}
 
     return {'text': 'ไม่รู้จัก tool นี้'}
 
@@ -16390,95 +16535,153 @@ def _agent_find_sku(params, cursor):
     name = params.get('product_name', '')
     size = params.get('size', '')
     color = params.get('color', '')
-    cursor.execute('''
-        SELECT s.id as sku_id, s.sku_code, s.stock, p.name as product_name
-        FROM skus s
-        JOIN products p ON p.id = s.product_id
-        WHERE p.name ILIKE %s
-        ORDER BY s.sku_code
-    ''', (f'%{name}%',))
+    cursor.execute('''SELECT s.id as sku_id, s.sku_code, s.stock, p.name as product_name
+        FROM skus s JOIN products p ON p.id = s.product_id WHERE p.name ILIKE %s ORDER BY s.sku_code''', (f'%{name}%',))
     skus = cursor.fetchall()
     if not skus:
         return None, f'ไม่พบสินค้าที่ชื่อใกล้เคียง "{name}"'
-    matched = skus
+    matched = list(skus)
     if size:
-        s_up = size.upper()
-        filtered = [r for r in matched if s_up in r['sku_code'].upper()]
-        if filtered:
-            matched = filtered
+        f2 = [r for r in matched if size.upper() in r['sku_code'].upper()]
+        if f2: matched = f2
     if color:
-        c_up = color.upper()
-        filtered = [r for r in matched if c_up in r['sku_code'].upper()]
-        if filtered:
-            matched = filtered
+        f3 = [r for r in matched if color.upper() in r['sku_code'].upper()]
+        if f3: matched = f3
     if len(matched) == 1:
         return dict(matched[0]), None
     if len(matched) > 1:
-        options = ', '.join([r['sku_code'] for r in matched[:6]])
-        return None, f'พบหลาย SKU: {options} — กรุณาระบุให้ชัดขึ้น'
-    return None, f'ไม่พบ SKU ที่ตรงกับ {name} สี{color} ไซส์{size}'
+        return None, f'พบหลาย SKU: {", ".join([r["sku_code"] for r in matched[:6]])} — กรุณาระบุให้ชัดขึ้น'
+    return None, f'ไม่พบ SKU ที่ตรงกับ {name}'
+
+
+def _agent_log_plan(cursor, conn, admin_id, admin_name, message, tool, context_page, params, before_data):
+    import json as _json
+    cursor.execute('''INSERT INTO agent_action_logs
+        (admin_id, admin_name, command_text, tool_name, context_page, plan_data, before_data, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id''',
+        (admin_id, admin_name, message, tool, context_page, _json.dumps(params), _json.dumps(before_data)))
+    log_id = cursor.fetchone()[0]
+    conn.commit()
+    return log_id
 
 
 @app.route('/api/admin/agent/chat', methods=['POST'])
 @admin_required
 def agent_chat():
     import json as _json
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
     conn = None
     cursor = None
     try:
         data = request.get_json()
-        message = (data.get('message') or '').strip()
+        message     = (data.get('message') or '').strip()
         context_page = data.get('context_page', 'dashboard')
-        if not message:
+        image_data  = data.get('image_data')
+        image_mime  = data.get('image_mime', 'image/jpeg')
+        if not message and not image_data:
             return jsonify({'error': 'ไม่มีข้อความ'}), 400
 
-        intent = _agent_call_gemini(message, context_page)
-        itype = intent.get('type', 'chat')
-        tool  = intent.get('tool', '')
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        settings = _agent_load_settings(cursor)
+
+        intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime)
+        itype  = intent.get('type', 'chat')
+        tool   = intent.get('tool', '')
         params = intent.get('params') or {}
+        admin_id   = session.get('user_id')
+        admin_name = session.get('full_name') or session.get('username') or 'Admin'
 
         if itype == 'answer':
-            conn = get_db()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             result = _agent_execute_read_tool(tool, params, cursor)
             return jsonify({'type': 'answer', 'message': result['text']}), 200
 
-        elif itype == 'plan' and tool == 'adjust_stock':
-            conn = get_db()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            sku, err = _agent_find_sku(params, cursor)
-            if err:
-                return jsonify({'type': 'answer', 'message': err}), 200
-            qty = abs(int(params.get('quantity', 0)))
-            direction = params.get('direction', 'add')
-            new_stock = sku['stock'] + qty if direction == 'add' else max(0, sku['stock'] - qty)
-            plan = {
-                'before': {'SKU': sku['sku_code'], 'สต็อกปัจจุบัน': f"{sku['stock']} ชิ้น"},
-                'after':  {'SKU': sku['sku_code'], 'สต็อกใหม่': f"{new_stock} ชิ้น ({'+' if direction=='add' else '-'}{qty})"}
-            }
-            admin_id = session.get('user_id')
-            admin_name = session.get('full_name') or session.get('username') or 'Admin'
-            cursor2 = conn.cursor()
-            cursor2.execute('''
-                INSERT INTO agent_action_logs
-                    (admin_id, admin_name, command_text, tool_name, context_page, plan_data, before_data, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id
-            ''', (admin_id, admin_name, message, tool, context_page,
-                  _json.dumps(params), _json.dumps({'sku_id': sku['sku_id'], 'stock': sku['stock']})))
-            log_id = cursor2.fetchone()[0]
-            conn.commit()
-            return jsonify({
-                'type': 'plan',
-                'tool': tool,
-                'params': {**params, 'sku_id': sku['sku_id'], 'quantity': qty},
-                'plan': plan,
-                'log_id': log_id,
-                'message': intent.get('message', f"จะ{'เพิ่ม' if direction=='add' else 'ลด'}สต็อก {sku['sku_code']} จาก {sku['stock']} เป็น {new_stock} ชิ้น")
-            }), 200
+        elif itype == 'plan':
+            if tool == 'adjust_stock':
+                sku, err = _agent_find_sku(params, cursor)
+                if err:
+                    return jsonify({'type': 'answer', 'message': err}), 200
+                qty = abs(int(params.get('quantity', 0)))
+                direction = params.get('direction', 'add')
+                new_stock = sku['stock'] + qty if direction == 'add' else max(0, sku['stock'] - qty)
+                plan = {
+                    'before': {'SKU': sku['sku_code'], 'สต็อกปัจจุบัน': f"{sku['stock']} ชิ้น"},
+                    'after':  {'SKU': sku['sku_code'], 'สต็อกใหม่': f"{new_stock} ชิ้น ({'+' if direction=='add' else '-'}{qty})"}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'sku_id': sku['sku_id'], 'stock': sku['stock']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'sku_id': sku['sku_id'], 'quantity': qty},
+                                'message': intent.get('message', f"จะ{'เพิ่ม' if direction=='add' else 'ลด'}สต็อก {sku['sku_code']} → {new_stock} ชิ้น")}), 200
+
+            elif tool == 'update_order_status':
+                order_num = str(params.get('order_number', '') or params.get('order_id', ''))
+                new_status = params.get('new_status', '')
+                allowed_statuses = ['processing', 'shipped', 'delivered', 'cancelled']
+                if new_status not in allowed_statuses:
+                    return jsonify({'type': 'answer', 'message': f'สถานะ "{new_status}" ไม่ถูกต้อง ใช้ได้: {", ".join(allowed_statuses)}'}), 200
+                cursor.execute('SELECT id, order_number, status, final_amount FROM orders WHERE order_number ILIKE %s OR id::text = %s', (f'%{order_num}%', order_num))
+                order = cursor.fetchone()
+                if not order:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบออเดอร์ {order_num}'}), 200
+                sl = {'pending_payment': 'รอชำระ', 'processing': 'กำลังจัดเตรียม', 'shipped': 'จัดส่งแล้ว', 'delivered': 'ส่งถึงแล้ว', 'cancelled': 'ยกเลิก'}
+                plan = {
+                    'before': {'ออเดอร์': order['order_number'], 'สถานะ': sl.get(order['status'], order['status'])},
+                    'after':  {'ออเดอร์': order['order_number'], 'สถานะใหม่': sl.get(new_status, new_status)}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'order_id': order['id'], 'old_status': order['status']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'order_id': order['id']},
+                                'message': intent.get('message', f"จะเปลี่ยนสถานะออเดอร์ {order['order_number']} เป็น {sl.get(new_status, new_status)}")}), 200
+
+            elif tool == 'toggle_product':
+                prod_name = params.get('product_name', '')
+                active = bool(params.get('active', True))
+                cursor.execute('SELECT id, name, is_active FROM products WHERE name ILIKE %s LIMIT 3', (f'%{prod_name}%',))
+                products = cursor.fetchall()
+                if not products:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อใกล้เคียง "{prod_name}"'}), 200
+                if len(products) > 1:
+                    opts = ', '.join([p['name'] for p in products])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายสินค้า: {opts} — กรุณาระบุชื่อให้ชัดขึ้น'}), 200
+                prod = products[0]
+                plan = {
+                    'before': {'สินค้า': prod['name'], 'สถานะ': 'เปิดขาย' if prod['is_active'] else 'ปิดขาย'},
+                    'after':  {'สินค้า': prod['name'], 'สถานะใหม่': 'เปิดขาย' if active else 'ปิดขาย'}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'product_id': prod['id'], 'old_active': prod['is_active']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'product_id': prod['id']},
+                                'message': intent.get('message', f"จะ{'เปิด' if active else 'ปิด'}การขายสินค้า {prod['name']}")}), 200
+
+            elif tool == 'send_chat_message':
+                reseller_name = params.get('reseller_name', '')
+                msg_text = params.get('message', '')
+                cursor.execute('''SELECT u.id, u.full_name FROM users u WHERE u.full_name ILIKE %s AND u.role_name = 'Reseller' LIMIT 3''', (f'%{reseller_name}%',))
+                resellers = cursor.fetchall()
+                if not resellers:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบตัวแทนชื่อ "{reseller_name}"'}), 200
+                if len(resellers) > 1:
+                    opts = ', '.join([r['full_name'] for r in resellers])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายคน: {opts} — ระบุให้ชัดขึ้น'}), 200
+                reseller = resellers[0]
+                plan = {
+                    'before': {'ผู้รับ': reseller['full_name']},
+                    'after':  {'ข้อความ': msg_text[:80]}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'reseller_id': reseller['id']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'reseller_id': reseller['id']},
+                                'message': intent.get('message', f"จะส่งข้อความหา {reseller['full_name']}: \"{msg_text[:60]}\"")}), 200
+
+            return jsonify({'type': 'answer', 'message': f'tool "{tool}" ยังไม่รองรับ'}), 200
 
         elif itype == 'clarify':
             return jsonify({'type': 'answer', 'message': intent.get('message', '')}), 200
-
         else:
             return jsonify({'type': 'answer', 'message': intent.get('message', '')}), 200
 
@@ -16494,61 +16697,200 @@ def agent_chat():
 @admin_required
 def agent_execute():
     import json as _json
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
     conn = None
     cursor = None
     try:
-        data = request.get_json()
-        log_id  = data.get('log_id')
-        tool    = data.get('tool')
-        params  = data.get('params') or {}
-
-        if tool != 'adjust_stock':
-            return jsonify({'error': 'ไม่รองรับ tool นี้'}), 400
-
-        conn = get_db()
+        data   = request.get_json()
+        log_id = data.get('log_id')
+        tool   = data.get('tool')
+        params = data.get('params') or {}
+        conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        admin_id = session.get('user_id')
 
-        sku_id    = int(params.get('sku_id', 0))
-        qty       = abs(int(params.get('quantity', 0)))
-        direction = params.get('direction', 'add')
+        if tool == 'adjust_stock':
+            sku_id    = int(params.get('sku_id', 0))
+            qty       = abs(int(params.get('quantity', 0)))
+            direction = params.get('direction', 'add')
+            cursor.execute('SELECT s.id, s.sku_code, s.stock, p.name FROM skus s JOIN products p ON p.id = s.product_id WHERE s.id = %s', (sku_id,))
+            sku = cursor.fetchone()
+            if not sku: return jsonify({'error': 'ไม่พบ SKU'}), 404
+            before_stock = sku['stock']
+            new_stock = before_stock + qty if direction == 'add' else max(0, before_stock - qty)
+            cur2 = conn.cursor()
+            cur2.execute('UPDATE skus SET stock = %s WHERE id = %s', (new_stock, sku_id))
+            cur2.execute('INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock) VALUES (%s, 2, %s) ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = %s', (sku_id, new_stock, new_stock))
+            before_data = {'SKU': sku['sku_code'], 'สต็อกก่อน': f"{before_stock} ชิ้น"}
+            after_data  = {'SKU': sku['sku_code'], 'สต็อกหลัง': f"{new_stock} ชิ้น"}
+            if log_id:
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"{'เพิ่ม' if direction=='add' else 'ลด'}สต็อก {sku['sku_code']} ({before_stock} → {new_stock} ชิ้น)",
+                            'before': before_data, 'after': after_data}), 200
 
-        cursor.execute('SELECT s.id, s.sku_code, s.stock, p.name as product_name FROM skus s JOIN products p ON p.id = s.product_id WHERE s.id = %s', (sku_id,))
-        sku = cursor.fetchone()
-        if not sku:
-            return jsonify({'error': 'ไม่พบ SKU'}), 404
+        elif tool == 'update_order_status':
+            order_id   = int(params.get('order_id', 0))
+            new_status = params.get('new_status', '')
+            cursor.execute('SELECT id, order_number, status FROM orders WHERE id = %s', (order_id,))
+            order = cursor.fetchone()
+            if not order: return jsonify({'error': 'ไม่พบออเดอร์'}), 404
+            old_status = order['status']
+            sl = {'pending_payment': 'รอชำระ', 'processing': 'กำลังจัดเตรียม', 'shipped': 'จัดส่งแล้ว', 'delivered': 'ส่งถึงแล้ว', 'cancelled': 'ยกเลิก'}
+            cur2 = conn.cursor()
+            cur2.execute('UPDATE orders SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (new_status, order_id))
+            before_data = {'ออเดอร์': order['order_number'], 'สถานะเดิม': sl.get(old_status, old_status)}
+            after_data  = {'ออเดอร์': order['order_number'], 'สถานะใหม่': sl.get(new_status, new_status)}
+            if log_id:
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"เปลี่ยนสถานะออเดอร์ {order['order_number']} → {sl.get(new_status, new_status)} สำเร็จ",
+                            'before': before_data, 'after': after_data}), 200
 
-        before_stock = sku['stock']
-        if direction == 'add':
-            new_stock = before_stock + qty
-        else:
-            new_stock = max(0, before_stock - qty)
+        elif tool == 'toggle_product':
+            product_id = int(params.get('product_id', 0))
+            active     = bool(params.get('active', True))
+            cursor.execute('SELECT id, name, is_active FROM products WHERE id = %s', (product_id,))
+            prod = cursor.fetchone()
+            if not prod: return jsonify({'error': 'ไม่พบสินค้า'}), 404
+            cur2 = conn.cursor()
+            cur2.execute('UPDATE products SET is_active = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (active, product_id))
+            before_data = {'สินค้า': prod['name'], 'สถานะเดิม': 'เปิดขาย' if prod['is_active'] else 'ปิดขาย'}
+            after_data  = {'สินค้า': prod['name'], 'สถานะใหม่': 'เปิดขาย' if active else 'ปิดขาย'}
+            if log_id:
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"{'เปิด' if active else 'ปิด'}การขาย {prod['name']} สำเร็จ",
+                            'before': before_data, 'after': after_data}), 200
 
-        cur2 = conn.cursor()
-        cur2.execute('UPDATE skus SET stock = %s WHERE id = %s', (new_stock, sku_id))
-        cur2.execute('''
-            INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
-            VALUES (%s, 2, %s)
-            ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = %s
-        ''', (sku_id, new_stock, new_stock))
+        elif tool == 'send_chat_message':
+            reseller_id = int(params.get('reseller_id', 0))
+            msg_text    = params.get('message', '')
+            cursor.execute('SELECT id FROM chat_threads WHERE reseller_id = %s', (reseller_id,))
+            thread = cursor.fetchone()
+            cur2 = conn.cursor()
+            if not thread:
+                cur2.execute('INSERT INTO chat_threads (reseller_id) VALUES (%s) RETURNING id', (reseller_id,))
+                thread_id = cur2.fetchone()[0]
+            else:
+                thread_id = thread['id']
+            cur2.execute('INSERT INTO chat_messages (thread_id, sender_id, sender_type, content) VALUES (%s, %s, %s, %s)',
+                         (thread_id, admin_id, 'admin', msg_text))
+            cur2.execute('UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s, is_archived = FALSE WHERE id = %s',
+                         (msg_text[:100], thread_id))
+            cursor.execute('SELECT full_name FROM users WHERE id = %s', (reseller_id,))
+            reseller = cursor.fetchone()
+            before_data = {'ผู้รับ': reseller['full_name'] if reseller else '-'}
+            after_data  = {'ข้อความ': msg_text[:80]}
+            if log_id:
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"ส่งข้อความหา {reseller['full_name'] if reseller else 'ตัวแทน'} สำเร็จ",
+                            'before': before_data, 'after': after_data}), 200
 
-        before_data = {'SKU': sku['sku_code'], 'สต็อกก่อน': f"{before_stock} ชิ้น"}
-        after_data  = {'SKU': sku['sku_code'], 'สต็อกหลัง': f"{new_stock} ชิ้น"}
+        return jsonify({'error': f'ไม่รองรับ tool "{tool}"'}), 400
 
-        if log_id:
-            cur2.execute('''
-                UPDATE agent_action_logs
-                SET status='executed', before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP
-                WHERE id=%s
-            ''', (_json.dumps(before_data), _json.dumps(after_data), log_id))
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
-        conn.commit()
-        action_word = 'เพิ่ม' if direction == 'add' else 'ลด'
+
+@app.route('/api/admin/agent/briefing', methods=['GET'])
+@admin_required
+def agent_briefing():
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
+    conn = None
+    cursor = None
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT COUNT(*) as cnt FROM orders WHERE status IN ('pending_payment','processing') AND is_quick_order = FALSE")
+        pending_orders = int(cursor.fetchone()['cnt'])
+        cursor.execute("SELECT COUNT(*) as cnt FROM skus s JOIN products p ON p.id = s.product_id WHERE s.stock <= 5 AND s.stock >= 0 AND p.is_active = TRUE")
+        low_stock = int(cursor.fetchone()['cnt'])
+        cursor.execute("""SELECT COUNT(*) as cnt FROM chat_threads ct
+            WHERE ct.is_archived = FALSE AND EXISTS (
+                SELECT 1 FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE)""")
+        unread_chat = int(cursor.fetchone()['cnt'])
+        cursor.execute("SELECT COUNT(*) as cnt FROM mto_orders WHERE status NOT IN ('delivered','cancelled')")
+        mto_pending = int(cursor.fetchone()['cnt'])
+        cursor.execute("SELECT COUNT(*) as cnt,COALESCE(SUM(final_amount),0) as total FROM orders WHERE status NOT IN ('cancelled','returned','stock_restored') AND DATE(created_at) = CURRENT_DATE AND is_quick_order = FALSE")
+        sales_today = cursor.fetchone()
+        alerts = []
+        if pending_orders > 0:
+            alerts.append(f"📋 ออเดอร์รอดำเนินการ {pending_orders} รายการ")
+        if low_stock > 0:
+            alerts.append(f"⚠️ สินค้าสต็อกต่ำ {low_stock} รายการ")
+        if unread_chat > 0:
+            alerts.append(f"💬 แชทรอตอบ {unread_chat} ห้อง")
+        if mto_pending > 0:
+            alerts.append(f"🏭 MTO ค้างอยู่ {mto_pending} ออเดอร์")
         return jsonify({
-            'message': f"{action_word}สต็อก {sku['sku_code']} สำเร็จ ({before_stock} → {new_stock} ชิ้น)",
-            'before': before_data,
-            'after':  after_data
+            'pending_orders': pending_orders, 'low_stock': low_stock,
+            'unread_chat': unread_chat, 'mto_pending': mto_pending,
+            'sales_today_count': int(sales_today['cnt']),
+            'sales_today_total': float(sales_today['total']),
+            'alerts': alerts
         }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
+
+@app.route('/api/admin/agent/settings', methods=['GET', 'PUT'])
+@admin_required
+def agent_settings_api():
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
+    conn = None
+    cursor = None
+    try:
+        conn   = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if request.method == 'GET':
+            settings = _agent_load_settings(cursor)
+            return jsonify(settings), 200
+        data = request.get_json()
+        cursor.execute('''UPDATE agent_settings SET agent_name=%s, tone=%s, ending_particle=%s, custom_prompt=%s, updated_at=CURRENT_TIMESTAMP WHERE id=1''',
+                       (data.get('agent_name', 'น้องเอก'), data.get('tone', 'friendly'),
+                        data.get('ending_particle', 'ครับ'), data.get('custom_prompt', '')))
+        conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/agent/feedback', methods=['POST'])
+@admin_required
+def agent_feedback_api():
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
+    conn = None
+    cursor = None
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+        data   = request.get_json()
+        cursor.execute('INSERT INTO agent_feedback (command_text, response_text, rating, correction, context_page) VALUES (%s,%s,%s,%s,%s)',
+                       (data.get('command_text'), data.get('response_text'), int(data.get('rating', 1)),
+                        data.get('correction'), data.get('context_page')))
+        conn.commit()
+        return jsonify({'success': True}), 200
     except Exception as e:
         if conn: conn.rollback()
         return handle_error(e)
@@ -16560,17 +16902,14 @@ def agent_execute():
 @app.route('/api/admin/agent/logs', methods=['GET'])
 @admin_required
 def agent_logs():
+    if not _agent_superadmin_required():
+        return jsonify({'error': 'สำหรับ Superadmin เท่านั้น'}), 403
     conn = None
     cursor = None
     try:
-        conn = get_db()
+        conn   = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute('''
-            SELECT id, admin_name, command_text, tool_name, context_page,
-                   before_data, after_data, status, executed_at, created_at
-            FROM agent_action_logs
-            ORDER BY created_at DESC LIMIT 50
-        ''')
+        cursor.execute('SELECT id, admin_name, command_text, tool_name, context_page, before_data, after_data, status, executed_at, created_at FROM agent_action_logs ORDER BY created_at DESC LIMIT 50')
         logs = [dict(r) for r in cursor.fetchall()]
         return jsonify(logs), 200
     except Exception as e:

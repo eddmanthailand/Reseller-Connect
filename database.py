@@ -1258,6 +1258,36 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # Agent Settings — บุคลิกและการตั้งค่า AI Agent
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS agent_settings (
+                id SERIAL PRIMARY KEY,
+                agent_name VARCHAR(100) DEFAULT 'น้องเอก',
+                tone VARCHAR(20) DEFAULT 'friendly',
+                ending_particle VARCHAR(10) DEFAULT 'ครับ',
+                custom_prompt TEXT DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            INSERT INTO agent_settings (id, agent_name, tone, ending_particle, custom_prompt)
+            VALUES (1, 'น้องเอก', 'friendly', 'ครับ', '')
+            ON CONFLICT (id) DO NOTHING
+        ''')
+
+        # Agent Feedback — บันทึก feedback จาก Admin
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS agent_feedback (
+                id SERIAL PRIMARY KEY,
+                command_text TEXT,
+                response_text TEXT,
+                rating INTEGER,
+                correction TEXT,
+                context_page VARCHAR(80),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")

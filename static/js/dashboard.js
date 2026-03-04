@@ -185,6 +185,7 @@ async function loadCurrentUser() {
         
         // Apply role-based UI restrictions
         applyRoleBasedUI(user.role);
+        if (typeof agentInitVisibility === 'function') agentInitVisibility(user.role);
     } catch (error) {
         console.error('Error loading current user:', error);
         if (error.message === 'Not authenticated') {
