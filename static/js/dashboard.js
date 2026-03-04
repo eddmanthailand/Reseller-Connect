@@ -515,6 +515,8 @@ function navigateTo(pageName) {
 
 // Switch between pages
 function switchPage(pageName) {
+    if (pageName !== 'quick-order') _labelPasteContext = null;
+
     // Update navigation
     navItems.forEach(item => {
         if (item.dataset.page === pageName) {
@@ -6034,7 +6036,8 @@ async function loadQuickOrderPage() {
     quickOrderItems = [];
     renderQuickOrderItems();
     updateQuickOrderSummary();
-    
+    _labelPasteContext = 'quick';
+
     try {
         const response = await fetch(`${API_URL}/sales-channels`);
         if (response.ok) {
@@ -6502,48 +6505,88 @@ async function restoreQuickOrderStock(orderId) {
 // ─── Label OCR (Gemini Vision) ───────────────────────────────────────────────
 
 let _ocrExtracted = null;
+let _labelPasteContext = null; // 'quick' | 'customer' | null
 
-async function handleLabelImageUpload(input) {
-    if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-    const statusDiv = document.getElementById('labelScanStatus');
-    const statusMsg = document.getElementById('labelScanMsg');
-    const resultCard = document.getElementById('labelOcrResult');
-    const btn = document.getElementById('btnScanLabel');
+function handleLabelDrop(event, type) {
+    event.preventDefault();
+    const zoneId = type === 'quick' ? 'qoLabelZone' : 'custLabelZone';
+    const zone = document.getElementById(zoneId);
+    if (zone) {
+        zone.style.borderColor = type === 'quick' ? 'rgba(99,102,241,0.5)' : '#c7c7cc';
+        zone.style.background   = type === 'quick' ? 'rgba(99,102,241,0.15)' : '#ffffff';
+        if (type === 'customer') zone.style.color = '#636366';
+    }
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0 && files[0].type.startsWith('image/')) {
+        _processLabelFile(files[0], type);
+    }
+}
 
-    statusDiv.style.display = 'block';
-    statusMsg.textContent = 'กำลังส่งรูปให้ AI อ่าน...';
-    resultCard.style.display = 'none';
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
+async function _processLabelFile(file, type) {
+    if (!file || !file.type.startsWith('image/')) {
+        showGlobalAlert('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
+        return;
+    }
 
-    try {
-        const formData = new FormData();
-        formData.append('image', file);
-
-        statusMsg.textContent = 'กำลังวิเคราะห์ใบปะหน้า...';
-        const res = await fetch(`${API_URL}/admin/quick-order/parse-label`, {
-            method: 'POST',
-            body: formData
-        });
-        const result = await res.json();
-
-        if (!res.ok) {
-            showGlobalAlert(result.error || 'ไม่สามารถอ่านใบปะหน้าได้', 'error');
-            return;
+    if (type === 'quick') {
+        const statusDiv  = document.getElementById('labelScanStatus');
+        const statusMsg  = document.getElementById('labelScanMsg');
+        const resultCard = document.getElementById('labelOcrResult');
+        const zone       = document.getElementById('qoLabelZone');
+        if (statusDiv)  { statusDiv.style.display = 'block'; }
+        if (statusMsg)  { statusMsg.textContent = 'กำลังวิเคราะห์ใบปะหน้า...'; }
+        if (resultCard) { resultCard.style.display = 'none'; }
+        if (zone) { zone.style.opacity = '0.6'; zone.style.pointerEvents = 'none'; }
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const res = await fetch(`${API_URL}/admin/quick-order/parse-label`, { method: 'POST', body: formData });
+            const result = await res.json();
+            if (!res.ok) { showGlobalAlert(result.error || 'ไม่สามารถอ่านใบปะหน้าได้', 'error'); return; }
+            _ocrExtracted = result.data;
+            renderOcrResultCard(result.data);
+        } catch (e) {
+            showGlobalAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+        } finally {
+            if (statusDiv) { statusDiv.style.display = 'none'; }
+            if (zone) { zone.style.opacity = '1'; zone.style.pointerEvents = 'auto'; }
+            const inp = document.getElementById('labelImageInput');
+            if (inp) inp.value = '';
         }
 
-        _ocrExtracted = result.data;
-        renderOcrResultCard(result.data);
-
-    } catch (e) {
-        showGlobalAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
-    } finally {
-        statusDiv.style.display = 'none';
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        input.value = '';
+    } else if (type === 'customer') {
+        const statusEl = document.getElementById('customerScanStatus');
+        const zone     = document.getElementById('custLabelZone');
+        if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '⏳ กำลังอ่านข้อมูลจากรูป...'; statusEl.style.color = '#8b5cf6'; }
+        if (zone) { zone.style.opacity = '0.6'; zone.style.pointerEvents = 'none'; }
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const res  = await fetch('/api/admin/quick-order/parse-label', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'ล้มเหลว');
+            if (data.customer_name) document.getElementById('custName').value        = data.customer_name;
+            if (data.customer_phone) document.getElementById('custPhone').value      = data.customer_phone;
+            if (data.address)       document.getElementById('custAddress').value     = data.address;
+            if (data.subdistrict)   document.getElementById('custSubdistrict').value = data.subdistrict;
+            if (data.district)      document.getElementById('custDistrict').value    = data.district;
+            if (data.province)      document.getElementById('custProvince').value    = data.province;
+            if (data.postal_code)   document.getElementById('custPostal').value      = data.postal_code;
+            if (data.platform)      document.getElementById('custSource').value      = data.platform;
+            if (statusEl) { statusEl.style.color = '#34d399'; statusEl.textContent = '✅ อ่านข้อมูลสำเร็จ ตรวจสอบและบันทึกได้เลย'; }
+            if (data.customer_phone) checkCustomerPhoneDuplicate(data.customer_phone);
+        } catch (e) {
+            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '❌ อ่านไม่ได้: ' + e.message; }
+        } finally {
+            if (zone) { zone.style.opacity = '1'; zone.style.pointerEvents = 'auto'; }
+            const inp = document.getElementById('customerLabelInput');
+            if (inp) inp.value = '';
+        }
     }
+}
+
+async function handleLabelImageUpload(input) {
+    if (input.files && input.files[0]) await _processLabelFile(input.files[0], 'quick');
 }
 
 function renderOcrResultCard(data) {
@@ -10520,6 +10563,7 @@ function openAddCustomerModal() {
     document.getElementById('custDuplicateWarning').style.display = 'none';
     document.getElementById('customerScanStatus').style.display = 'none';
     document.getElementById('addCustomerModal').style.display = 'flex';
+    _labelPasteContext = 'customer';
 
     const phoneInput = document.getElementById('custPhone');
     phoneInput.oninput = () => {
@@ -10545,6 +10589,7 @@ function openEditCustomerModal(id) {
     document.getElementById('custDuplicateWarning').style.display = 'none';
     document.getElementById('customerScanStatus').style.display = 'none';
     document.getElementById('addCustomerModal').style.display = 'flex';
+    _labelPasteContext = 'customer';
 
     const phoneInput = document.getElementById('custPhone');
     const origPhone = c.phone || '';
@@ -10560,6 +10605,7 @@ function openEditCustomerModal(id) {
 
 function closeAddCustomerModal() {
     document.getElementById('addCustomerModal').style.display = 'none';
+    _labelPasteContext = null;
 }
 
 async function checkCustomerPhoneDuplicate(phone) {
@@ -10581,39 +10627,7 @@ async function checkCustomerPhoneDuplicate(phone) {
 }
 
 async function handleCustomerLabelUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const statusEl = document.getElementById('customerScanStatus');
-    statusEl.style.display = 'block';
-    statusEl.textContent = '⏳ กำลังอ่านข้อมูลจากรูป...';
-
-    const formData = new FormData();
-    formData.append('image', file);
-    try {
-        const res = await fetch('/api/admin/quick-order/parse-label', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'ล้มเหลว');
-
-        if (data.customer_name) document.getElementById('custName').value = data.customer_name;
-        if (data.customer_phone) document.getElementById('custPhone').value = data.customer_phone;
-        if (data.address) document.getElementById('custAddress').value = data.address;
-        if (data.subdistrict) document.getElementById('custSubdistrict').value = data.subdistrict;
-        if (data.district) document.getElementById('custDistrict').value = data.district;
-        if (data.province) document.getElementById('custProvince').value = data.province;
-        if (data.postal_code) document.getElementById('custPostal').value = data.postal_code;
-        if (data.platform) document.getElementById('custSource').value = data.platform;
-
-        statusEl.style.color = '#34d399';
-        statusEl.textContent = '✅ อ่านข้อมูลสำเร็จ ตรวจสอบและบันทึกได้เลย';
-
-        if (data.customer_phone) {
-            checkCustomerPhoneDuplicate(data.customer_phone);
-        }
-    } catch (e) {
-        statusEl.style.color = '#f87171';
-        statusEl.textContent = '❌ อ่านไม่ได้: ' + e.message;
-    }
-    input.value = '';
+    if (input.files && input.files[0]) await _processLabelFile(input.files[0], 'customer');
 }
 
 async function saveCustomer() {
@@ -10664,6 +10678,22 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         const modal = document.getElementById('addCustomerModal');
         if (modal && modal.style.display !== 'none') closeAddCustomerModal();
+    }
+});
+
+document.addEventListener('paste', (e) => {
+    if (!_labelPasteContext) return;
+    const activeTag = document.activeElement?.tagName?.toLowerCase();
+    if (activeTag === 'input' || activeTag === 'textarea') return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) _processLabelFile(file, _labelPasteContext);
+            break;
+        }
     }
 });
 
