@@ -195,6 +195,12 @@ function _agentRenderMessages() {
     _agentScrollBottom();
 }
 
+function _agentModelBadge(model) {
+    if (!model) return '';
+    const isPro = model === 'Pro';
+    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;${isPro ? 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' : 'background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;'}">${isPro ? '✨ Pro' : '⚡ Flash'}</span>`;
+}
+
 function _agentBubbleAI(m, i) {
     return `<div class="agent-bubble-ai">
         <div class="agent-bubble-icon"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
@@ -203,6 +209,7 @@ function _agentBubbleAI(m, i) {
             <div class="agent-feedback-row" id="fb-${i}">
                 <button class="agent-fb-btn" onclick="agentFeedback(${i},1)" title="ดีมาก">👍</button>
                 <button class="agent-fb-btn" onclick="agentFeedback(${i},-1)" title="ไม่ตรง">👎</button>
+                ${m.model ? _agentModelBadge(m.model) : ''}
             </div>
         </div>
     </div>`;
@@ -228,6 +235,7 @@ function _agentPlanCard(m, i) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
             </div>
             <span style="font-size:13px;font-weight:700;color:#1d1d1f;">แผนการดำเนินงาน</span>
+            ${m.model ? _agentModelBadge(m.model) : ''}
         </div>
         <div style="font-size:13px;color:#374151;margin-bottom:10px;">${_esc(m.text || '')}</div>
         ${beforeRows || afterRows ? `<div style="background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:10px;">
@@ -301,9 +309,9 @@ async function agentSend() {
         if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
 
         if (data.type === 'plan') {
-            _agentMessages.push({ role: 'plan', text: data.message, plan: data.plan, log_id: data.log_id, tool: data.tool, params: data.params, approved: false });
+            _agentMessages.push({ role: 'plan', text: data.message, plan: data.plan, log_id: data.log_id, tool: data.tool, params: data.params, approved: false, model: data.model_used });
         } else {
-            _agentMessages.push({ role: 'ai', text: data.message });
+            _agentMessages.push({ role: 'ai', text: data.message, model: data.model_used });
         }
     } catch (e) {
         _agentMessages.push({ role: 'ai', text: '❌ ' + e.message });

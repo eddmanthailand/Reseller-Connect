@@ -32,7 +32,7 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Reseller Features:** Dedicated dashboard; tier-specific pricing; customer database management; profile management.
 - **Communication:** In-app chat between Admin and Resellers with real-time messaging, broadcasts, templates, attachments, unread badges, and email notifications.
 - **PWA & Push Notifications:** Progressive Web App with installable icon, Service Worker for caching, and VAPID-based Web Push Notifications for real-time alerts.
-- **AI Agent:** In-app AI assistant (FAB) with a glassmorphism panel. READ tools (query_sales_today, query_low_stock, query_stock_product, query_order_counts) for immediate answers. WRITE tool (adjust_stock) requires Admin approval. All actions logged. Uses Gemini (`gemini-2.5-flash`).
+- **AI Agent:** In-app AI assistant (FAB) with a glassmorphism panel. READ tools (query_sales_today, query_low_stock, query_stock_product, query_order_counts, search_web, etc.) for immediate answers. WRITE tools (adjust_stock, update_order_status, toggle_product, send_chat_message) require Admin approval. All actions logged. Smart model routing: `gemini-2.5-flash` for READ/chat, `gemini-2.5-pro` for WRITE tools (2-phase verification). `search_web` uses Gemini Google Search grounding for real-time internet data. Model badge (⚡Flash / ✨Pro) shown on each response. Ctrl+V paste image support. Gender-aware welcome message based on `custom_prompt` and `ending_particle` settings.
 - **Security:** `bcrypt` for passwords, strong `SESSION_SECRET`, route protection, input validation.
 
 ### System Design Choices
