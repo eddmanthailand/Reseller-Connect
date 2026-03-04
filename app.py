@@ -16251,5 +16251,336 @@ def reseller_preview_discount():
 
 # ==================== END MARKETING MODULE ====================
 
+
+# ==================== AI AGENT ====================
+
+AGENT_SYSTEM_PROMPT = """คุณเป็น AI ผู้ช่วยสำหรับระบบจัดการร้านค้า EKG Shops ชื่อ "ผู้ช่วย AI"
+ช่วย Admin จัดการร้านค้าผ่านคำสั่งภาษาไทย
+
+=== TOOLS ที่ใช้ได้ ===
+[อ่านข้อมูล — ตอบได้เลย ไม่ต้อง approve]
+- query_sales_today: ยอดขายวันนี้ / สัปดาห์นี้ / เดือนนี้
+- query_low_stock: สินค้าสต็อกต่ำ / ใกล้หมด
+- query_stock_product: เช็คสต็อกสินค้าเฉพาะตัว
+- query_order_counts: จำนวนออเดอร์ทุกสถานะ
+
+[แก้ไขข้อมูล — ต้อง Admin อนุมัติก่อนทุกครั้ง]
+- adjust_stock: เพิ่มหรือลดสต็อก SKU
+
+=== รูปแบบตอบกลับ (JSON เท่านั้น ห้ามมีข้อความอื่น) ===
+กรณีตอบข้อมูล (read):
+{"type":"answer","tool":"tool_name","params":{...},"message":"สรุปสั้น"}
+
+กรณีสร้าง plan (write, ต้อง approve):
+{"type":"plan","tool":"adjust_stock","params":{"product_name":"...","color":"...","size":"...","quantity":20,"direction":"add"},"message":"สรุปสิ่งที่จะทำ"}
+
+กรณีต้องการข้อมูลเพิ่ม:
+{"type":"clarify","message":"คำถามกลับ"}
+
+กรณีสนทนาทั่วไป:
+{"type":"chat","message":"ข้อความ"}
+
+=== กฎสำคัญ ===
+- ตอบเป็น JSON เสมอ ห้ามมีข้อความอื่นนอก JSON
+- params.direction สำหรับ adjust_stock: "add" = เพิ่ม, "subtract" = ลด
+- ถ้าชื่อสินค้า/สี/ไซส์ไม่ชัดเจน ให้ type=clarify ถามกลับ
+- ห้ามทำ action ลบข้อมูลทุกกรณี
+- ถ้าพูดเรื่องทั่วไปที่ไม่เกี่ยวกับงาน ให้ type=chat ตอบสั้นๆ"""
+
+
+def _agent_call_gemini(message, context_page):
+    import json as _json
+    try:
+        from google import genai as google_genai
+        from google.genai import types as genai_types
+        gemini_key = os.environ.get('GEMINI_API_KEY')
+        if not gemini_key:
+            return {'type': 'chat', 'message': 'ไม่พบ GEMINI_API_KEY'}
+        client = google_genai.Client(api_key=gemini_key)
+        full_prompt = f"{AGENT_SYSTEM_PROMPT}\n\n=== หน้าปัจจุบันของ Admin: {context_page} ===\n\nคำสั่ง Admin: {message}"
+        resp = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[full_prompt]
+        )
+        raw = resp.text.strip()
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+            raw = raw.strip()
+        return _json.loads(raw)
+    except Exception as e:
+        return {'type': 'chat', 'message': f'เกิดข้อผิดพลาด: {str(e)}'}
+
+
+def _agent_execute_read_tool(tool, params, cursor):
+    import datetime as _dt
+    today = _dt.date.today()
+
+    if tool == 'query_sales_today':
+        cursor.execute('''
+            SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total
+            FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored')
+            AND DATE(created_at) = %s AND is_quick_order = FALSE
+        ''', (today,))
+        row = cursor.fetchone()
+        cursor.execute('''
+            SELECT COUNT(*) as cnt, COALESCE(SUM(final_amount),0) as total
+            FROM orders
+            WHERE status NOT IN ('cancelled','returned','stock_restored')
+            AND DATE(created_at) >= DATE_TRUNC('week', CURRENT_DATE)
+            AND is_quick_order = FALSE
+        ''')
+        week = cursor.fetchone()
+        return {
+            'text': f"ยอดขายวันนี้: {int(row['cnt'])} ออเดอร์ รวม ฿{float(row['total']):,.0f}\n"
+                    f"สัปดาห์นี้: {int(week['cnt'])} ออเดอร์ รวม ฿{float(week['total']):,.0f}"
+        }
+
+    elif tool == 'query_low_stock':
+        threshold = int(params.get('threshold', 5))
+        cursor.execute('''
+            SELECT p.name as product_name, s.sku_code, s.stock
+            FROM skus s JOIN products p ON p.id = s.product_id
+            WHERE s.stock <= %s AND s.stock >= 0 AND p.is_active = TRUE
+            ORDER BY s.stock ASC LIMIT 15
+        ''', (threshold,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'ไม่มีสินค้าที่สต็อกต่ำกว่า {threshold} ชิ้น'}
+        lines = [f"• {r['product_name']} [{r['sku_code']}] — {r['stock']} ชิ้น" for r in rows]
+        return {'text': f"สินค้าสต็อกต่ำกว่า {threshold} ชิ้น ({len(rows)} รายการ):\n" + "\n".join(lines)}
+
+    elif tool == 'query_stock_product':
+        name = params.get('product_name', '')
+        cursor.execute('''
+            SELECT p.name as product_name, s.sku_code, s.stock
+            FROM skus s JOIN products p ON p.id = s.product_id
+            WHERE p.name ILIKE %s
+            ORDER BY s.sku_code
+            LIMIT 20
+        ''', (f'%{name}%',))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'ไม่พบสินค้าที่ชื่อใกล้เคียง "{name}"'}
+        lines = [f"• {r['sku_code']} — {r['stock']} ชิ้น" for r in rows]
+        product_name = rows[0]['product_name']
+        return {'text': f"สต็อก {product_name}:\n" + "\n".join(lines)}
+
+    elif tool == 'query_order_counts':
+        cursor.execute('''
+            SELECT status, COUNT(*) as cnt FROM orders
+            WHERE is_quick_order = FALSE
+            GROUP BY status ORDER BY cnt DESC
+        ''')
+        rows = cursor.fetchall()
+        status_labels = {
+            'pending_payment': 'รอชำระ', 'processing': 'กำลังจัดเตรียม',
+            'shipped': 'จัดส่งแล้ว', 'delivered': 'ส่งถึงแล้ว',
+            'cancelled': 'ยกเลิก', 'returned': 'คืนสินค้า'
+        }
+        lines = [f"• {status_labels.get(r['status'], r['status'])}: {r['cnt']} รายการ" for r in rows]
+        return {'text': "จำนวนออเดอร์ทุกสถานะ:\n" + "\n".join(lines)}
+
+    return {'text': 'ไม่รู้จัก tool นี้'}
+
+
+def _agent_find_sku(params, cursor):
+    name = params.get('product_name', '')
+    size = params.get('size', '')
+    color = params.get('color', '')
+    cursor.execute('''
+        SELECT s.id as sku_id, s.sku_code, s.stock, p.name as product_name
+        FROM skus s
+        JOIN products p ON p.id = s.product_id
+        WHERE p.name ILIKE %s
+        ORDER BY s.sku_code
+    ''', (f'%{name}%',))
+    skus = cursor.fetchall()
+    if not skus:
+        return None, f'ไม่พบสินค้าที่ชื่อใกล้เคียง "{name}"'
+    matched = skus
+    if size:
+        s_up = size.upper()
+        filtered = [r for r in matched if s_up in r['sku_code'].upper()]
+        if filtered:
+            matched = filtered
+    if color:
+        c_up = color.upper()
+        filtered = [r for r in matched if c_up in r['sku_code'].upper()]
+        if filtered:
+            matched = filtered
+    if len(matched) == 1:
+        return dict(matched[0]), None
+    if len(matched) > 1:
+        options = ', '.join([r['sku_code'] for r in matched[:6]])
+        return None, f'พบหลาย SKU: {options} — กรุณาระบุให้ชัดขึ้น'
+    return None, f'ไม่พบ SKU ที่ตรงกับ {name} สี{color} ไซส์{size}'
+
+
+@app.route('/api/admin/agent/chat', methods=['POST'])
+@admin_required
+def agent_chat():
+    import json as _json
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        message = (data.get('message') or '').strip()
+        context_page = data.get('context_page', 'dashboard')
+        if not message:
+            return jsonify({'error': 'ไม่มีข้อความ'}), 400
+
+        intent = _agent_call_gemini(message, context_page)
+        itype = intent.get('type', 'chat')
+        tool  = intent.get('tool', '')
+        params = intent.get('params') or {}
+
+        if itype == 'answer':
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            result = _agent_execute_read_tool(tool, params, cursor)
+            return jsonify({'type': 'answer', 'message': result['text']}), 200
+
+        elif itype == 'plan' and tool == 'adjust_stock':
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            sku, err = _agent_find_sku(params, cursor)
+            if err:
+                return jsonify({'type': 'answer', 'message': err}), 200
+            qty = abs(int(params.get('quantity', 0)))
+            direction = params.get('direction', 'add')
+            new_stock = sku['stock'] + qty if direction == 'add' else max(0, sku['stock'] - qty)
+            plan = {
+                'before': {'SKU': sku['sku_code'], 'สต็อกปัจจุบัน': f"{sku['stock']} ชิ้น"},
+                'after':  {'SKU': sku['sku_code'], 'สต็อกใหม่': f"{new_stock} ชิ้น ({'+' if direction=='add' else '-'}{qty})"}
+            }
+            admin_id = session.get('user_id')
+            admin_name = session.get('full_name') or session.get('username') or 'Admin'
+            cursor2 = conn.cursor()
+            cursor2.execute('''
+                INSERT INTO agent_action_logs
+                    (admin_id, admin_name, command_text, tool_name, context_page, plan_data, before_data, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id
+            ''', (admin_id, admin_name, message, tool, context_page,
+                  _json.dumps(params), _json.dumps({'sku_id': sku['sku_id'], 'stock': sku['stock']})))
+            log_id = cursor2.fetchone()[0]
+            conn.commit()
+            return jsonify({
+                'type': 'plan',
+                'tool': tool,
+                'params': {**params, 'sku_id': sku['sku_id'], 'quantity': qty},
+                'plan': plan,
+                'log_id': log_id,
+                'message': intent.get('message', f"จะ{'เพิ่ม' if direction=='add' else 'ลด'}สต็อก {sku['sku_code']} จาก {sku['stock']} เป็น {new_stock} ชิ้น")
+            }), 200
+
+        elif itype == 'clarify':
+            return jsonify({'type': 'answer', 'message': intent.get('message', '')}), 200
+
+        else:
+            return jsonify({'type': 'answer', 'message': intent.get('message', '')}), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/agent/execute', methods=['POST'])
+@admin_required
+def agent_execute():
+    import json as _json
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        log_id  = data.get('log_id')
+        tool    = data.get('tool')
+        params  = data.get('params') or {}
+
+        if tool != 'adjust_stock':
+            return jsonify({'error': 'ไม่รองรับ tool นี้'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        sku_id    = int(params.get('sku_id', 0))
+        qty       = abs(int(params.get('quantity', 0)))
+        direction = params.get('direction', 'add')
+
+        cursor.execute('SELECT s.id, s.sku_code, s.stock, p.name as product_name FROM skus s JOIN products p ON p.id = s.product_id WHERE s.id = %s', (sku_id,))
+        sku = cursor.fetchone()
+        if not sku:
+            return jsonify({'error': 'ไม่พบ SKU'}), 404
+
+        before_stock = sku['stock']
+        if direction == 'add':
+            new_stock = before_stock + qty
+        else:
+            new_stock = max(0, before_stock - qty)
+
+        cur2 = conn.cursor()
+        cur2.execute('UPDATE skus SET stock = %s WHERE id = %s', (new_stock, sku_id))
+        cur2.execute('''
+            INSERT INTO sku_warehouse_stock (sku_id, warehouse_id, stock)
+            VALUES (%s, 2, %s)
+            ON CONFLICT (sku_id, warehouse_id) DO UPDATE SET stock = %s
+        ''', (sku_id, new_stock, new_stock))
+
+        before_data = {'SKU': sku['sku_code'], 'สต็อกก่อน': f"{before_stock} ชิ้น"}
+        after_data  = {'SKU': sku['sku_code'], 'สต็อกหลัง': f"{new_stock} ชิ้น"}
+
+        if log_id:
+            cur2.execute('''
+                UPDATE agent_action_logs
+                SET status='executed', before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP
+                WHERE id=%s
+            ''', (_json.dumps(before_data), _json.dumps(after_data), log_id))
+
+        conn.commit()
+        action_word = 'เพิ่ม' if direction == 'add' else 'ลด'
+        return jsonify({
+            'message': f"{action_word}สต็อก {sku['sku_code']} สำเร็จ ({before_stock} → {new_stock} ชิ้น)",
+            'before': before_data,
+            'after':  after_data
+        }), 200
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/agent/logs', methods=['GET'])
+@admin_required
+def agent_logs():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT id, admin_name, command_text, tool_name, context_page,
+                   before_data, after_data, status, executed_at, created_at
+            FROM agent_action_logs
+            ORDER BY created_at DESC LIMIT 50
+        ''')
+        logs = [dict(r) for r in cursor.fetchall()]
+        return jsonify(logs), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+# ==================== END AI AGENT ====================
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

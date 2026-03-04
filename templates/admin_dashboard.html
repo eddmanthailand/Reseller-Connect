@@ -4217,5 +4217,257 @@
             <table class="sr-table" id="srTable"></table>
         </div>
     </div>
+
+    <!-- ===== AI AGENT FAB ===== -->
+    <style>
+        #agentFab {
+            position: fixed;
+            bottom: 28px;
+            right: 24px;
+            z-index: 9100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1d1d1f;
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 18px 12px 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.32), 0 1px 4px rgba(0,0,0,0.18);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #agentFab:hover { background: #2d2d30; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.38); }
+        #agentFab:active { transform: scale(0.96); }
+        #agentFabDot {
+            position: absolute;
+            top: -4px; right: -4px;
+            width: 12px; height: 12px;
+            background: #ff3b30;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            display: none;
+        }
+        #agentFabIcon {
+            width: 22px; height: 22px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        #agentPanel {
+            position: fixed;
+            bottom: 28px;
+            right: 24px;
+            z-index: 9100;
+            width: 400px;
+            max-width: calc(100vw - 32px);
+            height: 560px;
+            max-height: calc(100vh - 80px);
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(30px) saturate(1.8);
+            -webkit-backdrop-filter: blur(30px) saturate(1.8);
+            border-radius: 20px;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.22), 0 1px 4px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: opacity 0.22s cubic-bezier(0.4,0,0.2,1), transform 0.22s cubic-bezier(0.4,0,0.2,1);
+        }
+        .agent-header {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 16px 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            flex-shrink: 0;
+        }
+        .agent-header-icon {
+            width: 30px; height: 30px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .agent-header-title { font-size: 14px; font-weight: 700; color: #1d1d1f; }
+        .agent-header-sub { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+        .agent-header-actions { margin-left: auto; display: flex; gap: 6px; }
+        .agent-header-btn {
+            width: 28px; height: 28px;
+            border: none; background: rgba(0,0,0,0.05);
+            border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            color: #6e6e73; transition: background 0.15s;
+        }
+        .agent-header-btn:hover { background: rgba(0,0,0,0.1); }
+        .agent-ctx-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 14px; background: rgba(0,0,0,0.025);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            flex-shrink: 0;
+        }
+        #agentContextChip {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 11px; color: #6e6e73;
+        }
+        #agentQuickChips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .agent-chip {
+            padding: 4px 10px;
+            background: rgba(168,85,247,0.1);
+            color: #a855f7;
+            border: 1px solid rgba(168,85,247,0.2);
+            border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+            cursor: pointer; font-family: inherit;
+            transition: background 0.15s;
+            white-space: nowrap;
+        }
+        .agent-chip:hover { background: rgba(168,85,247,0.18); }
+        #agentMessages {
+            flex: 1; overflow-y: auto; padding: 14px;
+            display: flex; flex-direction: column; gap: 10px;
+            scroll-behavior: smooth;
+        }
+        #agentMessages::-webkit-scrollbar { width: 4px; }
+        #agentMessages::-webkit-scrollbar-track { background: transparent; }
+        #agentMessages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
+        .agent-bubble-ai {
+            display: flex; align-items: flex-start; gap: 8px;
+            animation: agentFadeIn 0.2s ease;
+        }
+        .agent-bubble-icon {
+            width: 24px; height: 24px; flex-shrink: 0;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; margin-top: 2px;
+        }
+        .agent-bubble-text {
+            background: #f2f2f7;
+            border-radius: 16px 16px 16px 4px;
+            padding: 10px 14px;
+            font-size: 13px; color: #1d1d1f; line-height: 1.5;
+            max-width: calc(100% - 36px);
+            word-break: break-word;
+        }
+        .agent-bubble-user {
+            display: flex; justify-content: flex-end;
+            animation: agentFadeIn 0.2s ease;
+        }
+        .agent-bubble-text-user {
+            background: #1d1d1f;
+            color: #fff;
+            border-radius: 16px 16px 4px 16px;
+            padding: 10px 14px;
+            font-size: 13px; line-height: 1.5;
+            max-width: 80%;
+            word-break: break-word;
+        }
+        .agent-plan-card {
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px;
+            animation: agentFadeIn 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .agent-success-card {
+            background: #f0fdf4;
+            border: 1.5px solid #bbf7d0;
+            border-radius: 14px;
+            padding: 14px;
+            animation: agentFadeIn 0.2s ease;
+        }
+        .agent-typing { display: flex; gap: 4px; align-items: center; }
+        .agent-typing span {
+            width: 6px; height: 6px;
+            background: #a855f7; border-radius: 50%;
+            animation: agentTyping 1.2s ease-in-out infinite;
+        }
+        .agent-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .agent-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes agentTyping { 0%,60%,100%{transform:translateY(0);opacity:.6} 30%{transform:translateY(-5px);opacity:1} }
+        @keyframes agentFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        .agent-input-bar {
+            display: flex; align-items: flex-end; gap: 8px;
+            padding: 10px 12px 14px;
+            border-top: 1px solid rgba(0,0,0,0.07);
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.95);
+        }
+        #agentInput {
+            flex: 1;
+            background: #f2f2f7;
+            border: 1.5px solid transparent;
+            border-radius: 20px;
+            padding: 9px 14px;
+            font-size: 13px; font-family: inherit; color: #1d1d1f;
+            resize: none; outline: none; line-height: 1.4;
+            max-height: 120px; overflow-y: auto;
+            transition: border-color 0.15s;
+        }
+        #agentInput:focus { border-color: #a855f7; background: #fff; }
+        #agentInput::placeholder { color: #aeaeb2; }
+        .agent-send-btn {
+            width: 36px; height: 36px; flex-shrink: 0;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border: none; border-radius: 50%;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            color: #fff; transition: transform 0.15s, opacity 0.15s;
+        }
+        .agent-send-btn:hover { transform: scale(1.08); opacity: 0.92; }
+        .agent-send-btn:active { transform: scale(0.95); }
+        @media (max-width: 480px) {
+            #agentPanel { bottom: 0; right: 0; width: 100vw; max-width: 100vw; border-radius: 20px 20px 0 0; height: 70vh; max-height: 70vh; }
+            #agentFab { bottom: 20px; right: 16px; }
+        }
+    </style>
+
+    <!-- FAB Button -->
+    <button id="agentFab" onclick="agentToggle()" title="AI ผู้ช่วย">
+        <div id="agentFabDot"></div>
+        <div id="agentFabIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        AI ผู้ช่วย
+    </button>
+
+    <!-- Agent Panel -->
+    <div id="agentPanel">
+        <div class="agent-header">
+            <div class="agent-header-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div>
+                <div class="agent-header-title">AI ผู้ช่วย</div>
+                <div class="agent-header-sub">EKG Shops Assistant</div>
+            </div>
+            <div class="agent-header-actions">
+                <button class="agent-header-btn" onclick="agentMinimize()" title="ย่อ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="agent-header-btn" onclick="agentClose()" title="ปิด">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="agent-ctx-bar">
+            <div id="agentContextChip"></div>
+            <div id="agentQuickChips"></div>
+        </div>
+        <div id="agentMessages"></div>
+        <div class="agent-input-bar">
+            <textarea id="agentInput" rows="1" placeholder="พิมพ์คำสั่ง เช่น ยอดขายวันนี้..." onkeydown="agentInputKeydown(event)" oninput="_agentAutoResize(this)"></textarea>
+            <button class="agent-send-btn" onclick="agentSend()" title="ส่ง">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+    <script src="/static/js/agent.js"></script>
+    <!-- ===== END AI AGENT ===== -->
+
 </body>
 </html>

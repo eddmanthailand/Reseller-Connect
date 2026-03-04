@@ -1240,6 +1240,24 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_quotations_status ON quotations(status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_mto_orders_reseller ON mto_orders(reseller_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_mto_orders_status ON mto_orders(status)')
+
+        # Agent Action Logs — บันทึกการกระทำของ AI Agent
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS agent_action_logs (
+                id SERIAL PRIMARY KEY,
+                admin_id INTEGER REFERENCES users(id),
+                admin_name VARCHAR(255),
+                command_text TEXT NOT NULL,
+                tool_name VARCHAR(80),
+                context_page VARCHAR(80),
+                plan_data JSONB,
+                before_data JSONB,
+                after_data JSONB,
+                status VARCHAR(20) DEFAULT 'pending',
+                executed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
