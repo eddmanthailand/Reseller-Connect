@@ -55,9 +55,27 @@ function agentToggle() {
     if (_agentOpen) _agentDoOpen(); else agentClose();
 }
 
+function _agentFitPanel() {
+    const panel = document.getElementById('agentPanel');
+    if (!panel) return;
+    const vw = window.innerWidth;
+    if (vw <= 480) return;
+    const sidebar = document.getElementById('sidebar');
+    const sidebarRight = sidebar ? sidebar.getBoundingClientRect().right : 0;
+    const available = vw - sidebarRight - 48;
+    if (available < 160) return;
+    const w = Math.min(400, available);
+    panel.style.width    = w + 'px';
+    panel.style.maxWidth = w + 'px';
+    panel.style.right    = '24px';
+    panel.style.left     = 'auto';
+    panel.style.bottom   = '28px';
+}
+
 function _agentDoOpen() {
     const panel = document.getElementById('agentPanel');
     const fab   = document.getElementById('agentFab');
+    _agentFitPanel();
     panel.style.display = 'flex';
     requestAnimationFrame(() => {
         panel.style.opacity = '1';
@@ -447,4 +465,12 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) _agentSettings = d; })
         .catch(() => {});
+
+    window.addEventListener('resize', () => { if (_agentOpen) _agentFitPanel(); });
+
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        new MutationObserver(() => { if (_agentOpen) _agentFitPanel(); })
+            .observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    }
 });
