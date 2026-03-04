@@ -16916,7 +16916,11 @@ def _agent_build_system_prompt(settings):
 {('บุคลิกพิเศษ: ' + custom) if custom else ''}
 
 === ข้อมูลระบบ ===
-- Model ที่ใช้: Gemini 3.1 Pro Preview (ทุก task)
+- Models ที่ใช้ในระบบ:
+  • Agent (ตัวคุณเอง): gemini-3.1-pro-preview
+  • Auto-Chat Bot (ข้อความทั่วไป): gemini-2.5-flash-lite
+  • Auto-Chat Bot (อ่านรูป size chart): gemini-2.5-flash
+  • OCR ใบปะหน้า (Quick Order): gemini-2.5-flash
 - Role: Developer Consultant + Business Assistant
 - Backend: Flask 3.1.2 + PostgreSQL (Neon) + Gunicorn (gevent)
 - Frontend: Vanilla JS SPA, Jinja2 templates
