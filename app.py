@@ -2134,11 +2134,13 @@ def create_product():
         else:
             low_stock = None
         cursor.execute('''
-            INSERT INTO products (brand_id, name, parent_sku, description, size_chart_image_url, status, 
+            INSERT INTO products (brand_id, name, parent_sku, description, bot_description,
+                                  size_chart_image_url, status, 
                                   weight, length, width, height, low_stock_threshold)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''), 
+        ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''),
+              data.get('bot_description', '') or '',
               data.get('size_chart_image_url'), status,
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
               low_stock))
@@ -2319,11 +2321,13 @@ def update_product(product_id):
             low_stock = None
         cursor.execute('''
             UPDATE products 
-            SET brand_id = %s, name = %s, description = %s, size_chart_image_url = %s, status = %s,
+            SET brand_id = %s, name = %s, description = %s, bot_description = %s,
+                size_chart_image_url = %s, status = %s,
                 weight = %s, length = %s, width = %s, height = %s, low_stock_threshold = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        ''', (brand_id, data['name'], data.get('description', ''), data.get('size_chart_image_url'), status,
+        ''', (brand_id, data['name'], data.get('description', ''), data.get('bot_description', '') or '',
+              data.get('size_chart_image_url'), status,
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
               low_stock, product_id))
         
@@ -14300,54 +14304,115 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         current_product_id = session_data.get('current_product_id')
         desired_size = session_data.get('desired_size')
 
+        def _fmt_product_row(pr, detailed=False):
+            brand = pr.get('brand_name') or ''
+            cat = pr.get('cat_name') or ''
+            options_str = pr.get('options_summary') or ''
+            size_stock = pr.get('size_stock') or ''
+            price = pr.get('min_price') or 0
+            bot_desc = pr.get('bot_description') or ''
+            line = f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาเริ่ม฿{price:.0f}"
+            if cat:
+                line += f" หมวด:{cat}"
+            if size_stock:
+                line += f" ไซส์(stock):{size_stock}"
+            if options_str:
+                line += f" ตัวเลือก:{options_str}"
+            if bot_desc:
+                line += f" ({bot_desc})"
+            if detailed and pr.get('size_chart_image_url'):
+                line += " [มีตารางไซส์]"
+            return line + '\n'
+
+        _product_base_select = '''
+            SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                   b.name as brand_name,
+                   (SELECT c2.name FROM categories c2
+                    JOIN product_categories pc2 ON pc2.category_id = c2.id
+                    WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
+                   MIN(s.price) as min_price,
+                   STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock,
+                   (SELECT STRING_AGG(DISTINCT ov.value, '/' ORDER BY ov.value)
+                    FROM options o JOIN option_values ov ON ov.option_id = o.id
+                    WHERE o.product_id = p.id AND LOWER(o.name) NOT IN ('ไซส์','size','sz')) as options_summary
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            JOIN skus s ON s.product_id = p.id
+        '''
+
         products_text = ''
         if current_cat_id:
-            cursor.execute('''
-                SELECT p.id, p.name, p.bot_description,
-                       MIN(s.price) as min_price,
-                       (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as img,
-                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
-                FROM products p
-                JOIN skus s ON s.product_id = p.id
-                WHERE p.category_id = %s AND p.status = 'active'
-                GROUP BY p.id, p.name, p.bot_description
+            cursor.execute(_product_base_select + '''
+                JOIN product_categories pc ON pc.product_id = p.id
+                WHERE pc.category_id = %s AND p.status = 'active'
+                GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                 LIMIT 10
             ''', (current_cat_id,))
             prods = cursor.fetchall()
             for pr in prods:
-                products_text += f"  - ID:{pr['id']} {pr['name']} ราคาเริ่ม฿{pr['min_price'] or 0:.0f} ไซส์(stock): {pr['size_stock']} {'('+pr['bot_description']+')' if pr.get('bot_description') else ''}\n"
+                products_text += _fmt_product_row(pr)
         elif current_product_id:
-            cursor.execute('''
-                SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
-                       MIN(s.price) as min_price,
-                       (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as img,
-                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
-                FROM products p
-                JOIN skus s ON s.product_id = p.id
+            cursor.execute(_product_base_select + '''
                 WHERE p.id = %s
-                GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url
+                GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
             ''', (current_product_id,))
             pr = cursor.fetchone()
             if pr:
-                products_text = f"  สินค้าที่กำลังดู: ID:{pr['id']} {pr['name']} ราคาเริ่ม฿{pr['min_price'] or 0:.0f}\n  ไซส์(stock): {pr['size_stock']}\n  มีตารางไซส์: {'ใช่' if pr.get('size_chart_image_url') else 'ไม่มี'}\n"
+                products_text = _fmt_product_row(pr, detailed=True)
+        else:
+            # IDLE state: keyword search from user message
+            import re as _re2
+            # Extract 2+ char words for search
+            kws = [w for w in _re2.findall(r'\S+', user_message_text) if len(w) >= 2]
+            if kws:
+                kw_query = ' '.join(kws[:5])
+                cursor.execute(_product_base_select + '''
+                    WHERE p.status = 'active'
+                      AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s
+                           OR b.name ILIKE %s)
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    LIMIT 8
+                ''', (f'%{kw_query}%', f'%{kw_query}%', f'%{kw_query}%', f'%{kw_query}%'))
+                prods = cursor.fetchall()
+                if not prods and len(kws) > 1:
+                    # Try each keyword separately
+                    seen = set()
+                    for kw in kws[:3]:
+                        cursor.execute(_product_base_select + '''
+                            WHERE p.status = 'active'
+                              AND (p.name ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
+                            GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                            LIMIT 5
+                        ''', (f'%{kw}%', f'%{kw}%', f'%{kw}%'))
+                        for pr in cursor.fetchall():
+                            if pr['id'] not in seen:
+                                seen.add(pr['id'])
+                                prods.append(pr)
+                for pr in prods:
+                    products_text += _fmt_product_row(pr)
 
         # Suggest alternatives if size is out of stock
         alt_products_text = ''
         if desired_size and current_product_id:
             cursor.execute('''
-                SELECT p.id, p.name, MIN(s.price) as min_price,
-                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
+                SELECT p.id, p.name, b.name as brand_name, MIN(s.price) as min_price,
+                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock,
+                       p.bot_description, p.size_chart_image_url
                 FROM products p
+                LEFT JOIN brands b ON b.id = p.brand_id
                 JOIN skus s ON s.product_id = p.id
-                WHERE p.category_id = (SELECT category_id FROM products WHERE id = %s)
+                WHERE p.id IN (
+                    SELECT product_id FROM product_categories WHERE category_id IN
+                        (SELECT category_id FROM product_categories WHERE product_id = %s)
+                )
                   AND p.id != %s AND p.status = 'active'
                   AND s.size = %s AND s.stock > 0
-                GROUP BY p.id, p.name
+                GROUP BY p.id, p.name, b.name, p.bot_description, p.size_chart_image_url
                 LIMIT 3
             ''', (current_product_id, current_product_id, desired_size))
             alts = cursor.fetchall()
             for a in alts:
-                alt_products_text += f"  - ID:{a['id']} {a['name']} ราคาเริ่ม฿{a['min_price'] or 0:.0f} ไซส์: {a['size_stock']}\n"
+                alt_products_text += _fmt_product_row(a)
 
         # 9. Build prompt for Flash Lite
         system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย
