@@ -10,11 +10,18 @@ import threading
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+_log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+_log_file_handler = logging.FileHandler('/tmp/app.log', mode='a', encoding='utf-8')
+_log_file_handler.setLevel(logging.WARNING)
+_log_file_handler.setFormatter(_log_formatter)
+_log_stream_handler = logging.StreamHandler()
+_log_stream_handler.setFormatter(_log_formatter)
 logging.basicConfig(
-    level=logging.ERROR,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
+    handlers=[_log_stream_handler, _log_file_handler]
 )
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 import json
 import smtplib
 from email.mime.text import MIMEText
@@ -16908,8 +16915,16 @@ def _agent_build_system_prompt(settings):
 น้ำเสียง: {tone_desc} ใช้คำลงท้าย "{particle}" เสมอ
 {('บุคลิกพิเศษ: ' + custom) if custom else ''}
 
+=== ข้อมูลระบบ ===
+- Model ที่ใช้: Gemini 3.1 Pro Preview (ทุก task)
+- Role: Developer Consultant + Business Assistant
+- Backend: Flask 3.1.2 + PostgreSQL (Neon) + Gunicorn (gevent)
+- Frontend: Vanilla JS SPA, Jinja2 templates
+- Storage: Replit Object Storage (รูปสินค้า)
+- ข้อจำกัด: อ่านได้ทุกอย่าง แต่แก้ไขโค้ด/DB โดยตรงไม่ได้ — ให้แนะนำ Superadmin แล้วใช้ Replit Agent ดำเนินการแทน
+
 === TOOLS ที่ใช้ได้ ===
-[READ — ตอบได้ทันที ไม่ต้อง approve]
+[READ — ธุรกิจ]
 - query_sales_today: ยอดขายวันนี้/สัปดาห์/เดือน
 - query_sales_by_brand: ยอดขายแยกตามแบรนด์
 - query_top_products: สินค้าขายดี
@@ -16924,34 +16939,45 @@ def _agent_build_system_prompt(settings):
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
 - search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query)
 - chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
-- chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart (เดือนปัจจุบัน)
+- chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart
 - chart_order_status: กราฟสัดส่วนสถานะออเดอร์ Pie chart
 - chart_top_products: กราฟสินค้าขายดี Bar chart (params: limit=10)
-- chart_low_stock: กราฟสต็อกสินค้าใกล้หมด Horizontal Bar (params: threshold=10)
+- chart_low_stock: กราฟสต็อกสินค้าใกล้หมด Horizontal Bar
 
-[READ — ตรวจสอบระบบ / Code Inspector (READ-ONLY ห้ามแก้ไข)]
-- list_files: รายการไฟล์ในโปรเจกต์ (params: path="." optional, pattern="*.py" optional)
-- read_code: อ่านไฟล์โค้ด (params: file="app.py", offset=1, limit=80) — อ่านได้ทุกไฟล์ แก้ไขไม่ได้
-- search_code: ค้นหาข้อความ/ฟังก์ชันในโค้ด (params: pattern="def route_name", file="*.py" optional, context_lines=2)
-- query_db_schema: โครงสร้างตาราง DB (params: table="orders" optional — ถ้าไม่ใส่จะแสดงทุกตาราง)
-- query_db: รัน SQL SELECT อ่านอย่างเดียว (params: sql="SELECT ...", limit=20) — ห้ามรัน INSERT/UPDATE/DELETE/DROP
+[READ — ตรวจสอบโค้ด (ห้ามแก้ไข)]
+- list_files: รายการไฟล์ (params: path="." optional, pattern="*.py" optional)
+- read_code: อ่านไฟล์โค้ด (params: file="app.py", offset=1, limit=80)
+- search_code: ค้นหาในโค้ด (params: pattern, file optional, context_lines=2)
+- query_db_schema: โครงสร้างตาราง DB (params: table optional)
+- query_db: SQL SELECT อย่างเดียว (params: sql, limit=20)
+- analyze_syntax: ตรวจ syntax error ในไฟล์ Python (params: file="app.py")
+- count_code_metrics: สถิติโค้ด จำนวนบรรทัด/functions/routes (params: file optional)
+
+[READ — ตรวจสอบระบบ]
+- check_system_status: CPU load, RAM, disk, uptime ของ server
+- read_server_logs: อ่าน server error log ล่าสุด (params: lines=50, level="ERROR" optional)
+- check_db_health: สุขภาพ DB — connections, table sizes, index
+- list_storage_files: รายการไฟล์ใน Object Storage (params: prefix="" optional)
+- list_env_var_names: รายชื่อ environment variables (ชื่อเท่านั้น ไม่มีค่า)
+- test_api_endpoint: ทดสอบ GET endpoint (params: path="/api/admin/brands")
 
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
-- update_order_status: เปลี่ยนสถานะออเดอร์ (params: order_number, new_status="processing"/"shipped"/"delivered"/"cancelled")
+- update_order_status: เปลี่ยนสถานะออเดอร์ (params: order_number, new_status)
 - toggle_product: เปิด/ปิดการขายสินค้า (params: product_name, active=true/false)
 - send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
-READ (ข้อมูลทั่วไป): {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
-READ (กราฟ): {{"type":"answer","tool":"chart_xxx","params":{{...}},"message":"หัวข้อกราฟ"}}
+READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
+กราฟ: {{"type":"answer","tool":"chart_xxx","params":{{...}},"message":"หัวข้อกราฟ"}}
 WRITE: {{"type":"plan","tool":"tool_name","params":{{...}},"message":"อธิบายสิ่งที่จะทำ"}}
-ต้องการข้อมูลเพิ่ม: {{"type":"clarify","message":"คำถามกลับ"}}
-สนทนาทั่วไป: {{"type":"chat","message":"ข้อความ"}}
+ถามเพิ่ม: {{"type":"clarify","message":"คำถามกลับ"}}
+สนทนา/แนะนำ: {{"type":"chat","message":"ข้อความ"}}
 
 === กฎสำคัญ ===
 - ตอบเป็น JSON เสมอ ห้ามมีข้อความอื่นนอก JSON
-- ห้ามลบข้อมูลทุกกรณี
+- ห้ามลบข้อมูล ห้ามแก้ไขโค้ดโดยตรง — บทบาทคือที่ปรึกษาและวิเคราะห์
+- ถ้าพบปัญหาในโค้ด ให้อธิบายและแนะนำวิธีแก้ใน message แทน
 - ถ้าชื่อ/รหัสไม่ชัดเจน ให้ clarify ถามกลับ
 - ถ้าถามนอกเรื่องงาน ให้ type=chat ตอบสั้นๆ"""
 
@@ -17490,6 +17516,216 @@ def _agent_execute_read_tool(tool, params, cursor):
             return {'text': f'📊 Query Result ({len(_rows)} แถว):\n```\n{_header}\n{_sep}\n{_data}\n```'}
         except Exception as _e:
             return {'text': f'SQL Error: {str(_e)}'}
+
+    # ─── System Status Tools ──────────────────────────────────────────────────
+    elif tool == 'check_system_status':
+        import os as _os, time as _time
+        try:
+            with open('/proc/meminfo', 'r') as _f:
+                _mem = {}
+                for _ln in _f:
+                    _k, _v = _ln.split(':', 1)
+                    _mem[_k.strip()] = int(_v.strip().split()[0])
+            _mem_total = _mem.get('MemTotal', 0) // 1024
+            _mem_free = (_mem.get('MemAvailable', 0)) // 1024
+            _mem_used = _mem_total - _mem_free
+            _mem_pct = round(_mem_used / _mem_total * 100, 1) if _mem_total else 0
+        except:
+            _mem_total = _mem_used = _mem_pct = 0
+        try:
+            with open('/proc/loadavg', 'r') as _f:
+                _load1, _load5, _load15 = _f.read().split()[:3]
+        except:
+            _load1 = _load5 = _load15 = 'N/A'
+        try:
+            import shutil as _sh
+            _disk = _sh.disk_usage('/')
+            _disk_total = _disk.total // 1024 // 1024 // 1024
+            _disk_free = _disk.free // 1024 // 1024 // 1024
+            _disk_pct = round((_disk.used / _disk.total) * 100, 1)
+        except:
+            _disk_total = _disk_free = _disk_pct = 0
+        try:
+            with open('/proc/uptime', 'r') as _f:
+                _up_sec = float(_f.read().split()[0])
+            _up_h = int(_up_sec // 3600)
+            _up_m = int((_up_sec % 3600) // 60)
+            _uptime = f'{_up_h}h {_up_m}m'
+        except:
+            _uptime = 'N/A'
+        import subprocess as _sp
+        _proc = _sp.run(['pgrep', '-c', 'gunicorn'], capture_output=True, text=True)
+        _gworkers = _proc.stdout.strip() or '?'
+        _lines = [
+            '🖥️ System Status:',
+            f'  RAM: {_mem_used}MB / {_mem_total}MB ใช้ไป {_mem_pct}%',
+            f'  CPU Load: {_load1} (1m) / {_load5} (5m) / {_load15} (15m)',
+            f'  Disk: {_disk_free}GB free / {_disk_total}GB ({_disk_pct}% ใช้แล้ว)',
+            f'  Uptime: {_uptime}',
+            f'  Gunicorn workers: {_gworkers} processes',
+        ]
+        return {'text': '\n'.join(_lines)}
+
+    elif tool == 'read_server_logs':
+        import os as _os
+        _log_path = '/tmp/app.log'
+        _lines_req = min(200, max(10, int(params.get('lines') or 50)))
+        _level_filter = (params.get('level') or '').upper()
+        if not _os.path.isfile(_log_path):
+            return {'text': f'ยังไม่มี log file ที่ {_log_path} — server ยังไม่มี error/warning บันทึก'}
+        try:
+            with open(_log_path, 'r', encoding='utf-8', errors='replace') as _f:
+                _all = _f.readlines()
+            if _level_filter in ('ERROR', 'WARNING', 'CRITICAL', 'INFO'):
+                _all = [l for l in _all if _level_filter in l]
+            _tail = _all[-_lines_req:]
+            _content = ''.join(_tail).strip()
+            if not _content:
+                return {'text': f'✅ Log ว่างเปล่า — ไม่พบ{"  " + _level_filter if _level_filter else ""} ใน {_log_path}'}
+            _total = len(_all)
+            return {'text': f'📋 Server Log (แสดง {len(_tail)}/{_total} บรรทัด{" [" + _level_filter + "]" if _level_filter else ""}):\n```\n{_content}\n```'}
+        except Exception as _e:
+            return {'text': f'อ่าน log ไม่สำเร็จ: {str(_e)}'}
+
+    elif tool == 'check_db_health':
+        try:
+            cursor.execute('SELECT count(*) as cnt FROM pg_stat_activity')
+            _conns = cursor.fetchone()['cnt']
+            cursor.execute('SELECT count(*) as cnt FROM pg_stat_activity WHERE state=%s', ('active',))
+            _active = cursor.fetchone()['cnt']
+            cursor.execute('''
+                SELECT tablename,
+                       pg_size_pretty(pg_total_relation_size('public.' || tablename)) as total_size,
+                       pg_total_relation_size('public.' || tablename) as raw_size
+                FROM pg_tables WHERE schemaname='public'
+                ORDER BY raw_size DESC LIMIT 10
+            ''')
+            _sizes = cursor.fetchall()
+            cursor.execute('''
+                SELECT indexname, tablename, pg_size_pretty(pg_relation_size(indexname::regclass)) as idx_size
+                FROM pg_indexes WHERE schemaname='public'
+                ORDER BY pg_relation_size(indexname::regclass) DESC LIMIT 5
+            ''')
+            _idx = cursor.fetchall()
+            _lines = [
+                f'🗄️ DB Health:',
+                f'  Connections: {_conns} total, {_active} active',
+                '',
+                'Top 10 ตาราง (ขนาด):',
+            ]
+            for r in _sizes:
+                _lines.append(f'  • {r["tablename"]}: {r["total_size"]}')
+            _lines.append('\nTop 5 Index:')
+            for r in _idx:
+                _lines.append(f'  • {r["indexname"]} ({r["tablename"]}): {r["idx_size"]}')
+            return {'text': '\n'.join(_lines)}
+        except Exception as _e:
+            return {'text': f'ดู DB health ไม่สำเร็จ: {str(_e)}'}
+
+    elif tool == 'list_storage_files':
+        try:
+            from replit.object_storage import Client as _OSC
+            _osc = _OSC()
+            _prefix = (params.get('prefix') or '').strip()
+            _objs = _osc.list()
+            _keys = [o.name for o in _objs if o.name.startswith(_prefix)]
+            if not _keys:
+                return {'text': f'ไม่พบไฟล์ใน Object Storage{(" ที่ขึ้นต้นด้วย " + _prefix) if _prefix else ""}'}
+            _lines = [f'☁️ Object Storage ({len(_keys)} ไฟล์):']
+            for k in _keys[:80]:
+                _lines.append(f'  {k}')
+            if len(_keys) > 80:
+                _lines.append(f'  … และอีก {len(_keys)-80} ไฟล์')
+            return {'text': '\n'.join(_lines)}
+        except Exception as _e:
+            return {'text': f'เข้าถึง Object Storage ไม่สำเร็จ: {str(_e)}'}
+
+    elif tool == 'list_env_var_names':
+        import os as _os
+        _keys = sorted(_os.environ.keys())
+        _app_keys = [k for k in _keys if not k.startswith('_') and k not in ('PATH', 'HOME', 'USER', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'PWD', 'OLDPWD', 'SHLVL', 'LOGNAME', 'MAIL')]
+        _lines = [f'🔑 Environment Variables ({len(_app_keys)} รายการ) — แสดงชื่อเท่านั้น:']
+        for k in _app_keys:
+            _masked = '●●●●●●●●' if any(x in k.upper() for x in ('KEY', 'SECRET', 'PASSWORD', 'TOKEN', 'PASS')) else f'(set, len={len(_os.environ[k])})'
+            _lines.append(f'  {k}: {_masked}')
+        return {'text': '\n'.join(_lines)}
+
+    elif tool == 'analyze_syntax':
+        import subprocess as _sp, os as _os
+        _root = '/home/runner/workspace'
+        _file = (params.get('file') or 'app.py').strip().lstrip('/')
+        _safe = _os.path.realpath(_os.path.join(_root, _file))
+        if not _safe.startswith(_root) or not _os.path.isfile(_safe):
+            return {'text': f'ไม่พบไฟล์: {_file}'}
+        _res = _sp.run(['python3', '-m', 'py_compile', _safe], capture_output=True, text=True)
+        if _res.returncode == 0:
+            _wc = _sp.run(['wc', '-l', _safe], capture_output=True, text=True)
+            _lines_count = _wc.stdout.strip().split()[0] if _wc.returncode == 0 else '?'
+            return {'text': f'✅ {_file} — Syntax OK ({_lines_count} บรรทัด ไม่มี error)'}
+        else:
+            _err = (_res.stderr or _res.stdout or 'ไม่ทราบ error').strip()
+            return {'text': f'❌ Syntax Error ใน {_file}:\n```\n{_err}\n```'}
+
+    elif tool == 'count_code_metrics':
+        import os as _os, re as _re, glob as _glob
+        _root = '/home/runner/workspace'
+        _target = (params.get('file') or '').strip().lstrip('/')
+        if _target:
+            _files = [_os.path.join(_root, _target)] if _os.path.isfile(_os.path.join(_root, _target)) else []
+        else:
+            _py = _glob.glob(_os.path.join(_root, '*.py'))
+            _js = _glob.glob(_os.path.join(_root, 'static', 'js', '*.js'))
+            _files = _py + _js
+        _results = []
+        _total_lines = 0
+        for _fp in _files:
+            try:
+                with open(_fp, 'r', encoding='utf-8', errors='replace') as _f:
+                    _content = _f.read()
+                _lc = _content.count('\n')
+                _funcs = len(_re.findall(r'^def \w+', _content, _re.MULTILINE))
+                _classes = len(_re.findall(r'^class \w+', _content, _re.MULTILINE))
+                _routes = len(_re.findall(r'@app\.route\(', _content))
+                _fn = _fp.replace(_root + '/', '')
+                _detail = f'{_lc:,} lines'
+                if _funcs: _detail += f', {_funcs} fn'
+                if _classes: _detail += f', {_classes} cls'
+                if _routes: _detail += f', {_routes} routes'
+                _results.append(f'  {_fn}: {_detail}')
+                _total_lines += _lc
+            except:
+                pass
+        if not _results:
+            return {'text': 'ไม่พบไฟล์ที่จะวิเคราะห์'}
+        _lines_out = [f'📊 Code Metrics ({len(_results)} ไฟล์, รวม {_total_lines:,} บรรทัด):'] + _results
+        return {'text': '\n'.join(_lines_out)}
+
+    elif tool == 'test_api_endpoint':
+        import urllib.request as _ur, urllib.error as _ue, json as _js
+        _path = (params.get('path') or '/api/admin/brands').strip()
+        if not _path.startswith('/'):
+            _path = '/' + _path
+        _url = f'http://127.0.0.1:5000{_path}'
+        try:
+            _req = _ur.Request(_url, headers={'User-Agent': 'AgentInspector/1.0', 'X-Internal-Test': '1'})
+            with _ur.urlopen(_req, timeout=8) as _resp:
+                _status = _resp.status
+                _body = _resp.read().decode('utf-8', errors='replace')
+                try:
+                    _parsed = _js.loads(_body)
+                    if isinstance(_parsed, list):
+                        _preview = f'Array [{len(_parsed)} items]\nตัวอย่าง: {_js.dumps(_parsed[0], ensure_ascii=False)[:200]}' if _parsed else 'Array [0 items]'
+                    elif isinstance(_parsed, dict):
+                        _preview = _js.dumps(_parsed, ensure_ascii=False, indent=2)[:500]
+                    else:
+                        _preview = str(_parsed)[:300]
+                except:
+                    _preview = _body[:300]
+            return {'text': f'✅ GET {_path} → HTTP {_status}\n```json\n{_preview}\n```'}
+        except _ue.HTTPError as _e:
+            return {'text': f'⚠️ GET {_path} → HTTP {_e.code} {_e.reason}'}
+        except Exception as _e:
+            return {'text': f'เรียก {_path} ไม่สำเร็จ: {str(_e)}'}
 
     return {'text': 'ไม่รู้จัก tool นี้'}
 
