@@ -14484,7 +14484,16 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 {extra_persona}
 กฎสำคัญ:
 - ตอบเป็นภาษาไทย ลงท้าย "ค่ะ" เสมอ
-- ถ้าลูกค้าถามเรื่องไซส์และมีตารางไซส์ → อ่านข้อมูลจากรูปและแนะนำไซส์ที่เหมาะสมได้เลย
+- ถ้าลูกค้าถามเรื่องไซส์และมีตารางไซส์ → ให้ทำตามขั้นตอนต่อไปนี้ทีละขั้น:
+  ขั้น 1: อ่านตัวเลขสะโพกแต่ละไซส์จากรูปตาราง (S=? M=? L=? XL=?)
+  ขั้น 2: คำนวณ "ช่องว่างสะโพก" = ขนาดสะโพกในตาราง − สะโพกลูกค้า สำหรับแต่ละไซส์
+  ขั้น 3: ตัดสินใจตามเกณฑ์นี้:
+    ✗ ช่องว่าง < 1.5" → แน่นเกินไป ใส่ไม่สบาย → ห้ามแนะนำ
+    ✓ ช่องว่าง 1.5"–3.5" → พอดีสบาย → แนะนำไซส์นี้
+    △ ช่องว่าง > 3.5" → หลวมเกินไป → แจ้งให้ทราบ
+  ขั้น 4: ถ้าไซส์ที่เลือกในขั้น 3 แน่นเกิน ให้บอก "ไซส์ X จะค่อนข้างแน่นนะคะ แนะนำ [ไซส์ถัดไป] จะพอดีสบายกว่าค่ะ"
+  [ตัวอย่างที่ถูกต้อง] ลูกค้าสะโพก 37", M=37.5" → ช่องว่าง = 37.5−37 = 0.5" < 1.5" → M แน่นมาก → แนะนำ L และแจ้งว่า M จะแน่น
+  * เอว: ผ้ายืดได้ ดูเอวเป็นข้อมูลรอง ถ้าสะโพกผ่านแล้วเอวไม่เกิน 2" ของตารางก็โอเค
 - ถ้าลูกค้าสนใจสินค้า → ถามไซส์และจำนวน → ชวนสั่งซื้อทันที
 - ถ้าสินค้าหมดในไซส์ที่ต้องการ → เสนอสินค้าคล้ายกันที่มีไซส์นั้นทันที ไม่ปล่อยให้หยุดสนทนา
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
@@ -14538,13 +14547,15 @@ State: {session_data.get('state','IDLE')}
         _contents = [conversation]
         if size_chart_image_bytes:
             _contents.append(_genai_types.Part.from_bytes(data=size_chart_image_bytes, mime_type=size_chart_mime))
+        # Use Flash (full) model when size chart vision is needed — better multi-step arithmetic
+        _bot_model = 'gemini-2.5-flash' if size_chart_image_bytes else 'gemini-2.5-flash-lite'
         resp = _client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model=_bot_model,
             contents=_contents,
             config=_genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.7,
-                max_output_tokens=512
+                temperature=0.3 if size_chart_image_bytes else 0.7,
+                max_output_tokens=1024 if size_chart_image_bytes else 512
             )
         )
         raw = resp.text or ''
