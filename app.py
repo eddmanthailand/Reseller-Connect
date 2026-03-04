@@ -14277,7 +14277,17 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             who = f'🤖 {bot_name}' if h.get('is_bot') else ('👤 สมาชิก' if h['sender_type'] == 'reseller' else '👩‍💼 Admin')
             history_text += f'{who}: {(h["content"] or "")[:200]}\n'
 
-        # 6. Reseller orders (recent 5)
+        # 6. Reseller tier info (for tier pricing)
+        cursor.execute('''
+            SELECT u.reseller_tier_id, rt.name as tier_name, rt.level_rank
+            FROM users u LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.id = %s
+        ''', (reseller_id,))
+        reseller_row = cursor.fetchone()
+        reseller_tier_id = reseller_row['reseller_tier_id'] if reseller_row else None
+        reseller_tier_name = reseller_row['tier_name'] if reseller_row else 'Bronze'
+
+        # 6b. Reseller orders (recent 5)
         cursor.execute('''
             SELECT order_number, status, created_at::date as order_date,
                    (SELECT string_agg(p.name || ' x' || oi.quantity, ', ') FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = o.id LIMIT 3) as items
@@ -14333,6 +14343,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     JOIN product_categories pc2 ON pc2.category_id = c2.id
                     WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
                    MIN(s.price) as min_price,
+                   ROUND(MIN(s.price) * (1 - COALESCE(
+                       (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                        WHERE ptp.product_id = p.id AND ptp.tier_id = {tier_id}), 0
+                   ) / 100), 0) as tier_price,
+                   COALESCE(
+                       (SELECT ptp2.discount_percent FROM product_tier_pricing ptp2
+                        WHERE ptp2.product_id = p.id AND ptp2.tier_id = {tier_id}), 0
+                   ) as tier_discount_pct,
                    COALESCE(
                        NULLIF((SELECT STRING_AGG(ov2.value || ':' || s2.stock::text, ' | ' ORDER BY ov2.value)
                         FROM skus s2
@@ -14351,6 +14369,9 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             LEFT JOIN brands b ON b.id = p.brand_id
             JOIN skus s ON s.product_id = p.id
         """
+        # Inject reseller tier_id safely (integer only, not user input)
+        _safe_tier_id = int(reseller_tier_id) if reseller_tier_id else 0
+        _product_base_select = _product_base_select.replace('{tier_id}', str(_safe_tier_id))
 
         products_text = ''
         if current_cat_id:
