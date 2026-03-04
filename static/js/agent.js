@@ -343,7 +343,12 @@ async function agentSend() {
     _agentRenderMessages();
 
     try {
-        const body = { message: text, context_page: _agentCurrentPage() };
+        const history = _agentMessages.slice(0, -1)
+            .filter(m => m.role === 'user' || m.role === 'ai')
+            .slice(-20)
+            .map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text || '' }))
+            .filter(m => m.text);
+        const body = { message: text, context_page: _agentCurrentPage(), history };
         if (sentImage) { body.image_data = sentImage; body.image_mime = sentMime; }
         const res  = await fetch('/api/admin/agent/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
