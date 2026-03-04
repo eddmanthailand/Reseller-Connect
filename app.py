@@ -16922,12 +16922,19 @@ def _agent_build_system_prompt(settings):
 - query_resellers: รายชื่อตัวแทนและสถิติ (params: tier="Gold" optional)
 - query_unread_chat: แชทที่ยังไม่ได้อ่าน
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
-- search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query) — ใช้เมื่อต้องการข้อมูลภายนอก เช่น ราคาตลาด ข่าวสาร ข้อมูลทั่วไป
+- search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query)
 - chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
 - chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart (เดือนปัจจุบัน)
 - chart_order_status: กราฟสัดส่วนสถานะออเดอร์ Pie chart
 - chart_top_products: กราฟสินค้าขายดี Bar chart (params: limit=10)
 - chart_low_stock: กราฟสต็อกสินค้าใกล้หมด Horizontal Bar (params: threshold=10)
+
+[READ — ตรวจสอบระบบ / Code Inspector (READ-ONLY ห้ามแก้ไข)]
+- list_files: รายการไฟล์ในโปรเจกต์ (params: path="." optional, pattern="*.py" optional)
+- read_code: อ่านไฟล์โค้ด (params: file="app.py", offset=1, limit=80) — อ่านได้ทุกไฟล์ แก้ไขไม่ได้
+- search_code: ค้นหาข้อความ/ฟังก์ชันในโค้ด (params: pattern="def route_name", file="*.py" optional, context_lines=2)
+- query_db_schema: โครงสร้างตาราง DB (params: table="orders" optional — ถ้าไม่ใส่จะแสดงทุกตาราง)
+- query_db: รัน SQL SELECT อ่านอย่างเดียว (params: sql="SELECT ...", limit=20) — ห้ามรัน INSERT/UPDATE/DELETE/DROP
 
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
