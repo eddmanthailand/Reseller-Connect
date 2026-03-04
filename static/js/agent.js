@@ -147,11 +147,12 @@ function agentQuickCmd(text) {
 
 /* ---- Welcome & Briefing ---- */
 function _agentShowWelcome() {
-    const name    = (_agentSettings?.agent_name)     || 'น้องเอก';
-    const prompt  = (_agentSettings?.persona_prompt) || '';
-    const isFemale = /ผู้หญิง|หญิง|เลขา|เลขานุการ|สาว|นางสาว/.test(prompt);
-    const pronoun = isFemale ? 'หนู' : 'ผม';
-    const polite  = isFemale ? 'ค่ะ'  : 'ครับ';
+    const name     = (_agentSettings?.agent_name)      || 'น้องเอก';
+    const prompt   = (_agentSettings?.custom_prompt)   || '';
+    const particle = (_agentSettings?.ending_particle) || '';
+    const isFemale = /ค่ะ|ขา/.test(particle) || /ผู้หญิง|หญิง|เลขา|เลขานุการ|สาว|นางสาว/.test(prompt);
+    const pronoun  = isFemale ? 'หนู' : 'ผม';
+    const polite   = particle || (isFemale ? 'ค่ะ' : 'ครับ');
     _agentPush({ role: 'ai', text: `สวัสดี${polite} ${pronoun}${name} 👋\nพร้อมช่วยงานเต็มที่เลย${polite} ลองพิมพ์คำสั่ง หรือกดแนบรูป (📎) เพื่อให้${pronoun}อ่านใบปะหน้า/สลิปให้ได้เลย${polite}` });
 }
 
@@ -477,4 +478,31 @@ document.addEventListener('DOMContentLoaded', () => {
         new MutationObserver(() => { if (_agentOpen) _agentFitPanel(); })
             .observe(sidebar, { attributes: true, attributeFilter: ['class'] });
     }
+
+    document.addEventListener('paste', (e) => {
+        if (!_agentOpen) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (!file) return;
+                _agentImageMime = item.type;
+                _agentImageName = 'clipboard.png';
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    _agentImageB64 = ev.target.result.split(',')[1];
+                    const preview    = document.getElementById('agentImagePreview');
+                    const previewImg = document.getElementById('agentImagePreviewImg');
+                    if (preview && previewImg) {
+                        previewImg.src = ev.target.result;
+                        preview.style.display = 'flex';
+                    }
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+        }
+    });
 });

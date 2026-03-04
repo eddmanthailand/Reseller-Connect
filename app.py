@@ -16288,6 +16288,7 @@ def _agent_build_system_prompt(settings):
 - query_resellers: รายชื่อตัวแทนและสถิติ (params: tier="Gold" optional)
 - query_unread_chat: แชทที่ยังไม่ได้อ่าน
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
+- search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query) — ใช้เมื่อต้องการข้อมูลภายนอก เช่น ราคาตลาด ข่าวสาร ข้อมูลทั่วไป
 
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
@@ -16527,6 +16528,29 @@ def _agent_execute_read_tool(tool, params, cursor):
             deadline = r['production_deadline'].strftime('%d/%m/%Y') if r['production_deadline'] else '-'
             lines.append(f"• {r['order_number']} [{mto_status_labels.get(r['status'], r['status'])}] ตัวแทน: {r['reseller_name'] or '-'} ครบกำหนด: {deadline}")
         return {'text': f"🏭 ออเดอร์ MTO ค้างอยู่ ({len(rows)} รายการ):\n" + "\n".join(lines)}
+
+    elif tool == 'search_web':
+        query = params.get('query', '').strip()
+        if not query:
+            return {'text': 'กรุณาระบุ query ที่ต้องการค้นหา'}
+        try:
+            from google import genai as _sg
+            from google.genai import types as _sgt
+            _key = os.environ.get('GEMINI_API_KEY', '')
+            if not _key:
+                return {'text': 'ไม่พบ GEMINI_API_KEY สำหรับค้นหาเว็บ'}
+            _sc = _sg.Client(api_key=_key)
+            _scfg = _sgt.GenerateContentConfig(
+                tools=[_sgt.Tool(google_search=_sgt.GoogleSearch())]
+            )
+            _sr = _sc.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=f"ค้นหา: {query} — ตอบเป็นภาษาไทย สรุปสั้นๆ ชัดเจน พร้อมแหล่งอ้างอิงถ้ามี",
+                config=_scfg
+            )
+            return {'text': f"🔍 ผลค้นหา: {query}\n\n{_sr.text.strip()}"}
+        except Exception as _se:
+            return {'text': f'ค้นหาไม่สำเร็จ: {str(_se)}'}
 
     return {'text': 'ไม่รู้จัก tool นี้'}
 
