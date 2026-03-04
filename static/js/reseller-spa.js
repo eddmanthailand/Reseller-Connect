@@ -4082,8 +4082,21 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
         bubbleStyle = `max-width: 80%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}`;
     }
 
+    const isBot = !!msg.is_bot;
+    const quickReplies = (isBot && msg.quick_replies) ? (typeof msg.quick_replies === 'string' ? JSON.parse(msg.quick_replies) : msg.quick_replies) : [];
+
+    let quickReplyHtml = '';
+    if (!isMine && quickReplies.length > 0) {
+        quickReplyHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
+            quickReplies.map(qr => `<button onclick="resellerChatQuickReply(${JSON.stringify(escapeHtmlChat(qr))})" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.22)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">${escapeHtmlChat(qr)}</button>`).join('') +
+            `</div>`;
+    }
+
+    const botBadge = isBot && !isMine ? `<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:3px;display:flex;align-items:center;gap:3px;"><span style="background:rgba(139,92,246,0.4);border-radius:4px;padding:1px 5px;font-size:9px;letter-spacing:0.5px;">🤖 Bot</span></div>` : '';
+
     return `
-        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
+        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'}; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};" data-msg-id="${msg.id}" data-sender-id="${msg.sender_id}">
+            ${botBadge}
             <div style="${bubbleStyle}">
                 ${msg.is_broadcast ? `<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px; ${hasOrderCard ? 'padding: 4px 12px 0;' : hasCouponCard ? 'padding: 4px 0 4px;' : ''}">📢 ประกาศ</div>` : ''}
                 ${couponCardHtml}
@@ -4099,6 +4112,7 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
                 ).join('') : ''}
                 <div style="font-size: 10px; opacity: 0.6; text-align: right; ${hasOrderCard ? 'padding: 0 10px 8px;' : hasCouponCard ? 'margin-top: 4px;' : 'margin-top: 6px;'}" class="reseller-msg-meta">${formatChatTimestamp(msg.created_at)}${isRead ? ' <span style="color: #60a5fa; opacity: 1;">อ่านแล้ว</span>' : ''}</div>
             </div>
+            ${quickReplyHtml}
         </div>
     `;
 }
@@ -4286,6 +4300,33 @@ async function sendResellerChatMessage() {
         }
     } catch (error) {
         showGlobalAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
+    }
+}
+
+async function resellerChatQuickReply(text) {
+    const input = document.getElementById('resellerChatInput');
+    if (input) { input.value = text; }
+    await sendResellerChatMessage();
+}
+
+async function resellerRequestAdmin() {
+    if (!resellerChatThreadId) return;
+    const btn = document.getElementById('btnRequestAdmin');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังส่ง...'; }
+    try {
+        const res = await fetch(`/api/chat/threads/${resellerChatThreadId}/request-admin`, {
+            method: 'POST', credentials: 'include'
+        });
+        if (res.ok) {
+            const statusEl = document.getElementById('resellerNeedsAdminStatus');
+            if (statusEl) statusEl.style.display = 'flex';
+            if (btn) { btn.disabled = true; btn.textContent = '🙋 รอ Admin ตอบกลับ'; btn.style.opacity = '0.6'; }
+            await loadResellerChatMessages();
+        } else {
+            if (btn) { btn.disabled = false; btn.textContent = '🙋 ขอคุยกับ Admin'; }
+        }
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = '🙋 ขอคุยกับ Admin'; }
     }
 }
 

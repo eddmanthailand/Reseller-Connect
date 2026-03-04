@@ -4536,6 +4536,23 @@
                     <label class="agent-settings-label">บุคลิกพิเศษ (custom prompt)</label>
                     <textarea id="agentSettingCustom" class="agent-settings-textarea" placeholder="เช่น ชอบพูดสั้น ใช้ตัวเลขเสมอ หรือเป็นคนมีอารมณ์ขัน..."></textarea>
                 </div>
+                <div style="border-top:1px solid #e5e7eb;margin:16px 0 14px;"></div>
+                <div class="agent-settings-title" style="margin-bottom:10px;">🤖 ตั้งค่าบอทแชทอัตโนมัติ</div>
+                <div class="agent-settings-field" style="display:flex;align-items:center;justify-content:space-between;">
+                    <label class="agent-settings-label" style="margin:0;">เปิดใช้บอทแชท</label>
+                    <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
+                        <input type="checkbox" id="botChatEnabled" style="opacity:0;width:0;height:0;">
+                        <span onclick="document.getElementById('botChatEnabled').click()" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:24px;transition:.3s;" id="botChatToggleSlider"></span>
+                    </label>
+                </div>
+                <div class="agent-settings-field">
+                    <label class="agent-settings-label">ชื่อบอท</label>
+                    <input id="botChatName" class="agent-settings-input" type="text" placeholder="น้องนุ่น">
+                </div>
+                <div class="agent-settings-field">
+                    <label class="agent-settings-label">บุคลิกบอท (เพิ่มเติม)</label>
+                    <textarea id="botChatPersona" class="agent-settings-textarea" placeholder="เช่น เน้นสินค้าหมวดชุดพยาบาล มีประสบการณ์ขาย..."></textarea>
+                </div>
                 <div class="agent-settings-footer">
                     <button onclick="agentCloseSettings()" style="flex:1;padding:9px;background:#f3f4f6;border:none;border-radius:10px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
                     <button onclick="agentSaveSettings()" style="flex:2;padding:9px;background:#1d1d1f;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
@@ -4544,7 +4561,7 @@
         </div>
 
     </div>
-    <script src="/static/js/agent.js?v=20260304d"></script>
+    <script src="/static/js/agent.js?v=20260304e"></script>
     <!-- ===== END AI AGENT ===== -->
 
 </body>

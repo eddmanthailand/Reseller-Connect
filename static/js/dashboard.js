@@ -8372,13 +8372,14 @@ async function loadChatThreads() {
         container.innerHTML = threads.map(thread => `
             <div class="chat-thread-item ${currentChatThreadId === thread.id ? 'active' : ''}" 
                  onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}', ${thread.reseller_tier_id || 'null'})"
-                 style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; background: ${currentChatThreadId === thread.id ? 'rgba(102,126,234,0.2)' : 'transparent'}; transition: background 0.2s;">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">
+                 style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; background: ${thread.needs_admin ? 'rgba(251,191,36,0.08)' : currentChatThreadId === thread.id ? 'rgba(102,126,234,0.2)' : 'transparent'}; transition: background 0.2s; border-left: ${thread.needs_admin ? '3px solid #fbbf24' : '3px solid transparent'};">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; position:relative;">
                     ${thread.reseller_name.charAt(0).toUpperCase()}
+                    ${thread.needs_admin ? '<span style="position:absolute;top:-4px;right:-4px;background:#fbbf24;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;">🙋</span>' : ''}
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: 600; font-size: 14px;">${escapeHtml(thread.reseller_name)}</span>
+                        <span style="font-weight: 600; font-size: 14px;">${escapeHtml(thread.reseller_name)}${thread.needs_admin ? ' <span style="background:#fbbf24;color:#000;font-size:9px;padding:1px 5px;border-radius:4px;font-weight:700;margin-left:4px;">รอ Admin</span>' : ''}</span>
                         ${thread.unread_count > 0 ? `<span style="background: #ef4444; color: white; font-size: 11px; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center;">${thread.unread_count}</span>` : ''}
                     </div>
                     <div style="font-size: 12px; opacity: 0.6; margin-top: 2px;">${thread.tier_name || 'ไม่ระบุ Tier'}</div>
@@ -8509,9 +8510,13 @@ function renderChatMessageHtml(msg, otherLastRead) {
         `;
     }
     
+    const isBot = !!msg.is_bot;
+    const botBadge = isBot ? '<span style="display:inline-block;background:rgba(139,92,246,0.4);border-radius:4px;padding:1px 5px;font-size:9px;margin-bottom:4px;letter-spacing:0.5px;">🤖 Bot</span><br>' : '';
+
     return `
-        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'};">
-            <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-bottom-right-radius: 4px;' : 'background: #3a3a3c; color: #fff; border-bottom-left-radius: 4px;'}">
+        <div style="display: flex; ${isMine ? 'justify-content: flex-end' : 'justify-content: flex-start'}; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};">
+            ${isBot && !isMine ? `<div style="font-size:10px;color:rgba(255,255,255,0.45);margin-bottom:2px;padding-left:2px;"><span style="background:rgba(139,92,246,0.35);border-radius:4px;padding:1px 6px;font-size:9px;">🤖 Bot</span></div>` : ''}
+            <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isBot && !isMine ? 'background:#2d2235; border:1px solid rgba(139,92,246,0.3);' : isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2);' : 'background: #3a3a3c;'} color: #fff; ${isMine ? 'border-bottom-right-radius: 4px;' : 'border-bottom-left-radius: 4px;'}">
                 ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
                 ${productCardHtml}
                 ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>` : ''}

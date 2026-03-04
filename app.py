@@ -13820,6 +13820,7 @@ def get_chat_threads():
             cursor.execute('''
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
                        COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
+                       ct.needs_admin, ct.needs_admin_at,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
@@ -13836,6 +13837,7 @@ def get_chat_threads():
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
                        COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
                        u.username, rt.name as tier_name, u.reseller_tier_id,
+                       ct.needs_admin, ct.needs_admin_at,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
@@ -13844,7 +13846,7 @@ def get_chat_threads():
                 JOIN users u ON u.id = ct.reseller_id
                 LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
                 WHERE ct.is_archived = %s
-                ORDER BY ct.last_message_at DESC NULLS LAST
+                ORDER BY CASE WHEN ct.needs_admin THEN 0 ELSE 1 END, ct.last_message_at DESC NULLS LAST
                 LIMIT 300
             ''', (user_id, show_archived))
         
@@ -14050,6 +14052,8 @@ def get_chat_messages(thread_id):
         
         msg_select = '''
                 SELECT cm.id, cm.sender_id, cm.sender_type, cm.content, cm.is_broadcast, cm.created_at, cm.product_id, cm.order_id, cm.coupon_id,
+                       COALESCE(cm.is_bot, FALSE) as is_bot,
+                       cm.quick_replies,
                        u.full_name as sender_name,
                        r.name as sender_role,
                        (SELECT json_agg(json_build_object('id', ca.id, 'file_url', ca.file_url, 
@@ -14198,6 +14202,264 @@ def get_chat_messages(thread_id):
             cursor.close()
         if conn:
             conn.close()
+
+def _bot_save_message(cursor, conn, thread_id, bot_user_id, text, quick_replies=None, product_id=None):
+    """Save one bot message and return its id + created_at"""
+    import json as _json
+    qr_json = _json.dumps(quick_replies, ensure_ascii=False) if quick_replies else None
+    cursor.execute('''
+        INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, product_id, is_bot, quick_replies)
+        VALUES (%s, %s, 'admin', %s, %s, TRUE, %s::jsonb) RETURNING id, created_at
+    ''', (thread_id, bot_user_id, text, product_id, qr_json))
+    row = cursor.fetchone()
+    preview = f'🤖 {text[:80]}' if text else '🤖 [สินค้า]'
+    cursor.execute('''
+        UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = %s WHERE id = %s
+    ''', (preview[:100], thread_id))
+    return row
+
+
+def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
+    """Generate and save an auto-reply from the bot using Gemini Flash Lite."""
+    import json as _json, re as _re
+    try:
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # 1. Bot settings
+        cursor.execute('SELECT * FROM agent_settings WHERE id = 1')
+        settings = cursor.fetchone() or {}
+        bot_name = settings.get('bot_chat_name') or 'น้องนุ่น'
+        bot_enabled = settings.get('bot_chat_enabled', True)
+        extra_persona = settings.get('bot_chat_persona') or ''
+        if not bot_enabled:
+            return []
+
+        # 2. Check if bot is paused (admin replied recently)
+        cursor.execute('SELECT bot_paused_until FROM chat_threads WHERE id = %s', (thread_id,))
+        trow = cursor.fetchone()
+        if trow and trow.get('bot_paused_until'):
+            from datetime import datetime as _dt
+            if trow['bot_paused_until'] > _dt.utcnow():
+                return []
+
+        # 3. Get bot user id (Super Admin account)
+        cursor.execute("SELECT id FROM users WHERE role_id = (SELECT id FROM roles WHERE name='Super Admin') ORDER BY id LIMIT 1")
+        admin_row = cursor.fetchone()
+        if not admin_row:
+            return []
+        bot_user_id = admin_row['id']
+
+        # 4. Session state
+        cursor.execute('SELECT bot_session_data FROM chat_threads WHERE id = %s', (thread_id,))
+        thread_row = cursor.fetchone()
+        session_data = {}
+        if thread_row and thread_row.get('bot_session_data'):
+            try:
+                sd = thread_row['bot_session_data']
+                session_data = sd if isinstance(sd, dict) else _json.loads(sd)
+            except Exception:
+                session_data = {}
+
+        # 5. Recent conversation history (last 8 messages)
+        cursor.execute('''
+            SELECT sender_type, COALESCE(cm.is_bot, FALSE) as is_bot, content
+            FROM chat_messages cm
+            WHERE thread_id = %s AND content IS NOT NULL AND content != ''
+            ORDER BY id DESC LIMIT 8
+        ''', (thread_id,))
+        history_rows = list(reversed(cursor.fetchall()))
+        history_text = ''
+        for h in history_rows:
+            who = f'🤖 {bot_name}' if h.get('is_bot') else ('👤 สมาชิก' if h['sender_type'] == 'reseller' else '👩‍💼 Admin')
+            history_text += f'{who}: {(h["content"] or "")[:200]}\n'
+
+        # 6. Reseller orders (recent 5)
+        cursor.execute('''
+            SELECT order_number, status, created_at::date as order_date,
+                   (SELECT string_agg(p.name || ' x' || oi.quantity, ', ') FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = o.id LIMIT 3) as items
+            FROM orders o WHERE user_id = %s ORDER BY id DESC LIMIT 5
+        ''', (reseller_id,))
+        orders = cursor.fetchall()
+        orders_text = ''
+        for o in orders:
+            orders_text += f"  - #{o['order_number']} สถานะ:{o['status']} ({o['order_date']}) สินค้า:{o.get('items','')}\n"
+        if not orders_text:
+            orders_text = '  (ยังไม่มีออเดอร์)\n'
+
+        # 7. Active promotions
+        cursor.execute('''
+            SELECT name, description FROM promotions
+            WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+            LIMIT 5
+        ''')
+        promos = cursor.fetchall()
+        promos_text = ', '.join([p['name'] for p in promos]) if promos else 'ไม่มีโปรโมชั่น'
+
+        # 8. Product search based on current session or message keywords
+        current_cat_id = session_data.get('category_id')
+        current_product_id = session_data.get('current_product_id')
+        desired_size = session_data.get('desired_size')
+
+        products_text = ''
+        if current_cat_id:
+            cursor.execute('''
+                SELECT p.id, p.name, p.bot_description,
+                       MIN(s.price) as min_price,
+                       (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as img,
+                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE p.category_id = %s AND p.status = 'active'
+                GROUP BY p.id, p.name, p.bot_description
+                LIMIT 10
+            ''', (current_cat_id,))
+            prods = cursor.fetchall()
+            for pr in prods:
+                products_text += f"  - ID:{pr['id']} {pr['name']} ราคาเริ่ม฿{pr['min_price'] or 0:.0f} ไซส์(stock): {pr['size_stock']} {'('+pr['bot_description']+')' if pr.get('bot_description') else ''}\n"
+        elif current_product_id:
+            cursor.execute('''
+                SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                       MIN(s.price) as min_price,
+                       (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as img,
+                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE p.id = %s
+                GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url
+            ''', (current_product_id,))
+            pr = cursor.fetchone()
+            if pr:
+                products_text = f"  สินค้าที่กำลังดู: ID:{pr['id']} {pr['name']} ราคาเริ่ม฿{pr['min_price'] or 0:.0f}\n  ไซส์(stock): {pr['size_stock']}\n  มีตารางไซส์: {'ใช่' if pr.get('size_chart_image_url') else 'ไม่มี'}\n"
+
+        # Suggest alternatives if size is out of stock
+        alt_products_text = ''
+        if desired_size and current_product_id:
+            cursor.execute('''
+                SELECT p.id, p.name, MIN(s.price) as min_price,
+                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock
+                FROM products p
+                JOIN skus s ON s.product_id = p.id
+                WHERE p.category_id = (SELECT category_id FROM products WHERE id = %s)
+                  AND p.id != %s AND p.status = 'active'
+                  AND s.size = %s AND s.stock > 0
+                GROUP BY p.id, p.name
+                LIMIT 3
+            ''', (current_product_id, current_product_id, desired_size))
+            alts = cursor.fetchall()
+            for a in alts:
+                alt_products_text += f"  - ID:{a['id']} {a['name']} ราคาเริ่ม฿{a['min_price'] or 0:.0f} ไซส์: {a['size_stock']}\n"
+
+        # 9. Build prompt for Flash Lite
+        system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย
+{extra_persona}
+กฎสำคัญ:
+- ตอบเป็นภาษาไทย ลงท้าย "ค่ะ" เสมอ
+- ถ้าลูกค้าสนใจสินค้า → ถามไซส์และจำนวน → ชวนสั่งซื้อทันที
+- ถ้าสินค้าหมดในไซส์ที่ต้องการ → เสนอสินค้าคล้ายกันที่มีไซส์นั้นทันที ไม่ปล่อยให้หยุดสนทนา
+- ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
+- ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
+- ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
+- ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด
+
+=== ข้อมูลสถานการณ์ปัจจุบัน ===
+State: {session_data.get('state','IDLE')}
+สินค้าที่กำลังดู ID: {current_product_id or 'ไม่มี'}
+ไซส์ที่ต้องการ: {desired_size or 'ยังไม่ได้ระบุ'}
+
+=== ประวัติออเดอร์ล่าสุดของสมาชิก ===
+{orders_text}
+
+=== โปรโมชั่นที่มีอยู่ ===
+{promos_text}
+
+=== รายการสินค้าที่เกี่ยวข้อง ===
+{products_text or '(ยังไม่ได้เลือกหมวดหมู่)'}
+
+=== สินค้าทดแทน (มีไซส์ {desired_size or ''}) ===
+{alt_products_text or '(ไม่มี หรือยังไม่ได้ระบุไซส์)'}
+
+ตอบกลับเป็น JSON เท่านั้น:
+{{
+  "message": "ข้อความตอบกลับ (string)",
+  "quick_replies": ["ตัวเลือก1", "ตัวเลือก2"],
+  "show_product_ids": [id1, id2],
+  "new_state": {{
+    "state": "IDLE|BROWSING_CATEGORY|VIEWING_PRODUCT|SUGGEST_ALTERNATIVE",
+    "current_product_id": null,
+    "category_id": null,
+    "desired_size": null
+  }},
+  "needs_admin": false
+}}
+- "quick_replies": ปุ่มตัวเลือกให้กด (ไม่เกิน 4 ปุ่ม หรือ [] ถ้าไม่ต้องการ)
+- "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี)
+- "needs_admin": true ถ้าต้องการให้ Admin มาช่วย"""
+
+        # 10. Call Flash Lite
+        import os as _os
+        from google import genai as _genai
+        _api_key = _os.environ.get('GEMINI_API_KEY', '')
+        if not _api_key:
+            return []
+        _client = _genai.Client(api_key=_api_key)
+        conversation = f"=== ประวัติแชท ===\n{history_text}\n👤 สมาชิก: {user_message_text}"
+        resp = _client.models.generate_content(
+            model='gemini-2.0-flash-lite',
+            contents=conversation,
+            config=_genai.types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.7,
+                max_output_tokens=512
+            )
+        )
+        raw = resp.text or ''
+
+        # 11. Parse JSON
+        m = _re.search(r'\{[\s\S]*\}', raw)
+        parsed = {}
+        if m:
+            try:
+                parsed = _json.loads(m.group())
+            except Exception:
+                parsed = {}
+        bot_text = parsed.get('message', '').strip() or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ'
+        quick_replies = parsed.get('quick_replies') or []
+        show_product_ids = [int(x) for x in (parsed.get('show_product_ids') or []) if x]
+        new_state = parsed.get('new_state') or {}
+        needs_admin_flag = bool(parsed.get('needs_admin', False))
+
+        # 12. Save bot message(s)
+        saved_msgs = []
+        row = _bot_save_message(cursor, conn, thread_id, bot_user_id, bot_text, quick_replies if quick_replies else None)
+        saved_msgs.append({'id': row['id'], 'created_at': row['created_at'].isoformat()})
+
+        for pid in show_product_ids[:3]:
+            row2 = _bot_save_message(cursor, conn, thread_id, bot_user_id, '', None, product_id=pid)
+            saved_msgs.append({'id': row2['id'], 'created_at': row2['created_at'].isoformat()})
+
+        # 13. Update session state + needs_admin
+        merged_state = {**session_data, **new_state}
+        cursor.execute('''
+            UPDATE chat_threads SET bot_session_data = %s::jsonb,
+                needs_admin = %s, needs_admin_at = CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE needs_admin_at END
+            WHERE id = %s
+        ''', (_json.dumps(merged_state), needs_admin_flag, needs_admin_flag, thread_id))
+
+        conn.commit()
+
+        # 14. Push notification to reseller
+        try:
+            send_push_notification(reseller_id, f'💬 {bot_name}', bot_text[:100], url='/reseller#chat', tag=f'bot-{thread_id}', notification_type='chat')
+        except Exception:
+            pass
+
+        cursor.close()
+        return saved_msgs
+
+    except Exception as e:
+        print(f'[BOT] Error: {e}')
+        return []
+
 
 @app.route('/api/chat/threads/<int:thread_id>/messages', methods=['POST'])
 @login_required
@@ -14353,9 +14615,30 @@ def send_chat_message(thread_id):
             except Exception as e:
                 print(f"[CHAT-PUSH] Error in admin broadcast: {str(e)[:200]}")
         
+        # Trigger bot auto-reply when reseller sends
+        reseller_id_for_bot = thread['reseller_id']
+        bot_msgs = []
+        if sender_type == 'reseller' and content:
+            try:
+                bot_msgs = _bot_chat_reply(thread_id, reseller_id_for_bot, content, conn)
+            except Exception as e:
+                print(f'[BOT] Auto-reply error: {e}')
+
+        # When admin sends manually → pause bot for 2 hours
+        if sender_type == 'admin':
+            try:
+                cursor.execute('''
+                    UPDATE chat_threads SET bot_paused_until = CURRENT_TIMESTAMP + INTERVAL '2 hours',
+                        needs_admin = FALSE WHERE id = %s
+                ''', (thread_id,))
+                conn.commit()
+            except Exception:
+                pass
+
         return jsonify({
             'id': message_id,
-            'created_at': result['created_at'].isoformat()
+            'created_at': result['created_at'].isoformat(),
+            'bot_messages': bot_msgs
         }), 201
         
     except Exception as e:
@@ -14367,6 +14650,101 @@ def send_chat_message(thread_id):
             cursor.close()
         if conn:
             conn.close()
+
+
+@app.route('/api/chat/threads/<int:thread_id>/request-admin', methods=['POST'])
+@login_required
+def chat_request_admin(thread_id):
+    """Reseller presses 'ขอคุยกับ Admin' button"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session['user_id']
+        role_name = session.get('role', '')
+        cursor.execute('SELECT reseller_id FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({'error': 'Thread not found'}), 404
+        if role_name == 'Reseller' and thread['reseller_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+        cursor.execute('''
+            UPDATE chat_threads SET needs_admin = TRUE, needs_admin_at = CURRENT_TIMESTAMP WHERE id = %s
+        ''', (thread_id,))
+        # Send system message
+        cursor.execute("SELECT id FROM users WHERE role_id=(SELECT id FROM roles WHERE name='Super Admin') ORDER BY id LIMIT 1")
+        admin_row = cursor.fetchone()
+        bot_user_id = admin_row['id'] if admin_row else user_id
+        cursor.execute('''
+            INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, is_bot)
+            VALUES (%s, %s, 'admin', %s, TRUE) RETURNING id, created_at
+        ''', (thread_id, bot_user_id, '🙋 สมาชิกต้องการคุยกับ Admin กรุณารอสักครู่นะคะ'))
+        row = cursor.fetchone()
+        cursor.execute('''
+            UPDATE chat_threads SET last_message_at = CURRENT_TIMESTAMP, last_message_preview = '🙋 รอ Admin' WHERE id = %s
+        ''', (thread_id,))
+        conn.commit()
+        # Notify all admins via push
+        try:
+            cursor.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
+            rinfo = cursor.fetchone()
+            rname = rinfo['full_name'] if rinfo else 'สมาชิก'
+            cursor.execute('''
+                SELECT DISTINCT ps.user_id FROM push_subscriptions ps
+                JOIN users u ON u.id = ps.user_id
+                JOIN roles r ON r.id = u.role_id
+                WHERE r.name IN ('Super Admin', 'Assistant Admin')
+            ''')
+            admins = [r['user_id'] for r in cursor.fetchall()]
+            for aid in admins:
+                try:
+                    send_push_notification(aid, f'🙋 {rname} ขอคุยกับ Admin', 'กดเพื่อเปิดแชท', url='/admin#chat', tag=f'req-admin-{thread_id}', notification_type='chat')
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f'[BOT] Request admin notify error: {e}')
+        return jsonify({'id': row['id'], 'created_at': row['created_at'].isoformat()}), 201
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/admin/bot-settings', methods=['GET', 'POST'])
+@admin_required
+def admin_bot_settings():
+    """Get or update bot chat settings"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if request.method == 'GET':
+            cursor.execute('SELECT bot_chat_enabled, bot_chat_name, bot_chat_persona FROM agent_settings WHERE id = 1')
+            row = cursor.fetchone()
+            return jsonify(dict(row) if row else {'bot_chat_enabled': True, 'bot_chat_name': 'น้องนุ่น', 'bot_chat_persona': ''}), 200
+        data = request.get_json()
+        cursor.execute('''
+            UPDATE agent_settings SET bot_chat_enabled = %s, bot_chat_name = %s, bot_chat_persona = %s WHERE id = 1
+        ''', (bool(data.get('bot_chat_enabled', True)), (data.get('bot_chat_name') or 'น้องนุ่น')[:100], data.get('bot_chat_persona') or ''))
+        conn.commit()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 
 @app.route('/api/chat/unread-count', methods=['GET'])
 @login_required

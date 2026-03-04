@@ -453,14 +453,28 @@ async function agentOpenSettings() {
     const modal = document.getElementById('agentSettingsModal');
     if (!modal) return;
     try {
-        const res = await fetch('/api/admin/agent/settings', { credentials: 'include' });
-        if (res.ok) {
-            const d = await res.json();
+        const [res1, res2] = await Promise.all([
+            fetch('/api/admin/agent/settings', { credentials: 'include' }),
+            fetch('/api/admin/bot-settings', { credentials: 'include' })
+        ]);
+        if (res1.ok) {
+            const d = await res1.json();
             _agentSettings = d;
             document.getElementById('agentSettingName').value      = d.agent_name      || 'น้องเอก';
             document.getElementById('agentSettingTone').value      = d.tone             || 'friendly';
             document.getElementById('agentSettingParticle').value  = d.ending_particle  || 'ครับ';
             document.getElementById('agentSettingCustom').value    = d.custom_prompt    || '';
+        }
+        if (res2.ok) {
+            const b = await res2.json();
+            const cb = document.getElementById('botChatEnabled');
+            const sl = document.getElementById('botChatToggleSlider');
+            if (cb) cb.checked = !!b.bot_chat_enabled;
+            if (sl) sl.style.background = b.bot_chat_enabled ? '#a855f7' : '#ccc';
+            if (document.getElementById('botChatName')) document.getElementById('botChatName').value = b.bot_chat_name || 'น้องนุ่น';
+            if (document.getElementById('botChatPersona')) document.getElementById('botChatPersona').value = b.bot_chat_persona || '';
+            const cb2 = document.getElementById('botChatEnabled');
+            if (cb2) cb2.addEventListener('change', () => { if (sl) sl.style.background = cb2.checked ? '#a855f7' : '#ccc'; });
         }
     } catch (_) {}
     modal.style.display = 'flex';
@@ -481,12 +495,23 @@ async function agentSaveSettings() {
         ending_particle: document.getElementById('agentSettingParticle').value.trim() || 'ครับ',
         custom_prompt:   document.getElementById('agentSettingCustom').value.trim(),
     };
+    const botPayload = {
+        bot_chat_enabled: document.getElementById('botChatEnabled')?.checked ?? true,
+        bot_chat_name:    (document.getElementById('botChatName')?.value.trim()) || 'น้องนุ่น',
+        bot_chat_persona: document.getElementById('botChatPersona')?.value.trim() || '',
+    };
     try {
-        const res = await fetch('/api/admin/agent/settings', {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            credentials: 'include', body: JSON.stringify(payload)
-        });
-        if (res.ok) {
+        const [res1, res2] = await Promise.all([
+            fetch('/api/admin/agent/settings', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify(payload)
+            }),
+            fetch('/api/admin/bot-settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', body: JSON.stringify(botPayload)
+            })
+        ]);
+        if (res1.ok) {
             _agentSettings = payload;
             agentCloseSettings();
             _agentMessages = [];
