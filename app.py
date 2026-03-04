@@ -17075,7 +17075,7 @@ def _agent_execute_read_tool(tool, params, cursor):
         cursor.execute('''
             SELECT p.name as product_name, s.sku_code, s.stock
             FROM skus s JOIN products p ON p.id = s.product_id
-            WHERE s.stock <= %s AND s.stock >= 0 AND p.is_active = TRUE
+            WHERE s.stock <= %s AND s.stock >= 0 AND p.status = 'active'
             ORDER BY s.stock ASC LIMIT 15
         ''', (threshold,))
         rows = cursor.fetchall()
@@ -17171,18 +17171,23 @@ def _agent_execute_read_tool(tool, params, cursor):
     elif tool == 'query_unread_chat':
         cursor.execute('''
             SELECT ct.id as thread_id, u.full_name as reseller_name, ct.last_message_preview,
-                   ct.last_message_at,
-                   (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE) as unread_cnt
+                   ct.last_message_at, ct.needs_admin,
+                   (SELECT COUNT(*) FROM chat_messages cm
+                    WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller'
+                    AND cm.created_at >= NOW() - INTERVAL '48 hours') as recent_msgs
             FROM chat_threads ct JOIN users u ON u.id = ct.reseller_id
             WHERE ct.is_archived = FALSE
-            HAVING (SELECT COUNT(*) FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE) > 0
-            ORDER BY ct.last_message_at DESC LIMIT 10
+              AND ct.last_message_at >= NOW() - INTERVAL '72 hours'
+            ORDER BY ct.needs_admin DESC, ct.last_message_at DESC LIMIT 10
         ''')
         rows = cursor.fetchall()
         if not rows:
-            return {'text': '✅ ไม่มีแชทที่รอตอบ'}
-        lines = [f"• {r['reseller_name']} — {int(r['unread_cnt'])} ข้อความ: \"{(r['last_message_preview'] or '')[:40]}\"" for r in rows]
-        return {'text': f"💬 แชทที่รอตอบ ({len(rows)} ห้อง):\n" + "\n".join(lines)}
+            return {'text': '✅ ไม่มีแชทที่มีกิจกรรมในช่วง 72 ชั่วโมงที่ผ่านมา'}
+        lines = []
+        for r in rows:
+            flag = ' 🙋 ขอคุยกับ Admin' if r['needs_admin'] else ''
+            lines.append(f"• {r['reseller_name']}{flag} — {int(r['recent_msgs'] or 0)} ข้อความ 48h: \"{(r['last_message_preview'] or '')[:40]}\"")
+        return {'text': f"💬 แชทที่มีกิจกรรมล่าสุด ({len(rows)} ห้อง):\n" + "\n".join(lines)}
 
     elif tool == 'query_mto_status':
         cursor.execute('''
@@ -17334,7 +17339,7 @@ def _agent_execute_read_tool(tool, params, cursor):
         cursor.execute('''
             SELECT p.name, s.sku_code, s.stock
             FROM skus s JOIN products p ON p.id = s.product_id
-            WHERE s.stock <= %s AND p.is_active = TRUE
+            WHERE s.stock <= %s AND p.status = 'active'
             ORDER BY s.stock ASC LIMIT 15
         ''', (threshold,))
         rows = cursor.fetchall()
@@ -17853,7 +17858,7 @@ def agent_chat():
             elif tool == 'toggle_product':
                 prod_name = params.get('product_name', '')
                 active = bool(params.get('active', True))
-                cursor.execute('SELECT id, name, is_active FROM products WHERE name ILIKE %s LIMIT 3', (f'%{prod_name}%',))
+                cursor.execute('SELECT id, name, status FROM products WHERE name ILIKE %s LIMIT 3', (f'%{prod_name}%',))
                 products = cursor.fetchall()
                 if not products:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อใกล้เคียง "{prod_name}"'}), 200
@@ -17862,11 +17867,11 @@ def agent_chat():
                     return jsonify({'type': 'answer', 'message': f'พบหลายสินค้า: {opts} — กรุณาระบุชื่อให้ชัดขึ้น'}), 200
                 prod = products[0]
                 plan = {
-                    'before': {'สินค้า': prod['name'], 'สถานะ': 'เปิดขาย' if prod['is_active'] else 'ปิดขาย'},
+                    'before': {'สินค้า': prod['name'], 'สถานะ': 'เปิดขาย' if prod['status'] == 'active' else 'ปิดขาย'},
                     'after':  {'สินค้า': prod['name'], 'สถานะใหม่': 'เปิดขาย' if active else 'ปิดขาย'}
                 }
                 log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
-                                          params, {'product_id': prod['id'], 'old_active': prod['is_active']})
+                                          params, {'product_id': prod['id'], 'old_status': prod['status']})
                 return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
                                 'params': {**params, 'product_id': prod['id']},
                                 'message': intent.get('message', f"จะ{'เปิด' if active else 'ปิด'}การขายสินค้า {prod['name']}"),
@@ -17969,12 +17974,13 @@ def agent_execute():
         elif tool == 'toggle_product':
             product_id = int(params.get('product_id', 0))
             active     = bool(params.get('active', True))
-            cursor.execute('SELECT id, name, is_active FROM products WHERE id = %s', (product_id,))
+            cursor.execute('SELECT id, name, status FROM products WHERE id = %s', (product_id,))
             prod = cursor.fetchone()
             if not prod: return jsonify({'error': 'ไม่พบสินค้า'}), 404
             cur2 = conn.cursor()
-            cur2.execute('UPDATE products SET is_active = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (active, product_id))
-            before_data = {'สินค้า': prod['name'], 'สถานะเดิม': 'เปิดขาย' if prod['is_active'] else 'ปิดขาย'}
+            new_status_val = 'active' if active else 'inactive'
+            cur2.execute('UPDATE products SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (new_status_val, product_id))
+            before_data = {'สินค้า': prod['name'], 'สถานะเดิม': 'เปิดขาย' if prod['status'] == 'active' else 'ปิดขาย'}
             after_data  = {'สินค้า': prod['name'], 'สถานะใหม่': 'เปิดขาย' if active else 'ปิดขาย'}
             if log_id:
                 cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
@@ -18031,11 +18037,11 @@ def agent_briefing():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute("SELECT COUNT(*) as cnt FROM orders WHERE status IN ('pending_payment','processing') AND is_quick_order = FALSE")
         pending_orders = int(cursor.fetchone()['cnt'])
-        cursor.execute("SELECT COUNT(*) as cnt FROM skus s JOIN products p ON p.id = s.product_id WHERE s.stock <= 5 AND s.stock >= 0 AND p.is_active = TRUE")
+        cursor.execute("SELECT COUNT(*) as cnt FROM skus s JOIN products p ON p.id = s.product_id WHERE s.stock <= 5 AND s.stock >= 0 AND p.status = 'active'")
         low_stock = int(cursor.fetchone()['cnt'])
         cursor.execute("""SELECT COUNT(*) as cnt FROM chat_threads ct
-            WHERE ct.is_archived = FALSE AND EXISTS (
-                SELECT 1 FROM chat_messages cm WHERE cm.thread_id = ct.id AND cm.sender_type = 'reseller' AND cm.is_read = FALSE)""")
+            WHERE ct.is_archived = FALSE AND (ct.needs_admin = TRUE
+              OR ct.last_message_at >= NOW() - INTERVAL '24 hours')""")
         unread_chat = int(cursor.fetchone()['cnt'])
         cursor.execute("SELECT COUNT(*) as cnt FROM mto_orders WHERE status NOT IN ('delivered','cancelled')")
         mto_pending = int(cursor.fetchone()['cnt'])
