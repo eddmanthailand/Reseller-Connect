@@ -4264,9 +4264,10 @@
             position: fixed;
             bottom: 28px;
             right: 24px;
+            left: auto;
             z-index: 9100;
             width: 400px;
-            max-width: calc(100vw - 32px);
+            max-width: min(400px, calc(100vw - var(--sidebar-width, 240px) - 40px));
             height: 560px;
             max-height: calc(100vh - 80px);
             background: rgba(255,255,255,0.96);
@@ -4278,6 +4279,9 @@
             flex-direction: column;
             overflow: hidden;
             transition: opacity 0.22s cubic-bezier(0.4,0,0.2,1), transform 0.22s cubic-bezier(0.4,0,0.2,1);
+        }
+        body.sidebar-collapsed #agentPanel {
+            max-width: min(400px, calc(100vw - var(--sidebar-collapsed, 60px) - 40px));
         }
         .agent-header {
             display: flex; align-items: center; gap: 10px;
