@@ -14308,37 +14308,49 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             brand = pr.get('brand_name') or ''
             cat = pr.get('cat_name') or ''
             options_str = pr.get('options_summary') or ''
-            size_stock = pr.get('size_stock') or ''
+            sku_info = pr.get('sku_info') or ''
             price = pr.get('min_price') or 0
             bot_desc = pr.get('bot_description') or ''
             line = f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาเริ่ม฿{price:.0f}"
             if cat:
                 line += f" หมวด:{cat}"
-            if size_stock:
-                line += f" ไซส์(stock):{size_stock}"
+            if sku_info:
+                line += f" ไซส์/สต็อก:{sku_info}"
             if options_str:
-                line += f" ตัวเลือก:{options_str}"
+                line += f" สี/ลาย:{options_str}"
             if bot_desc:
                 line += f" ({bot_desc})"
             if detailed and pr.get('size_chart_image_url'):
                 line += " [มีตารางไซส์]"
             return line + '\n'
 
-        _product_base_select = '''
+        # Base SELECT — uses sku_values_map for size label, falls back to sku_code + stock
+        _SIZE_OPT_NAMES = ('ไซส์', 'size', 'sz', 'ขนาด')
+        _product_base_select = """
             SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
                    b.name as brand_name,
                    (SELECT c2.name FROM categories c2
                     JOIN product_categories pc2 ON pc2.category_id = c2.id
                     WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
                    MIN(s.price) as min_price,
-                   STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock,
-                   (SELECT STRING_AGG(DISTINCT ov.value, '/' ORDER BY ov.value)
-                    FROM options o JOIN option_values ov ON ov.option_id = o.id
-                    WHERE o.product_id = p.id AND LOWER(o.name) NOT IN ('ไซส์','size','sz')) as options_summary
+                   COALESCE(
+                       NULLIF((SELECT STRING_AGG(ov2.value || ':' || s2.stock::text, ' | ' ORDER BY ov2.value)
+                        FROM skus s2
+                        JOIN sku_values_map svm2 ON svm2.sku_id = s2.id
+                        JOIN option_values ov2 ON ov2.id = svm2.option_value_id
+                        JOIN options o2 ON o2.id = ov2.option_id
+                        WHERE s2.product_id = p.id
+                          AND LOWER(o2.name) IN ('ไซส์','size','sz','ขนาด')), ''),
+                       STRING_AGG(DISTINCT s.sku_code || ':' || s.stock::text, ' | ')
+                   ) as sku_info,
+                   (SELECT STRING_AGG(DISTINCT ov3.value, '/' ORDER BY ov3.value)
+                    FROM options o3 JOIN option_values ov3 ON ov3.option_id = o3.id
+                    WHERE o3.product_id = p.id
+                      AND LOWER(o3.name) NOT IN ('ไซส์','size','sz','ขนาด')) as options_summary
             FROM products p
             LEFT JOIN brands b ON b.id = p.brand_id
             JOIN skus s ON s.product_id = p.id
-        '''
+        """
 
         products_text = ''
         if current_cat_id:
@@ -14394,10 +14406,20 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # Suggest alternatives if size is out of stock
         alt_products_text = ''
         if desired_size and current_product_id:
-            cursor.execute('''
+            cursor.execute("""
                 SELECT p.id, p.name, b.name as brand_name, MIN(s.price) as min_price,
-                       STRING_AGG(DISTINCT s.size || ':' || s.stock::text, ', ' ORDER BY s.size || ':' || s.stock::text) as size_stock,
-                       p.bot_description, p.size_chart_image_url
+                       p.bot_description, p.size_chart_image_url,
+                       COALESCE(
+                           NULLIF((SELECT STRING_AGG(ov2.value || ':' || s2.stock::text, ' | ' ORDER BY ov2.value)
+                            FROM skus s2
+                            JOIN sku_values_map svm2 ON svm2.sku_id = s2.id
+                            JOIN option_values ov2 ON ov2.id = svm2.option_value_id
+                            JOIN options o2 ON o2.id = ov2.option_id
+                            WHERE s2.product_id = p.id
+                              AND LOWER(o2.name) IN ('ไซส์','size','sz','ขนาด') AND s2.stock > 0), ''),
+                           STRING_AGG(DISTINCT s.sku_code || ':' || s.stock::text, ' | ')
+                       ) as sku_info,
+                       NULL::text as options_summary
                 FROM products p
                 LEFT JOIN brands b ON b.id = p.brand_id
                 JOIN skus s ON s.product_id = p.id
@@ -14405,26 +14427,49 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     SELECT product_id FROM product_categories WHERE category_id IN
                         (SELECT category_id FROM product_categories WHERE product_id = %s)
                 )
-                  AND p.id != %s AND p.status = 'active'
-                  AND s.size = %s AND s.stock > 0
+                  AND p.id != %s AND p.status = 'active' AND s.stock > 0
                 GROUP BY p.id, p.name, b.name, p.bot_description, p.size_chart_image_url
                 LIMIT 3
-            ''', (current_product_id, current_product_id, desired_size))
+            """, (current_product_id, current_product_id))
             alts = cursor.fetchall()
             for a in alts:
                 alt_products_text += _fmt_product_row(a)
 
-        # 9. Build prompt for Flash Lite
+        # 9. Load size chart image for Vision (when viewing a product with size chart)
+        size_chart_image_bytes = None
+        size_chart_mime = 'image/jpeg'
+        size_chart_hint = ''
+        _size_keywords = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
+        _user_asks_size = any(kw in user_message_text.lower() for kw in _size_keywords)
+        if current_product_id and _user_asks_size:
+            cursor.execute('SELECT size_chart_image_url FROM products WHERE id = %s', (current_product_id,))
+            _prow = cursor.fetchone()
+            _chart_url = _prow['size_chart_image_url'] if _prow else None
+            if _chart_url and _chart_url.startswith('/storage/'):
+                try:
+                    from replit.object_storage import Client as _OSClient
+                    _storage_key = _chart_url.replace('/storage/', '')
+                    size_chart_image_bytes = _OSClient().download_as_bytes(_storage_key)
+                    if _chart_url.endswith('.png'):
+                        size_chart_mime = 'image/png'
+                    elif _chart_url.endswith('.webp'):
+                        size_chart_mime = 'image/webp'
+                    size_chart_hint = '\n[ตารางไซส์แนบเป็นรูปภาพ — ใช้ข้อมูลในรูปตอบคำถามเรื่องไซส์ได้เลยค่ะ]'
+                except Exception as _img_err:
+                    print(f'[BOT] Cannot load size chart: {_img_err}')
+
+        # 10. Build prompt for Flash Lite
         system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย
 {extra_persona}
 กฎสำคัญ:
 - ตอบเป็นภาษาไทย ลงท้าย "ค่ะ" เสมอ
+- ถ้าลูกค้าถามเรื่องไซส์และมีตารางไซส์ → อ่านข้อมูลจากรูปและแนะนำไซส์ที่เหมาะสมได้เลย
 - ถ้าลูกค้าสนใจสินค้า → ถามไซส์และจำนวน → ชวนสั่งซื้อทันที
 - ถ้าสินค้าหมดในไซส์ที่ต้องการ → เสนอสินค้าคล้ายกันที่มีไซส์นั้นทันที ไม่ปล่อยให้หยุดสนทนา
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
 - ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
-- ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด
+- ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
 
 === ข้อมูลสถานการณ์ปัจจุบัน ===
 State: {session_data.get('state','IDLE')}
@@ -14440,7 +14485,7 @@ State: {session_data.get('state','IDLE')}
 === รายการสินค้าที่เกี่ยวข้อง ===
 {products_text or '(ยังไม่ได้เลือกหมวดหมู่)'}
 
-=== สินค้าทดแทน (มีไซส์ {desired_size or ''}) ===
+=== สินค้าทดแทน ===
 {alt_products_text or '(ไม่มี หรือยังไม่ได้ระบุไซส์)'}
 
 ตอบกลับเป็น JSON เท่านั้น:
@@ -14460,17 +14505,21 @@ State: {session_data.get('state','IDLE')}
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี)
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย"""
 
-        # 10. Call Flash Lite
+        # 11. Call Flash Lite (with Vision if size chart available)
         import os as _os
         from google import genai as _genai
+        from google.genai import types as _genai_types
         _api_key = _os.environ.get('GEMINI_API_KEY', '')
         if not _api_key:
             return []
         _client = _genai.Client(api_key=_api_key)
         conversation = f"=== ประวัติแชท ===\n{history_text}\n👤 สมาชิก: {user_message_text}"
+        _contents = [conversation]
+        if size_chart_image_bytes:
+            _contents.append(_genai_types.Part.from_bytes(data=size_chart_image_bytes, mime_type=size_chart_mime))
         resp = _client.models.generate_content(
-            model='gemini-2.0-flash-lite',
-            contents=conversation,
+            model='gemini-2.5-flash-lite',
+            contents=_contents,
             config=_genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.7,
