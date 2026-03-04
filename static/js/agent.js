@@ -239,8 +239,10 @@ function _agentChartCard(m, i) {
 
 function _agentModelBadge(model) {
     if (!model) return '';
-    const isPro = model === 'Pro';
-    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;${isPro ? 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' : 'background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;'}">${isPro ? '✨ Pro' : '⚡ Flash'}</span>`;
+    const is31Pro = model === '3.1 Pro';
+    const isPro = model === 'Pro' || is31Pro;
+    const label = is31Pro ? '✨ 3.1 Pro' : (isPro ? '✨ Pro' : '⚡ Flash');
+    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;${isPro ? 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' : 'background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;'}">${label}</span>`;
 }
 
 function _agentBubbleAI(m, i) {

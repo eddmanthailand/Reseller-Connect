@@ -17354,6 +17354,143 @@ def _agent_execute_read_tool(tool, params, cursor):
         except Exception as _se:
             return {'text': f'ค้นหาไม่สำเร็จ: {str(_se)}'}
 
+    # ─── Code Inspector Tools (READ-ONLY) ────────────────────────────────────
+    elif tool == 'list_files':
+        import glob as _glob, os as _os
+        _root = '/home/runner/workspace'
+        _path = params.get('path', '.').strip().lstrip('/')
+        _pattern = params.get('pattern', '*')
+        _safe_dir = _os.path.realpath(_os.path.join(_root, _path))
+        if not _safe_dir.startswith(_root):
+            return {'text': '⛔ ไม่อนุญาตให้เข้าถึงนอก project directory'}
+        _files = _glob.glob(_os.path.join(_safe_dir, '**', _pattern), recursive=True)
+        _files += _glob.glob(_os.path.join(_safe_dir, _pattern))
+        _files = sorted(set(f.replace(_root + '/', '') for f in _files if _os.path.isfile(f)))
+        _files = [f for f in _files if not any(s in f for s in ['/.git/', '/__pycache__/', '/.pythonlibs/', '/node_modules/'])]
+        if not _files:
+            return {'text': f'ไม่พบไฟล์ที่ตรง pattern "{_pattern}" ใน {_path or "/"}'}
+        _lines = [f'📁 ไฟล์ใน {_path or "/"} (pattern: {_pattern}) — {len(_files)} ไฟล์:']
+        _lines += [f'  {f}' for f in _files[:100]]
+        if len(_files) > 100:
+            _lines.append(f'  … และอีก {len(_files)-100} ไฟล์')
+        return {'text': '\n'.join(_lines)}
+
+    elif tool == 'read_code':
+        import os as _os
+        _root = '/home/runner/workspace'
+        _file = (params.get('file') or '').strip().lstrip('/')
+        if not _file:
+            return {'text': 'กรุณาระบุ file เช่น "app.py" หรือ "static/js/dashboard.js"'}
+        _safe = _os.path.realpath(_os.path.join(_root, _file))
+        if not _safe.startswith(_root):
+            return {'text': '⛔ ไม่อนุญาตให้เข้าถึงนอก project directory'}
+        if not _os.path.isfile(_safe):
+            return {'text': f'ไม่พบไฟล์: {_file}'}
+        _offset = max(1, int(params.get('offset') or 1))
+        _limit = min(200, max(10, int(params.get('limit') or 80)))
+        try:
+            with open(_safe, 'r', encoding='utf-8', errors='replace') as _fh:
+                _all = _fh.readlines()
+            _total = len(_all)
+            _slice = _all[_offset - 1: _offset - 1 + _limit]
+            _numbered = ''.join(f'{_offset + i:5d}│ {ln}' for i, ln in enumerate(_slice))
+            _header = f'📄 {_file} (บรรทัด {_offset}–{_offset+len(_slice)-1} จากทั้งหมด {_total} บรรทัด)\n'
+            return {'text': _header + '```\n' + _numbered + '\n```'}
+        except Exception as _e:
+            return {'text': f'อ่านไฟล์ไม่สำเร็จ: {str(_e)}'}
+
+    elif tool == 'search_code':
+        import subprocess as _sp, os as _os
+        _root = '/home/runner/workspace'
+        _pattern = (params.get('pattern') or '').strip()
+        if not _pattern:
+            return {'text': 'กรุณาระบุ pattern เช่น "def create_order" หรือ "coupon_discount"'}
+        _file_glob = (params.get('file') or '').strip() or '.'
+        _ctx = min(10, max(0, int(params.get('context_lines') or 2)))
+        _safe_path = _os.path.join(_root, _file_glob.lstrip('/'))
+        try:
+            _args = ['grep', '-rn', '--include=*.py', '--include=*.js', '--include=*.html',
+                     '--include=*.css', '--include=*.json', f'-C{_ctx}', _pattern, _safe_path]
+            _res = _sp.run(_args, capture_output=True, text=True, timeout=10, cwd=_root)
+            _out = _res.stdout.strip()
+            if not _out:
+                return {'text': f'ไม่พบ "{_pattern}" ในโค้ด'}
+            _lines_out = _out.split('\n')
+            _preview = '\n'.join(_lines_out[:150])
+            _extra = f'\n… (แสดง 150/{len(_lines_out)} บรรทัด)' if len(_lines_out) > 150 else ''
+            return {'text': f'🔎 ค้นหา "{_pattern}":\n```\n{_preview}\n```{_extra}'}
+        except Exception as _e:
+            return {'text': f'ค้นหาไม่สำเร็จ: {str(_e)}'}
+
+    elif tool == 'query_db_schema':
+        _table = (params.get('table') or '').strip().lower()
+        if _table:
+            cursor.execute('''
+                SELECT c.column_name, c.data_type, c.column_default, c.is_nullable,
+                       c.character_maximum_length
+                FROM information_schema.columns c
+                WHERE c.table_name = %s
+                ORDER BY c.ordinal_position
+            ''', (_table,))
+            _cols = cursor.fetchall()
+            if not _cols:
+                return {'text': f'ไม่พบตาราง "{_table}" ใน database'}
+            cursor.execute('''
+                SELECT tc.constraint_type, kcu.column_name, tc.constraint_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name AND tc.table_name = kcu.table_name
+                WHERE tc.table_name = %s
+                ORDER BY tc.constraint_type, kcu.column_name
+            ''', (_table,))
+            _constraints = cursor.fetchall()
+            _lines = [f'📋 โครงสร้างตาราง `{_table}`:']
+            for col in _cols:
+                _null = '' if col['is_nullable'] == 'NO' else ' NULL'
+                _def = f' DEFAULT {col["column_default"]}' if col['column_default'] else ''
+                _len = f'({col["character_maximum_length"]})' if col.get('character_maximum_length') else ''
+                _lines.append(f'  {col["column_name"]}: {col["data_type"]}{_len}{_null}{_def}')
+            if _constraints:
+                _lines.append('\nConstraints:')
+                for con in _constraints:
+                    _lines.append(f'  [{con["constraint_type"]}] {con["column_name"]} ({con["constraint_name"]})')
+            return {'text': '\n'.join(_lines)}
+        else:
+            cursor.execute('''
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+                ORDER BY table_name
+            ''')
+            _tables = [r['table_name'] for r in cursor.fetchall()]
+            return {'text': f'📊 ตารางทั้งหมดใน DB ({len(_tables)} ตาราง):\n' + '\n'.join(f'  • {t}' for t in _tables)}
+
+    elif tool == 'query_db':
+        _sql = (params.get('sql') or '').strip()
+        if not _sql:
+            return {'text': 'กรุณาระบุ SQL เช่น "SELECT * FROM orders LIMIT 5"'}
+        _sql_upper = _sql.upper().lstrip()
+        _allowed = ('SELECT ', 'WITH ', 'SHOW ', 'EXPLAIN ')
+        if not any(_sql_upper.startswith(k) for k in _allowed):
+            return {'text': '⛔ อนุญาตเฉพาะ SELECT/WITH/SHOW/EXPLAIN เท่านั้น — ห้ามแก้ไขข้อมูล'}
+        _danger = ['INSERT ', 'UPDATE ', 'DELETE ', 'DROP ', 'TRUNCATE ', 'ALTER ', 'CREATE ', 'GRANT ', 'REVOKE ']
+        if any(d in _sql_upper for d in _danger):
+            return {'text': '⛔ SQL มีคำสั่งที่อาจแก้ไขข้อมูล — ถูก block เพื่อความปลอดภัย'}
+        _limit = min(50, max(1, int(params.get('limit') or 20)))
+        if 'LIMIT' not in _sql_upper:
+            _sql = f'{_sql} LIMIT {_limit}'
+        try:
+            cursor.execute(_sql)
+            _rows = cursor.fetchall()
+            if not _rows:
+                return {'text': 'Query สำเร็จ — ไม่มีข้อมูล (0 แถว)'}
+            _cols = list(_rows[0].keys()) if _rows else []
+            _header = ' | '.join(_cols)
+            _sep = '-' * min(len(_header), 120)
+            _data = '\n'.join(' | '.join(str(r[c])[:40] for c in _cols) for r in _rows)
+            return {'text': f'📊 Query Result ({len(_rows)} แถว):\n```\n{_header}\n{_sep}\n{_data}\n```'}
+        except Exception as _e:
+            return {'text': f'SQL Error: {str(_e)}'}
+
     return {'text': 'ไม่รู้จัก tool นี้'}
 
 
@@ -17412,18 +17549,18 @@ def agent_chat():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         settings = _agent_load_settings(cursor)
 
-        # Phase 1: Flash สำหรับ routing (เร็ว ถูก)
-        intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-flash')
+        # Phase 1: 3.1 Pro Preview สำหรับ routing (ฉลาด เข้าใจโค้ดได้)
+        intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-3.1-pro-preview')
         itype  = intent.get('type', 'chat')
-        model_used = 'Flash'
+        model_used = '3.1 Pro'
 
-        # Phase 2: ถ้าเป็น WRITE tool ให้ Pro ตรวจสอบ params ให้รอบคอบขึ้น
+        # Phase 2: ถ้าเป็น WRITE tool ให้ 3.1 Pro ตรวจสอบ params ให้รอบคอบขึ้น
         if itype == 'plan':
-            pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-pro')
+            pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-3.1-pro-preview')
             if pro_intent.get('type') in ('plan', 'clarify'):
                 intent = pro_intent
                 itype  = intent.get('type', 'plan')
-                model_used = 'Pro'
+                model_used = '3.1 Pro'
 
         tool   = intent.get('tool', '')
         params = intent.get('params') or {}
