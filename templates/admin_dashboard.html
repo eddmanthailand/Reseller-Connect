@@ -2571,21 +2571,36 @@
 
             <!-- Customers Page -->
             <div id="page-customers" class="page-content">
-                <div class="page-header">
-                    <h1>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:8px;">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                        </svg>
-                        ข้อมูลลูกค้า
-                    </h1>
-                    <p>รวมลูกค้าจากทุกช่องทาง — วิเคราะห์พฤติกรรม ติดตามยอดซื้อ</p>
+
+                <!-- Apple-style Page Header -->
+                <div style="background:#fff;border-radius:18px;padding:24px 28px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.07),0 0 0 1px rgba(0,0,0,0.04);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0;line-height:1.2;">ข้อมูลลูกค้า</h1>
+                            <p style="font-size:13px;color:#6e6e73;margin:3px 0 0;">รวมลูกค้าจากทุกช่องทาง — วิเคราะห์พฤติกรรม ติดตามยอดซื้อ</p>
+                        </div>
+                    </div>
+                    <button onclick="openAddCustomerModal()" style="display:flex;align-items:center;gap:7px;padding:10px 20px;background:#1d1d1f;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        เพิ่มลูกค้า
+                    </button>
                 </div>
 
-                <!-- Filter + Action Bar -->
-                <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
-                    <input type="text" id="customerSearchInput" class="form-input" placeholder="ค้นหาชื่อ, เบอร์, จังหวัด..." oninput="filterCustomers()" style="flex:1;min-width:200px;max-width:360px;">
-                    <select id="customerPlatformFilter" class="form-select" onchange="filterCustomers()" style="width:160px;">
+                <!-- Filter Bar -->
+                <div style="background:#fff;border-radius:14px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.07),0 0 0 1px rgba(0,0,0,0.04);display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <div style="position:relative;flex:1;min-width:200px;max-width:340px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="2" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);pointer-events:none;">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="customerSearchInput" placeholder="ค้นหาชื่อ, เบอร์, จังหวัด..." oninput="filterCustomers()" style="width:100%;padding:9px 12px 9px 34px;border:1px solid #e5e7eb;border-radius:9px;font-size:13px;color:#1d1d1f;background:#f9fafb;outline:none;font-family:inherit;box-sizing:border-box;" onfocus="this.style.border='1px solid #6366f1';this.style.background='#fff'" onblur="this.style.border='1px solid #e5e7eb';this.style.background='#f9fafb'">
+                    </div>
+                    <select id="customerPlatformFilter" onchange="filterCustomers()" style="padding:9px 12px;border:1px solid #e5e7eb;border-radius:9px;font-size:13px;color:#374151;background:#f9fafb;outline:none;font-family:inherit;cursor:pointer;">
                         <option value="">ทุกแพลตฟอร์ม</option>
                         <option value="shopee">🛍️ Shopee</option>
                         <option value="lazada">📦 Lazada</option>
@@ -2594,25 +2609,19 @@
                         <option value="tiktok">🎵 TikTok</option>
                         <option value="onsale">🏪 หน้าร้าน</option>
                     </select>
-                    <select id="customerTagFilter" class="form-select" onchange="filterCustomers()" style="width:160px;">
+                    <select id="customerTagFilter" onchange="filterCustomers()" style="padding:9px 12px;border:1px solid #e5e7eb;border-radius:9px;font-size:13px;color:#374151;background:#f9fafb;outline:none;font-family:inherit;cursor:pointer;">
                         <option value="">ทุกประเภท</option>
                         <option value="frequent">🌟 ลูกค้าประจำ</option>
                         <option value="new">🆕 ลูกค้าใหม่</option>
                         <option value="inactive">💤 ไม่ active</option>
                         <option value="reseller">👤 ลูกค้าตัวแทน</option>
                     </select>
-                    <div style="margin-left:auto;display:flex;gap:8px;">
-                        <span id="customerCountBadge" style="align-self:center;font-size:13px;opacity:0.7;"></span>
-                        <button onclick="openAddCustomerModal()" class="btn" style="padding:9px 18px;font-size:13px;display:flex;align-items:center;gap:6px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            เพิ่มลูกค้า
-                        </button>
-                    </div>
+                    <span id="customerCountBadge" style="margin-left:auto;font-size:13px;font-weight:600;color:#6b7280;white-space:nowrap;"></span>
                 </div>
 
                 <!-- Customers Table -->
                 <div id="customersTableContainer">
-                    <div style="text-align:center;padding:40px;opacity:0.6;">กำลังโหลดข้อมูล...</div>
+                    <div style="text-align:center;padding:60px;color:#8e8e93;">กำลังโหลดข้อมูล...</div>
                 </div>
             </div>
 
@@ -2646,7 +2655,10 @@
                                 </div>
                                 <div style="font-size:11px;opacity:0.55;">วาง Ctrl+V · ลากรูปมาวาง · หรือคลิกเลือกไฟล์</div>
                             </div>
-                            <div id="customerScanStatus" style="display:none;text-align:center;padding:7px;font-size:12px;color:#8b5cf6;background:#f3f0ff;border-radius:8px;margin-bottom:12px;">กำลังอ่านข้อมูล...</div>
+                            <div id="customerScanStatus" style="display:none;text-align:center;padding:7px;font-size:12px;color:#8b5cf6;background:#f3f0ff;border-radius:8px;margin-bottom:10px;">กำลังอ่านข้อมูล...</div>
+
+                            <!-- Label Image Preview -->
+                            <img id="custLabelPreview" src="" alt="ใบปะหน้า" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid #e5e5ea;background:#f9f9f9;margin-bottom:12px;">
 
                             <!-- Divider -->
                             <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">

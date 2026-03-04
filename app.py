@@ -9214,6 +9214,32 @@ def check_customer_phone():
         if conn: conn.close()
 
 
+@app.route('/api/admin/customers/<int:customer_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_customer(customer_id):
+    """Delete an admin-created customer from the customers table"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM customers WHERE id = %s RETURNING id', (customer_id,))
+        deleted = cursor.fetchone()
+        if not deleted:
+            return jsonify({'error': 'ไม่พบลูกค้า'}), 404
+        conn.commit()
+        return jsonify({'message': 'ลบลูกค้าสำเร็จ'}), 200
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route('/api/admin/orders/counts', methods=['GET'])
 @admin_required
 def get_order_counts():

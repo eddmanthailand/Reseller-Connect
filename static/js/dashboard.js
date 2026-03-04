@@ -6580,24 +6580,36 @@ async function _processLabelFile(file, type) {
         const zone     = document.getElementById('custLabelZone');
         if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '⏳ กำลังอ่านข้อมูลจากรูป...'; statusEl.style.color = '#8b5cf6'; }
         if (zone) { zone.style.opacity = '0.6'; zone.style.pointerEvents = 'none'; }
+
+        const preview = document.getElementById('custLabelPreview');
+        if (preview) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
         try {
             const formData = new FormData();
             formData.append('image', file);
             const res  = await fetch('/api/admin/quick-order/parse-label', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'ล้มเหลว');
-            if (data.customer_name) document.getElementById('custName').value        = data.customer_name;
-            if (data.customer_phone) document.getElementById('custPhone').value      = data.customer_phone;
-            if (data.address)       document.getElementById('custAddress').value     = data.address;
-            if (data.subdistrict)   document.getElementById('custSubdistrict').value = data.subdistrict;
-            if (data.district)      document.getElementById('custDistrict').value    = data.district;
-            if (data.province)      document.getElementById('custProvince').value    = data.province;
-            if (data.postal_code)   document.getElementById('custPostal').value      = data.postal_code;
-            if (data.platform)      document.getElementById('custSource').value      = data.platform;
-            if (statusEl) { statusEl.style.color = '#34d399'; statusEl.textContent = '✅ อ่านข้อมูลสำเร็จ ตรวจสอบและบันทึกได้เลย'; }
+            const resp = await res.json();
+            if (!res.ok) throw new Error(resp.error || 'ล้มเหลว');
+            const data = resp.data || {};
+            if (data.customer_name)  document.getElementById('custName').value        = data.customer_name;
+            if (data.customer_phone) document.getElementById('custPhone').value       = data.customer_phone;
+            if (data.address)        document.getElementById('custAddress').value     = data.address;
+            if (data.subdistrict)    document.getElementById('custSubdistrict').value = data.subdistrict;
+            if (data.district)       document.getElementById('custDistrict').value    = data.district;
+            if (data.province)       document.getElementById('custProvince').value    = data.province;
+            if (data.postal_code)    document.getElementById('custPostal').value      = data.postal_code;
+            if (data.platform)       document.getElementById('custSource').value      = data.platform;
+            if (statusEl) { statusEl.style.color = '#16a34a'; statusEl.textContent = '✅ อ่านข้อมูลสำเร็จ ตรวจสอบและบันทึกได้เลย'; }
             if (data.customer_phone) checkCustomerPhoneDuplicate(data.customer_phone);
         } catch (e) {
-            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '❌ อ่านไม่ได้: ' + e.message; }
+            if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.textContent = '❌ อ่านไม่ได้: ' + e.message; }
         } finally {
             if (zone) { zone.style.opacity = '1'; zone.style.pointerEvents = 'auto'; }
             const inp = document.getElementById('customerLabelInput');
@@ -10540,72 +10552,100 @@ function renderCustomersTable(customers) {
 
     if (!customers.length) {
         document.getElementById('customersTableContainer').innerHTML =
-            `<div style="text-align:center;padding:60px;opacity:0.5;">ไม่พบลูกค้า</div>`;
+            `<div style="text-align:center;padding:60px;color:#8e8e93;">ไม่พบลูกค้า</div>`;
         return;
     }
 
+    const TAG_BG   = { frequent: '#fff7ed', new: '#f0fdf4', inactive: '#f9fafb', reseller: '#f5f3ff' };
+    const TAG_TEXT = { frequent: '#c2410c', new: '#15803d', inactive: '#6b7280', reseller: '#7c3aed' };
+
     const rows = customers.map(c => {
         const tagLabel = TAG_LABEL[c.auto_tag] || '';
-        const tagColor = TAG_COLOR[c.auto_tag] || '#6b7280';
+        const tagBg   = TAG_BG[c.auto_tag]   || '#f3f4f6';
+        const tagText = TAG_TEXT[c.auto_tag]  || '#6b7280';
         const isReseller = c.source_type === 'reseller';
         const platforms = (c.platforms || []).map(p =>
-            `<span style="font-size:11px;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;white-space:nowrap;">${PLATFORM_LABEL[p] || p}</span>`
+            `<span style="font-size:11px;background:#f3f4f6;color:#374151;padding:2px 7px;border-radius:5px;white-space:nowrap;">${PLATFORM_LABEL[p] || p}</span>`
         ).join(' ');
         const lastOrder = c.last_order_at
             ? new Date(c.last_order_at).toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'2-digit' })
             : '—';
         const spent = c.total_spent > 0 ? `฿${c.total_spent.toLocaleString('th-TH', { maximumFractionDigits: 0 })}` : '—';
-        const subText = isReseller
-            ? `<div style="font-size:11px;color:#a78bfa;margin-top:2px;">ตัวแทน: ${c.reseller_name || '—'}</div>`
-            : (c.note ? `<div style="font-size:11px;opacity:0.5;margin-top:2px;">${c.note}</div>` : '');
-        const editBtn = isReseller
-            ? `<span style="font-size:11px;opacity:0.35;">จัดการโดยตัวแทน</span>`
-            : `<button onclick="openEditCustomerModal(${c.id})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">แก้ไข</button>`;
-        return `<tr>
-            <td>
-                <div style="font-weight:600;font-size:14px;">${c.name || '<span style="opacity:0.4">ไม่มีชื่อ</span>'}</div>
-                ${subText}
+        const subNote = isReseller
+            ? `<div style="font-size:11px;color:#7c3aed;margin-top:2px;">ตัวแทน: ${c.reseller_name || '—'}</div>`
+            : (c.note ? `<div style="font-size:11px;color:#8e8e93;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${c.note}</div>` : '');
+        const actionBtns = isReseller
+            ? `<span style="font-size:11px;color:#c7c7cc;">จัดการโดยตัวแทน</span>`
+            : `<div style="display:flex;gap:6px;">
+                <button onclick="openEditCustomerModal(${c.id})" style="padding:5px 12px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='#fff'">แก้ไข</button>
+                <button onclick="deleteCustomer(${c.id},'${(c.name||'ลูกค้า').replace(/'/g,'')}')" style="padding:5px 10px;font-size:12px;font-weight:500;border-radius:8px;border:1px solid #fecaca;background:#fff;color:#ef4444;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#fff'" title="ลบลูกค้า">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>
+               </div>`;
+        return `<tr class="cust-row">
+            <td style="padding:12px 14px;vertical-align:middle;max-width:200px;">
+                <div style="font-weight:600;font-size:14px;color:#1d1d1f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name || '<span style="color:#c7c7cc">ไม่มีชื่อ</span>'}</div>
+                ${subNote}
             </td>
-            <td style="font-size:13px;">${c.phone || '—'}</td>
-            <td style="font-size:12px;opacity:0.8;">${[c.province, c.district].filter(Boolean).join(', ') || '—'}</td>
-            <td style="text-align:center;">${isReseller ? '—' : c.order_count}</td>
-            <td style="text-align:right;font-weight:600;">${isReseller ? '—' : spent}</td>
-            <td style="display:flex;flex-wrap:wrap;gap:4px;padding-top:10px;">${platforms || '—'}</td>
-            <td style="font-size:12px;">${lastOrder}</td>
-            <td><span style="font-size:11px;background:${tagColor}22;color:${tagColor};padding:3px 8px;border-radius:20px;white-space:nowrap;">${tagLabel}</span></td>
-            <td>${editBtn}</td>
+            <td style="padding:12px 14px;vertical-align:middle;font-size:13px;color:#3a3a3c;white-space:nowrap;">${c.phone || '—'}</td>
+            <td style="padding:12px 14px;vertical-align:middle;font-size:12px;color:#6e6e73;">${[c.province, c.district].filter(Boolean).join(', ') || '—'}</td>
+            <td style="padding:12px 14px;vertical-align:middle;text-align:center;font-size:13px;font-weight:600;color:#1d1d1f;">${isReseller ? '<span style="color:#c7c7cc">—</span>' : c.order_count}</td>
+            <td style="padding:12px 14px;vertical-align:middle;text-align:right;font-size:13px;font-weight:600;color:#1d1d1f;">${isReseller ? '<span style="color:#c7c7cc">—</span>' : spent}</td>
+            <td style="padding:12px 14px;vertical-align:middle;">
+                <div style="display:flex;flex-wrap:wrap;gap:3px;">${platforms || '<span style="color:#c7c7cc;font-size:12px;">—</span>'}</div>
+            </td>
+            <td style="padding:12px 14px;vertical-align:middle;font-size:12px;color:#6e6e73;white-space:nowrap;">${lastOrder}</td>
+            <td style="padding:12px 14px;vertical-align:middle;">
+                <span style="font-size:11px;background:${tagBg};color:${tagText};padding:3px 9px;border-radius:20px;font-weight:500;white-space:nowrap;">${tagLabel}</span>
+            </td>
+            <td style="padding:12px 14px;vertical-align:middle;">${actionBtns}</td>
         </tr>`;
     }).join('');
 
     document.getElementById('customersTableContainer').innerHTML = `
+        <div style="background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 0 0 1px rgba(0,0,0,0.05);overflow:hidden;">
         <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead>
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);text-align:left;">
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;width:180px;">ชื่อ</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">เบอร์โทร</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">พื้นที่</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:center;">ออเดอร์</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:right;">ยอดรวม</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">แพลตฟอร์ม</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">สั่งล่าสุด</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">ประเภท</th>
-                    <th style="padding:10px 12px;font-size:11px;opacity:0.6;font-weight:600;text-transform:uppercase;letter-spacing:.5px;"></th>
+                <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">ชื่อ</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">เบอร์โทร</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">พื้นที่</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:center;">ออเดอร์</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:right;">ยอดรวม</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">แพลตฟอร์ม</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">สั่งล่าสุด</th>
+                    <th style="padding:11px 14px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:left;">ประเภท</th>
+                    <th style="padding:11px 14px;"></th>
                 </tr>
             </thead>
             <tbody>
                 ${rows}
             </tbody>
         </table>
+        </div>
         </div>`;
 
-    document.querySelectorAll('#customersTableContainer tbody tr').forEach((tr, i) => {
-        tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-        tr.querySelectorAll('td').forEach(td => { td.style.padding = '10px 12px'; td.style.verticalAlign = 'middle'; });
-        tr.style.transition = 'background 0.15s';
-        tr.addEventListener('mouseenter', () => tr.style.background = 'rgba(255,255,255,0.04)');
+    document.querySelectorAll('#customersTableContainer .cust-row').forEach(tr => {
+        tr.style.borderBottom = '1px solid #f3f4f6';
+        tr.style.transition = 'background 0.12s';
+        tr.addEventListener('mouseenter', () => tr.style.background = '#fafafa');
         tr.addEventListener('mouseleave', () => tr.style.background = '');
     });
+}
+
+async function deleteCustomer(id, name) {
+    if (!confirm(`ลบลูกค้า "${name}" ออกจากระบบ?\nออเดอร์ที่เกี่ยวข้องจะไม่ถูกลบ`)) return;
+    try {
+        const res = await fetch(`/api/admin/customers/${id}`, { method: 'DELETE', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'ลบไม่สำเร็จ');
+        showGlobalAlert('ลบลูกค้าสำเร็จ', 'success');
+        _allCustomers = _allCustomers.filter(c => !(c.source_type === 'admin' && c.id === id));
+        filterCustomers();
+    } catch (e) {
+        showGlobalAlert(e.message, 'error');
+    }
 }
 
 function openAddCustomerModal() {
@@ -10622,6 +10662,8 @@ function openAddCustomerModal() {
     document.getElementById('custNote').value = '';
     document.getElementById('custDuplicateWarning').style.display = 'none';
     document.getElementById('customerScanStatus').style.display = 'none';
+    const prevImg = document.getElementById('custLabelPreview');
+    if (prevImg) { prevImg.src = ''; prevImg.style.display = 'none'; }
     document.getElementById('addCustomerModal').style.display = 'flex';
     _labelPasteContext = 'customer';
 
