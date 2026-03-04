@@ -10648,8 +10648,8 @@ async function saveCustomer() {
         note: document.getElementById('custNote').value.trim()
     };
 
-    if (!payload.name && !payload.phone) {
-        showAlert('กรุณากรอกชื่อหรือเบอร์โทรอย่างน้อย 1 อย่าง', 'error');
+    if (!payload.name && !payload.phone && !payload.address) {
+        showAlert('กรุณากรอกชื่อ, เบอร์โทร หรือที่อยู่ อย่างน้อย 1 อย่าง', 'error');
         btn.disabled = false;
         btn.textContent = 'บันทึกลูกค้า';
         return;
@@ -10683,8 +10683,6 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('paste', (e) => {
     if (!_labelPasteContext) return;
-    const activeTag = document.activeElement?.tagName?.toLowerCase();
-    if (activeTag === 'input' || activeTag === 'textarea') return;
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
