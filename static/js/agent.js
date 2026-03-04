@@ -147,8 +147,12 @@ function agentQuickCmd(text) {
 
 /* ---- Welcome & Briefing ---- */
 function _agentShowWelcome() {
-    const name = (_agentSettings?.agent_name) || 'น้องเอก';
-    _agentPush({ role: 'ai', text: `สวัสดีครับ ผม${name} 👋\nพร้อมช่วยงานเต็มที่เลยครับ ลองพิมพ์คำสั่ง หรือกดแนบรูป (📎) เพื่อให้ผมอ่านใบปะหน้า/สลิปให้ได้เลยครับ` });
+    const name    = (_agentSettings?.agent_name)     || 'น้องเอก';
+    const prompt  = (_agentSettings?.persona_prompt) || '';
+    const isFemale = /ผู้หญิง|หญิง|เลขา|เลขานุการ|สาว|นางสาว/.test(prompt);
+    const pronoun = isFemale ? 'หนู' : 'ผม';
+    const polite  = isFemale ? 'ค่ะ'  : 'ครับ';
+    _agentPush({ role: 'ai', text: `สวัสดี${polite} ${pronoun}${name} 👋\nพร้อมช่วยงานเต็มที่เลย${polite} ลองพิมพ์คำสั่ง หรือกดแนบรูป (📎) เพื่อให้${pronoun}อ่านใบปะหน้า/สลิปให้ได้เลย${polite}` });
 }
 
 async function _agentLoadBriefing() {
