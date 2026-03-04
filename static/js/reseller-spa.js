@@ -4249,18 +4249,19 @@ function formatChatTimestamp(dateStr) {
 let resellerSelectedChatProduct = null;
 let resellerChatProductSearchTimeout = null;
 
-function showBotTypingIndicator() {
+let _botTypingTimer = null;
+
+function _renderBotTypingIndicator() {
     const container = document.getElementById('resellerChatMessages');
     if (!container) return;
-    const existing = container.querySelector('#botTypingIndicator');
-    if (existing) return;
+    if (container.querySelector('#botTypingIndicator')) return;
     const div = document.createElement('div');
     div.id = 'botTypingIndicator';
     div.style.cssText = 'display:flex;align-items:flex-end;gap:8px;margin-bottom:12px;';
     div.innerHTML = `
         <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#a855f7,#ec4899);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">🤖</div>
         <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:18px 18px 18px 4px;padding:10px 14px;max-width:70%;">
-            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">กำลังประมาณผล รอสักครู่นะคะ</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">กำลังประมวลผล รอสักครู่นะคะ</div>
             <div style="display:flex;gap:4px;align-items:center;">
                 <span style="width:7px;height:7px;border-radius:50%;background:rgba(168,85,247,0.7);animation:botDot 1.2s infinite 0s;display:inline-block;"></span>
                 <span style="width:7px;height:7px;border-radius:50%;background:rgba(168,85,247,0.7);animation:botDot 1.2s infinite 0.2s;display:inline-block;"></span>
@@ -4277,7 +4278,14 @@ function showBotTypingIndicator() {
     container.scrollTop = container.scrollHeight;
 }
 
-function hideBotTypingIndicator() {
+function showBotTypingIndicatorDelayed(ms) {
+    clearTimeout(_botTypingTimer);
+    _botTypingTimer = setTimeout(() => _renderBotTypingIndicator(), ms || 800);
+}
+
+function cancelBotTypingIndicator() {
+    clearTimeout(_botTypingTimer);
+    _botTypingTimer = null;
     const el = document.getElementById('botTypingIndicator');
     if (el) el.remove();
 }
@@ -4309,16 +4317,16 @@ async function sendResellerChatMessage() {
 
         input.value = '';
         input.style.height = 'auto';
-        showBotTypingIndicator();
-        
+        showBotTypingIndicatorDelayed(800);
+
         const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(body)
         });
-        
-        hideBotTypingIndicator();
+
+        cancelBotTypingIndicator();
 
         if (response.ok) {
             resellerPendingAttachments = [];
@@ -4336,7 +4344,7 @@ async function sendResellerChatMessage() {
             showGlobalAlert('error', error.error || 'ไม่สามารถส่งข้อความได้');
         }
     } catch (error) {
-        hideBotTypingIndicator();
+        cancelBotTypingIndicator();
         showGlobalAlert('error', 'เกิดข้อผิดพลาด: ' + error.message);
     }
 }

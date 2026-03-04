@@ -14561,10 +14561,12 @@ State: {session_data.get('state','IDLE')}
     "category_id": null,
     "desired_size": null
   }},
+  "add_to_cart": {{"product_id": null, "size": null, "quantity": 0}},
   "needs_admin": false
 }}
 - "quick_replies": ปุ่มตัวเลือกให้กด (ไม่เกิน 4 ปุ่ม หรือ [] ถ้าไม่ต้องการ)
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี)
+- "add_to_cart": ใส่ข้อมูลเมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "ขอ L 2 ตัว" หรือ "สั่งเลยค่ะ" — ให้ใส่ product_id (จากรายการสินค้า), size (ชื่อไซส์เช่น "L"), quantity (จำนวน) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย"""
 
         # 11. Call Flash Lite (with Vision if size chart available)
@@ -14605,6 +14607,76 @@ State: {session_data.get('state','IDLE')}
         show_product_ids = [int(x) for x in (parsed.get('show_product_ids') or []) if x]
         new_state = parsed.get('new_state') or {}
         needs_admin_flag = bool(parsed.get('needs_admin', False))
+        add_to_cart_data = parsed.get('add_to_cart') or {}
+
+        # 12a. Auto add to cart if bot detected purchase intent
+        cart_confirm_text = None
+        atc_product_id = add_to_cart_data.get('product_id')
+        atc_size = add_to_cart_data.get('size')
+        atc_qty = int(add_to_cart_data.get('quantity') or 0)
+
+        # Fallback: use current product from session if bot didn't specify
+        if not atc_product_id and session_data.get('current_product_id'):
+            atc_product_id = session_data['current_product_id']
+
+        if atc_product_id and atc_size and atc_qty > 0:
+            try:
+                atc_product_id = int(atc_product_id)
+                # Find SKU by product + size value (via option values OR sku_code suffix)
+                cursor.execute('''
+                    SELECT s.id as sku_id, s.price, s.stock, ptp.discount_percent
+                    FROM skus s
+                    LEFT JOIN product_tier_pricing ptp
+                        ON ptp.product_id = s.product_id AND ptp.tier_id = %s
+                    WHERE s.product_id = %s AND (
+                        s.id IN (
+                            SELECT svm.sku_id FROM sku_values_map svm
+                            JOIN option_values ov ON ov.id = svm.option_value_id
+                            JOIN options o ON o.id = ov.option_id
+                            WHERE LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
+                              AND LOWER(ov.value) = LOWER(%s)
+                        )
+                        OR s.sku_code ILIKE %s
+                    )
+                    ORDER BY s.id
+                    LIMIT 1
+                ''', (reseller_tier_id or 0, atc_product_id, str(atc_size), '%-' + str(atc_size)))
+                sku_row = cursor.fetchone()
+
+                if sku_row and sku_row['stock'] >= atc_qty:
+                    # Get/create cart
+                    cursor.execute('''
+                        INSERT INTO carts (user_id, status)
+                        VALUES (%s, 'active')
+                        ON CONFLICT (user_id, status) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                    ''', (reseller_id,))
+                    cart_id = cursor.fetchone()['id']
+
+                    price = float(sku_row['price'])
+                    discount_pct = float(sku_row['discount_percent'] or 0)
+                    tier_price = round(price * (1 - discount_pct / 100), 2)
+
+                    # Upsert cart item
+                    cursor.execute('''
+                        INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (cart_id, sku_id) DO UPDATE
+                          SET quantity = cart_items.quantity + EXCLUDED.quantity,
+                              updated_at = CURRENT_TIMESTAMP
+                    ''', (cart_id, sku_row['sku_id'], atc_qty, tier_price, discount_pct))
+
+                    cart_confirm_text = (
+                        f'น้องนุ่นนำสินค้าใส่ตะกร้าให้แล้วนะคะ 🛒 ({atc_size} x{atc_qty} ชิ้น) '
+                        f'ขอบคุณที่ให้ความไว้วางใจอุดหนุนนะคะ 🙏 '
+                        f'ยังสนใจสินค้าอื่นเพิ่มเติมไหมคะ?'
+                    )
+                elif sku_row and sku_row['stock'] < atc_qty:
+                    cart_confirm_text = f'ขอโทษนะคะ ไซส์ {atc_size} เหลือสต็อกแค่ {sku_row["stock"]} ชิ้นค่ะ ต้องการปรับจำนวนไหมคะ?'
+                else:
+                    cart_confirm_text = f'ขอโทษนะคะ ไม่พบสินค้าไซส์ {atc_size} ในระบบค่ะ กรุณาตรวจสอบไซส์อีกครั้งนะคะ'
+            except Exception as _cart_err:
+                print(f'[BOT] Cart add error: {_cart_err}')
 
         # 12. Save bot message(s)
         saved_msgs = []
@@ -14614,6 +14686,12 @@ State: {session_data.get('state','IDLE')}
         for pid in show_product_ids[:3]:
             row2 = _bot_save_message(cursor, conn, thread_id, bot_user_id, '', None, product_id=pid)
             saved_msgs.append({'id': row2['id'], 'created_at': row2['created_at'].isoformat()})
+
+        # 12b. Save cart confirmation message (shown after main bot reply)
+        if cart_confirm_text:
+            cart_qr = ['ดูสินค้าอื่น', 'ไปที่ตะกร้า', 'ชำระเงิน']
+            row_cart = _bot_save_message(cursor, conn, thread_id, bot_user_id, cart_confirm_text, cart_qr)
+            saved_msgs.append({'id': row_cart['id'], 'created_at': row_cart['created_at'].isoformat()})
 
         # 13. Update session state + needs_admin
         merged_state = {**session_data, **new_state}
