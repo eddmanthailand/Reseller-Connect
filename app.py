@@ -14879,7 +14879,7 @@ State: {session_data.get('state','IDLE')}
 === สินค้าทดแทน ===
 {alt_products_text or '(ไม่มี หรือยังไม่ได้ระบุไซส์)'}
 
-ตอบกลับเป็น JSON เท่านั้น:
+⚠️ ตอบกลับเป็น JSON เท่านั้น ห้ามตอบเป็นข้อความธรรมดาเด็ดขาด แม้จะมีรูปภาพแนบมา:
 {{
   "message": "ข้อความตอบกลับ (string)",
   "quick_replies": ["ตัวเลือก1", "ตัวเลือก2"],
@@ -14923,20 +14923,27 @@ State: {session_data.get('state','IDLE')}
         )
         raw = resp.text or ''
 
-        # 11. Parse JSON
+        # 11. Parse JSON — Gemini Flash (Vision) sometimes returns plain text instead of JSON
         m = _re.search(r'\{[\s\S]*\}', raw)
         parsed = {}
+        _plain_text_fallback = ''
         if m:
             try:
                 parsed = _json.loads(m.group())
             except Exception as _json_err:
                 print(f'[BOT] JSON parse error: {_json_err} | raw={raw[:300]}')
-                parsed = {}
+                _plain_text_fallback = raw.strip()
         else:
-            print(f'[BOT] No JSON found in response | raw={raw[:300]}')
-        bot_text = parsed.get('message', '').strip() or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ'
-        if not parsed.get('message', '').strip():
-            print(f'[BOT] Empty message | model={_bot_model} | user_msg={user_message_text[:80]} | parsed={str(parsed)[:200]}')
+            # Gemini returned plain text (not JSON) — use it directly as the bot reply
+            _plain_text_fallback = raw.strip()
+            if _plain_text_fallback:
+                print(f'[BOT] Plain text response (no JSON) | model={_bot_model} | text={_plain_text_fallback[:120]}')
+
+        bot_text = (parsed.get('message', '').strip()
+                    or _plain_text_fallback
+                    or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ')
+        if not bot_text or bot_text == 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ':
+            print(f'[BOT] Empty/fallback message | model={_bot_model} | user_msg={user_message_text[:80]}')
         quick_replies = parsed.get('quick_replies') or []
         show_product_ids = [int(x) for x in (parsed.get('show_product_ids') or []) if x]
         new_state = parsed.get('new_state') or {}
