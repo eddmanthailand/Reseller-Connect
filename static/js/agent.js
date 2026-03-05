@@ -182,11 +182,12 @@ function _agentRenderMessages() {
     const el = document.getElementById('agentMessages');
     if (!el) return;
     el.innerHTML = _agentMessages.map((m, i) => {
-        if (m.role === 'ai')      return _agentBubbleAI(m, i);
-        if (m.role === 'user')    return _agentBubbleUser(m, i);
-        if (m.role === 'plan')    return _agentPlanCard(m, i);
-        if (m.role === 'success') return _agentSuccessCard(m, i);
-        if (m.role === 'chart')   return _agentChartCard(m, i);
+        if (m.role === 'ai')       return _agentBubbleAI(m, i);
+        if (m.role === 'user')     return _agentBubbleUser(m, i);
+        if (m.role === 'plan')     return _agentPlanCard(m, i);
+        if (m.role === 'success')  return _agentSuccessCard(m, i);
+        if (m.role === 'chart')    return _agentChartCard(m, i);
+        if (m.role === 'genimage') return _agentGenImageCard(m, i);
         return '';
     }).join('');
     if (_agentLoading) {
@@ -227,6 +228,32 @@ function _agentChartCard(m, i) {
             <div class="agent-bubble-text" style="margin-bottom:10px;">${_esc(m.text)}</div>
             <div style="background:#fff;border-radius:14px;padding:14px 12px;box-shadow:0 1px 6px rgba(0,0,0,0.08);border:1px solid rgba(0,0,0,0.06);">
                 <canvas id="${id}" style="max-height:220px;width:100%;display:block;"></canvas>
+            </div>
+            <div class="agent-feedback-row" style="margin-top:6px;">
+                <button class="agent-fb-btn" onclick="agentFeedback(${i},1)" title="ดีมาก">👍</button>
+                <button class="agent-fb-btn" onclick="agentFeedback(${i},-1)" title="ไม่ตรง">👎</button>
+                ${m.model ? _agentModelBadge(m.model) : ''}
+            </div>
+        </div>
+    </div>`;
+}
+
+function _agentGenImageCard(m, i) {
+    const src = `data:${m.mime_type || 'image/png'};base64,${m.image_b64}`;
+    const shortModel = (m.image_model || 'Imagen').split('/').pop().replace('imagen-','Imagen ');
+    return `<div class="agent-bubble-ai">
+        <div class="agent-bubble-icon"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg></div>
+        <div style="flex:1;min-width:0;">
+            <div class="agent-bubble-text" style="margin-bottom:8px;">${_esc(m.text).replace(/\n/g,'<br>')}</div>
+            <div style="position:relative;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.1);">
+                <img src="${src}" style="width:100%;display:block;border-radius:14px;" alt="AI Generated Image">
+                <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:6px;">
+                    <a href="${src}" download="imagen-${i}.png" style="background:rgba(0,0,0,0.65);backdrop-filter:blur(8px);color:#fff;text-decoration:none;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        ดาวน์โหลด
+                    </a>
+                    <span style="background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);color:rgba(255,255,255,0.8);padding:5px 10px;border-radius:8px;font-size:10px;font-weight:600;">🎨 ${_esc(shortModel)}</span>
+                </div>
             </div>
             <div class="agent-feedback-row" style="margin-top:6px;">
                 <button class="agent-fb-btn" onclick="agentFeedback(${i},1)" title="ดีมาก">👍</button>
@@ -359,6 +386,8 @@ async function agentSend() {
 
         if (data.type === 'chart') {
             _agentMessages.push({ role: 'chart', text: data.message, chartConfig: data.chart, model: data.model_used });
+        } else if (data.type === 'image') {
+            _agentMessages.push({ role: 'genimage', text: data.message, image_b64: data.image_b64, mime_type: data.mime_type, prompt: data.prompt, image_model: data.image_model, model: data.model_used });
         } else if (data.type === 'plan') {
             _agentMessages.push({ role: 'plan', text: data.message, plan: data.plan, log_id: data.log_id, tool: data.tool, params: data.params, approved: false, model: data.model_used });
         } else {

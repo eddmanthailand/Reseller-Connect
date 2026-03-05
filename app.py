@@ -17156,6 +17156,7 @@ def _agent_build_system_prompt(settings, context=None):
 - read_notes: อ่านสมุดโน้ต AI ทั้งหมด
 - query_facebook_ads: ดึงข้อมูล Meta Ads จริงจาก Marketing API (params: period="7d"/"30d"/"90d")
 - search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query)
+- generate_image: สร้างภาพด้วย AI (Imagen 4) จาก prompt ที่กำหนด (params: prompt, aspect_ratio="1:1"/"16:9"/"9:16"/"4:3", negative_prompt="สิ่งที่ไม่ต้องการในภาพ (optional)")
 - chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
 - chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart
 - chart_order_status: กราฟสัดส่วนสถานะออเดอร์ Pie chart
@@ -18081,6 +18082,61 @@ def _agent_execute_read_tool(tool, params, cursor):
         except Exception as _e:
             return {'text': f'เรียก {_path} ไม่สำเร็จ: {str(_e)}'}
 
+    elif tool == 'generate_image':
+        import base64 as _b64
+        _prompt        = (params.get('prompt') or '').strip()
+        _aspect        = (params.get('aspect_ratio') or '1:1').strip()
+        _neg_prompt    = (params.get('negative_prompt') or '').strip()
+        if not _prompt:
+            return {'text': '⚠️ กรุณาระบุ prompt สำหรับสร้างภาพ'}
+        _aspect_map = {'1:1': 'IMAGE_ASPECT_RATIO_SQUARE', '16:9': 'IMAGE_ASPECT_RATIO_LANDSCAPE_16_9',
+                       '9:16': 'IMAGE_ASPECT_RATIO_PORTRAIT_9_16', '4:3': 'IMAGE_ASPECT_RATIO_LANDSCAPE_4_3',
+                       '3:4': 'IMAGE_ASPECT_RATIO_PORTRAIT_3_4'}
+        _ar_enum = _aspect_map.get(_aspect, 'IMAGE_ASPECT_RATIO_SQUARE')
+        _models_to_try = ['imagen-4.0-generate-preview-05-20', 'imagen-4.0-generate-preview-06-06',
+                          'imagen-4.0-ultra-generate-preview-05-20', 'imagen-3.0-generate-002']
+        _img_bytes = None
+        _mime_type = 'image/png'
+        _used_model = None
+        _last_err = None
+        try:
+            from google import genai as _gai
+            from google.genai import types as _gai_types
+            import os as _os2
+            _gclient = _gai.Client(api_key=_os2.environ.get('GEMINI_API_KEY', ''))
+            for _m in _models_to_try:
+                try:
+                    _gen_cfg = {'number_of_images': 1, 'output_mime_type': 'image/png',
+                                'aspect_ratio': _ar_enum}
+                    if _neg_prompt:
+                        _gen_cfg['negative_prompt'] = _neg_prompt
+                    _resp = _gclient.models.generate_images(
+                        model=_m,
+                        prompt=_prompt,
+                        config=_gai_types.GenerateImagesConfig(**_gen_cfg)
+                    )
+                    if _resp.generated_images:
+                        _img_bytes = _resp.generated_images[0].image.image_bytes
+                        _mime_type = 'image/png'
+                        _used_model = _m
+                        break
+                except Exception as _me:
+                    _last_err = str(_me)
+                    continue
+        except Exception as _import_err:
+            return {'text': f'❌ โหลด google-genai ไม่สำเร็จ: {_import_err}'}
+        if not _img_bytes:
+            return {'text': f'❌ สร้างภาพไม่สำเร็จ: {_last_err}'}
+        _b64_str = _b64.b64encode(_img_bytes).decode('utf-8')
+        _short_model = _used_model.split('/')[-1] if _used_model else 'Imagen'
+        return {
+            'text': f'🎨 สร้างภาพสำเร็จด้วย {_short_model}\n📝 Prompt: {_prompt[:80]}{"..." if len(_prompt)>80 else ""}',
+            'image_b64': _b64_str,
+            'mime_type': _mime_type,
+            'prompt': _prompt,
+            'model': _used_model
+        }
+
     return {'text': 'ไม่รู้จัก tool นี้'}
 
 
@@ -18164,6 +18220,11 @@ def agent_chat():
             result = _agent_execute_read_tool(tool, params, cursor)
             if result.get('chart'):
                 return jsonify({'type': 'chart', 'message': result['text'], 'chart': result['chart'], 'model_used': model_used}), 200
+            if result.get('image_b64'):
+                return jsonify({'type': 'image', 'message': result['text'],
+                                'image_b64': result['image_b64'], 'mime_type': result.get('mime_type', 'image/png'),
+                                'prompt': result.get('prompt', ''), 'image_model': result.get('model', ''),
+                                'model_used': model_used}), 200
             if tool in _code_tools:
                 explanation = _agent_explain_code(message, result['text'], settings)
                 return jsonify({'type': 'answer', 'message': explanation, 'model_used': model_used}), 200
