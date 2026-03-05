@@ -14929,9 +14929,14 @@ State: {session_data.get('state','IDLE')}
         if m:
             try:
                 parsed = _json.loads(m.group())
-            except Exception:
+            except Exception as _json_err:
+                print(f'[BOT] JSON parse error: {_json_err} | raw={raw[:300]}')
                 parsed = {}
+        else:
+            print(f'[BOT] No JSON found in response | raw={raw[:300]}')
         bot_text = parsed.get('message', '').strip() or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ'
+        if not parsed.get('message', '').strip():
+            print(f'[BOT] Empty message | model={_bot_model} | user_msg={user_message_text[:80]} | parsed={str(parsed)[:200]}')
         quick_replies = parsed.get('quick_replies') or []
         show_product_ids = [int(x) for x in (parsed.get('show_product_ids') or []) if x]
         new_state = parsed.get('new_state') or {}
