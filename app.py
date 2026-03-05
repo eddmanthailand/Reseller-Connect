@@ -14537,7 +14537,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # 7. Active promotions (cached 5 min)
         def _fetch_promos():
             cursor.execute('''
-                SELECT name, promo_type, reward_type, reward_value, min_purchase_amount,
+                SELECT name, promo_type, reward_type, reward_value, condition_min_spend,
                        start_date, end_date FROM promotions
                 WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
                 LIMIT 5
@@ -14556,7 +14556,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     _reward_str = "ส่งฟรี"
                 else:
                     _reward_str = str(_rv)
-                _min = f" (ซื้อขั้นต่ำ ฿{p['min_purchase_amount']:.0f})" if p.get('min_purchase_amount') else ""
+                _min = f" (ซื้อขั้นต่ำ ฿{p['condition_min_spend']:.0f})" if p.get('condition_min_spend') else ""
                 _end = f" หมดเขต {p['end_date']}" if p.get('end_date') else ""
                 _promo_lines.append(f"  • {p['name']}: {_reward_str}{_min}{_end}")
             promos_text = '\n'.join(_promo_lines)
