@@ -14918,32 +14918,47 @@ State: {session_data.get('state','IDLE')}
             config=_genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.3 if size_chart_image_bytes else 0.7,
-                max_output_tokens=1024 if size_chart_image_bytes else 512
+                max_output_tokens=2048 if size_chart_image_bytes else 600
             )
         )
         raw = resp.text or ''
 
-        # 11. Parse JSON — Gemini Flash (Vision) sometimes returns plain text instead of JSON
+        # 11. Parse JSON — handles: valid JSON, truncated JSON, plain text
         m = _re.search(r'\{[\s\S]*\}', raw)
         parsed = {}
         _plain_text_fallback = ''
         if m:
             try:
                 parsed = _json.loads(m.group())
-            except Exception as _json_err:
-                print(f'[BOT] JSON parse error: {_json_err} | raw={raw[:300]}')
-                _plain_text_fallback = raw.strip()
+            except Exception:
+                # JSON truncated or malformed — try to extract "message" field directly
+                _msg_match = _re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', m.group())
+                if _msg_match:
+                    _plain_text_fallback = _msg_match.group(1).replace('\\n', '\n').replace('\\"', '"')
+                else:
+                    _plain_text_fallback = raw.strip()
+                print(f'[BOT] Truncated/invalid JSON | extracted={_plain_text_fallback[:80]}')
         else:
-            # Gemini returned plain text (not JSON) — use it directly as the bot reply
-            _plain_text_fallback = raw.strip()
-            if _plain_text_fallback:
-                print(f'[BOT] Plain text response (no JSON) | model={_bot_model} | text={_plain_text_fallback[:120]}')
+            raw_stripped = raw.strip()
+            # Check if it looks like JSON that got split (starts with { but no closing })
+            if raw_stripped.startswith('{') and '"message"' in raw_stripped:
+                _msg_match = _re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_stripped)
+                if _msg_match:
+                    _plain_text_fallback = _msg_match.group(1).replace('\\n', '\n').replace('\\"', '"')
+                    print(f'[BOT] Extracted message from truncated JSON | text={_plain_text_fallback[:80]}')
+                else:
+                    _plain_text_fallback = raw_stripped
+            else:
+                # Gemini returned genuine plain text — use directly
+                _plain_text_fallback = raw_stripped
+                if _plain_text_fallback:
+                    print(f'[BOT] Plain text response | model={_bot_model} | text={_plain_text_fallback[:120]}')
 
         bot_text = (parsed.get('message', '').strip()
                     or _plain_text_fallback
                     or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ')
         if not bot_text or bot_text == 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ':
-            print(f'[BOT] Empty/fallback message | model={_bot_model} | user_msg={user_message_text[:80]}')
+            print(f'[BOT] Empty/fallback | model={_bot_model} | user_msg={user_message_text[:80]}')
         quick_replies = parsed.get('quick_replies') or []
         show_product_ids = [int(x) for x in (parsed.get('show_product_ids') or []) if x]
         new_state = parsed.get('new_state') or {}
