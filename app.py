@@ -14557,7 +14557,8 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                 else:
                     _reward_str = str(_rv)
                 _min = f" (ซื้อขั้นต่ำ ฿{p['condition_min_spend']:.0f})" if p.get('condition_min_spend') else ""
-                _end = f" หมดเขต {p['end_date']}" if p.get('end_date') else ""
+                _p_end = p.get('end_date')
+                _end = f" หมดเขต {_p_end.strftime('%d/%m/%Y') if hasattr(_p_end,'strftime') else str(_p_end)[:10]}" if _p_end else ""
                 _promo_lines.append(f"  • {p['name']}: {_reward_str}{_min}{_end}")
             promos_text = '\n'.join(_promo_lines)
         else:
@@ -14566,12 +14567,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # 7b. Reseller's own coupons (ready to use)
         cursor.execute('''
             SELECT c.code, c.name, c.discount_type, c.discount_value, c.min_spend,
-                   c.max_discount, c.expiry_date, uc.status
+                   c.max_discount, c.end_date, uc.status
             FROM user_coupons uc
             JOIN coupons c ON c.id = uc.coupon_id
             WHERE uc.user_id = %s AND uc.status = 'ready'
-              AND (c.expiry_date IS NULL OR c.expiry_date >= CURRENT_DATE)
-            ORDER BY c.expiry_date NULLS LAST
+              AND (c.end_date IS NULL OR c.end_date >= CURRENT_DATE)
+            ORDER BY c.end_date NULLS LAST
             LIMIT 10
         ''', (reseller_id,))
         reseller_coupons = cursor.fetchall()
@@ -14589,7 +14590,8 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     _d_str = str(_dv)
                 _min_s = f" ซื้อขั้นต่ำ ฿{cp['min_spend']:.0f}" if cp.get('min_spend') else ""
                 _max_d = f" (ลดสูงสุด ฿{cp['max_discount']:.0f})" if cp.get('max_discount') else ""
-                _exp = f" หมดอายุ {cp['expiry_date']}" if cp.get('expiry_date') else ""
+                _end_d = cp.get('end_date')
+                _exp = f" หมดอายุ {_end_d.strftime('%d/%m/%Y') if hasattr(_end_d,'strftime') else str(_end_d)[:10]}" if _end_d else ""
                 _cpn_lines.append(f"  • โค้ด [{cp['code']}] {cp['name']}: {_d_str}{_min_s}{_max_d}{_exp}")
             coupons_text = '\n'.join(_cpn_lines)
         else:
