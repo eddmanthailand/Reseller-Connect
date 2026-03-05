@@ -14470,7 +14470,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 
         # 7. Active promotions
         cursor.execute('''
-            SELECT name, description FROM promotions
+            SELECT name, promo_type, reward_type, reward_value FROM promotions
             WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
             LIMIT 5
         ''')

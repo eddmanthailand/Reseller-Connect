@@ -3172,14 +3172,23 @@
 
             <!-- Chat Page -->
             <div id="page-chat" class="page-content">
-                <div class="page-header">
-                    <h1>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        แชทกับตัวแทน
-                    </h1>
-                    <p>สื่อสารกับสมาชิกทั้งหมด</p>
+                <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                    <div>
+                        <h1>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            แชทกับตัวแทน
+                        </h1>
+                        <p>สื่อสารกับสมาชิกทั้งหมด</p>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                        <span style="font-size:13px;color:rgba(255,255,255,0.6);">🤖 บอทแชท:</span>
+                        <button id="btnGlobalBotToggle" onclick="toggleGlobalBot()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid rgba(72,199,142,0.5);background:rgba(72,199,142,0.15);color:#48c78e;transition:all 0.2s;">
+                            <span id="globalBotStatusDot" style="width:8px;height:8px;border-radius:50%;background:#48c78e;display:inline-block;"></span>
+                            <span id="globalBotStatusLabel">กำลังโหลด...</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="admin-chat-grid" style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: calc(100vh - 200px); min-height: 500px;">
@@ -4145,7 +4154,7 @@
     </script>
     <script src="/static/js/global-alert.js?v=20260228"></script>
     <script src="/static/js/thai-address.js?v=20241214"></script>
-    <script src="/static/js/dashboard.js?v=20260228"></script>
+    <script src="/static/js/dashboard.js?v=20260305g"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
 

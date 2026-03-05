@@ -589,6 +589,7 @@ function switchPage(pageName) {
         loadChatThreadsAndAutoSelect();
         loadChatUnreadCount();
         startChatPolling();
+        loadGlobalBotStatus();
     } else if (pageName === 'promotions') {
         loadPromotions();
     } else if (pageName === 'coupons') {
@@ -8586,6 +8587,61 @@ async function toggleChatBot() {
             const data = await res.json();
             updateChatBotToggleBtn(data.bot_active);
             showGlobalAlert('success', data.bot_active ? '🤖 บอทเปิดทำงานแล้ว' : '⏸️ บอทหยุดทำงานแล้ว');
+        }
+    } catch (e) {
+        showGlobalAlert('error', 'เกิดข้อผิดพลาด');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function _updateGlobalBotBtn(enabled) {
+    const btn = document.getElementById('btnGlobalBotToggle');
+    const dot = document.getElementById('globalBotStatusDot');
+    const lbl = document.getElementById('globalBotStatusLabel');
+    if (!btn) return;
+    if (enabled) {
+        btn.style.background = 'rgba(72,199,142,0.15)';
+        btn.style.color = '#48c78e';
+        btn.style.borderColor = 'rgba(72,199,142,0.5)';
+        if (dot) { dot.style.background = '#48c78e'; }
+        if (lbl) lbl.textContent = 'เปิดอยู่ — คลิกเพื่อปิด';
+    } else {
+        btn.style.background = 'rgba(255,255,255,0.07)';
+        btn.style.color = 'rgba(255,255,255,0.5)';
+        btn.style.borderColor = 'rgba(255,255,255,0.2)';
+        if (dot) { dot.style.background = '#6b7280'; }
+        if (lbl) lbl.textContent = 'ปิดอยู่ — คลิกเพื่อเปิด';
+    }
+}
+
+async function loadGlobalBotStatus() {
+    try {
+        const res = await fetch('/api/admin/bot-settings', { credentials: 'include' });
+        if (res.ok) {
+            const data = await res.json();
+            _updateGlobalBotBtn(data.bot_chat_enabled !== false);
+        }
+    } catch (e) {}
+}
+
+async function toggleGlobalBot() {
+    const btn = document.getElementById('btnGlobalBotToggle');
+    if (btn) btn.disabled = true;
+    try {
+        const statusRes = await fetch('/api/admin/bot-settings', { credentials: 'include' });
+        if (!statusRes.ok) return;
+        const current = await statusRes.json();
+        const newEnabled = !(current.bot_chat_enabled !== false);
+        const res = await fetch('/api/admin/bot-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ bot_chat_enabled: newEnabled })
+        });
+        if (res.ok) {
+            _updateGlobalBotBtn(newEnabled);
+            showGlobalAlert('success', newEnabled ? '🤖 เปิดบอทแชทแล้ว' : '⏸️ ปิดบอทแชทแล้ว');
         }
     } catch (e) {
         showGlobalAlert('error', 'เกิดข้อผิดพลาด');
