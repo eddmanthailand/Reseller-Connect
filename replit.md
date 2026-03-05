@@ -71,3 +71,4 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 
 ### Active Integrations
 - **iShip (ตัวกลางการขนส่ง)**: Webhook integration (`POST /api/webhook/iship`) for shipping status updates (delivered, shipped, returned, etc.). Authenticated via `X-API-Key` or `Authorization: Bearer`.
+- **Meta Marketing API**: Facebook Ads real data integration (`/api/admin/facebook-ads/meta-insights`). Credentials (Access Token + Ad Account ID) stored in `facebook_pixel_settings` table, with fallback to `META_ACCESS_TOKEN` / `META_AD_ACCOUNT_ID` environment variables. AI Agent can call `query_facebook_ads` tool to analyze ad performance (spend, ROAS, CTR, impressions, conversions).

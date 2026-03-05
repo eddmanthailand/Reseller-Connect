@@ -3389,8 +3389,24 @@
                 </div>
 
                 <div class="settings-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-                    <!-- Left Column: Chart + Recent Registrations -->
+                    <!-- Left Column: Meta Insights + Chart + Recent Registrations -->
                     <div style="display: flex; flex-direction: column; gap: 24px;">
+
+                        <!-- Meta Real Ads Insights -->
+                        <div class="settings-card" id="metaInsightsCard" style="display:none;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                                <h3 style="margin:0;color:#60a5fa;">📘 Meta Ads — ข้อมูลจริง</h3>
+                                <div style="display:flex;gap:6px;">
+                                    <button onclick="loadMetaInsights('7d')" id="metaBtn7d" class="btn-secondary" style="padding:4px 10px;font-size:11px;">7 วัน</button>
+                                    <button onclick="loadMetaInsights('30d')" id="metaBtn30d" class="btn-primary" style="padding:4px 10px;font-size:11px;">30 วัน</button>
+                                    <button onclick="loadMetaInsights('90d')" id="metaBtn90d" class="btn-secondary" style="padding:4px 10px;font-size:11px;">90 วัน</button>
+                                </div>
+                            </div>
+                            <div id="metaInsightsContent">
+                                <div style="text-align:center;padding:20px;opacity:0.5;font-size:13px;">กำลังโหลด...</div>
+                            </div>
+                        </div>
+
                         <!-- Chart Card -->
                         <div class="settings-card">
                             <h3>
@@ -3484,6 +3500,46 @@
                             </button>
                         </div>
                         
+                        <!-- Meta Marketing API Settings -->
+                        <div class="settings-card" style="border: 1px solid rgba(24,119,242,0.3);">
+                            <h3 style="color:#60a5fa;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h.01M15 9h.01M9 15h6"/></svg>
+                                Meta Marketing API
+                            </h3>
+                            <div style="font-size:11px;opacity:0.6;margin-bottom:12px;">เชื่อมต่อเพื่อดูข้อมูลโฆษณาจริง (Spend, ROAS, CTR ฯลฯ) และให้ AI วิเคราะห์</div>
+
+                            <div id="metaApiStatus" style="margin-bottom:12px;padding:8px 12px;border-radius:8px;font-size:12px;background:rgba(255,255,255,0.05);">
+                                กำลังตรวจสอบ...
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Ad Account ID</label>
+                                <input type="text" id="metaAdAccountId" class="form-input" placeholder="เช่น 123456789012345">
+                                <small style="opacity:0.6;font-size:11px;">หาได้จาก Meta Ads Manager → Account ID (ไม่ต้องใส่ act_)</small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Access Token</label>
+                                <input type="password" id="metaAccessToken" class="form-input" placeholder="ใส่ token ใหม่เพื่ออัปเดต (ว่างไว้ = คงเดิม)">
+                                <small style="opacity:0.6;font-size:11px;">ใช้ System User Token (ถาวร) จาก Meta Business Suite</small>
+                            </div>
+
+                            <div style="background:rgba(24,119,242,0.08);padding:10px 12px;border-radius:8px;margin-bottom:14px;border-left:3px solid #1877f2;">
+                                <div style="font-size:11px;opacity:0.85;line-height:1.6;">
+                                    <strong>วิธีสร้าง System User Token:</strong><br>
+                                    Meta Business Suite → Settings → System Users → สร้าง System User → Generate Token → เลือก Ad Account Permission: ads_read
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:8px;">
+                                <button type="button" onclick="saveMetaApiSettings()" class="btn-primary" style="flex:1;justify-content:center;background:linear-gradient(135deg,#1877f2,#0d5fc4);">
+                                    💾 บันทึก
+                                </button>
+                                <button type="button" onclick="loadMetaInsights('30d')" class="btn-secondary" style="flex:1;justify-content:center;">
+                                    📊 ดึงข้อมูล
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Landing Page Link -->
                         <div class="settings-card">
                             <h3>

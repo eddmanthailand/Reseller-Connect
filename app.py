@@ -4832,6 +4832,155 @@ def get_facebook_ads_stats():
         if conn:
             conn.close()
 
+# ==================== FACEBOOK META API ====================
+
+def _get_meta_credentials(cursor):
+    """Get Meta API credentials: prefer DB, fallback to env vars."""
+    cursor.execute('SELECT meta_access_token, meta_ad_account_id FROM facebook_pixel_settings LIMIT 1')
+    row = cursor.fetchone()
+    token = (row['meta_access_token'] if row else None) or os.environ.get('META_ACCESS_TOKEN', '')
+    account_id = (row['meta_ad_account_id'] if row else None) or os.environ.get('META_AD_ACCOUNT_ID', '')
+    return token.strip() if token else '', account_id.strip() if account_id else ''
+
+
+@app.route('/api/admin/facebook-ads/meta-settings', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_meta_ads_settings():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if request.method == 'GET':
+            token, account_id = _get_meta_credentials(cursor)
+            # Mask token for display
+            masked = (token[:12] + '...' + token[-4:]) if len(token) > 16 else ('*' * len(token) if token else '')
+            env_token = bool(os.environ.get('META_ACCESS_TOKEN'))
+            env_account = bool(os.environ.get('META_AD_ACCOUNT_ID'))
+            return jsonify({
+                'meta_access_token_masked': masked,
+                'meta_ad_account_id': account_id,
+                'has_token': bool(token),
+                'has_account': bool(account_id),
+                'token_from_env': env_token,
+                'account_from_env': env_account
+            })
+        else:
+            data = request.get_json(silent=True) or {}
+            new_token = (data.get('meta_access_token') or '').strip()
+            new_account = (data.get('meta_ad_account_id') or '').strip()
+            cursor.execute('SELECT id, meta_access_token FROM facebook_pixel_settings LIMIT 1')
+            existing = cursor.fetchone()
+            # Keep existing token if blank (user clearing shouldn't wipe accidentally)
+            if not new_token and existing and existing.get('meta_access_token'):
+                new_token = existing['meta_access_token']
+            if existing:
+                cursor.execute('''
+                    UPDATE facebook_pixel_settings
+                    SET meta_access_token = %s, meta_ad_account_id = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (new_token or None, new_account or None, existing['id']))
+            else:
+                cursor.execute('''
+                    INSERT INTO facebook_pixel_settings (meta_access_token, meta_ad_account_id)
+                    VALUES (%s, %s)
+                ''', (new_token or None, new_account or None))
+            conn.commit()
+            return jsonify({'ok': True, 'message': 'บันทึกข้อมูล Meta API เรียบร้อย'})
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/facebook-ads/meta-insights', methods=['GET'])
+@login_required
+@admin_required
+def admin_meta_ads_insights():
+    """Fetch real ad performance data from Meta Marketing API."""
+    import urllib.request
+    import urllib.parse
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        if not token or not account_id:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token หรือ Ad Account ID'}), 400
+
+        # Normalize account ID (ensure starts with act_)
+        if not account_id.startswith('act_'):
+            account_id = f'act_{account_id}'
+
+        period = request.args.get('period', '30d')
+        period_map = {'7d': 7, '30d': 30, '90d': 90}
+        days = period_map.get(period, 30)
+        since = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        until = datetime.now().strftime('%Y-%m-%d')
+
+        fields = 'impressions,clicks,spend,reach,cpm,cpc,ctr,actions,action_values'
+        params = urllib.parse.urlencode({
+            'fields': fields,
+            'time_range': json.dumps({'since': since, 'until': until}),
+            'level': 'account',
+            'access_token': token
+        })
+        url = f'https://graph.facebook.com/v19.0/{account_id}/insights?{params}'
+
+        req = urllib.request.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode())
+
+        data_rows = raw.get('data', [])
+        if not data_rows:
+            return jsonify({'ok': True, 'data': None, 'period': period, 'message': 'ยังไม่มีข้อมูลโฆษณาในช่วงเวลานี้'})
+
+        row = data_rows[0]
+        actions = {a['action_type']: float(a['value']) for a in (row.get('actions') or [])}
+        action_values = {a['action_type']: float(a['value']) for a in (row.get('action_values') or [])}
+        purchase_value = action_values.get('purchase', 0)
+        purchase_count = int(actions.get('purchase', 0))
+        spend = float(row.get('spend', 0))
+        roas = round(purchase_value / spend, 2) if spend > 0 else 0
+
+        return jsonify({
+            'ok': True,
+            'period': period,
+            'since': since,
+            'until': until,
+            'data': {
+                'impressions': int(row.get('impressions', 0)),
+                'clicks': int(row.get('clicks', 0)),
+                'spend': spend,
+                'reach': int(row.get('reach', 0)),
+                'cpm': float(row.get('cpm', 0)),
+                'cpc': float(row.get('cpc', 0)),
+                'ctr': float(row.get('ctr', 0)),
+                'purchases': purchase_count,
+                'purchase_value': purchase_value,
+                'roas': roas
+            }
+        })
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode()
+        try:
+            err_json = json.loads(err_body)
+            msg = err_json.get('error', {}).get('message', err_body)
+        except Exception:
+            msg = err_body
+        return jsonify({'error': f'Meta API Error: {msg}'}), 400
+    except urllib.error.URLError as ue:
+        return jsonify({'error': f'ไม่สามารถเชื่อมต่อ Meta API: {ue.reason}'}), 503
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 # ==================== NOTIFICATIONS API ====================
 
 @app.route('/api/notifications', methods=['GET'])
@@ -17005,6 +17154,7 @@ def _agent_build_system_prompt(settings, context=None):
 - query_unread_chat: แชทที่ยังไม่ได้อ่าน
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
 - read_notes: อ่านสมุดโน้ต AI ทั้งหมด
+- query_facebook_ads: ดึงข้อมูล Meta Ads จริงจาก Marketing API (params: period="7d"/"30d"/"90d")
 - search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query)
 - chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
 - chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart
@@ -17497,6 +17647,68 @@ def _agent_execute_read_tool(tool, params, cursor):
             return {'text': f"📒 **สมุดโน้ต AI** ({len(rows)} รายการ)\n" + '\n'.join(lines)}
         except Exception as e:
             return {'text': f'ไม่สามารถอ่านสมุดโน้ตได้: {e}'}
+
+    elif tool == 'query_facebook_ads':
+        import urllib.request as _ur
+        import urllib.parse as _up
+        import urllib.error as _ue
+        try:
+            conn2 = get_db()
+            cur2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            token, account_id = _get_meta_credentials(cur2)
+            cur2.close(); conn2.close()
+        except Exception as _ce:
+            return {'text': f'ไม่สามารถอ่านข้อมูล Meta credentials: {_ce}'}
+        if not token or not account_id:
+            return {'text': '⚠️ ยังไม่ได้ตั้งค่า Meta Access Token หรือ Ad Account ID\nไปที่หน้า Facebook Ads → Meta Marketing API Settings เพื่อตั้งค่า'}
+        period = str(params.get('period', '30d'))
+        period_map = {'7d': 7, '30d': 30, '90d': 90}
+        days_n = period_map.get(period, 30)
+        since = (datetime.now() - timedelta(days=days_n)).strftime('%Y-%m-%d')
+        until = datetime.now().strftime('%Y-%m-%d')
+        if not account_id.startswith('act_'):
+            account_id = f'act_{account_id}'
+        _qp = _up.urlencode({
+            'fields': 'impressions,clicks,spend,reach,cpm,cpc,ctr,actions,action_values',
+            'time_range': json.dumps({'since': since, 'until': until}),
+            'level': 'account',
+            'access_token': token
+        })
+        _url = f'https://graph.facebook.com/v19.0/{account_id}/insights?{_qp}'
+        try:
+            _req = _ur.Request(_url, headers={'User-Agent': 'EKGShops/1.0'})
+            with _ur.urlopen(_req, timeout=15) as _resp:
+                _raw = json.loads(_resp.read().decode())
+            _rows = _raw.get('data', [])
+            if not _rows:
+                return {'text': f'📊 ไม่มีข้อมูลโฆษณา Meta ในช่วง {since} — {until}'}
+            _r = _rows[0]
+            _actions = {a['action_type']: float(a['value']) for a in (_r.get('actions') or [])}
+            _av = {a['action_type']: float(a['value']) for a in (_r.get('action_values') or [])}
+            _spend = float(_r.get('spend', 0))
+            _pval = _av.get('purchase', 0)
+            _pcnt = int(_actions.get('purchase', 0))
+            _roas = round(_pval / _spend, 2) if _spend > 0 else 0
+            return {'text': (
+                f"📘 Meta Ads — {period} ({since} ถึง {until})\n"
+                f"💰 งบโฆษณา: ฿{_spend:,.2f}\n"
+                f"👁 Impressions: {int(_r.get('impressions',0)):,}\n"
+                f"🖱 Clicks: {int(_r.get('clicks',0)):,}\n"
+                f"📈 CTR: {float(_r.get('ctr',0)):.2f}%\n"
+                f"💵 CPC: ฿{float(_r.get('cpc',0)):,.2f}\n"
+                f"📢 CPM: ฿{float(_r.get('cpm',0)):,.2f}\n"
+                f"🛒 ยอดซื้อ: {_pcnt} ครั้ง มูลค่า ฿{_pval:,.0f}\n"
+                f"📊 ROAS: {_roas}x"
+            )}
+        except _ue.HTTPError as _he:
+            _eb = _he.read().decode()
+            try:
+                _ej = json.loads(_eb).get('error', {}).get('message', _eb)
+            except Exception:
+                _ej = _eb
+            return {'text': f'❌ Meta API Error: {_ej}'}
+        except Exception as _me:
+            return {'text': f'ไม่สามารถดึงข้อมูล Meta Ads ได้: {_me}'}
 
     elif tool == 'search_web':
         query = params.get('query', '').strip()

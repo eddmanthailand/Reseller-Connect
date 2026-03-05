@@ -3374,17 +3374,107 @@ async function saveFacebookPixelSettings() {
 let fbAdsChart = null;
 
 async function loadFacebookAdsPage() {
-    // Set Landing Page URL - use custom domain
     const urlInput = document.getElementById('fbLandingUrl');
-    if (urlInput) {
-        urlInput.value = 'https://ekgshops.com/join';
-    }
-    
-    // Load Pixel settings
+    if (urlInput) urlInput.value = 'https://ekgshops.com/join';
     loadFbAdsPixelSettings();
-    
-    // Load stats
     loadFacebookAdsStats();
+    loadMetaApiStatus();
+}
+
+/* ─── Meta Marketing API ─── */
+async function loadMetaApiStatus() {
+    try {
+        const r = await fetch('/api/admin/facebook-ads/meta-settings', { credentials: 'include' });
+        if (!r.ok) return;
+        const d = await r.json();
+        const el = document.getElementById('metaApiStatus');
+        const accountEl = document.getElementById('metaAdAccountId');
+        if (el) {
+            if (d.has_token && d.has_account) {
+                el.style.background = 'rgba(74,222,128,0.1)';
+                el.style.border = '1px solid rgba(74,222,128,0.3)';
+                el.innerHTML = `✅ เชื่อมต่อแล้ว | Account: <strong>${d.meta_ad_account_id}</strong> | Token: <code style="font-size:10px;">${d.meta_access_token_masked}</code>${d.token_from_env ? ' <span style="opacity:0.6;">(env)</span>' : ''}`;
+                document.getElementById('metaInsightsCard').style.display = '';
+                loadMetaInsights('30d');
+            } else {
+                el.style.background = 'rgba(251,191,36,0.1)';
+                el.style.border = '1px solid rgba(251,191,36,0.3)';
+                el.innerHTML = '⚠️ ยังไม่ได้ตั้งค่า — กรอก Access Token และ Ad Account ID แล้วกดบันทึก';
+            }
+        }
+        if (accountEl && d.meta_ad_account_id) accountEl.value = d.meta_ad_account_id;
+    } catch (e) { console.error('loadMetaApiStatus', e); }
+}
+
+async function saveMetaApiSettings() {
+    const token = document.getElementById('metaAccessToken')?.value || '';
+    const account = document.getElementById('metaAdAccountId')?.value.trim() || '';
+    if (!account) { showAlert('กรุณาระบุ Ad Account ID', 'error'); return; }
+    try {
+        const r = await fetch('/api/admin/facebook-ads/meta-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ meta_access_token: token, meta_ad_account_id: account })
+        });
+        const d = await r.json();
+        if (r.ok) {
+            showAlert('บันทึก Meta API credentials เรียบร้อย', 'success');
+            document.getElementById('metaAccessToken').value = '';
+            loadMetaApiStatus();
+        } else {
+            showAlert(d.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (e) { showAlert('ไม่สามารถบันทึกได้', 'error'); }
+}
+
+async function loadMetaInsights(period = '30d') {
+    const card = document.getElementById('metaInsightsCard');
+    const content = document.getElementById('metaInsightsContent');
+    if (!card || !content) return;
+    card.style.display = '';
+    content.innerHTML = '<div style="text-align:center;padding:20px;opacity:0.5;font-size:13px;">กำลังดึงข้อมูลจาก Meta...</div>';
+    ['7d','30d','90d'].forEach(p => {
+        const btn = document.getElementById(`metaBtn${p}`);
+        if (btn) { btn.className = p === period ? 'btn-primary' : 'btn-secondary'; btn.style.padding='4px 10px'; btn.style.fontSize='11px'; }
+    });
+    try {
+        const r = await fetch(`/api/admin/facebook-ads/meta-insights?period=${period}`, { credentials: 'include' });
+        const d = await r.json();
+        if (!r.ok || d.error) {
+            content.innerHTML = `<div style="color:#f87171;font-size:13px;padding:12px;">${d.error || 'ไม่สามารถดึงข้อมูลได้'}</div>`;
+            return;
+        }
+        if (!d.data) {
+            content.innerHTML = `<div style="opacity:0.5;font-size:13px;padding:12px;text-align:center;">${d.message || 'ไม่มีข้อมูล'}</div>`;
+            return;
+        }
+        const x = d.data;
+        const roas_color = x.roas >= 3 ? '#4ade80' : x.roas >= 1.5 ? '#fbbf24' : '#f87171';
+        content.innerHTML = `
+            <div style="font-size:11px;opacity:0.5;margin-bottom:12px;">${d.since} — ${d.until}</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;">
+                ${_metaStat('💰 ใช้จ่าย', '฿' + x.spend.toLocaleString('th-TH',{minimumFractionDigits:0}), '#60a5fa')}
+                ${_metaStat('📊 ROAS', x.roas + 'x', roas_color)}
+                ${_metaStat('🛒 ยอดซื้อ', '฿' + x.purchase_value.toLocaleString('th-TH',{minimumFractionDigits:0}), '#4ade80')}
+                ${_metaStat('👁 Impressions', x.impressions.toLocaleString(), '#e2e8f0')}
+                ${_metaStat('🖱 Clicks', x.clicks.toLocaleString(), '#e2e8f0')}
+                ${_metaStat('📈 CTR', x.ctr.toFixed(2) + '%', '#e2e8f0')}
+                ${_metaStat('💵 CPC', '฿' + x.cpc.toFixed(2), '#e2e8f0')}
+                ${_metaStat('📢 CPM', '฿' + x.cpm.toFixed(2), '#e2e8f0')}
+                ${_metaStat('🛒 Conversions', x.purchases, '#e2e8f0')}
+            </div>
+        `;
+    } catch (e) {
+        content.innerHTML = `<div style="color:#f87171;font-size:13px;padding:12px;">ไม่สามารถเชื่อมต่อได้: ${e.message}</div>`;
+    }
+}
+
+function _metaStat(label, value, color) {
+    return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.08);">
+        <div style="font-size:10px;opacity:0.55;margin-bottom:3px;">${label}</div>
+        <div style="font-size:16px;font-weight:700;color:${color};">${value}</div>
+    </div>`;
 }
 
 async function loadFbAdsPixelSettings() {

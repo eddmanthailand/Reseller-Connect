@@ -1289,6 +1289,13 @@ def init_db():
             )
         ''')
         
+        # Migration: Add Meta Marketing API credentials to facebook_pixel_settings
+        cursor.execute("""
+            ALTER TABLE facebook_pixel_settings
+            ADD COLUMN IF NOT EXISTS meta_access_token TEXT,
+            ADD COLUMN IF NOT EXISTS meta_ad_account_id VARCHAR(100)
+        """)
+
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         
