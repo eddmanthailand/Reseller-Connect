@@ -14879,7 +14879,9 @@ State: {session_data.get('state','IDLE')}
         return saved_msgs
 
     except Exception as e:
+        import traceback as _tb
         print(f'[BOT] Error: {e}')
+        _tb.print_exc()
         return []
 
 
@@ -18094,6 +18096,7 @@ def _agent_execute_read_tool(tool, params, cursor):
                        '3:4': 'IMAGE_ASPECT_RATIO_PORTRAIT_3_4'}
         _ar_enum = _aspect_map.get(_aspect, 'IMAGE_ASPECT_RATIO_SQUARE')
         _models_to_try = ['imagen-4.0-generate-preview-05-20', 'imagen-4.0-generate-preview-06-06',
+                          'imagen-4.0-fast-generate-preview-06-05', 'imagen-4.0-fast-generate-preview-05-20',
                           'imagen-4.0-ultra-generate-preview-05-20', 'imagen-3.0-generate-002']
         _img_bytes = None
         _mime_type = 'image/png'
