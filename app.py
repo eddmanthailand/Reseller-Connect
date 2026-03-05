@@ -14548,14 +14548,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             _promo_lines = []
             for p in promos:
                 _rv = p['reward_value']
-                if p['reward_type'] == 'percent':
+                if p['reward_type'] in ('percent', 'discount_percent'):
                     _reward_str = f"ลด {_rv:.0f}%"
-                elif p['reward_type'] == 'fixed':
+                elif p['reward_type'] in ('fixed', 'fixed_discount', 'fixed_amount'):
                     _reward_str = f"ลด ฿{_rv:.0f}"
-                elif p['reward_type'] == 'free_shipping':
+                elif 'shipping' in (p['reward_type'] or ''):
                     _reward_str = "ส่งฟรี"
                 else:
-                    _reward_str = str(_rv)
+                    _reward_str = f"ลด {_rv:.0f}%"
                 _min = f" (ซื้อขั้นต่ำ ฿{p['condition_min_spend']:.0f})" if p.get('condition_min_spend') else ""
                 _p_end = p.get('end_date')
                 _end = f" หมดเขต {_p_end.strftime('%d/%m/%Y') if hasattr(_p_end,'strftime') else str(_p_end)[:10]}" if _p_end else ""
