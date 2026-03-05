@@ -1359,16 +1359,31 @@ function updateSummaryWithDiscount(data) {
     const coupon = data.coupon;
 
     // Show promo row — when promo wins over tier, also update subtotal to show retail price
+    const promoWinsNote = document.getElementById('promoWinsNote');
+    const promoWinsNoteText = document.getElementById('promoWinsNoteText');
     if (promo && promo.discount > 0) {
         document.getElementById('autoPromoName').textContent = promo.name || 'โปรโมชัน';
         document.getElementById('autoPromoSaved').textContent = `-฿${Number(promo.discount).toLocaleString()}`;
         autoRow.style.display = 'flex';
         // Update subtotal to show retail price (promo is applied on retail)
-        if (data.retail_total && data.retail_total > checkoutData.total) {
+        const tierSavings = checkoutData.tierSavings || 0;
+        const promoDiscount = Number(promo.discount);
+        if (data.retail_total && data.retail_total > checkoutData.total && tierSavings > 0) {
             document.getElementById('summarySubtotal').textContent = `฿${Number(data.retail_total).toLocaleString()}`;
+            // Show explanation note: promo wins over tier
+            if (promoWinsNote && promoWinsNoteText) {
+                promoWinsNoteText.textContent =
+                    `โปรโมชันนี้ให้ส่วนลด ฿${promoDiscount.toLocaleString()} ` +
+                    `มากกว่าส่วนลดระดับสมาชิก ฿${tierSavings.toLocaleString()} ` +
+                    `ระบบจึงเลือกส่วนลดที่ดีที่สุดให้คุณโดยอัตโนมัติ`;
+                promoWinsNote.style.display = 'block';
+            }
+        } else {
+            if (promoWinsNote) promoWinsNote.style.display = 'none';
         }
     } else {
         autoRow.style.display = 'none';
+        if (promoWinsNote) promoWinsNote.style.display = 'none';
         // Restore subtotal to tier price
         document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
     }
