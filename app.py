@@ -14627,6 +14627,35 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             for a in alts:
                 alt_products_text += _fmt_product_row(a)
 
+        # 8b. Collect ALL actual option values in store (so bot cannot hallucinate colors)
+        cursor.execute("""
+            SELECT DISTINCT ov.value, o.name as opt_name
+            FROM option_values ov
+            JOIN options o ON o.id = ov.option_id
+            JOIN products p ON p.id = o.product_id
+            WHERE p.status = 'active'
+              AND LOWER(o.name) NOT IN ('ไซส์','size','sz','ขนาด')
+            ORDER BY ov.value
+        """)
+        _all_color_opts = cursor.fetchall()
+        _color_values = list(dict.fromkeys(r['value'] for r in _all_color_opts))
+        _available_colors_str = ', '.join(_color_values) if _color_values else 'ไม่มีข้อมูล'
+
+        cursor.execute("""
+            SELECT DISTINCT ov.value
+            FROM option_values ov
+            JOIN options o ON o.id = ov.option_id
+            JOIN sku_values_map svm ON svm.option_value_id = ov.id
+            JOIN skus s ON s.id = svm.sku_id
+            JOIN products p ON p.id = o.product_id
+            WHERE p.status = 'active'
+              AND LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
+              AND s.stock > 0
+            ORDER BY ov.value
+        """)
+        _all_size_opts = [r['value'] for r in cursor.fetchall()]
+        _available_sizes_str = ', '.join(_all_size_opts) if _all_size_opts else 'ไม่มีข้อมูล'
+
         # 9. Load size chart image for Vision (when viewing a product with size chart)
         size_chart_image_bytes = None
         size_chart_mime = 'image/jpeg'
@@ -14712,11 +14741,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
 - ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
 
-กฎ quick_replies (สำคัญมาก):
-- quick_replies ต้องมาจากข้อมูลสินค้าจริงเท่านั้น ห้ามสร้างตัวเลือกที่ไม่มีในข้อมูล
-- ไซส์: ดูจาก sku_info เช่น "S:5 | M:3 | L:0" → เอาแค่ไซส์ที่ stock > 0 คือ S และ M เท่านั้น ห้ามใส่ L (stock=0)
-- สีหรือลาย: ดูจาก options_summary เช่น "แดง/ขาว/ดำ" → เอาแค่ค่าที่ปรากฏในนั้น ห้ามใส่สีที่ไม่มี
-- ถ้าไม่มีข้อมูลสินค้า → quick_replies ให้เป็นคำถามหรือหมวดหมู่สินค้า ไม่ใช่ตัวเลือกสี/ไซส์
+กฎ quick_replies (เด็ดขาด — ห้ามฝ่าฝืน):
+❌ ห้ามเดาสีหรือตัวเลือกจากความรู้ทั่วไป เช่น ห้ามใส่ "สีกรม" ถ้าไม่มีในข้อมูลด้านล่าง
+✅ สีและลายที่มีในร้านทั้งหมด: {_available_colors_str}
+✅ ไซส์ที่มีสต็อก: {_available_sizes_str}
+- quick_replies เรื่องสี: ใช้ได้เฉพาะค่าที่อยู่ใน "สีและลายที่มีในร้านทั้งหมด" เท่านั้น
+- quick_replies เรื่องไซส์: ใช้ได้เฉพาะค่าที่อยู่ใน "ไซส์ที่มีสต็อก" เท่านั้น
+- quick_replies เรื่องสินค้า: ใช้ชื่อสินค้าจริงจากรายการข้อมูลสินค้าด้านล่าง ห้ามตั้งชื่อขึ้นเอง
+- ถ้ายังไม่มีข้อมูลสินค้าที่ match → quick_replies ให้เป็นคำถามถามลูกค้า เช่น "บอกประเภทที่ต้องการ" ไม่ใช่เดาตัวเลือก
 
 === ข้อมูลสถานการณ์ปัจจุบัน ===
 State: {session_data.get('state','IDLE')}
