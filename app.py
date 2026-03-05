@@ -14537,13 +14537,63 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # 7. Active promotions (cached 5 min)
         def _fetch_promos():
             cursor.execute('''
-                SELECT name, promo_type, reward_type, reward_value FROM promotions
+                SELECT name, promo_type, reward_type, reward_value, min_purchase_amount,
+                       start_date, end_date FROM promotions
                 WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
                 LIMIT 5
             ''')
             return cursor.fetchall()
         promos = _bot_cache_get('promotions', 300, _fetch_promos)
-        promos_text = ', '.join([p['name'] for p in promos]) if promos else 'ไม่มีโปรโมชั่น'
+        if promos:
+            _promo_lines = []
+            for p in promos:
+                _rv = p['reward_value']
+                if p['reward_type'] == 'percent':
+                    _reward_str = f"ลด {_rv:.0f}%"
+                elif p['reward_type'] == 'fixed':
+                    _reward_str = f"ลด ฿{_rv:.0f}"
+                elif p['reward_type'] == 'free_shipping':
+                    _reward_str = "ส่งฟรี"
+                else:
+                    _reward_str = str(_rv)
+                _min = f" (ซื้อขั้นต่ำ ฿{p['min_purchase_amount']:.0f})" if p.get('min_purchase_amount') else ""
+                _end = f" หมดเขต {p['end_date']}" if p.get('end_date') else ""
+                _promo_lines.append(f"  • {p['name']}: {_reward_str}{_min}{_end}")
+            promos_text = '\n'.join(_promo_lines)
+        else:
+            promos_text = '  (ไม่มีโปรโมชั่น)'
+
+        # 7b. Reseller's own coupons (ready to use)
+        cursor.execute('''
+            SELECT c.code, c.name, c.discount_type, c.discount_value, c.min_spend,
+                   c.max_discount, c.expiry_date, uc.status
+            FROM user_coupons uc
+            JOIN coupons c ON c.id = uc.coupon_id
+            WHERE uc.user_id = %s AND uc.status = 'ready'
+              AND (c.expiry_date IS NULL OR c.expiry_date >= CURRENT_DATE)
+            ORDER BY c.expiry_date NULLS LAST
+            LIMIT 10
+        ''', (reseller_id,))
+        reseller_coupons = cursor.fetchall()
+        if reseller_coupons:
+            _cpn_lines = []
+            for cp in reseller_coupons:
+                _dv = cp['discount_value']
+                if cp['discount_type'] == 'percent':
+                    _d_str = f"ลด {_dv:.0f}%"
+                elif cp['discount_type'] == 'fixed':
+                    _d_str = f"ลด ฿{_dv:.0f}"
+                elif cp['discount_type'] == 'free_shipping':
+                    _d_str = "ส่งฟรี"
+                else:
+                    _d_str = str(_dv)
+                _min_s = f" ซื้อขั้นต่ำ ฿{cp['min_spend']:.0f}" if cp.get('min_spend') else ""
+                _max_d = f" (ลดสูงสุด ฿{cp['max_discount']:.0f})" if cp.get('max_discount') else ""
+                _exp = f" หมดอายุ {cp['expiry_date']}" if cp.get('expiry_date') else ""
+                _cpn_lines.append(f"  • โค้ด [{cp['code']}] {cp['name']}: {_d_str}{_min_s}{_max_d}{_exp}")
+            coupons_text = '\n'.join(_cpn_lines)
+        else:
+            coupons_text = '  (สมาชิกยังไม่มีคูปอง)'
 
         # 8. Product search based on current session or message keywords
         # Safely cast to int — Gemini sometimes stores text like "เสื้อพยาบาล" instead of an integer
@@ -14830,10 +14880,10 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 {_greeting_rule}
 กฎสำคัญ:
 - ตอบเป็นภาษาไทย ลงท้าย "ค่ะ" เสมอ
-- 🖼️ การแสดงรูปสินค้า: เมื่อสมาชิกขอดูรูปสินค้า/แบบ/รูปถ่าย → ใส่ product ID ใน "show_product_ids" เสมอ ระบบจะแสดงรูปภาพให้อัตโนมัติ
+- 🖼️ การแสดงรูปสินค้า (show_product_ids): ใส่ product ID เฉพาะเมื่อสมาชิก **ขอดูรูป/แบบ/รูปถ่าย/ภาพ** อย่างชัดเจน เท่านั้น
+  * ✅ ใส่ show_product_ids เมื่อ: "ขอดูรูป", "ส่งรูปหน่อย", "แบบนี้มีรูปไหม", "ดูรูปได้ไหม", "เห็นสินค้าหน่อย"
+  * ❌ ห้ามใส่ show_product_ids เมื่อ: ถามไซส์, ถามราคา, ถามโปรโมชั่น, ถามคูปอง, ถามสต็อก, สั่งซื้อ, หรือคำถามทั่วไปที่ไม่ได้ขอดูรูป
   * Product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42 ใน show_product_ids
-  * ถ้ากำลังดูสินค้าอยู่แล้ว (สินค้าที่กำลังดู ID ≠ ไม่มี) → ใช้ ID นั้นทันที
-  * ถ้าสมาชิกพูดชื่อสินค้า → หา ID จากรายการด้านล่าง แล้วใส่ใน show_product_ids ได้เลย
   * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" ในข้อความตอบสมาชิกเด็ดขาด — สมาชิกไม่รู้และไม่ควรต้องรู้ ID
   * ❌ ห้ามเขียนในข้อความว่า "ระบบไม่สามารถแสดงรูปภาพได้" หรือ "ขออภัยที่ไม่สามารถแสดงรูป" เด็ดขาด
 - 🔍 เมื่อค้นหาสินค้าไม่เจอ (รายการสินค้าด้านล่างว่างเปล่า): ห้ามบอกว่า "ไม่พบสินค้า" แล้วหยุด และห้ามพูดคำว่า "Product ID" เด็ดขาด — ให้ถามสมาชิกด้วยชื่อหมวดหมู่จริงจาก "หมวดหมู่สินค้าในร้าน" ด้านบน เช่น "ขอทราบว่าสนใจประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ
@@ -14848,6 +14898,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - ถ้าลูกค้าสนใจสินค้า → ถามไซส์และจำนวน → ชวนสั่งซื้อทันที
 - ถ้าสินค้าหมดในไซส์ที่ต้องการ → เสนอสินค้าคล้ายกันที่มีไซส์นั้นทันที ไม่ปล่อยให้หยุดสนทนา
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
+- 🎟️ คูปองของสมาชิก: ถ้าสมาชิกถามว่า "มีคูปองไหม" หรือ "คูปองของฉัน" → ดูจากหัวข้อ "คูปองของสมาชิกคนนี้" ด้านล่าง แล้วตอบรายละเอียดที่ถูกต้อง ถ้าไม่มีให้บอกว่า "ยังไม่มีคูปองค่ะ" อย่าบอกว่า "สามารถแจ้งทางร้านได้"
 - ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
 - ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
@@ -14872,6 +14923,9 @@ State: {session_data.get('state','IDLE')}
 
 === โปรโมชั่นที่มีอยู่ ===
 {promos_text}
+
+=== คูปองของสมาชิกคนนี้ (พร้อมใช้) ===
+{coupons_text}
 
 === รายการสินค้าที่เกี่ยวข้อง ===
 {products_text or '(ยังไม่ได้เลือกหมวดหมู่)'}
