@@ -14411,15 +14411,43 @@ def _bot_save_message(cursor, conn, thread_id, bot_user_id, text, quick_replies=
     return row
 
 
+# ── Bot in-memory cache (per worker process) ──────────────────────────────
+import time as _time_mod
+_BOT_CACHE = {
+    'bot_settings': {'data': None, 'expires': 0},
+    'colors':       {'data': None, 'expires': 0},
+    'sizes':        {'data': None, 'expires': 0},
+    'categories':   {'data': None, 'expires': 0},
+    'promotions':   {'data': None, 'expires': 0},
+}
+
+def _bot_cache_get(key, ttl_seconds, fetch_fn):
+    """Return cached data if still valid, otherwise fetch fresh and cache it."""
+    entry = _BOT_CACHE[key]
+    if entry['data'] is None or _time_mod.time() > entry['expires']:
+        entry['data'] = fetch_fn()
+        entry['expires'] = _time_mod.time() + ttl_seconds
+    return entry['data']
+
+def bot_cache_invalidate(*keys):
+    """Call after Admin saves data to expire specific cache keys immediately."""
+    for k in (keys or _BOT_CACHE.keys()):
+        if k in _BOT_CACHE:
+            _BOT_CACHE[k]['expires'] = 0
+# ────────────────────────────────────────────────────────────────────────────
+
+
 def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
     """Generate and save an auto-reply from the bot using Gemini Flash Lite."""
     import json as _json, re as _re
     try:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        # 1. Bot settings
-        cursor.execute('SELECT * FROM agent_settings WHERE id = 1')
-        settings = cursor.fetchone() or {}
+        # 1. Bot settings (cached 10 min — Admin rarely changes this)
+        def _fetch_settings():
+            cursor.execute('SELECT * FROM agent_settings WHERE id = 1')
+            return cursor.fetchone() or {}
+        settings = _bot_cache_get('bot_settings', 600, _fetch_settings)
         bot_name = settings.get('bot_chat_name') or 'น้องนุ่น'
         bot_enabled = settings.get('bot_chat_enabled', True)
         extra_persona = settings.get('bot_chat_persona') or ''
@@ -14506,13 +14534,15 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         if not orders_text:
             orders_text = '  (ยังไม่มีออเดอร์)\n'
 
-        # 7. Active promotions
-        cursor.execute('''
-            SELECT name, promo_type, reward_type, reward_value FROM promotions
-            WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-            LIMIT 5
-        ''')
-        promos = cursor.fetchall()
+        # 7. Active promotions (cached 5 min)
+        def _fetch_promos():
+            cursor.execute('''
+                SELECT name, promo_type, reward_type, reward_value FROM promotions
+                WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+                LIMIT 5
+            ''')
+            return cursor.fetchall()
+        promos = _bot_cache_get('promotions', 300, _fetch_promos)
         promos_text = ', '.join([p['name'] for p in promos]) if promos else 'ไม่มีโปรโมชั่น'
 
         # 8. Product search based on current session or message keywords
@@ -14604,36 +14634,62 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             if pr:
                 products_text = _fmt_product_row(pr, detailed=True)
         else:
-            # IDLE state: keyword search from user message
+            # IDLE state: keyword search — handles Thai text (no spaces between words)
             import re as _re2
-            # Extract 2+ char words for search
-            kws = [w for w in _re2.findall(r'\S+', user_message_text) if len(w) >= 2]
-            if kws:
-                kw_query = ' '.join(kws[:5])
-                cursor.execute(_product_base_select + '''
+
+            _prod_where = '''
+                WHERE p.status = 'active'
+                  AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
+                GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                LIMIT 8
+            '''
+            prods = []
+            seen_ids = set()
+
+            def _run_kw_search(kw, limit=8):
+                """Search by a single keyword and merge into prods/seen_ids."""
+                pat = f'%{kw}%'
+                cursor.execute(_product_base_select + f'''
                     WHERE p.status = 'active'
-                      AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s
-                           OR b.name ILIKE %s)
+                      AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
-                    LIMIT 8
-                ''', (f'%{kw_query}%', f'%{kw_query}%', f'%{kw_query}%', f'%{kw_query}%'))
-                prods = cursor.fetchall()
-                if not prods and len(kws) > 1:
-                    # Try each keyword separately
-                    seen = set()
-                    for kw in kws[:3]:
-                        cursor.execute(_product_base_select + '''
-                            WHERE p.status = 'active'
-                              AND (p.name ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
-                            GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
-                            LIMIT 5
-                        ''', (f'%{kw}%', f'%{kw}%', f'%{kw}%'))
-                        for pr in cursor.fetchall():
-                            if pr['id'] not in seen:
-                                seen.add(pr['id'])
-                                prods.append(pr)
-                for pr in prods:
-                    products_text += _fmt_product_row(pr)
+                    LIMIT {limit}
+                ''', (pat, pat, pat, pat))
+                for _pr in cursor.fetchall():
+                    if _pr['id'] not in seen_ids:
+                        seen_ids.add(_pr['id'])
+                        prods.append(_pr)
+
+            # Step 1: split on whitespace (works when user typed with spaces)
+            space_kws = [w for w in _re2.findall(r'\S+', user_message_text) if len(w) >= 3]
+            if len(space_kws) > 1:
+                # Multiple space-separated words — try combined then each word
+                _run_kw_search(' '.join(space_kws[:5]))
+                if not prods:
+                    for _kw in space_kws[:4]:
+                        _run_kw_search(_kw, limit=5)
+            elif space_kws:
+                # Single long word (typical Thai: no spaces) — try whole, then N-grams
+                _run_kw_search(space_kws[0])
+
+            # Step 2: N-gram fallback — extract overlapping 5-6 char chunks from message
+            # Handles Thai text like "มีเสื้อกาวน์จำหน่ายไหม" → "เสื้อกาวน์" → matches product
+            if not prods:
+                _msg_clean = ''.join(user_message_text.split())
+                _ngrams_tried = set()
+                for _ng_len in (6, 5, 4):
+                    if prods:
+                        break
+                    for _i in range(len(_msg_clean) - _ng_len + 1):
+                        _ng = _msg_clean[_i:_i + _ng_len]
+                        if _ng not in _ngrams_tried:
+                            _ngrams_tried.add(_ng)
+                            _run_kw_search(_ng, limit=5)
+                        if prods:
+                            break
+
+            for pr in prods:
+                products_text += _fmt_product_row(pr)
 
         # Suggest alternatives if size is out of stock
         alt_products_text = ''
@@ -14667,38 +14723,41 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             for a in alts:
                 alt_products_text += _fmt_product_row(a)
 
-        # 8b. Collect ALL actual option values in store (so bot cannot hallucinate colors)
-        cursor.execute("""
-            SELECT DISTINCT ov.value, o.name as opt_name
-            FROM option_values ov
-            JOIN options o ON o.id = ov.option_id
-            JOIN products p ON p.id = o.product_id
-            WHERE p.status = 'active'
-              AND LOWER(o.name) NOT IN ('ไซส์','size','sz','ขนาด')
-            ORDER BY ov.value
-        """)
-        _all_color_opts = cursor.fetchall()
-        _color_values = list(dict.fromkeys(r['value'] for r in _all_color_opts))
+        # 8b. Collect option values — cached (colors 10 min, sizes 2 min, cats 30 min)
+        def _fetch_colors():
+            cursor.execute("""
+                SELECT DISTINCT ov.value FROM option_values ov
+                JOIN options o ON o.id = ov.option_id
+                JOIN products p ON p.id = o.product_id
+                WHERE p.status = 'active'
+                  AND LOWER(o.name) NOT IN ('ไซส์','size','sz','ขนาด')
+                ORDER BY ov.value
+            """)
+            return list(dict.fromkeys(r['value'] for r in cursor.fetchall()))
+        _color_values = _bot_cache_get('colors', 600, _fetch_colors)
         _available_colors_str = ', '.join(_color_values) if _color_values else 'ไม่มีข้อมูล'
 
-        cursor.execute("""
-            SELECT DISTINCT ov.value
-            FROM option_values ov
-            JOIN options o ON o.id = ov.option_id
-            JOIN sku_values_map svm ON svm.option_value_id = ov.id
-            JOIN skus s ON s.id = svm.sku_id
-            JOIN products p ON p.id = o.product_id
-            WHERE p.status = 'active'
-              AND LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
-              AND s.stock > 0
-            ORDER BY ov.value
-        """)
-        _all_size_opts = [r['value'] for r in cursor.fetchall()]
+        def _fetch_sizes():
+            cursor.execute("""
+                SELECT DISTINCT ov.value FROM option_values ov
+                JOIN options o ON o.id = ov.option_id
+                JOIN sku_values_map svm ON svm.option_value_id = ov.id
+                JOIN skus s ON s.id = svm.sku_id
+                JOIN products p ON p.id = o.product_id
+                WHERE p.status = 'active'
+                  AND LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
+                  AND s.stock > 0
+                ORDER BY ov.value
+            """)
+            return [r['value'] for r in cursor.fetchall()]
+        _all_size_opts = _bot_cache_get('sizes', 120, _fetch_sizes)
         _available_sizes_str = ', '.join(_all_size_opts) if _all_size_opts else 'ไม่มีข้อมูล'
 
-        # 8c. Collect active category names (for bot to suggest when product not found)
-        cursor.execute("SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order, name LIMIT 15")
-        _available_cats_str = ', '.join(r['name'] for r in cursor.fetchall()) or 'ไม่มีข้อมูล'
+        # 8c. Category names (cached 30 min)
+        def _fetch_cats():
+            cursor.execute("SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order, name LIMIT 15")
+            return [r['name'] for r in cursor.fetchall()]
+        _available_cats_str = ', '.join(_bot_cache_get('categories', 1800, _fetch_cats)) or 'ไม่มีข้อมูล'
 
         # 9. Load size chart image for Vision (when viewing a product with size chart)
         size_chart_image_bytes = None
