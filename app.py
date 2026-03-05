@@ -14439,6 +14439,8 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             ORDER BY id DESC LIMIT 8
         ''', (thread_id,))
         history_rows = list(reversed(cursor.fetchall()))
+        # ถือว่า "ข้อความแรก" ถ้าบอทยังไม่เคยตอบในประวัติล่าสุด (8 ข้อความ)
+        is_first_message = not any(h.get('is_bot') for h in history_rows)
         history_text = ''
         for h in history_rows:
             who = f'🤖 {bot_name}' if h.get('is_bot') else ('👤 สมาชิก' if h['sender_type'] == 'reseller' else '👩‍💼 Admin')
@@ -14446,13 +14448,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 
         # 6. Reseller tier info (for tier pricing)
         cursor.execute('''
-            SELECT u.reseller_tier_id, rt.name as tier_name, rt.level_rank
+            SELECT u.reseller_tier_id, rt.name as tier_name, rt.level_rank, u.full_name
             FROM users u LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
             WHERE u.id = %s
         ''', (reseller_id,))
         reseller_row = cursor.fetchone()
         reseller_tier_id = reseller_row['reseller_tier_id'] if reseller_row else None
         reseller_tier_name = reseller_row['tier_name'] if reseller_row else 'Bronze'
+        reseller_name = reseller_row['full_name'] if reseller_row else ''
 
         # 6b. Reseller orders (recent 5)
         cursor.execute('''
@@ -14682,9 +14685,17 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
   L: สะโพก 39−37 = 2" = พอดี ✓ เอว 29−28 = 1" = พอดี ✓
 → แนะนำ L พร้อมแจ้งว่า "เวลานั่งนานๆ อาจรู้สึกกระชับที่สะโพกบ้างนะคะ เพราะผ้าไม่ยืด"
 """
+        _greeting_rule = f"""
+⚠️ ข้อความแรกของการสนทนา (ยังไม่มีประวัติแชท):
+- ต้องทักทายสมาชิกชื่อ "{reseller_name}" ด้วยความอบอุ่น
+- แนะนำตัวเองว่าชื่อ "{bot_name}" เป็นผู้ช่วยของร้าน
+- ถามว่าสนใจสินค้าประเภทไหน หรือมีอะไรให้ช่วยได้บ้าง
+- quick_replies ให้ใส่หมวดหมู่/ประเภทสินค้าที่น่าสนใจ (2-4 ปุ่ม) เช่น สินค้าขายดี, ดูสินค้าทั้งหมด
+""" if is_first_message else ""
         system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย
 {extra_persona}
 {_FABRIC_KNOWLEDGE}
+{_greeting_rule}
 กฎสำคัญ:
 - ตอบเป็นภาษาไทย ลงท้าย "ค่ะ" เสมอ
 - ถ้าลูกค้าถามเรื่องไซส์และมีตารางไซส์ → ให้ทำตามขั้นตอนต่อไปนี้ทีละขั้น:
@@ -14700,6 +14711,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
 - ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
+
+กฎ quick_replies (สำคัญมาก):
+- quick_replies ต้องมาจากข้อมูลสินค้าจริงเท่านั้น ห้ามสร้างตัวเลือกที่ไม่มีในข้อมูล
+- ไซส์: ดูจาก sku_info เช่น "S:5 | M:3 | L:0" → เอาแค่ไซส์ที่ stock > 0 คือ S และ M เท่านั้น ห้ามใส่ L (stock=0)
+- สีหรือลาย: ดูจาก options_summary เช่น "แดง/ขาว/ดำ" → เอาแค่ค่าที่ปรากฏในนั้น ห้ามใส่สีที่ไม่มี
+- ถ้าไม่มีข้อมูลสินค้า → quick_replies ให้เป็นคำถามหรือหมวดหมู่สินค้า ไม่ใช่ตัวเลือกสี/ไซส์
 
 === ข้อมูลสถานการณ์ปัจจุบัน ===
 State: {session_data.get('state','IDLE')}
