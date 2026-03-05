@@ -17185,6 +17185,7 @@ def _agent_build_system_prompt(settings, context=None):
 - toggle_product: เปิด/ปิดการขายสินค้า (params: product_name, active=true/false)
 - send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 - save_note: บันทึกข้อมูลสำคัญลงสมุดโน้ต AI (params: key, value) — จำได้ข้ามเซสชัน
+- toggle_facebook_ad: เปลี่ยนสถานะ Campaign/AdSet/Ad ใน Meta Ads (params: ad_id, status="ACTIVE"/"PAUSED"/"ARCHIVED") — ส่ง POST ไป Meta Marketing API จริง
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
 READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
@@ -18271,6 +18272,57 @@ def agent_chat():
                                 'message': intent.get('message', f"จะบันทึกลงสมุดโน้ต: **{note_key}** = {note_value[:60]}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'toggle_facebook_ad':
+                import urllib.request as _ur2
+                import urllib.parse as _up2
+                import urllib.error as _ue2
+                ad_id  = str(params.get('ad_id', '')).strip()
+                status = str(params.get('status', 'PAUSED')).upper().strip()
+                allowed_statuses = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED']
+                if not ad_id:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ ad_id (Campaign ID / AdSet ID / Ad ID)'}), 200
+                if status not in allowed_statuses:
+                    return jsonify({'type': 'answer', 'message': f'status "{status}" ไม่ถูกต้อง ใช้ได้: {", ".join(allowed_statuses)}'}), 200
+                # Get Meta credentials
+                try:
+                    _mc2 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    _tok2, _acc2 = _get_meta_credentials(_mc2)
+                    _mc2.close()
+                except Exception as _ce2:
+                    return jsonify({'type': 'answer', 'message': f'ไม่สามารถอ่าน Meta credentials: {_ce2}'}), 200
+                if not _tok2:
+                    return jsonify({'type': 'answer', 'message': '⚠️ ยังไม่ได้ตั้งค่า Meta Access Token — ไปที่หน้า Facebook Ads เพื่อตั้งค่า'}), 200
+                # Fetch current ad info from Meta API
+                try:
+                    _fq = _up2.urlencode({'fields': 'name,status,effective_status,objective', 'access_token': _tok2})
+                    _fr = _ur2.Request(f'https://graph.facebook.com/v19.0/{ad_id}?{_fq}', headers={'User-Agent': 'EKGShops/1.0'})
+                    with _ur2.urlopen(_fr, timeout=10) as _fresp:
+                        _fdata = json.loads(_fresp.read().decode())
+                    ad_name       = _fdata.get('name', ad_id)
+                    current_status = _fdata.get('status', 'UNKNOWN')
+                    effective_status = _fdata.get('effective_status', current_status)
+                except _ue2.HTTPError as _fhe:
+                    try:
+                        _ferr = json.loads(_fhe.read().decode()).get('error', {}).get('message', str(_fhe))
+                    except Exception:
+                        _ferr = str(_fhe)
+                    return jsonify({'type': 'answer', 'message': f'❌ Meta API ไม่พบ ad_id "{ad_id}": {_ferr}'}), 200
+                except Exception as _fe:
+                    return jsonify({'type': 'answer', 'message': f'ไม่สามารถดึงข้อมูลโฆษณา: {_fe}'}), 200
+                # Build plan for approval
+                status_th = {'ACTIVE': '▶️ เปิดอยู่', 'PAUSED': '⏸ หยุดชั่วคราว', 'ARCHIVED': '📦 เก็บถาวร', 'DELETED': '🗑 ลบแล้ว'}
+                plan = {
+                    'before': {'ID': ad_id, 'ชื่อ': ad_name, 'สถานะปัจจุบัน': status_th.get(current_status, current_status)},
+                    'after':  {'ID': ad_id, 'ชื่อ': ad_name, 'สถานะใหม่': status_th.get(status, status),
+                               '⚠️ หมายเหตุ': 'คำสั่งนี้จะส่ง POST จริงไปยัง Meta Marketing API'}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'ad_id': ad_id, 'old_status': current_status, 'ad_name': ad_name})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {'ad_id': ad_id, 'status': status, 'ad_name': ad_name},
+                                'message': intent.get('message', f"จะเปลี่ยนสถานะโฆษณา **{ad_name}** → {status_th.get(status, status)}"),
+                                'model_used': model_used}), 200
+
             return jsonify({'type': 'answer', 'message': f'tool "{tool}" ยังไม่รองรับ'}), 200
 
         elif itype == 'clarify':
@@ -18404,6 +18456,62 @@ def agent_execute():
                              ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
             conn.commit()
             return jsonify({'message': f"📝 บันทึกสมุดโน้ตสำเร็จ: **{note_key}**",
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'toggle_facebook_ad':
+            import urllib.request as _ur3
+            import urllib.parse as _up3
+            import urllib.error as _ue3
+            ad_id  = str(params.get('ad_id', '')).strip()
+            status = str(params.get('status', 'PAUSED')).upper().strip()
+            ad_name = params.get('ad_name', ad_id)
+            if not ad_id:
+                return jsonify({'error': 'ขาด ad_id'}), 400
+            # Get Meta credentials
+            try:
+                _mc3 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                _tok3, _ = _get_meta_credentials(_mc3)
+                _mc3.close()
+            except Exception as _ce3:
+                return jsonify({'error': f'ไม่สามารถอ่าน Meta credentials: {_ce3}'}), 500
+            if not _tok3:
+                return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
+            # POST to Meta Marketing API to update status
+            status_th = {'ACTIVE': '▶️ เปิดอยู่', 'PAUSED': '⏸ หยุดชั่วคราว', 'ARCHIVED': '📦 เก็บถาวร', 'DELETED': '🗑 ลบแล้ว'}
+            try:
+                _post_body = _up3.urlencode({'status': status, 'access_token': _tok3}).encode('utf-8')
+                _post_req = _ur3.Request(
+                    f'https://graph.facebook.com/v19.0/{ad_id}',
+                    data=_post_body,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'EKGShops/1.0'},
+                    method='POST'
+                )
+                with _ur3.urlopen(_post_req, timeout=15) as _post_resp:
+                    _post_data = json.loads(_post_resp.read().decode())
+                success = _post_data.get('success', False)
+                if not success:
+                    return jsonify({'error': f'Meta API ตอบกลับว่าไม่สำเร็จ: {_post_data}'}), 400
+            except _ue3.HTTPError as _phe:
+                try:
+                    _perr = json.loads(_phe.read().decode()).get('error', {}).get('message', str(_phe))
+                except Exception:
+                    _perr = str(_phe)
+                if log_id:
+                    cur2 = conn.cursor()
+                    cur2.execute('UPDATE agent_action_logs SET status=%s WHERE id=%s', ('failed', log_id))
+                    conn.commit()
+                return jsonify({'error': f'Meta API Error: {_perr}'}), 400
+            except Exception as _pe:
+                return jsonify({'error': f'ไม่สามารถส่ง POST ไป Meta ได้: {_pe}'}), 500
+            # Log success
+            before_data = {'ID': ad_id, 'ชื่อ': ad_name, 'สถานะเดิม': '(ก่อนเปลี่ยน)'}
+            after_data  = {'ID': ad_id, 'ชื่อ': ad_name, 'สถานะใหม่': status_th.get(status, status)}
+            cur2 = conn.cursor()
+            if log_id:
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ เปลี่ยนสถานะโฆษณา **{ad_name}** (ID: {ad_id}) → {status_th.get(status, status)} สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
 
         return jsonify({'error': f'ไม่รองรับ tool "{tool}"'}), 400
