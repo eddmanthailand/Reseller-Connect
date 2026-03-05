@@ -15123,14 +15123,25 @@ def send_chat_message(thread_id):
             except Exception as e:
                 print(f"[CHAT-PUSH] Error in admin broadcast: {str(e)[:200]}")
         
-        # Trigger bot auto-reply when reseller sends
+        # Trigger bot auto-reply in background thread (non-blocking)
         reseller_id_for_bot = thread['reseller_id']
-        bot_msgs = []
         if sender_type == 'reseller' and content:
-            try:
-                bot_msgs = _bot_chat_reply(thread_id, reseller_id_for_bot, content, conn)
-            except Exception as e:
-                print(f'[BOT] Auto-reply error: {e}')
+            def _run_bot_async(tid, rid, msg_text):
+                bot_conn = None
+                try:
+                    bot_conn = get_db()
+                    _bot_chat_reply(tid, rid, msg_text, bot_conn)
+                except Exception as e:
+                    print(f'[BOT] Auto-reply error: {e}')
+                finally:
+                    if bot_conn:
+                        try: bot_conn.close()
+                        except: pass
+            threading.Thread(
+                target=_run_bot_async,
+                args=(thread_id, reseller_id_for_bot, content),
+                daemon=True
+            ).start()
 
         # When admin sends manually → pause bot for 2 hours
         if sender_type == 'admin':
@@ -15146,7 +15157,7 @@ def send_chat_message(thread_id):
         return jsonify({
             'id': message_id,
             'created_at': result['created_at'].isoformat(),
-            'bot_messages': bot_msgs
+            'bot_messages': []
         }), 201
         
     except Exception as e:

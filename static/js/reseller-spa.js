@@ -3922,6 +3922,9 @@ async function loadResellerChatMessages() {
                 return;
             }
 
+            const hasIncoming = messages.some(m => Number(m.sender_id) !== Number(currentUserId));
+            if (hasIncoming) cancelBotTypingIndicator();
+
             messages.forEach(msg => {
                 resellerAllMessages.push(msg);
                 const isMine = Number(msg.sender_id) === Number(currentUserId);
@@ -4278,14 +4281,22 @@ function _renderBotTypingIndicator() {
     container.scrollTop = container.scrollHeight;
 }
 
+let _botTypingMaxTimer = null;
+
 function showBotTypingIndicatorDelayed(ms) {
     clearTimeout(_botTypingTimer);
-    _botTypingTimer = setTimeout(() => _renderBotTypingIndicator(), ms || 800);
+    clearTimeout(_botTypingMaxTimer);
+    _botTypingTimer = setTimeout(() => {
+        _renderBotTypingIndicator();
+        _botTypingMaxTimer = setTimeout(() => cancelBotTypingIndicator(), 30000);
+    }, ms || 800);
 }
 
 function cancelBotTypingIndicator() {
     clearTimeout(_botTypingTimer);
+    clearTimeout(_botTypingMaxTimer);
     _botTypingTimer = null;
+    _botTypingMaxTimer = null;
     const el = document.getElementById('botTypingIndicator');
     if (el) el.remove();
 }
@@ -4317,7 +4328,6 @@ async function sendResellerChatMessage() {
 
         input.value = '';
         input.style.height = 'auto';
-        showBotTypingIndicatorDelayed(800);
 
         const response = await fetch(`/api/chat/threads/${resellerChatThreadId}/messages`, {
             method: 'POST',
@@ -4325,8 +4335,6 @@ async function sendResellerChatMessage() {
             credentials: 'include',
             body: JSON.stringify(body)
         });
-
-        cancelBotTypingIndicator();
 
         if (response.ok) {
             resellerPendingAttachments = [];
@@ -4339,6 +4347,8 @@ async function sendResellerChatMessage() {
             document.getElementById('resellerChatOrderPreview').style.display = 'none';
             document.getElementById('resellerChatCouponPreview').style.display = 'none';
             await loadResellerChatMessages();
+            // Bot now replies async — show typing indicator until polling picks up bot reply
+            showBotTypingIndicatorDelayed(400);
         } else {
             const error = await response.json();
             showGlobalAlert('error', error.error || 'ไม่สามารถส่งข้อความได้');
