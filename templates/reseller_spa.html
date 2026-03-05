@@ -2999,6 +2999,10 @@
                         <div id="resellerNeedsAdminStatus" style="display:none;font-size:12px;color:rgba(255,200,0,0.9);align-items:center;gap:5px;">
                             <span>🙋</span><span>กำลังรอ Admin ตอบกลับ</span>
                         </div>
+                        <div id="resellerBotStatusBadge" style="display:none;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);">
+                            <span id="resellerBotStatusDot" style="width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span id="resellerBotStatusText" style="color:rgba(255,255,255,0.7);"></span>
+                        </div>
                         <div style="flex:1;"></div>
                         <button id="btnRequestAdmin" onclick="resellerRequestAdmin()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.85);padding:8px 18px;border-radius:22px;font-size:13px;cursor:pointer;white-space:nowrap;transition:background 0.2s;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background='rgba(255,255,255,0.16)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">🙋 ขอคุยกับ Admin</button>
                     </div>

@@ -15506,6 +15506,49 @@ def chat_request_admin(thread_id):
             conn.close()
 
 
+@app.route('/api/chat/threads/<int:thread_id>/bot-status', methods=['GET'])
+@login_required
+def chat_bot_status(thread_id):
+    """Return bot status for a thread — accessible by both Admin and Reseller."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        user_id = session.get('user_id')
+        role_name = session.get('role', '')
+
+        cursor.execute('SELECT reseller_id, bot_paused_until FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({'error': 'Thread not found'}), 404
+        if role_name == 'Reseller' and thread['reseller_id'] != user_id:
+            return jsonify({'error': 'Access denied'}), 403
+
+        cursor.execute('SELECT bot_chat_enabled, bot_chat_name FROM agent_settings WHERE id = 1')
+        settings = cursor.fetchone() or {}
+        global_enabled = bool(settings.get('bot_chat_enabled', True))
+        bot_name = settings.get('bot_chat_name') or 'น้องนุ่น'
+
+        from datetime import datetime as _dt2
+        paused_until = thread.get('bot_paused_until')
+        is_paused = bool(paused_until and paused_until > _dt2.utcnow())
+
+        if not global_enabled:
+            status = 'disabled'
+        elif is_paused:
+            status = 'paused'
+        else:
+            status = 'active'
+
+        return jsonify({'status': status, 'bot_name': bot_name, 'global_enabled': global_enabled}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/chat/threads/<int:thread_id>/toggle-bot', methods=['POST'])
 @admin_required
 def chat_toggle_bot(thread_id):

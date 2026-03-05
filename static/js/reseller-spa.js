@@ -3957,10 +3957,35 @@ async function initResellerChat() {
             resellerChatThreadId = data.thread_id;
             await loadResellerChatMessages();
             startResellerChatPolling();
+            loadResellerBotStatus();
         }
     } catch (error) {
         console.error('Error initializing chat:', error);
     }
+}
+
+async function loadResellerBotStatus() {
+    if (!resellerChatThreadId) return;
+    try {
+        const res = await fetch(`/api/chat/threads/${resellerChatThreadId}/bot-status`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const badge = document.getElementById('resellerBotStatusBadge');
+        const dot   = document.getElementById('resellerBotStatusDot');
+        const text  = document.getElementById('resellerBotStatusText');
+        if (!badge) return;
+        if (data.status === 'active') {
+            dot.style.background  = '#4ade80';
+            text.textContent      = `🤖 ${data.bot_name || 'บอท'}: ออนไลน์`;
+        } else if (data.status === 'paused') {
+            dot.style.background  = '#f59e0b';
+            text.textContent      = `🤖 ${data.bot_name || 'บอท'}: พักชั่วคราว`;
+        } else {
+            dot.style.background  = '#6b7280';
+            text.textContent      = `🤖 ${data.bot_name || 'บอท'}: ปิดอยู่`;
+        }
+        badge.style.display = 'flex';
+    } catch (_) {}
 }
 
 async function loadResellerChatMessages() {
