@@ -6328,7 +6328,7 @@ def get_reseller_cart():
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
                    ci.customization_data,
                    s.sku_code, s.stock, p.name as product_name, p.id as product_id,
-                   p.brand_id, p.category_id, p.weight,
+                   p.brand_id, p.weight,
                    b.name as brand_name,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
             FROM cart_items ci
@@ -7235,7 +7235,7 @@ def create_order():
         # Get cart items
         cursor.execute('''
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent, ci.customization_data,
-                   s.stock, s.sku_code, p.name as product_name, p.brand_id, p.category_id
+                   s.stock, s.sku_code, p.name as product_name, p.brand_id
             FROM cart_items ci
             JOIN skus s ON s.id = ci.sku_id
             JOIN products p ON p.id = s.product_id
@@ -14456,7 +14456,8 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # 6b. Reseller orders (recent 5)
         cursor.execute('''
             SELECT order_number, status, created_at::date as order_date,
-                   (SELECT string_agg(p.name || ' x' || oi.quantity, ', ') FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = o.id LIMIT 3) as items
+                   (SELECT string_agg(oi.product_name || ' x' || oi.quantity::text, ', ')
+                    FROM order_items oi WHERE oi.order_id = o.id) as items
             FROM orders o WHERE user_id = %s ORDER BY id DESC LIMIT 5
         ''', (reseller_id,))
         orders = cursor.fetchall()
@@ -17319,7 +17320,8 @@ def _agent_execute_read_tool(tool, params, cursor):
             SELECT b.name as brand_name, COUNT(DISTINCT o.id) as order_cnt, COALESCE(SUM(oi.subtotal),0) as total
             FROM order_items oi
             JOIN orders o ON o.id = oi.order_id
-            JOIN products p ON p.id = oi.product_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
             JOIN brands b ON b.id = p.brand_id
             WHERE o.status NOT IN ('cancelled','returned','stock_restored')
             AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
@@ -17338,7 +17340,8 @@ def _agent_execute_read_tool(tool, params, cursor):
             SELECT p.name as product_name, SUM(oi.quantity) as total_qty, COALESCE(SUM(oi.subtotal),0) as revenue
             FROM order_items oi
             JOIN orders o ON o.id = oi.order_id
-            JOIN products p ON p.id = oi.product_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
             WHERE o.status NOT IN ('cancelled','returned','stock_restored')
             AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
             GROUP BY p.name ORDER BY total_qty DESC LIMIT %s
@@ -17530,7 +17533,8 @@ def _agent_execute_read_tool(tool, params, cursor):
             SELECT b.name as brand_name, COALESCE(SUM(oi.subtotal),0) as total
             FROM order_items oi
             JOIN orders o ON o.id = oi.order_id
-            JOIN products p ON p.id = oi.product_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
             JOIN brands b ON b.id = p.brand_id
             WHERE o.status NOT IN ('cancelled','returned','stock_restored')
               AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
@@ -17578,10 +17582,11 @@ def _agent_execute_read_tool(tool, params, cursor):
     elif tool == 'chart_top_products':
         limit = int(params.get('limit', 10))
         cursor.execute('''
-            SELECT p.name, COALESCE(SUM(oi.qty),0) as sold, COALESCE(SUM(oi.subtotal),0) as revenue
+            SELECT p.name, COALESCE(SUM(oi.quantity),0) as sold, COALESCE(SUM(oi.subtotal),0) as revenue
             FROM order_items oi
             JOIN orders o ON o.id = oi.order_id
-            JOIN products p ON p.id = oi.product_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
             WHERE o.status NOT IN ('cancelled','returned','stock_restored')
               AND DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)
             GROUP BY p.name ORDER BY sold DESC LIMIT %s
