@@ -14697,7 +14697,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         _available_sizes_str = ', '.join(_all_size_opts) if _all_size_opts else 'ไม่มีข้อมูล'
 
         # 8c. Collect active category names (for bot to suggest when product not found)
-        cursor.execute("SELECT name FROM categories WHERE is_active = TRUE ORDER BY name LIMIT 20")
+        cursor.execute("SELECT name FROM categories WHERE parent_id IS NULL ORDER BY sort_order, name LIMIT 15")
         _available_cats_str = ', '.join(r['name'] for r in cursor.fetchall()) or 'ไม่มีข้อมูล'
 
         # 9. Load size chart image for Vision (when viewing a product with size chart)
