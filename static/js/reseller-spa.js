@@ -1250,7 +1250,15 @@ async function calculateShippingCost() {
         
         if (data.promo_applied && data.original_shipping > data.shipping_cost) {
             promoName.textContent = data.promo_applied;
-            promoSaved.textContent = `-฿${(data.original_shipping - data.shipping_cost).toLocaleString()}`;
+            if (data.shipping_cost === 0) {
+                // Free shipping — show label only, no amount (shipping row already shows ฟรี!)
+                promoSaved.textContent = '✓ ฟรี!';
+                promoSaved.style.fontWeight = '600';
+            } else {
+                // Partial discount — show amount saved
+                promoSaved.textContent = `-฿${(data.original_shipping - data.shipping_cost).toLocaleString()}`;
+                promoSaved.style.fontWeight = '600';
+            }
             promoRow.style.display = 'flex';
         } else {
             promoRow.style.display = 'none';
