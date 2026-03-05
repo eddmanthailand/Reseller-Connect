@@ -14956,7 +14956,8 @@ State: {session_data.get('state','IDLE')}
 - "quick_replies": ปุ่มตัวเลือกให้กด (ไม่เกิน 4 ปุ่ม หรือ [] ถ้าไม่ต้องการ)
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี) — ดึง ID จากรายการสินค้าด้านบน (ตัวเลขหลัง "ID:") ห้ามถามสมาชิก
 - "add_to_cart": ใส่ข้อมูลเมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "ขอ L 2 ตัว" หรือ "สั่งเลยค่ะ" — ให้ใส่ product_id (จากรายการสินค้า), size (ชื่อไซส์เช่น "L"), quantity (จำนวน) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0
-- "needs_admin": true ถ้าต้องการให้ Admin มาช่วย"""
+- "needs_admin": true ถ้าต้องการให้ Admin มาช่วย
+- "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่"""
 
         # 11. Call Flash Lite (with Vision if size chart available)
         import os as _os
@@ -14972,16 +14973,29 @@ State: {session_data.get('state','IDLE')}
             _contents.append(_genai_types.Part.from_bytes(data=size_chart_image_bytes, mime_type=size_chart_mime))
         # Use Flash (full) model when size chart vision is needed — better multi-step arithmetic
         _bot_model = 'gemini-2.5-flash' if size_chart_image_bytes else 'gemini-2.5-flash-lite'
-        resp = _client.models.generate_content(
-            model=_bot_model,
-            contents=_contents,
-            config=_genai.types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.3 if size_chart_image_bytes else 0.7,
-                max_output_tokens=2048 if size_chart_image_bytes else 600
-            )
+        # Fallback model chain if primary is overloaded (503)
+        _fallback_models = ['gemini-2.0-flash', 'gemini-2.5-flash'] if not size_chart_image_bytes else ['gemini-2.0-flash']
+        _all_models = [_bot_model] + _fallback_models
+        _cfg = _genai.types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.3 if size_chart_image_bytes else 0.7,
+            max_output_tokens=2048 if size_chart_image_bytes else 600
         )
-        raw = resp.text or ''
+        raw = ''
+        for _try_model in _all_models:
+            try:
+                _resp = _client.models.generate_content(
+                    model=_try_model, contents=_contents, config=_cfg
+                )
+                raw = _resp.text or ''
+                _bot_model = _try_model  # update for logging
+                break
+            except Exception as _api_err:
+                _err_str = str(_api_err)
+                if '503' in _err_str or 'UNAVAILABLE' in _err_str or '429' in _err_str:
+                    print(f'[BOT] Model {_try_model} unavailable, trying next...')
+                    continue
+                raise  # re-raise non-503 errors immediately
 
         # 11. Parse JSON — handles: valid JSON, truncated JSON, plain text
         m = _re.search(r'\{[\s\S]*\}', raw)
@@ -15115,6 +15129,11 @@ State: {session_data.get('state','IDLE')}
             if _k in new_state:
                 try: new_state[_k] = int(new_state[_k]) if new_state[_k] not in (None, 'null', '') else None
                 except (ValueError, TypeError): new_state[_k] = None
+        # Auto-fill current_product_id from show_product_ids if Gemini forgot to set it
+        if show_product_ids and not new_state.get('current_product_id'):
+            new_state['current_product_id'] = show_product_ids[0]
+            if not new_state.get('state'):
+                new_state['state'] = 'VIEWING_PRODUCT'
         merged_state = {**session_data, **new_state}
         cursor.execute('''
             UPDATE chat_threads SET bot_session_data = %s::jsonb,
