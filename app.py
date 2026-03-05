@@ -14481,8 +14481,13 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         promos_text = ', '.join([p['name'] for p in promos]) if promos else 'ไม่มีโปรโมชั่น'
 
         # 8. Product search based on current session or message keywords
-        current_cat_id = session_data.get('category_id')
-        current_product_id = session_data.get('current_product_id')
+        # Safely cast to int — Gemini sometimes stores text like "เสื้อพยาบาล" instead of an integer
+        def _safe_int(v):
+            try: return int(v) if v is not None else None
+            except (ValueError, TypeError): return None
+
+        current_cat_id = _safe_int(session_data.get('category_id'))
+        current_product_id = _safe_int(session_data.get('current_product_id'))
         desired_size = session_data.get('desired_size')
 
         def _fmt_product_row(pr, detailed=False):
@@ -14911,6 +14916,11 @@ State: {session_data.get('state','IDLE')}
             saved_msgs.append({'id': row_cart['id'], 'created_at': row_cart['created_at'].isoformat()})
 
         # 13. Update session state + needs_admin
+        # Sanitize new_state — Gemini may return text IDs; coerce to int or None
+        for _k in ('category_id', 'current_product_id'):
+            if _k in new_state:
+                try: new_state[_k] = int(new_state[_k]) if new_state[_k] not in (None, 'null', '') else None
+                except (ValueError, TypeError): new_state[_k] = None
         merged_state = {**session_data, **new_state}
         cursor.execute('''
             UPDATE chat_threads SET bot_session_data = %s::jsonb,
