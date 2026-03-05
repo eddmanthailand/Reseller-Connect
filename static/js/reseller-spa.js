@@ -1341,7 +1341,8 @@ function removeCoupon() {
         document.getElementById('autoPromoRow').style.display = 'none';
         const ship = checkoutData.shippingCost || 0;
         const sub = checkoutData.total || 0;
-        document.getElementById('summaryTotal').textContent = `฿${(sub + ship).toLocaleString()}`;
+        checkoutData.finalTotal = sub + ship;
+        document.getElementById('summaryTotal').textContent = `฿${checkoutData.finalTotal.toLocaleString()}`;
     }
 }
 
@@ -1380,7 +1381,8 @@ function updateSummaryWithDiscount(data) {
         couponRow.style.display = 'none';
     }
     const finalAmt = data.final_total !== undefined ? data.final_total : (checkoutData.total || 0);
-    document.getElementById('summaryTotal').textContent = `฿${(finalAmt + ship).toLocaleString()}`;
+    checkoutData.finalTotal = finalAmt + ship;
+    document.getElementById('summaryTotal').textContent = `฿${checkoutData.finalTotal.toLocaleString()}`;
 }
 
 async function openCouponWalletPicker() {
@@ -1629,7 +1631,7 @@ async function loadPromptPayQR() {
     
     try {
         const shippingCost = checkoutData.shippingCost || 0;
-        const amount = (checkoutData.total || 0) + shippingCost;
+        const amount = checkoutData.finalTotal || ((checkoutData.total || 0) + shippingCost);
         const res = await fetch(`${RESELLER_API_URL}/promptpay-qr?amount=${amount}`);
         
         if (!res.ok) {
@@ -2009,7 +2011,7 @@ async function placeOrder() {
                 try {
                     const formData = new FormData();
                     formData.append('slip_image', selectedPaymentSlip);
-                    formData.append('amount', (checkoutData.total || 0) + (checkoutData.shippingCost || 0));
+                    formData.append('amount', checkoutData.finalTotal || ((checkoutData.total || 0) + (checkoutData.shippingCost || 0)));
 
                     const slipRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, {
                         method: 'POST',
