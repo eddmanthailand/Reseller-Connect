@@ -617,7 +617,7 @@ window.openChatThread = async function(threadId) {
     if (threads && threads.length > 0) {
         const target = threads.find(t => t.id === threadId);
         if (target) {
-            selectChatThread(target.id, target.reseller_name, target.tier_name || '', target.reseller_tier_id || null);
+            selectChatThread(target.id, target.reseller_name, target.tier_name || '', target.reseller_tier_id || null, target.bot_paused || false);
         }
     }
 };
@@ -8416,7 +8416,7 @@ async function loadChatThreadsAndAutoSelect() {
     const threads = await loadChatThreads();
     if (threads && threads.length > 0 && !currentChatThreadId) {
         const firstThread = threads.find(t => t.unread_count > 0) || threads[0];
-        selectChatThread(firstThread.id, firstThread.reseller_name, firstThread.tier_name || '', firstThread.reseller_tier_id || null);
+        selectChatThread(firstThread.id, firstThread.reseller_name, firstThread.tier_name || '', firstThread.reseller_tier_id || null, firstThread.bot_paused || false);
     }
 }
 
@@ -8461,7 +8461,7 @@ async function loadChatThreads() {
         const isAdmin = document.getElementById('btnToggleArchived') !== null;
         container.innerHTML = threads.map(thread => `
             <div class="chat-thread-item ${currentChatThreadId === thread.id ? 'active' : ''}" 
-                 onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}', ${thread.reseller_tier_id || 'null'})"
+                 onclick="selectChatThread(${thread.id}, '${escapeHtml(thread.reseller_name)}', '${escapeHtml(thread.tier_name || '')}', ${thread.reseller_tier_id || 'null'}, ${thread.bot_paused ? 'true' : 'false'})"
                  style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; cursor: pointer; background: ${thread.needs_admin ? 'rgba(251,191,36,0.08)' : currentChatThreadId === thread.id ? 'rgba(102,126,234,0.2)' : 'transparent'}; transition: background 0.2s; border-left: ${thread.needs_admin ? '3px solid #fbbf24' : '3px solid transparent'};">
                 <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; position:relative;">
                     ${thread.reseller_name.charAt(0).toUpperCase()}
@@ -8530,7 +8530,7 @@ function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function selectChatThread(threadId, resellerName, tierName, resellerTierId) {
+async function selectChatThread(threadId, resellerName, tierName, resellerTierId, botPaused) {
     currentChatThreadId = threadId;
     lastMessageId = 0;
     oldestMessageId = 0;
@@ -8546,6 +8546,8 @@ async function selectChatThread(threadId, resellerName, tierName, resellerTierId
     document.getElementById('chatResellerName').textContent = resellerName;
     document.getElementById('chatResellerTier').textContent = tierName || 'ไม่ระบุ Tier';
     
+    updateChatBotToggleBtn(!botPaused);
+    
     const chatGrid = document.querySelector('.admin-chat-grid');
     if (chatGrid) chatGrid.classList.add('chat-thread-open');
     
@@ -8553,6 +8555,43 @@ async function selectChatThread(threadId, resellerName, tierName, resellerTierId
     loadChatThreads();
     loadQuickReplyButtons();
     startChatPolling();
+}
+
+function updateChatBotToggleBtn(isActive) {
+    const btn = document.getElementById('btnChatBotToggle');
+    const lbl = document.getElementById('chatBotToggleLabel');
+    if (!btn || !lbl) return;
+    if (isActive) {
+        btn.style.background = 'rgba(72,199,142,0.15)';
+        btn.style.color = '#48c78e';
+        btn.style.borderColor = 'rgba(72,199,142,0.4)';
+        btn.innerHTML = '🤖 <span id="chatBotToggleLabel">บอทกำลังทำงาน</span>';
+    } else {
+        btn.style.background = 'rgba(255,255,255,0.08)';
+        btn.style.color = 'rgba(255,255,255,0.5)';
+        btn.style.borderColor = 'rgba(255,255,255,0.2)';
+        btn.innerHTML = '⏸️ <span id="chatBotToggleLabel">บอทหยุดอยู่</span>';
+    }
+}
+
+async function toggleChatBot() {
+    if (!currentChatThreadId) return;
+    const btn = document.getElementById('btnChatBotToggle');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch(`/api/chat/threads/${currentChatThreadId}/toggle-bot`, {
+            method: 'POST', credentials: 'include'
+        });
+        if (res.ok) {
+            const data = await res.json();
+            updateChatBotToggleBtn(data.bot_active);
+            showGlobalAlert('success', data.bot_active ? '🤖 บอทเปิดทำงานแล้ว' : '⏸️ บอทหยุดทำงานแล้ว');
+        }
+    } catch (e) {
+        showGlobalAlert('error', 'เกิดข้อผิดพลาด');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 function adminChatGoBack() {
@@ -9361,7 +9400,7 @@ async function searchChatMessages() {
         }
         
         const firstResult = results[0];
-        selectChatThread(firstResult.thread_id, firstResult.reseller_name || firstResult.sender_name, '');
+        selectChatThread(firstResult.thread_id, firstResult.reseller_name || firstResult.sender_name, '', null, false);
         
         showAlert('success', `พบ ${results.length} ข้อความ`);
     } catch (error) {
@@ -9454,7 +9493,7 @@ async function startChatWithReseller(resellerId, resellerName, tierName) {
         
         if (response.ok) {
             const data = await response.json();
-            selectChatThread(data.thread_id, resellerName, tierName);
+            selectChatThread(data.thread_id, resellerName, tierName, null, false);
             loadChatThreads();
         } else {
             const error = await response.json();

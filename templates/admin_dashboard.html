@@ -3220,16 +3220,20 @@
 
                     <!-- Chat Window -->
                     <div class="card admin-chat-window" style="display: flex; flex-direction: column; overflow: hidden;">
-                        <div id="chatHeader" style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: none;">
+                        <div id="chatHeader" style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: none;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <button class="admin-chat-back-btn" onclick="adminChatGoBack()" style="display: none; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: rgba(255,255,255,0.1); border-radius: 50%; color: white; cursor: pointer; flex-shrink: 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
                                 </button>
-                                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;" id="chatAvatarInitial">?</div>
-                                <div>
+                                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;" id="chatAvatarInitial">?</div>
+                                <div style="flex: 1; min-width: 0;">
                                     <div style="font-weight: 600; color: #ffffff;" id="chatResellerName">-</div>
                                     <div style="font-size: 12px; opacity: 0.6; color: rgba(255,255,255,0.7);" id="chatResellerTier">-</div>
                                 </div>
+                                <button id="btnChatBotToggle" onclick="toggleChatBot()" title="เปิด/ปิดบอทสำหรับแชทนี้"
+                                    style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:12px;cursor:pointer;white-space:nowrap;border:1px solid rgba(255,255,255,0.25);background:rgba(72,199,142,0.15);color:#48c78e;transition:all 0.2s;">
+                                    🤖 <span id="chatBotToggleLabel">บอทกำลังทำงาน</span>
+                                </button>
                             </div>
                         </div>
                         <div id="chatMessagesContainer" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #1a1a1d;">

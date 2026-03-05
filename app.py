@@ -14007,7 +14007,8 @@ def get_chat_threads():
                 SELECT ct.id, ct.reseller_id, ct.last_message_at, ct.last_message_preview,
                        COALESCE(u.full_name, u.username, 'สมาชิก #' || u.id::text) as reseller_name,
                        u.username, rt.name as tier_name, u.reseller_tier_id,
-                       ct.needs_admin, ct.needs_admin_at,
+                       ct.needs_admin, ct.needs_admin_at, ct.bot_paused_until,
+                       (ct.bot_paused_until IS NOT NULL AND ct.bot_paused_until > CURRENT_TIMESTAMP) as bot_paused,
                        (SELECT COUNT(*) FROM chat_messages cm 
                         WHERE cm.thread_id = ct.id 
                         AND cm.id > COALESCE((SELECT last_read_message_id FROM chat_read_status 
@@ -15130,6 +15131,43 @@ def chat_request_admin(thread_id):
         except Exception as e:
             print(f'[BOT] Request admin notify error: {e}')
         return jsonify({'id': row['id'], 'created_at': row['created_at'].isoformat()}), 201
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/chat/threads/<int:thread_id>/toggle-bot', methods=['POST'])
+@admin_required
+def chat_toggle_bot(thread_id):
+    """Admin manually pauses or resumes the bot for a specific thread."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT bot_paused_until FROM chat_threads WHERE id = %s', (thread_id,))
+        thread = cursor.fetchone()
+        if not thread:
+            return jsonify({'error': 'Thread not found'}), 404
+        from datetime import datetime as _dt
+        currently_paused = thread.get('bot_paused_until') and thread['bot_paused_until'] > _dt.utcnow()
+        if currently_paused:
+            cursor.execute('UPDATE chat_threads SET bot_paused_until = NULL WHERE id = %s', (thread_id,))
+            bot_active = True
+        else:
+            cursor.execute(
+                "UPDATE chat_threads SET bot_paused_until = CURRENT_TIMESTAMP + INTERVAL '10 years' WHERE id = %s",
+                (thread_id,)
+            )
+            bot_active = False
+        conn.commit()
+        return jsonify({'bot_active': bot_active}), 200
     except Exception as e:
         if conn:
             conn.rollback()
