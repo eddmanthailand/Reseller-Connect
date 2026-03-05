@@ -14734,12 +14734,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                 WHERE p.status = 'active'
                   AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
                 GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
-                LIMIT 8
+                LIMIT 15
             '''
             prods = []
             seen_ids = set()
 
-            def _run_kw_search(kw, limit=8):
+            def _run_kw_search(kw, limit=15):
                 """Search by a single keyword and merge into prods/seen_ids."""
                 pat = f'%{kw}%'
                 cursor.execute(_product_base_select + f'''
@@ -14777,7 +14777,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                         _ng = _msg_clean[_i:_i + _ng_len]
                         if _ng not in _ngrams_tried:
                             _ngrams_tried.add(_ng)
-                            _run_kw_search(_ng, limit=5)
+                            _run_kw_search(_ng, limit=15)
                         if prods:
                             break
 
