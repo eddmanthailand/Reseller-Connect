@@ -455,14 +455,61 @@ function _agentClearImage() {
     if (img) img.src = '';
 }
 
+/* ---- Notes helpers ---- */
+function _agentRenderNotes(notes) {
+    const el = document.getElementById('agentNotesList');
+    if (!el) return;
+    if (!notes || !notes.length) {
+        el.innerHTML = '<div style="font-size:11px;color:#9ca3af;padding:4px 0;">ยังไม่มีบันทึก — AI จะเริ่มจำเมื่อคุณสั่งให้บันทึก</div>';
+        return;
+    }
+    el.innerHTML = notes.map(n => `
+        <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 0;border-bottom:1px solid #f3f4f6;">
+            <div style="flex:1;min-width:0;">
+                <span style="font-size:11px;font-weight:600;color:#1d1d1f;">${n.note_key}</span>
+                <span style="font-size:11px;color:#6b7280;"> — ${n.note_value}</span>
+            </div>
+            <button onclick="agentDeleteNote('${n.note_key.replace(/'/g,"\\'")}',this)" style="flex-shrink:0;background:none;border:none;color:#ef4444;font-size:13px;cursor:pointer;padding:0 2px;" title="ลบ">✕</button>
+        </div>`).join('');
+}
+
+async function agentAddNote() {
+    const key = (document.getElementById('agentNoteKey')?.value || '').trim();
+    const val = (document.getElementById('agentNoteVal')?.value || '').trim();
+    if (!key || !val) { alert('กรุณาระบุหัวข้อและข้อมูล'); return; }
+    const res = await fetch('/api/admin/agent/notes', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        credentials: 'include', body: JSON.stringify({key, value: val})
+    });
+    if (res.ok) {
+        document.getElementById('agentNoteKey').value = '';
+        document.getElementById('agentNoteVal').value = '';
+        const notes = await (await fetch('/api/admin/agent/notes', {credentials:'include'})).json();
+        _agentRenderNotes(notes);
+    }
+}
+
+async function agentDeleteNote(key, btn) {
+    if (!confirm(`ลบบันทึก "${key}" ออกจากสมุดโน้ต?`)) return;
+    const res = await fetch('/api/admin/agent/notes', {
+        method: 'DELETE', headers: {'Content-Type':'application/json'},
+        credentials: 'include', body: JSON.stringify({key})
+    });
+    if (res.ok) {
+        const notes = await (await fetch('/api/admin/agent/notes', {credentials:'include'})).json();
+        _agentRenderNotes(notes);
+    }
+}
+
 /* ---- Settings modal ---- */
 async function agentOpenSettings() {
     const modal = document.getElementById('agentSettingsModal');
     if (!modal) return;
     try {
-        const [res1, res2] = await Promise.all([
+        const [res1, res2, res3] = await Promise.all([
             fetch('/api/admin/agent/settings', { credentials: 'include' }),
-            fetch('/api/admin/bot-settings', { credentials: 'include' })
+            fetch('/api/admin/bot-settings', { credentials: 'include' }),
+            fetch('/api/admin/agent/notes', { credentials: 'include' })
         ]);
         if (res1.ok) {
             const d = await res1.json();
@@ -472,6 +519,7 @@ async function agentOpenSettings() {
             document.getElementById('agentSettingParticle').value  = d.ending_particle  || 'ครับ';
             document.getElementById('agentSettingCustom').value    = d.custom_prompt    || '';
         }
+        if (res3.ok) { _agentRenderNotes(await res3.json()); }
         if (res2.ok) {
             const b = await res2.json();
             const cb = document.getElementById('botChatEnabled');

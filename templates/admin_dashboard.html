@@ -4533,10 +4533,19 @@
                     <input id="agentSettingParticle" class="agent-settings-input" type="text" placeholder="ครับ / ค่ะ">
                 </div>
                 <div class="agent-settings-field">
-                    <label class="agent-settings-label">บุคลิกพิเศษ (custom prompt)</label>
-                    <textarea id="agentSettingCustom" class="agent-settings-textarea" placeholder="เช่น ชอบพูดสั้น ใช้ตัวเลขเสมอ หรือเป็นคนมีอารมณ์ขัน..."></textarea>
+                    <label class="agent-settings-label">คำสั่งพิเศษ / บริบทธุรกิจ</label>
+                    <textarea id="agentSettingCustom" class="agent-settings-textarea" rows="4" style="min-height:90px;" placeholder="เช่น: โกดังหลักอยู่กรุงเทพ, ส่งEMSเป็นหลัก, ยอดขายปกติ 50,000/วัน, แบรนด์ NRSK ขายดีที่สุด..."></textarea>
+                    <div style="font-size:10px;color:#9ca3af;margin-top:3px;">AI จะจำบริบทนี้และนำไปใช้ตอบทุกคำถาม</div>
                 </div>
-                <div style="border-top:1px solid #e5e7eb;margin:16px 0 14px;"></div>
+                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
+                <div class="agent-settings-title" style="margin-bottom:8px;">📒 สมุดโน้ต AI <span style="font-size:11px;font-weight:400;color:#9ca3af;">(จำข้ามเซสชัน)</span></div>
+                <div id="agentNotesList" style="margin-bottom:8px;max-height:130px;overflow-y:auto;"></div>
+                <div style="display:flex;gap:6px;margin-bottom:4px;">
+                    <input id="agentNoteKey" class="agent-settings-input" type="text" placeholder="หัวข้อ" style="flex:1;font-size:12px;padding:6px 10px;">
+                    <input id="agentNoteVal" class="agent-settings-input" type="text" placeholder="ข้อมูล" style="flex:2;font-size:12px;padding:6px 10px;">
+                    <button onclick="agentAddNote()" style="padding:6px 10px;background:#1d1d1f;border:none;border-radius:8px;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap;">+ เพิ่ม</button>
+                </div>
+                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
                 <div class="agent-settings-title" style="margin-bottom:10px;">🤖 ตั้งค่าบอทแชทอัตโนมัติ</div>
                 <div class="agent-settings-field" style="display:flex;align-items:center;justify-content:space-between;">
                     <label class="agent-settings-label" style="margin:0;">เปิดใช้บอทแชท</label>
@@ -4561,7 +4570,7 @@
         </div>
 
     </div>
-    <script src="/static/js/agent.js?v=20260304e"></script>
+    <script src="/static/js/agent.js?v=20260305f"></script>
     <!-- ===== END AI AGENT ===== -->
 
 </body>
