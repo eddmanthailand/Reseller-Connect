@@ -8605,13 +8605,13 @@ function _updateGlobalBotBtn(enabled) {
         btn.style.color = '#48c78e';
         btn.style.borderColor = 'rgba(72,199,142,0.5)';
         if (dot) { dot.style.background = '#48c78e'; }
-        if (lbl) lbl.textContent = 'เปิดอยู่ — คลิกเพื่อปิด';
+        if (lbl) lbl.textContent = 'เปิดอยู่';
     } else {
         btn.style.background = 'rgba(255,255,255,0.07)';
         btn.style.color = 'rgba(255,255,255,0.5)';
         btn.style.borderColor = 'rgba(255,255,255,0.2)';
         if (dot) { dot.style.background = '#6b7280'; }
-        if (lbl) lbl.textContent = 'ปิดอยู่ — คลิกเพื่อเปิด';
+        if (lbl) lbl.textContent = 'ปิดอยู่';
     }
 }
 
