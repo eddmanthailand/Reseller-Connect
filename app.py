@@ -14648,6 +14648,31 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         current_product_id = _safe_int(session_data.get('current_product_id'))
         desired_size = session_data.get('desired_size')
 
+        # ── Context-switch detection ───────────────────────────────────────
+        # If user's message doesn't reference the current product at all but
+        # DOES match a different product → clear context so keyword search runs.
+        if current_product_id:
+            cursor.execute('SELECT name FROM products WHERE id = %s', (current_product_id,))
+            _cp_row = cursor.fetchone()
+            _cp_name = (_cp_row['name'] if _cp_row else '') or ''
+            _msg_c = ''.join(user_message_text.split())
+            if len(_msg_c) >= 3:
+                _msg_ngs = set()
+                for _nl in (5, 4):
+                    for _i in range(len(_msg_c) - _nl + 1):
+                        _msg_ngs.add(_msg_c[_i:_i + _nl])
+                _hits_current = sum(1 for ng in _msg_ngs if ng in _cp_name)
+                if _hits_current == 0 and _msg_ngs:
+                    for _ng in sorted(_msg_ngs, key=len, reverse=True)[:8]:
+                        cursor.execute(
+                            "SELECT id FROM products WHERE status='active' AND id != %s AND name ILIKE %s LIMIT 1",
+                            (current_product_id, f'%{_ng}%')
+                        )
+                        if cursor.fetchone():
+                            current_product_id = None
+                            current_cat_id = None
+                            break
+
         def _fmt_product_row(pr, detailed=False):
             brand = pr.get('brand_name') or ''
             cat = pr.get('cat_name') or ''
@@ -14982,6 +15007,7 @@ State: {session_data.get('state','IDLE')}
 {coupons_text}
 
 === รายการสินค้าที่เกี่ยวข้อง (ข้อมูลจริงจากระบบ — ใช้ข้อมูลนี้เท่านั้น ห้ามอ้างอิงประวัติแชท) ===
+⚠️ ไซส์และสต็อกของแต่ละสินค้า ให้ใช้ข้อมูลจากสินค้านั้นๆ เท่านั้น ห้ามนำไซส์หรือสต็อกจากสินค้าอื่นมาระบุ และห้ามเพิ่มไซส์ที่ไม่ปรากฏในข้อมูลด้านล่าง
 {products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
 
 === สินค้าทดแทน ===
