@@ -14494,6 +14494,29 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             except Exception:
                 session_data = {}
 
+        # 4b. Load customer measurements from session (24-hour TTL)
+        from datetime import datetime as _dt, timedelta as _td
+        _meas = session_data.get('measurements') or {}
+        _meas_age_ok = False
+        if _meas.get('measured_at'):
+            try:
+                _meas_time = _dt.fromisoformat(_meas['measured_at'])
+                _meas_age_ok = (_dt.utcnow() - _meas_time) < _td(hours=24)
+            except Exception:
+                pass
+        if not _meas_age_ok:
+            _meas = {}
+            session_data.pop('measurements', None)
+        customer_chest = _meas.get('chest')
+        customer_waist = _meas.get('waist')
+        customer_hips  = _meas.get('hips')
+        # Build readable measurements string for prompt
+        _meas_parts = []
+        if customer_chest: _meas_parts.append(f"รอบอก {customer_chest} นิ้ว")
+        if customer_waist: _meas_parts.append(f"รอบเอว {customer_waist} นิ้ว")
+        if customer_hips:  _meas_parts.append(f"รอบสะโพก {customer_hips} นิ้ว")
+        measurements_text = ', '.join(_meas_parts) if _meas_parts else '(ยังไม่มีข้อมูล)'
+
         # 5. Recent conversation history (last 8 messages)
         cursor.execute('''
             SELECT sender_type, COALESCE(cm.is_bot, FALSE) as is_bot, content
@@ -14905,6 +14928,10 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - ถ้าสินค้าหมดในไซส์ที่ต้องการ → เสนอสินค้าคล้ายกันที่มีไซส์นั้นทันที ไม่ปล่อยให้หยุดสนทนา
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
 - 🎟️ คูปองของสมาชิก: ถ้าสมาชิกถามว่า "มีคูปองไหม" หรือ "คูปองของฉัน" → ดูจากหัวข้อ "คูปองของสมาชิกคนนี้" ด้านล่าง แล้วตอบรายละเอียดที่ถูกต้อง ถ้าไม่มีให้บอกว่า "ยังไม่มีคูปองค่ะ" อย่าบอกว่า "สามารถแจ้งทางร้านได้"
+- 📏 ขนาดร่างกายสมาชิก: ดูจากหัวข้อ "ขนาดร่างกายของสมาชิก" ด้านล่าง
+  * ถ้ามีข้อมูลแล้ว → ห้ามถามซ้ำ ใช้ค่านั้นได้เลย (เช่น ถ้ามีรอบเอวแล้วไม่ต้องถามรอบเอวอีก)
+  * ถ้าขาดข้อมูลบางส่วน → ถามเฉพาะที่ขาด (เช่น มีเอว+สะโพกแล้ว ถามแค่รอบอก)
+  * ถ้าสมาชิกบอกขนาดใหม่ในข้อความนี้ → บันทึกลง new_state.measurements ทันที
 - ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
 - ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
@@ -14923,6 +14950,9 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 State: {session_data.get('state','IDLE')}
 สินค้าที่กำลังดู ID: {current_product_id or 'ไม่มี'}
 ไซส์ที่ต้องการ: {desired_size or 'ยังไม่ได้ระบุ'}
+
+=== ขนาดร่างกายของสมาชิก (บันทึกไว้ในการสนทนา — ใช้ได้เลยไม่ต้องถามซ้ำ) ===
+{measurements_text}
 
 === ประวัติออเดอร์ล่าสุดของสมาชิก ===
 {orders_text}
@@ -14957,7 +14987,8 @@ State: {session_data.get('state','IDLE')}
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี) — ดึง ID จากรายการสินค้าด้านบน (ตัวเลขหลัง "ID:") ห้ามถามสมาชิก
 - "add_to_cart": ใส่ข้อมูลเมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "ขอ L 2 ตัว" หรือ "สั่งเลยค่ะ" — ให้ใส่ product_id (จากรายการสินค้า), size (ชื่อไซส์เช่น "L"), quantity (จำนวน) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย
-- "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่"""
+- "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่
+- "new_state.measurements": ⚠️ ถ้าสมาชิกบอกขนาดร่างกาย (รอบอก/เอว/สะโพก) ในข้อความนี้ → ต้องอัปเดตทันที รูปแบบ: {{"chest": 32, "waist": 28, "hips": 35, "measured_at": "2026-01-01T00:00:00"}} ใส่เฉพาะค่าที่สมาชิกบอก ไม่ต้องใส่ที่ไม่รู้ ถ้าไม่มีการบอกขนาดให้ละ field นี้ทิ้งไป (ไม่ต้อง return)"""
 
         # 11. Call Flash Lite (with Vision if size chart available)
         import os as _os
@@ -15134,7 +15165,20 @@ State: {session_data.get('state','IDLE')}
             new_state['current_product_id'] = show_product_ids[0]
             if not new_state.get('state'):
                 new_state['state'] = 'VIEWING_PRODUCT'
+
+        # Merge measurements: preserve existing + override with new values from this turn
+        _new_meas = new_state.pop('measurements', None)
         merged_state = {**session_data, **new_state}
+        if _new_meas and isinstance(_new_meas, dict):
+            # Merge individual fields so partial update doesn't wipe other measurements
+            _existing_meas = merged_state.get('measurements') or {}
+            _merged_meas = {**_existing_meas, **_new_meas}
+            # Always set measured_at to server time (ignore Gemini's value)
+            _merged_meas['measured_at'] = _dt.utcnow().isoformat()
+            merged_state['measurements'] = _merged_meas
+        elif _meas:
+            # Keep existing valid measurements (already loaded above)
+            merged_state['measurements'] = _meas
         cursor.execute('''
             UPDATE chat_threads SET bot_session_data = %s::jsonb,
                 needs_admin = %s, needs_admin_at = CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE needs_admin_at END
