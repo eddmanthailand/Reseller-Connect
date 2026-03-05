@@ -1267,16 +1267,16 @@ async function calculateShippingCost() {
         const grandTotal = checkoutData.total + data.shipping_cost;
         totalEl.textContent = `฿${grandTotal.toLocaleString()}`;
         
-        loadPromptPayQR();
         if (!_appliedCoupon) checkAutoPromotion();
+        else loadPromptPayQR();
         
     } catch (error) {
         console.error('Error calculating shipping:', error);
         shippingEl.textContent = '฿0';
         totalEl.textContent = `฿${checkoutData.total.toLocaleString()}`;
         checkoutData.shippingCost = 0;
-        loadPromptPayQR();
         if (!_appliedCoupon) checkAutoPromotion();
+        else loadPromptPayQR();
     }
 }
 
@@ -1351,6 +1351,7 @@ function removeCoupon() {
         const sub = checkoutData.total || 0;
         checkoutData.finalTotal = sub + ship;
         document.getElementById('summaryTotal').textContent = `฿${checkoutData.finalTotal.toLocaleString()}`;
+        loadPromptPayQR();
     }
 }
 
@@ -1406,6 +1407,7 @@ function updateSummaryWithDiscount(data) {
     const finalAmt = data.final_total !== undefined ? data.final_total : (checkoutData.total || 0);
     checkoutData.finalTotal = finalAmt + ship;
     document.getElementById('summaryTotal').textContent = `฿${checkoutData.finalTotal.toLocaleString()}`;
+    loadPromptPayQR();
 }
 
 async function openCouponWalletPicker() {
