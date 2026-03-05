@@ -962,6 +962,15 @@ function renderCart() {
             customizationsHtml = `<div class="cart-item-customizations">${custTags}</div>`;
         }
         
+        const hasTierDiscount = item.tier_discount_percent > 0;
+        const priceHtml = hasTierDiscount
+            ? `<div class="cart-item-price">
+                   <span style="text-decoration:line-through;opacity:0.45;font-size:12px;font-weight:400;">฿${item.unit_price.toLocaleString()}</span>
+                   <span style="margin-left:6px;">฿${item.final_price.toLocaleString()}</span>
+                   <span style="margin-left:6px;font-size:11px;background:rgba(74,222,128,0.18);color:#4ade80;border-radius:4px;padding:1px 6px;">-${item.tier_discount_percent}%</span>
+               </div>`
+            : `<div class="cart-item-price">฿${item.final_price.toLocaleString()}</div>`;
+
         return `
         <div class="cart-item">
             <img class="cart-item-image" src="${item.image_url || ''}" onerror="this.style.display='none'" alt="">
@@ -970,7 +979,7 @@ function renderCart() {
                 <div class="cart-item-sku">${item.sku_code}</div>
                 ${skuOptionsHtml}
                 ${customizationsHtml}
-                <div class="cart-item-price">฿${item.final_price.toLocaleString()}</div>
+                ${priceHtml}
                 <div class="cart-item-qty">
                     <button class="qty-btn" onclick="updateCartQty(${item.id}, ${item.quantity - 1})">-</button>
                     <span>${item.quantity}</span>
@@ -982,7 +991,16 @@ function renderCart() {
             </div>
         </div>
     `}).join('');
-    
+
+    const retailTotal = cartItems.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0);
+    const tierSavings = retailTotal - total;
+    const tierSavingsHtml = tierSavings > 0
+        ? `<div class="cart-summary-row" style="color:#4ade80;font-size:13px;">
+               <span>ส่วนลดระดับสมาชิก</span>
+               <span>-฿${tierSavings.toLocaleString()}</span>
+           </div>`
+        : '';
+
     container.innerHTML = `
         <div class="cart-grid">
             <div class="cart-items-list">
@@ -994,11 +1012,17 @@ function renderCart() {
                     <span>รวมสินค้า</span>
                     <span>${cartItems.length} รายการ</span>
                 </div>
+                ${tierSavings > 0 ? `<div class="cart-summary-row" style="font-size:13px;opacity:0.6;">
+                    <span>ราคาปกติ</span>
+                    <span>฿${retailTotal.toLocaleString()}</span>
+                </div>` : ''}
+                ${tierSavingsHtml}
                 <div class="cart-summary-row">
                     <span>ยอดรวม</span>
                     <span class="cart-summary-total">฿${total.toLocaleString()}</span>
                 </div>
-                <button class="btn-primary" style="width: 100%; margin-top: 16px;" onclick="proceedToCheckout()">
+                <div style="font-size:11px;opacity:0.5;text-align:right;margin-top:2px;margin-bottom:8px;">* โปรโมชันเพิ่มเติมจะแสดงในหน้าชำระเงิน</div>
+                <button class="btn-primary" style="width: 100%; margin-top: 8px;" onclick="proceedToCheckout()">
                     ดำเนินการสั่งซื้อ
                 </button>
             </div>
