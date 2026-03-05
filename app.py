@@ -31,6 +31,7 @@ from datetime import timedelta, datetime
 import time
 import secrets
 from pywebpush import webpush, WebPushException
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -630,7 +631,9 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info='', ord
         'shipping_issue': f'⚠️ คำสั่งซื้อ {order_number} มีปัญหาการจัดส่ง',
         'failed_delivery': f'❌ คำสั่งซื้อ {order_number} จัดส่งไม่สำเร็จ',
         'reship': f'🔄 คำสั่งซื้อ {order_number} กำลังจัดส่งใหม่',
-        'refunded': f'💸 คำสั่งซื้อ {order_number} คืนเงินสำเร็จแล้ว'
+        'refunded': f'💸 คำสั่งซื้อ {order_number} คืนเงินสำเร็จแล้ว',
+        'pending_payment_reminder': f'🛒 คำสั่งซื้อ {order_number} สร้างเรียบร้อยแล้ว!\n⏰ กรุณาชำระเงินและส่งสลิปภายใน 24 ชั่วโมง มิฉะนั้นระบบจะยกเลิกอัตโนมัติและคืนสินค้าเข้าสต็อก',
+        'auto_cancelled': f'🚫 คำสั่งซื้อ {order_number} ถูกยกเลิกอัตโนมัติ เนื่องจากไม่ได้รับการชำระเงินภายใน 24 ชั่วโมง สต็อกสินค้าได้รับการคืนเรียบร้อยแล้ว หากต้องการสั่งซื้ออีกครั้ง กรุณาสร้างคำสั่งซื้อใหม่'
     }
     message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
     if extra_info:
@@ -7097,13 +7100,14 @@ def create_order():
         # Get all sku_ids from cart
         sku_ids = [item['sku_id'] for item in items]
         
-        # Get warehouse stock for all SKUs
+        # Get warehouse stock for all SKUs — FOR UPDATE locks rows to prevent race conditions
         cursor.execute('''
             SELECT sws.sku_id, sws.warehouse_id, sws.stock, w.name as warehouse_name, w.is_active
             FROM sku_warehouse_stock sws
             JOIN warehouses w ON w.id = sws.warehouse_id
             WHERE sws.sku_id = ANY(%s) AND sws.stock > 0 AND w.is_active = TRUE
             ORDER BY sws.warehouse_id, sws.sku_id
+            FOR UPDATE OF sws
         ''', (sku_ids,))
         warehouse_stocks = cursor.fetchall()
         
@@ -7294,6 +7298,12 @@ def create_order():
         # Add shipment count to response
         order['shipment_count'] = len(warehouse_shipments)
         
+        # Notify reseller via bot chat: payment deadline reminder
+        try:
+            send_order_status_chat(user_id, order['order_number'], 'pending_payment_reminder', order_id=order['id'])
+        except Exception:
+            pass
+
         # Send email notification to admin
         reseller_name = session.get('full_name', 'Unknown')
         send_order_notification_to_admin(
@@ -18351,6 +18361,145 @@ def agent_notes_api():
         if conn: conn.close()
 
 # ==================== END AI AGENT ====================
+
+
+# ==================== AUTO-CANCEL SCHEDULER ====================
+
+def _auto_cancel_expired_orders():
+    """
+    Background job: Cancel pending_payment orders older than 24 hours.
+    Restores stock and notifies resellers via bot chat.
+    Runs every 30 minutes via APScheduler.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Find expired pending_payment orders (older than 24 hours)
+        cursor.execute('''
+            SELECT id, order_number, user_id, final_amount
+            FROM orders
+            WHERE status = 'pending_payment'
+              AND created_at < NOW() - INTERVAL '24 hours'
+            FOR UPDATE SKIP LOCKED
+        ''')
+        expired_orders = cursor.fetchall()
+
+        if not expired_orders:
+            return
+
+        print(f"[AUTO-CANCEL] Found {len(expired_orders)} expired orders to cancel")
+
+        # Get system admin id once
+        cursor.execute("SELECT id FROM users WHERE role_id = (SELECT id FROM roles WHERE name = 'Super Admin') LIMIT 1")
+        admin_row = cursor.fetchone()
+        system_admin_id = admin_row['id'] if admin_row else 1
+
+        for order in expired_orders:
+            order_id = order['id']
+            order_number = order['order_number'] or f'#{order_id}'
+            reseller_id = order['user_id']
+
+            try:
+                # Get shipment items to restore stock
+                cursor.execute('''
+                    SELECT osi.order_item_id, osi.quantity, os.warehouse_id, oi.sku_id
+                    FROM order_shipment_items osi
+                    JOIN order_shipments os ON os.id = osi.shipment_id
+                    JOIN order_items oi ON oi.id = osi.order_item_id
+                    WHERE os.order_id = %s
+                ''', (order_id,))
+                shipment_items = cursor.fetchall()
+
+                # Restore warehouse stock
+                for item in shipment_items:
+                    cursor.execute('''
+                        UPDATE sku_warehouse_stock
+                        SET stock = stock + %s
+                        WHERE sku_id = %s AND warehouse_id = %s
+                    ''', (item['quantity'], item['sku_id'], item['warehouse_id']))
+
+                    cursor.execute('''
+                        INSERT INTO stock_audit_log
+                            (sku_id, warehouse_id, quantity_before, quantity_after, change_type,
+                             reference_id, reference_type, notes, created_by)
+                        SELECT %s, %s, stock - %s, stock, 'order_cancel', %s, 'order',
+                               'Auto-cancel: ไม่ชำระเงินภายใน 24 ชม.', %s
+                        FROM sku_warehouse_stock
+                        WHERE sku_id = %s AND warehouse_id = %s
+                    ''', (item['sku_id'], item['warehouse_id'], item['quantity'],
+                          order_id, system_admin_id, item['sku_id'], item['warehouse_id']))
+
+                # Restore main SKU stock
+                cursor.execute('''
+                    SELECT sku_id, SUM(quantity) as total_qty
+                    FROM order_items WHERE order_id = %s
+                    GROUP BY sku_id
+                ''', (order_id,))
+                for sku in cursor.fetchall():
+                    cursor.execute(
+                        'UPDATE skus SET stock = stock + %s WHERE id = %s',
+                        (sku['total_qty'], sku['sku_id'])
+                    )
+
+                # Update order status to cancelled
+                cursor.execute('''
+                    UPDATE orders
+                    SET status = 'cancelled',
+                        notes = CONCAT(COALESCE(notes, ''), ' [ยกเลิกอัตโนมัติ: ไม่ชำระเงินภายใน 24 ชม.]'),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (order_id,))
+
+                conn.commit()
+                print(f"[AUTO-CANCEL] Cancelled order {order_number} (id={order_id}), stock restored")
+
+                # Notify reseller via bot chat (separate connection to avoid tx conflict)
+                try:
+                    send_order_status_chat(reseller_id, order_number, 'auto_cancelled', order_id=order_id)
+                except Exception as chat_err:
+                    print(f"[AUTO-CANCEL] Chat notify error for order {order_number}: {chat_err}")
+
+            except Exception as order_err:
+                conn.rollback()
+                print(f"[AUTO-CANCEL] Error cancelling order {order_number}: {order_err}")
+
+    except Exception as e:
+        print(f"[AUTO-CANCEL] Scheduler error: {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# Start APScheduler — runs auto-cancel every 30 minutes
+_scheduler = BackgroundScheduler(daemon=True, timezone='Asia/Bangkok')
+_scheduler.add_job(
+    _auto_cancel_expired_orders,
+    trigger='interval',
+    minutes=30,
+    id='auto_cancel_expired_orders',
+    replace_existing=True,
+    max_instances=1
+)
+_scheduler.start()
+print("[SCHEDULER] Auto-cancel scheduler started (every 30 min)")
+
+# ==================== END AUTO-CANCEL SCHEDULER ====================
 
 
 if __name__ == '__main__':
