@@ -4088,7 +4088,7 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
     let quickReplyHtml = '';
     if (!isMine && quickReplies.length > 0) {
         quickReplyHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
-            quickReplies.map(qr => `<button onclick="resellerChatQuickReply(${JSON.stringify(escapeHtmlChat(qr))})" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.22)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">${escapeHtmlChat(qr)}</button>`).join('') +
+            quickReplies.map(qr => `<button data-qr="${escapeHtmlChat(qr)}" onclick="resellerChatQuickReply(this.dataset.qr)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.22)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">${escapeHtmlChat(qr)}</button>`).join('') +
             `</div>`;
     }
 
