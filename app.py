@@ -15100,60 +15100,79 @@ State: {session_data.get('state','IDLE')}
 
         if atc_product_id and atc_size and atc_qty > 0:
             try:
+                import time as _time
                 atc_product_id = int(atc_product_id)
-                # Find SKU by product + size value (via option values OR sku_code suffix)
-                cursor.execute('''
-                    SELECT s.id as sku_id, s.price, s.stock, ptp.discount_percent
-                    FROM skus s
-                    LEFT JOIN product_tier_pricing ptp
-                        ON ptp.product_id = s.product_id AND ptp.tier_id = %s
-                    WHERE s.product_id = %s AND (
-                        s.id IN (
-                            SELECT svm.sku_id FROM sku_values_map svm
-                            JOIN option_values ov ON ov.id = svm.option_value_id
-                            JOIN options o ON o.id = ov.option_id
-                            WHERE LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
-                              AND LOWER(ov.value) = LOWER(%s)
-                        )
-                        OR s.sku_code ILIKE %s
-                    )
-                    ORDER BY s.id
-                    LIMIT 1
-                ''', (reseller_tier_id or 0, atc_product_id, str(atc_size), '%-' + str(atc_size)))
-                sku_row = cursor.fetchone()
 
-                if sku_row and sku_row['stock'] >= atc_qty:
-                    # Get/create cart
-                    cursor.execute('''
-                        INSERT INTO carts (user_id, status)
-                        VALUES (%s, 'active')
-                        ON CONFLICT (user_id, status) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-                        RETURNING id
-                    ''', (reseller_id,))
-                    cart_id = cursor.fetchone()['id']
-
-                    price = float(sku_row['price'])
-                    discount_pct = float(sku_row['discount_percent'] or 0)
-                    tier_price = round(price * (1 - discount_pct / 100), 2)
-
-                    # Upsert cart item
-                    cursor.execute('''
-                        INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent)
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (cart_id, sku_id) DO UPDATE
-                          SET quantity = cart_items.quantity + EXCLUDED.quantity,
-                              updated_at = CURRENT_TIMESTAMP
-                    ''', (cart_id, sku_row['sku_id'], atc_qty, tier_price, discount_pct))
-
-                    cart_confirm_text = (
-                        f'น้องนุ่นนำสินค้าใส่ตะกร้าให้แล้วนะคะ 🛒 ({atc_size} x{atc_qty} ชิ้น) '
-                        f'ขอบคุณที่ให้ความไว้วางใจอุดหนุนนะคะ 🙏 '
-                        f'ยังสนใจสินค้าอื่นเพิ่มเติมไหมคะ?'
-                    )
-                elif sku_row and sku_row['stock'] < atc_qty:
-                    cart_confirm_text = f'ขอโทษนะคะ ไซส์ {atc_size} เหลือสต็อกแค่ {sku_row["stock"]} ชิ้นค่ะ ต้องการปรับจำนวนไหมคะ?'
+                # Deduplication: skip if same SKU was added by bot within the last 60 seconds
+                _last_bot_cart = session_data.get('last_bot_cart') or {}
+                _last_sku_key = f'{atc_product_id}_{str(atc_size).lower()}'
+                _last_added_at = _last_bot_cart.get('key') == _last_sku_key and _last_bot_cart.get('added_at', 0)
+                _now_ts = _time.time()
+                if _last_added_at and (_now_ts - float(_last_added_at)) < 60:
+                    # Duplicate within 60 s — skip cart add silently
+                    pass
                 else:
-                    cart_confirm_text = f'ขอโทษนะคะ ไม่พบสินค้าไซส์ {atc_size} ในระบบค่ะ กรุณาตรวจสอบไซส์อีกครั้งนะคะ'
+                    # Find SKU by product + size value (via option values OR sku_code suffix)
+                    cursor.execute('''
+                        SELECT s.id as sku_id, s.price, s.stock, ptp.discount_percent
+                        FROM skus s
+                        LEFT JOIN product_tier_pricing ptp
+                            ON ptp.product_id = s.product_id AND ptp.tier_id = %s
+                        WHERE s.product_id = %s AND (
+                            s.id IN (
+                                SELECT svm.sku_id FROM sku_values_map svm
+                                JOIN option_values ov ON ov.id = svm.option_value_id
+                                JOIN options o ON o.id = ov.option_id
+                                WHERE LOWER(o.name) IN ('ไซส์','size','sz','ขนาด')
+                                  AND LOWER(ov.value) = LOWER(%s)
+                            )
+                            OR s.sku_code ILIKE %s
+                        )
+                        ORDER BY s.id
+                        LIMIT 1
+                    ''', (reseller_tier_id or 0, atc_product_id, str(atc_size), '%-' + str(atc_size)))
+                    sku_row = cursor.fetchone()
+
+                    if sku_row and sku_row['stock'] >= atc_qty:
+                        # Get/create cart
+                        cursor.execute('''
+                            INSERT INTO carts (user_id, status)
+                            VALUES (%s, 'active')
+                            ON CONFLICT (user_id, status) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                            RETURNING id
+                        ''', (reseller_id,))
+                        cart_id = cursor.fetchone()['id']
+
+                        retail_price = float(sku_row['price'])
+                        discount_pct = float(sku_row['discount_percent'] or 0)
+
+                        # Upsert: SET quantity = EXCLUDED.quantity (idempotent — not cumulative)
+                        # so if bot fires twice for same intent, cart quantity won't double
+                        cursor.execute('''
+                            INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (cart_id, sku_id) DO UPDATE
+                              SET quantity = EXCLUDED.quantity,
+                                  unit_price = EXCLUDED.unit_price,
+                                  tier_discount_percent = EXCLUDED.tier_discount_percent,
+                                  updated_at = CURRENT_TIMESTAMP
+                        ''', (cart_id, sku_row['sku_id'], atc_qty, retail_price, discount_pct))
+
+                        # Record in session so duplicate bot fire within 60 s is skipped
+                        session_data['last_bot_cart'] = {
+                            'key': _last_sku_key,
+                            'added_at': _now_ts
+                        }
+
+                        cart_confirm_text = (
+                            f'น้องนุ่นนำสินค้าใส่ตะกร้าให้แล้วนะคะ 🛒 ({atc_size} x{atc_qty} ชิ้น) '
+                            f'ขอบคุณที่ให้ความไว้วางใจอุดหนุนนะคะ 🙏 '
+                            f'ยังสนใจสินค้าอื่นเพิ่มเติมไหมคะ?'
+                        )
+                    elif sku_row and sku_row['stock'] < atc_qty:
+                        cart_confirm_text = f'ขอโทษนะคะ ไซส์ {atc_size} เหลือสต็อกแค่ {sku_row["stock"]} ชิ้นค่ะ ต้องการปรับจำนวนไหมคะ?'
+                    else:
+                        cart_confirm_text = f'ขอโทษนะคะ ไม่พบสินค้าไซส์ {atc_size} ในระบบค่ะ กรุณาตรวจสอบไซส์อีกครั้งนะคะ'
             except Exception as _cart_err:
                 print(f'[BOT] Cart add error: {_cart_err}')
 
