@@ -1000,7 +1000,11 @@
                     <div class="win-name" id="winName">—</div>
                     <div class="win-tier" id="winTier"></div>
                 </div>
-                <div class="win-actions">
+                <div class="win-actions" style="display:flex;align-items:center;gap:8px;">
+                    <button id="btnChatBotToggle" onclick="toggleChatBot()" title="เปิด/ปิดบอทสำหรับแชทนี้"
+                        style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:18px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;border:1px solid #48c78e;background:rgba(72,199,142,0.2);color:#48c78e;transition:all 0.2s;flex-shrink:0;">
+                        🤖 <span id="chatBotToggleLabel">บอทเปิดอยู่</span>
+                    </button>
                     <button class="icon-btn" id="archiveBtn" onclick="toggleArchiveThread()" title="ซ่อน/แสดงการสนทนา">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
@@ -1367,7 +1371,7 @@ function renderThreads(threads) {
     const newHtml = displayThreads.map(t => {
         const name = t.reseller_name || t.username || `สมาชิก #${t.reseller_id}`;
         return `
-        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false}, ${t.reseller_id||'null'})">
+        <div class="thread-item ${currentThreadId === t.id ? 'active' : ''}" onclick="selectThread(${t.id}, '${esc(name)}', '${esc(t.tier_name||'')}', ${t.reseller_tier_id||'null'}, ${t.is_archived||false}, ${t.reseller_id||'null'}, ${t.bot_paused ? 'true' : 'false'})">
             <div class="thread-avatar">${name.charAt(0).toUpperCase()}</div>
             <div class="thread-info">
                 <div class="thread-badges">
@@ -1426,7 +1430,7 @@ function fmtThreadTime(dateStr) {
 }
 
 // ── Select Thread ──
-async function selectThread(id, name, tier, tierId, isArchived, resellerId) {
+async function selectThread(id, name, tier, tierId, isArchived, resellerId, botPaused) {
     currentThreadId = id;
     currentResellerId = resellerId || null;
     currentMemberName = name;
@@ -1441,6 +1445,7 @@ async function selectThread(id, name, tier, tierId, isArchived, resellerId) {
     document.getElementById('winName').textContent = name;
     document.getElementById('winTier').textContent = tier || '';
     updateArchiveBtnIcon();
+    updateBotToggleBtn(!botPaused);
 
     renderThreads(allThreads); // re-render to update active state
 
@@ -1448,6 +1453,43 @@ async function selectThread(id, name, tier, tierId, isArchived, resellerId) {
     await loadMessages();
     startPolling();
     loadQuickReplies();
+}
+
+function updateBotToggleBtn(isActive) {
+    const btn = document.getElementById('btnChatBotToggle');
+    if (!btn) return;
+    if (isActive) {
+        btn.style.background = 'rgba(72,199,142,0.2)';
+        btn.style.color = '#48c78e';
+        btn.style.borderColor = '#48c78e';
+        btn.innerHTML = '🤖 <span id="chatBotToggleLabel">บอทเปิดอยู่</span>';
+    } else {
+        btn.style.background = 'rgba(239,68,68,0.15)';
+        btn.style.color = '#f87171';
+        btn.style.borderColor = '#f87171';
+        btn.innerHTML = '⏸️ <span id="chatBotToggleLabel">บอทปิดอยู่</span>';
+    }
+}
+
+async function toggleChatBot() {
+    if (!currentThreadId) return;
+    const btn = document.getElementById('btnChatBotToggle');
+    if (btn) btn.style.opacity = '0.6';
+    try {
+        const r = await fetch(`/api/chat/threads/${currentThreadId}/toggle-bot`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await r.json();
+        if (r.ok) {
+            const isActive = data.bot_active;
+            updateBotToggleBtn(isActive);
+            // update allThreads cache so re-render shows correct state
+            const t = allThreads.find(x => x.id === currentThreadId);
+            if (t) t.bot_paused = !isActive;
+        }
+    } catch(e) { console.error(e); }
+    finally { if (btn) btn.style.opacity = '1'; }
 }
 
 function showChatWindow() {
