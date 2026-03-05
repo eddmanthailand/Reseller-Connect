@@ -6328,7 +6328,8 @@ def get_reseller_cart():
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent,
                    ci.customization_data,
                    s.sku_code, s.stock, p.name as product_name, p.id as product_id,
-                   p.brand_id, p.category_id, p.weight,
+                   p.brand_id, p.weight,
+                   (SELECT pc.category_id FROM product_categories pc WHERE pc.product_id = p.id ORDER BY pc.id LIMIT 1) as category_id,
                    b.name as brand_name,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order LIMIT 1) as image_url
             FROM cart_items ci
@@ -7235,8 +7236,8 @@ def create_order():
         # Get cart items
         cursor.execute('''
             SELECT ci.id, ci.sku_id, ci.quantity, ci.unit_price, ci.tier_discount_percent, ci.customization_data,
-                   s.stock, s.sku_code, p.name as product_name, p.brand_id,
-                   p.id as product_id, p.category_id
+                   s.stock, s.sku_code, p.name as product_name, p.brand_id, p.id as product_id,
+                   (SELECT pc.category_id FROM product_categories pc WHERE pc.product_id = p.id ORDER BY pc.id LIMIT 1) as category_id
             FROM cart_items ci
             JOIN skus s ON s.id = ci.sku_id
             JOIN products p ON p.id = s.product_id
@@ -12835,12 +12836,20 @@ def admin_create_mto_product():
             return jsonify({'error': 'รหัส SPU นี้มีอยู่แล้ว'}), 400
         
         cursor.execute('''
-            INSERT INTO products (name, parent_sku, brand_id, category_id, description, product_type, production_days, deposit_percent, status, size_chart_image_url)
-            VALUES (%s, %s, %s, %s, %s, 'made_to_order', %s, %s, %s, %s)
+            INSERT INTO products (name, parent_sku, brand_id, description, product_type, production_days, deposit_percent, status, size_chart_image_url)
+            VALUES (%s, %s, %s, %s, 'made_to_order', %s, %s, %s, %s)
             RETURNING id
-        ''', (name, parent_sku, brand_id, category_id, description, production_days, deposit_percent, status, size_chart_image_url))
+        ''', (name, parent_sku, brand_id, description, production_days, deposit_percent, status, size_chart_image_url))
         product_id = cursor.fetchone()['id']
-        
+
+        if category_id:
+            cursor.execute('SELECT id FROM categories WHERE id = %s', (category_id,))
+            if cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO product_categories (product_id, category_id)
+                    VALUES (%s, %s) ON CONFLICT DO NOTHING
+                ''', (product_id, category_id))
+
         # Save images
         for i, img_url in enumerate(images):
             cursor.execute('''
@@ -13024,7 +13033,7 @@ def admin_update_mto_product(product_id):
         update_fields = []
         params = []
         
-        for field in ['name', 'description', 'production_days', 'deposit_percent', 'status', 'brand_id', 'category_id', 'parent_sku', 'size_chart_image_url']:
+        for field in ['name', 'description', 'production_days', 'deposit_percent', 'status', 'brand_id', 'parent_sku', 'size_chart_image_url']:
             if field in data:
                 update_fields.append(f'{field} = %s')
                 params.append(data[field])
@@ -13036,6 +13045,17 @@ def admin_update_mto_product(product_id):
                 UPDATE products SET {', '.join(update_fields)}
                 WHERE id = %s
             ''', params)
+
+        if 'category_id' in data:
+            category_id = data['category_id']
+            cursor.execute('DELETE FROM product_categories WHERE product_id = %s', (product_id,))
+            if category_id:
+                cursor.execute('SELECT id FROM categories WHERE id = %s', (category_id,))
+                if cursor.fetchone():
+                    cursor.execute('''
+                        INSERT INTO product_categories (product_id, category_id)
+                        VALUES (%s, %s) ON CONFLICT DO NOTHING
+                    ''', (product_id, category_id))
         
         image_urls = data.get('image_urls') or data.get('images')
         if image_urls is not None:
