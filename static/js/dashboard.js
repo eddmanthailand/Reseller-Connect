@@ -8467,6 +8467,7 @@ async function loadChatThreads() {
                 <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; position:relative;">
                     ${thread.reseller_name.charAt(0).toUpperCase()}
                     ${thread.needs_admin ? '<span style="position:absolute;top:-4px;right:-4px;background:#fbbf24;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;">🙋</span>' : ''}
+                    <span data-bot-indicator title="${thread.bot_paused ? 'บอทหยุดอยู่' : 'บอทกำลังทำงาน'}" style="position:absolute;bottom:-3px;left:-3px;background:${thread.bot_paused ? '#6b7280' : '#10b981'};border-radius:50%;width:14px;height:14px;border:2px solid #1a1a2e;font-size:8px;display:flex;align-items:center;justify-content:center;line-height:1;">${thread.bot_paused ? '⏸' : '🤖'}</span>
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -8560,18 +8561,32 @@ async function selectChatThread(threadId, resellerName, tierName, resellerTierId
 
 function updateChatBotToggleBtn(isActive) {
     const btn = document.getElementById('btnChatBotToggle');
-    const lbl = document.getElementById('chatBotToggleLabel');
-    if (!btn || !lbl) return;
+    if (!btn) return;
     if (isActive) {
-        btn.style.background = 'rgba(72,199,142,0.15)';
+        btn.style.background = 'rgba(72,199,142,0.2)';
         btn.style.color = '#48c78e';
-        btn.style.borderColor = 'rgba(72,199,142,0.4)';
-        btn.innerHTML = '🤖 <span id="chatBotToggleLabel">บอทกำลังทำงาน</span>';
+        btn.style.borderColor = '#48c78e';
+        btn.innerHTML = '🤖 <span id="chatBotToggleLabel">บอทเปิดอยู่</span>';
     } else {
-        btn.style.background = 'rgba(255,255,255,0.08)';
-        btn.style.color = 'rgba(255,255,255,0.5)';
-        btn.style.borderColor = 'rgba(255,255,255,0.2)';
-        btn.innerHTML = '⏸️ <span id="chatBotToggleLabel">บอทหยุดอยู่</span>';
+        btn.style.background = 'rgba(239,68,68,0.15)';
+        btn.style.color = '#f87171';
+        btn.style.borderColor = '#f87171';
+        btn.innerHTML = '⏸️ <span id="chatBotToggleLabel">บอทปิดอยู่</span>';
+    }
+    // Update bot indicator on the thread row in the list
+    if (currentChatThreadId) {
+        const threadItems = document.querySelectorAll('#chatThreadsList .chat-thread-item');
+        threadItems.forEach(item => {
+            const onclick = item.getAttribute('onclick') || '';
+            if (onclick.includes(`selectChatThread(${currentChatThreadId},`)) {
+                const indicator = item.querySelector('[data-bot-indicator]');
+                if (indicator) {
+                    indicator.textContent = isActive ? '🤖' : '⏸';
+                    indicator.style.background = isActive ? '#10b981' : '#6b7280';
+                    indicator.title = isActive ? 'บอทกำลังทำงาน' : 'บอทหยุดอยู่';
+                }
+            }
+        });
     }
 }
 
