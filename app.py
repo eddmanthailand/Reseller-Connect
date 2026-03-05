@@ -14426,6 +14426,20 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         if not bot_enabled:
             return []
 
+        # 1b. Load active training examples (Q&A pairs)
+        cursor.execute('''
+            SELECT question_pattern, answer_template FROM bot_training_examples
+            WHERE is_active = TRUE ORDER BY sort_order, id
+        ''')
+        training_rows = cursor.fetchall()
+        training_block = ''
+        if training_rows:
+            qa_lines = '\n'.join(
+                f'Q: {r["question_pattern"]}\nA: {r["answer_template"]}'
+                for r in training_rows
+            )
+            training_block = f'\n\n📚 ตัวอย่างการตอบที่ถูกต้อง (ให้ใช้เป็นแนวทาง):\n{qa_lines}'
+
         # 2. Check if bot is paused (admin replied recently)
         cursor.execute('SELECT bot_paused_until FROM chat_threads WHERE id = %s', (thread_id,))
         trow = cursor.fetchone()
@@ -14748,7 +14762,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - quick_replies ให้ใส่หมวดหมู่/ประเภทสินค้าที่น่าสนใจ (2-4 ปุ่ม) เช่น สินค้าขายดี, ดูสินค้าทั้งหมด
 """ if is_first_message else ""
         system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย
-{extra_persona}
+{extra_persona}{training_block}
 {_FABRIC_KNOWLEDGE}
 {_greeting_rule}
 กฎสำคัญ:
@@ -15291,6 +15305,79 @@ def admin_bot_settings():
         ''', (bool(data.get('bot_chat_enabled', True)), (data.get('bot_chat_name') or 'น้องนุ่น')[:100], data.get('bot_chat_persona') or ''))
         conn.commit()
         return jsonify({'ok': True}), 200
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/admin/bot-training', methods=['GET', 'POST'])
+@login_required
+def admin_bot_training():
+    """List or create bot training examples (Q&A pairs)."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if request.method == 'GET':
+            cursor.execute('SELECT * FROM bot_training_examples ORDER BY sort_order, id')
+            rows = [dict(r) for r in cursor.fetchall()]
+            return jsonify(rows), 200
+        data = request.get_json() or {}
+        q = (data.get('question_pattern') or '').strip()
+        a = (data.get('answer_template') or '').strip()
+        if not q or not a:
+            return jsonify({'error': 'กรุณาระบุคำถามและคำตอบ'}), 400
+        cursor.execute('''
+            INSERT INTO bot_training_examples (question_pattern, answer_template, is_active, sort_order)
+            VALUES (%s, %s, %s, %s) RETURNING *
+        ''', (q, a, bool(data.get('is_active', True)), int(data.get('sort_order') or 0)))
+        row = dict(cursor.fetchone())
+        conn.commit()
+        return jsonify(row), 201
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route('/api/admin/bot-training/<int:example_id>', methods=['PUT', 'DELETE'])
+@login_required
+def admin_bot_training_item(example_id):
+    """Update or delete a bot training example."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if request.method == 'DELETE':
+            cursor.execute('DELETE FROM bot_training_examples WHERE id = %s', (example_id,))
+            conn.commit()
+            return jsonify({'ok': True}), 200
+        data = request.get_json() or {}
+        q = (data.get('question_pattern') or '').strip()
+        a = (data.get('answer_template') or '').strip()
+        if not q or not a:
+            return jsonify({'error': 'กรุณาระบุคำถามและคำตอบ'}), 400
+        cursor.execute('''
+            UPDATE bot_training_examples
+            SET question_pattern=%s, answer_template=%s, is_active=%s, sort_order=%s
+            WHERE id=%s RETURNING *
+        ''', (q, a, bool(data.get('is_active', True)), int(data.get('sort_order') or 0), example_id))
+        row = cursor.fetchone()
+        conn.commit()
+        return jsonify(dict(row) if row else {}), 200
     except Exception as e:
         if conn:
             conn.rollback()

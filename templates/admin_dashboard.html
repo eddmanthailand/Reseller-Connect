@@ -4632,6 +4632,34 @@
                     <label class="agent-settings-label">บุคลิกบอท (เพิ่มเติม)</label>
                     <textarea id="botChatPersona" class="agent-settings-textarea" placeholder="เช่น เน้นสินค้าหมวดชุดพยาบาล มีประสบการณ์ขาย..."></textarea>
                 </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div class="agent-settings-title" style="margin:0;">📚 เทรนบอท <span id="botTrainingCount" style="font-size:11px;font-weight:400;color:#9ca3af;"></span></div>
+                    <button onclick="botTrainingShowForm()" style="padding:5px 12px;background:#a855f7;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">+ เพิ่มตัวอย่าง</button>
+                </div>
+                <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">สอนบอทด้วยตัวอย่าง Q&A — บอทจะใช้เป็นแนวทางตอบลูกค้าอัตโนมัติ</div>
+
+                <!-- Inline add/edit form -->
+                <div id="botTrainingForm" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px;">
+                    <input type="hidden" id="btfId">
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">❓ รูปแบบคำถาม (ที่ลูกค้ามักถาม)</label>
+                        <textarea id="btfQuestion" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ส่งของวันไหน, มีชุดพยาบาลไหม, ราคาส่งเท่าไร..."></textarea>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">💬 แนวทางคำตอบของบอท</label>
+                        <textarea id="btfAnswer" rows="3" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ร้านส่งทุกวันอังคาร-ศุกร์ รับออเดอร์ก่อน 14.00 น. ส่งวันเดียวกันค่ะ..."></textarea>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="botTrainingSave()" style="flex:2;padding:7px;background:#1d1d1f;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
+                        <button onclick="botTrainingCancelForm()" style="flex:1;padding:7px;background:#f3f4f6;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
+                    </div>
+                </div>
+
+                <!-- Training examples list -->
+                <div id="botTrainingList" style="max-height:220px;overflow-y:auto;"></div>
+
                 <div class="agent-settings-footer">
                     <button onclick="agentCloseSettings()" style="flex:1;padding:9px;background:#f3f4f6;border:none;border-radius:10px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
                     <button onclick="agentSaveSettings()" style="flex:2;padding:9px;background:#1d1d1f;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
@@ -4640,7 +4668,7 @@
         </div>
 
     </div>
-    <script src="/static/js/agent.js?v=20260305f"></script>
+    <script src="/static/js/agent.js?v=20260305k"></script>
     <!-- ===== END AI AGENT ===== -->
 
 </body>

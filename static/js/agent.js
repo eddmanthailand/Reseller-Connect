@@ -549,6 +549,7 @@ async function agentOpenSettings() {
             document.getElementById('agentSettingCustom').value    = d.custom_prompt    || '';
         }
         if (res3.ok) { _agentRenderNotes(await res3.json()); }
+        _loadBotTraining();
         if (res2.ok) {
             const b = await res2.json();
             const cb = document.getElementById('botChatEnabled');
@@ -603,6 +604,117 @@ async function agentSaveSettings() {
             _agentShowWelcome();
         }
     } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
+}
+
+/* ---- Bot Training ---- */
+let _botTrainingData = [];
+
+async function _loadBotTraining() {
+    try {
+        const res = await fetch('/api/admin/bot-training', { credentials: 'include' });
+        if (!res.ok) return;
+        _botTrainingData = await res.json();
+        _renderBotTraining();
+    } catch (_) {}
+}
+
+function _renderBotTraining() {
+    const list = document.getElementById('botTrainingList');
+    const counter = document.getElementById('botTrainingCount');
+    if (!list) return;
+    const active = _botTrainingData.filter(e => e.is_active).length;
+    if (counter) counter.textContent = `(${active} เปิดใช้ / ${_botTrainingData.length} ทั้งหมด)`;
+    if (!_botTrainingData.length) {
+        list.innerHTML = '<div style="text-align:center;padding:16px 0;color:#9ca3af;font-size:12px;">ยังไม่มีตัวอย่าง — กด "+ เพิ่มตัวอย่าง" เพื่อเริ่มเทรนบอท</div>';
+        return;
+    }
+    list.innerHTML = _botTrainingData.map(ex => `
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:${ex.is_active ? '#fff' : '#f9fafb'};opacity:${ex.is_active ? '1' : '0.6'};">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:700;color:#a855f7;margin-bottom:3px;">❓ ${_escHtml(ex.question_pattern)}</div>
+                    <div style="font-size:11px;color:#374151;line-height:1.5;">${_escHtml(ex.answer_template)}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+                    <button onclick="botTrainingEdit(${ex.id})" style="padding:3px 8px;background:#f3f4f6;border:none;border-radius:6px;font-size:11px;cursor:pointer;color:#374151;">แก้ไข</button>
+                    <button onclick="botTrainingToggle(${ex.id}, ${!ex.is_active})" style="padding:3px 8px;background:${ex.is_active ? '#fef3c7' : '#d1fae5'};border:none;border-radius:6px;font-size:11px;cursor:pointer;color:${ex.is_active ? '#92400e' : '#065f46'};">${ex.is_active ? 'ปิด' : 'เปิด'}</button>
+                    <button onclick="botTrainingDelete(${ex.id})" style="padding:3px 8px;background:#fee2e2;border:none;border-radius:6px;font-size:11px;cursor:pointer;color:#991b1b;">ลบ</button>
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+function _escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function botTrainingShowForm(id) {
+    const form = document.getElementById('botTrainingForm');
+    if (!form) return;
+    document.getElementById('btfId').value = '';
+    document.getElementById('btfQuestion').value = '';
+    document.getElementById('btfAnswer').value = '';
+    form.style.display = 'block';
+    document.getElementById('btfQuestion').focus();
+}
+
+function botTrainingEdit(id) {
+    const ex = _botTrainingData.find(e => e.id === id);
+    if (!ex) return;
+    const form = document.getElementById('botTrainingForm');
+    if (!form) return;
+    document.getElementById('btfId').value = id;
+    document.getElementById('btfQuestion').value = ex.question_pattern;
+    document.getElementById('btfAnswer').value = ex.answer_template;
+    form.style.display = 'block';
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('btfQuestion').focus();
+}
+
+function botTrainingCancelForm() {
+    const form = document.getElementById('botTrainingForm');
+    if (form) form.style.display = 'none';
+}
+
+async function botTrainingSave() {
+    const id = document.getElementById('btfId').value;
+    const q = (document.getElementById('btfQuestion').value || '').trim();
+    const a = (document.getElementById('btfAnswer').value || '').trim();
+    if (!q || !a) { alert('กรุณาระบุทั้งคำถามและคำตอบ'); return; }
+    const body = { question_pattern: q, answer_template: a, is_active: true };
+    const url = id ? `/api/admin/bot-training/${id}` : '/api/admin/bot-training';
+    const method = id ? 'PUT' : 'POST';
+    try {
+        const res = await fetch(url, {
+            method, credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) { alert('บันทึกไม่สำเร็จ'); return; }
+        botTrainingCancelForm();
+        await _loadBotTraining();
+    } catch (e) { alert('เกิดข้อผิดพลาด'); }
+}
+
+async function botTrainingToggle(id, isActive) {
+    const ex = _botTrainingData.find(e => e.id === id);
+    if (!ex) return;
+    try {
+        await fetch(`/api/admin/bot-training/${id}`, {
+            method: 'PUT', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_pattern: ex.question_pattern, answer_template: ex.answer_template, is_active: isActive })
+        });
+        await _loadBotTraining();
+    } catch (_) {}
+}
+
+async function botTrainingDelete(id) {
+    if (!confirm('ลบตัวอย่างนี้?')) return;
+    try {
+        await fetch(`/api/admin/bot-training/${id}`, { method: 'DELETE', credentials: 'include' });
+        await _loadBotTraining();
+    } catch (_) {}
 }
 
 /* ---- Helpers ---- */

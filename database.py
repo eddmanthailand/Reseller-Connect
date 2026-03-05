@@ -717,7 +717,20 @@ def init_db():
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)')
-        
+
+        # Bot training examples table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bot_training_examples (
+                id SERIAL PRIMARY KEY,
+                question_pattern TEXT NOT NULL,
+                answer_template TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_bot_training_active ON bot_training_examples(is_active, sort_order)')
+
         # ==================== END CHAT SYSTEM ====================
         
         # Insert default sales channels
