@@ -1055,7 +1055,7 @@ function proceedToCheckout() {
     window.location.hash = 'checkout';
 }
 
-let checkoutData = { items: [], total: 0, customers: [], selfAddress: null };
+let checkoutData = { items: [], total: 0, retailTotal: 0, tierSavings: 0, customers: [], selfAddress: null };
 
 async function loadCheckout() {
     try {
@@ -1070,6 +1070,9 @@ async function loadCheckout() {
         const cartData = await cartRes.json();
         checkoutData.items = cartData.items || [];
         checkoutData.total = cartData.total || 0;
+        // Track retail total (before tier discount) for "best discount wins" logic
+        checkoutData.retailTotal = checkoutData.items.reduce((s, i) => s + (i.unit_price || 0) * (i.quantity || 0), 0);
+        checkoutData.tierSavings = checkoutData.retailTotal - checkoutData.total;
         _appliedCoupon = null;
         
         if (checkoutData.items.length === 0) {
@@ -1178,7 +1181,7 @@ function renderCheckoutItems() {
 }
 
 function updateCheckoutSummary() {
-    document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
+    document.getElementById('summarySubtotal').textContent = `฿${checkoutData.retailTotal > checkoutData.total ? checkoutData.retailTotal.toLocaleString() : checkoutData.total.toLocaleString()}`;
     calculateShippingCost();
 }
 
@@ -1233,6 +1236,7 @@ async function calculateShippingCost() {
         totalEl.textContent = `฿${grandTotal.toLocaleString()}`;
         
         loadPromptPayQR();
+        if (!_appliedCoupon) checkAutoPromotion();
         
     } catch (error) {
         console.error('Error calculating shipping:', error);
@@ -1240,25 +1244,50 @@ async function calculateShippingCost() {
         totalEl.textContent = `฿${checkoutData.total.toLocaleString()}`;
         checkoutData.shippingCost = 0;
         loadPromptPayQR();
+        if (!_appliedCoupon) checkAutoPromotion();
     }
 }
 
 let _appliedCoupon = null;
+let _autoPromoData = null;  // promo from checkAutoPromotion (no coupon)
+
+function _buildDiscountPayload(couponCode = '') {
+    const cartItems = checkoutData.items || [];
+    return {
+        coupon_code: couponCode,
+        cart_total: checkoutData.total,
+        retail_total: checkoutData.retailTotal || checkoutData.total,
+        tier_savings: checkoutData.tierSavings || 0,
+        brand_ids: [...new Set(cartItems.map(i => i.brand_id).filter(id => id))],
+        category_ids: [...new Set(cartItems.map(i => i.category_id).filter(id => id))],
+        product_ids: [...new Set(cartItems.map(i => i.product_id).filter(id => id))],
+        cart_qty: cartItems.reduce((s, i) => s + (i.quantity || 0), 0)
+    };
+}
+
+async function checkAutoPromotion() {
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/reseller/cart/preview-discount`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_buildDiscountPayload(''))
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        _autoPromoData = data;
+        if (!_appliedCoupon) updateSummaryWithDiscount(data);
+    } catch (e) { /* non-critical, fail silently */ }
+}
 
 async function applyCouponCode() {
     const code = (document.getElementById('couponCodeInput').value || '').trim().toUpperCase();
     if (!code) { showCouponMsg('กรุณากรอกรหัสคูปอง', '#ef4444'); return; }
     showCouponMsg('กำลังตรวจสอบ...', 'rgba(255,255,255,0.5)');
     try {
-        const cartItems = checkoutData.items || [];
-        const brandIds = [...new Set(cartItems.map(i => i.brand_id).filter(id => id))];
-        const categoryIds = [...new Set(cartItems.map(i => i.category_id).filter(id => id))];
-        const productIds = [...new Set(cartItems.map(i => i.product_id).filter(id => id))];
-        const cartQty = cartItems.reduce((s, i) => s + (i.quantity || 0), 0);
         const res = await fetch(`${RESELLER_API_URL}/reseller/cart/preview-discount`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coupon_code: code, cart_total: checkoutData.total, brand_ids: brandIds, category_ids: categoryIds, product_ids: productIds, cart_qty: cartQty })
+            body: JSON.stringify(_buildDiscountPayload(code))
         });
         const data = await res.json();
         if (!res.ok) { showCouponMsg(data.error || 'คูปองไม่ถูกต้อง', '#ef4444'); return; }
@@ -1279,12 +1308,17 @@ function removeCoupon() {
     document.getElementById('couponCodeInput').value = '';
     document.getElementById('couponCodeInput').disabled = false;
     document.getElementById('removeCouponBtn').style.display = 'none';
-    document.getElementById('autoPromoRow').style.display = 'none';
     document.getElementById('couponDiscountRow').style.display = 'none';
     document.getElementById('couponMessage').textContent = '';
-    const sub = checkoutData.total || 0;
-    const ship = checkoutData.shippingCost || 0;
-    document.getElementById('summaryTotal').textContent = `฿${(sub + ship).toLocaleString()}`;
+    // Restore auto-promo display (if any)
+    if (_autoPromoData) {
+        updateSummaryWithDiscount(_autoPromoData);
+    } else {
+        document.getElementById('autoPromoRow').style.display = 'none';
+        const ship = checkoutData.shippingCost || 0;
+        const sub = checkoutData.total || 0;
+        document.getElementById('summaryTotal').textContent = `฿${(sub + ship).toLocaleString()}`;
+    }
 }
 
 function showCouponMsg(msg, color) {
@@ -1298,13 +1332,22 @@ function updateSummaryWithDiscount(data) {
     const couponRow = document.getElementById('couponDiscountRow');
     const promo = data.promotion;
     const coupon = data.coupon;
+
+    // Show promo row — when promo wins over tier, also update subtotal to show retail price
     if (promo && promo.discount > 0) {
         document.getElementById('autoPromoName').textContent = promo.name || 'โปรโมชัน';
         document.getElementById('autoPromoSaved').textContent = `-฿${Number(promo.discount).toLocaleString()}`;
         autoRow.style.display = 'flex';
+        // Update subtotal to show retail price (promo is applied on retail)
+        if (data.retail_total && data.retail_total > checkoutData.total) {
+            document.getElementById('summarySubtotal').textContent = `฿${Number(data.retail_total).toLocaleString()}`;
+        }
     } else {
         autoRow.style.display = 'none';
+        // Restore subtotal to tier price
+        document.getElementById('summarySubtotal').textContent = `฿${checkoutData.total.toLocaleString()}`;
     }
+
     if (coupon && coupon.discount > 0) {
         document.getElementById('couponDiscountName').textContent = `คูปอง ${coupon.code || ''}`;
         document.getElementById('couponDiscountSaved').textContent = `-฿${Number(coupon.discount).toLocaleString()}`;

@@ -7292,7 +7292,7 @@ def create_order():
             total_amount += unit_price * item['quantity']
             total_discount += (unit_price - discounted_price) * item['quantity']
         
-        item_total = total_amount - total_discount
+        item_total = total_amount - total_discount   # tier-discounted total
         shipping_fee = float(data.get('shipping_fee', 0) or 0)
 
         # Layer 2 & 3: Apply promotion + coupon discounts
@@ -7310,19 +7310,32 @@ def create_order():
         tier_row = cursor.fetchone()
         user_tier_rank = int(tier_row['level_rank']) if tier_row and tier_row['level_rank'] else 1
 
-        applied_promo, promo_discount = _calc_best_promotion(cursor, item_total, cart_brand_ids, cart_category_ids, user_tier_rank, cart_total_qty)
+        # "Best discount wins": compare promo on RETAIL price vs tier savings — pick higher, no stacking
+        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, total_amount, cart_brand_ids, cart_category_ids, user_tier_rank, cart_total_qty)
+        use_tier = (total_discount >= promo_on_retail) or (promo_on_retail == 0)
+        if use_tier:
+            applied_promo = None
+            promo_discount = 0
+            effective_item_total = item_total        # retail - tier discount
+            effective_discount = total_discount      # tier savings go to discount_amount column
+        else:
+            applied_promo = promo_candidate
+            promo_discount = promo_on_retail
+            effective_item_total = total_amount - promo_on_retail  # retail - promo
+            effective_discount = 0                   # tier waived; promo goes to promotion_discount column
+
         applied_coupon, coupon_discount, coupon_error = (None, 0, None)
         if coupon_code:
             if applied_promo is None or applied_promo.get('is_stackable'):
                 applied_coupon, coupon_discount, coupon_error = _calc_coupon_discount(
-                    cursor, coupon_code, item_total - promo_discount, user_id, user_tier_rank,
+                    cursor, coupon_code, effective_item_total, user_id, user_tier_rank,
                     cart_brand_ids=cart_brand_ids, cart_product_ids=cart_product_ids)
 
         # Check free_shipping coupon
         free_shipping_coupon = applied_coupon and applied_coupon.get('discount_type') == 'free_shipping'
         effective_shipping = 0.0 if free_shipping_coupon else shipping_fee
 
-        final_amount = max(0, item_total - promo_discount - coupon_discount) + effective_shipping
+        final_amount = max(0, effective_item_total - coupon_discount) + effective_shipping
 
         # Get default online channel
         cursor.execute("SELECT id FROM sales_channels WHERE name = 'ระบบออนไลน์' LIMIT 1")
@@ -7339,7 +7352,7 @@ def create_order():
                                 coupon_id, coupon_discount, promotion_id, promotion_discount)
             VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, user_id, channel_id, total_amount, total_discount, effective_shipping, final_amount, notes, customer_id,
+        ''', (order_number, user_id, channel_id, total_amount, effective_discount, effective_shipping, final_amount, notes, customer_id,
               applied_coupon['id'] if applied_coupon else None, coupon_discount,
               applied_promo['id'] if applied_promo else None, promo_discount))
         order = dict(cursor.fetchone())
@@ -7348,16 +7361,21 @@ def create_order():
         order_item_map = {}  # {cart_item_id: order_item_id}
         for item in items:
             unit_price = float(item['unit_price'])
-            discount_pct = float(item['tier_discount_percent'] or 0)
-            discounted_price = round(unit_price * (1 - discount_pct / 100), 2)
+            if use_tier:
+                discount_pct = float(item['tier_discount_percent'] or 0)
+                discounted_price = round(unit_price * (1 - discount_pct / 100), 2)
+                discount_amount = round(unit_price * discount_pct / 100, 2)
+            else:
+                # Promo wins → bill at retail price, tier waived for this order
+                discount_pct = 0
+                discounted_price = unit_price
+                discount_amount = 0
+            subtotal = round(discounted_price * item['quantity'], 2)
             
             # Convert customization_data to JSON string if it's a dict
             cust_data = item['customization_data']
             if isinstance(cust_data, dict):
                 cust_data = json.dumps(cust_data)
-            
-            discount_amount = round(unit_price * discount_pct / 100, 2)
-            subtotal = round(discounted_price * item['quantity'], 2)
             
             cursor.execute('''
                 INSERT INTO order_items (order_id, sku_id, product_name, sku_code, quantity, unit_price, tier_discount_percent, discount_amount, subtotal, customization_data)
@@ -17432,7 +17450,12 @@ def reseller_preview_discount():
     try:
         user_id = session.get('user_id')
         data = request.get_json()
-        cart_total = float(data.get('cart_total', 0))
+        cart_total = float(data.get('cart_total', 0))          # tier-discounted total
+        retail_total = float(data.get('retail_total', 0))      # retail total before tier discount
+        tier_savings = float(data.get('tier_savings', 0))      # = retail_total - cart_total
+        if retail_total <= 0:
+            retail_total = cart_total                           # fallback: no tier info sent
+            tier_savings = 0
         coupon_code = (data.get('coupon_code') or '').strip()
         brand_ids = data.get('brand_ids', [])
         category_ids = data.get('category_ids', [])
@@ -17451,23 +17474,33 @@ def reseller_preview_discount():
         u = cursor.fetchone()
         user_tier_rank = int(u['level_rank']) if u and u['level_rank'] else 1
 
-        promo, promo_discount = _calc_best_promotion(cursor, cart_total, brand_ids, category_ids, user_tier_rank, cart_qty)
+        # "Best discount wins": compare promo on RETAIL price vs tier savings — pick higher, no stacking
+        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, retail_total, brand_ids, category_ids, user_tier_rank, cart_qty)
+        use_tier = (tier_savings >= promo_on_retail) or (promo_on_retail == 0)
+        if use_tier:
+            promo = None
+            promo_discount = 0
+            effective_total = cart_total        # already tier-discounted
+        else:
+            promo = promo_candidate
+            promo_discount = promo_on_retail
+            effective_total = retail_total - promo_on_retail   # retail - promo
 
         coupon, coupon_discount, coupon_error = (None, 0, None)
         if coupon_code:
-            # Coupon can stack if promotion is stackable OR no promotion applied
             if promo is None or promo.get('is_stackable'):
                 coupon, coupon_discount, coupon_error = _calc_coupon_discount(
-                    cursor, coupon_code, cart_total - promo_discount, user_id, user_tier_rank,
+                    cursor, coupon_code, effective_total, user_id, user_tier_rank,
                     cart_brand_ids=brand_ids, cart_product_ids=product_ids)
             else:
                 coupon_error = 'โปรโมชันที่ใช้อยู่ไม่รองรับการใช้คูปองร่วมกัน'
 
-        total_discount = promo_discount + coupon_discount
-        final_total = max(0, cart_total - total_discount)
+        final_total = max(0, effective_total - coupon_discount)
 
         return jsonify({
             'cart_total': cart_total,
+            'retail_total': retail_total,
+            'effective_total': effective_total,
             'promotion': {
                 'id': promo['id'] if promo else None,
                 'name': promo['name'] if promo else None,
@@ -17480,7 +17513,7 @@ def reseller_preview_discount():
                 'is_free_shipping': coupon['discount_type'] == 'free_shipping' if coupon else False
             } if coupon else None,
             'coupon_error': coupon_error,
-            'total_discount': total_discount,
+            'total_discount': promo_discount + coupon_discount,
             'final_total': final_total
         }), 200
     except Exception as e:
