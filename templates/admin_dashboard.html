@@ -4494,15 +4494,24 @@
         #agentImagePreview { display:none; align-items:center; gap:8px; padding:8px 12px 4px; }
         #agentImagePreviewImg { width:48px; height:48px; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb; }
         .agent-img-clear { background:none; border:none; cursor:pointer; color:#6b7280; font-size:18px; line-height:1; padding:0; }
-        #agentSettingsModal { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.4); border-radius:20px; z-index:10; align-items:flex-end; opacity:0; transition:opacity 0.18s; }
-        .agent-settings-sheet { background:#fff; border-radius:16px 16px 0 0; padding:20px; width:100%; }
-        .agent-settings-title { font-size:14px; font-weight:700; color:#1d1d1f; margin-bottom:14px; }
+        #agentSettingsModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center; opacity:0; transition:opacity 0.18s; padding:20px; box-sizing:border-box; }
+        .agent-settings-sheet { background:#fff; border-radius:20px; width:100%; max-width:560px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+        .agent-settings-header { padding:20px 20px 14px; border-bottom:1px solid #f0f0f0; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }
+        .agent-settings-title { font-size:15px; font-weight:700; color:#1d1d1f; margin:0; }
+        .agent-settings-body { flex:1; overflow-y:auto; padding:16px 20px; }
+        .agent-settings-body::-webkit-scrollbar { width:4px; }
+        .agent-settings-body::-webkit-scrollbar-track { background:transparent; }
+        .agent-settings-body::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:2px; }
         .agent-settings-field { margin-bottom:12px; }
         .agent-settings-label { font-size:11px; font-weight:600; color:#6e6e73; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; display:block; }
         .agent-settings-input, .agent-settings-select, .agent-settings-textarea { width:100%; background:#f2f2f7; border:1.5px solid transparent; border-radius:10px; padding:8px 12px; font-size:13px; font-family:inherit; color:#1d1d1f; outline:none; box-sizing:border-box; transition:border-color 0.15s; }
         .agent-settings-input:focus, .agent-settings-select:focus, .agent-settings-textarea:focus { border-color:#a855f7; background:#fff; }
         .agent-settings-textarea { resize:vertical; min-height:60px; }
-        .agent-settings-footer { display:flex; gap:8px; margin-top:16px; }
+        .agent-settings-footer { display:flex; gap:8px; padding:14px 20px; border-top:1px solid #f0f0f0; flex-shrink:0; }
+        @media (max-width:600px) {
+            #agentSettingsModal { align-items:flex-end; padding:0; }
+            .agent-settings-sheet { max-width:100%; border-radius:20px 20px 0 0; max-height:88vh; }
+        }
         .agent-send-btn {
             width: 36px; height: 36px; flex-shrink: 0;
             background: linear-gradient(135deg, #a855f7, #ec4899);
@@ -4585,85 +4594,101 @@
         <!-- Settings modal (sheet) -->
         <div id="agentSettingsModal" onclick="if(event.target===this)agentCloseSettings()">
             <div class="agent-settings-sheet">
-                <div class="agent-settings-title">⚙️ ตั้งค่าบุคลิก AI ผู้ช่วย</div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">ชื่อ AI ผู้ช่วย</label>
-                    <input id="agentSettingName" class="agent-settings-input" type="text" placeholder="น้องเอก">
-                </div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">น้ำเสียง</label>
-                    <select id="agentSettingTone" class="agent-settings-select">
-                        <option value="friendly">เป็นกันเอง สุภาพ</option>
-                        <option value="formal">เป็นทางการ มืออาชีพ</option>
-                        <option value="concise">กระชับสั้น ตรงประเด็น</option>
-                    </select>
-                </div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">คำลงท้าย</label>
-                    <input id="agentSettingParticle" class="agent-settings-input" type="text" placeholder="ครับ / ค่ะ">
-                </div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">คำสั่งพิเศษ / บริบทธุรกิจ</label>
-                    <textarea id="agentSettingCustom" class="agent-settings-textarea" rows="4" style="min-height:90px;" placeholder="เช่น: โกดังหลักอยู่กรุงเทพ, ส่งEMSเป็นหลัก, ยอดขายปกติ 50,000/วัน, แบรนด์ NRSK ขายดีที่สุด..."></textarea>
-                    <div style="font-size:10px;color:#9ca3af;margin-top:3px;">AI จะจำบริบทนี้และนำไปใช้ตอบทุกคำถาม</div>
-                </div>
-                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
-                <div class="agent-settings-title" style="margin-bottom:8px;">📒 สมุดโน้ต AI <span style="font-size:11px;font-weight:400;color:#9ca3af;">(จำข้ามเซสชัน)</span></div>
-                <div id="agentNotesList" style="margin-bottom:8px;max-height:130px;overflow-y:auto;"></div>
-                <div style="display:flex;gap:6px;margin-bottom:4px;">
-                    <input id="agentNoteKey" class="agent-settings-input" type="text" placeholder="หัวข้อ" style="flex:1;font-size:12px;padding:6px 10px;">
-                    <input id="agentNoteVal" class="agent-settings-input" type="text" placeholder="ข้อมูล" style="flex:2;font-size:12px;padding:6px 10px;">
-                    <button onclick="agentAddNote()" style="padding:6px 10px;background:#1d1d1f;border:none;border-radius:8px;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap;">+ เพิ่ม</button>
-                </div>
-                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
-                <div class="agent-settings-title" style="margin-bottom:10px;">🤖 ตั้งค่าบอทแชทอัตโนมัติ</div>
-                <div class="agent-settings-field" style="display:flex;align-items:center;justify-content:space-between;">
-                    <label class="agent-settings-label" style="margin:0;">เปิดใช้บอทแชท</label>
-                    <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
-                        <input type="checkbox" id="botChatEnabled" style="opacity:0;width:0;height:0;">
-                        <span onclick="document.getElementById('botChatEnabled').click()" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:24px;transition:.3s;" id="botChatToggleSlider"></span>
-                    </label>
-                </div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">ชื่อบอท</label>
-                    <input id="botChatName" class="agent-settings-input" type="text" placeholder="น้องนุ่น">
-                </div>
-                <div class="agent-settings-field">
-                    <label class="agent-settings-label">บุคลิกบอท (เพิ่มเติม)</label>
-                    <textarea id="botChatPersona" class="agent-settings-textarea" placeholder="เช่น เน้นสินค้าหมวดชุดพยาบาล มีประสบการณ์ขาย..."></textarea>
+
+                <!-- Header — fixed -->
+                <div class="agent-settings-header">
+                    <div class="agent-settings-title">⚙️ ตั้งค่า AI ผู้ช่วย & บอทแชท</div>
+                    <button onclick="agentCloseSettings()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:20px;line-height:1;padding:0;">&times;</button>
                 </div>
 
-                <div style="border-top:1px solid #e5e7eb;margin:14px 0 12px;"></div>
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                    <div class="agent-settings-title" style="margin:0;">📚 เทรนบอท <span id="botTrainingCount" style="font-size:11px;font-weight:400;color:#9ca3af;"></span></div>
-                    <button onclick="botTrainingShowForm()" style="padding:5px 12px;background:#a855f7;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">+ เพิ่มตัวอย่าง</button>
-                </div>
-                <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">สอนบอทด้วยตัวอย่าง Q&A — บอทจะใช้เป็นแนวทางตอบลูกค้าอัตโนมัติ</div>
+                <!-- Body — scrollable -->
+                <div class="agent-settings-body">
 
-                <!-- Inline add/edit form -->
-                <div id="botTrainingForm" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px;">
-                    <input type="hidden" id="btfId">
-                    <div style="margin-bottom:8px;">
-                        <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">❓ รูปแบบคำถาม (ที่ลูกค้ามักถาม)</label>
-                        <textarea id="btfQuestion" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ส่งของวันไหน, มีชุดพยาบาลไหม, ราคาส่งเท่าไร..."></textarea>
+                    <div style="font-size:12px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">🤖 AI ผู้ช่วย (Superadmin)</div>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">ชื่อ AI ผู้ช่วย</label>
+                        <input id="agentSettingName" class="agent-settings-input" type="text" placeholder="น้องเอก">
                     </div>
-                    <div style="margin-bottom:10px;">
-                        <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">💬 แนวทางคำตอบของบอท</label>
-                        <textarea id="btfAnswer" rows="3" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ร้านส่งทุกวันอังคาร-ศุกร์ รับออเดอร์ก่อน 14.00 น. ส่งวันเดียวกันค่ะ..."></textarea>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">น้ำเสียง</label>
+                        <select id="agentSettingTone" class="agent-settings-select">
+                            <option value="friendly">เป็นกันเอง สุภาพ</option>
+                            <option value="formal">เป็นทางการ มืออาชีพ</option>
+                            <option value="concise">กระชับสั้น ตรงประเด็น</option>
+                        </select>
                     </div>
-                    <div style="display:flex;gap:6px;">
-                        <button onclick="botTrainingSave()" style="flex:2;padding:7px;background:#1d1d1f;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
-                        <button onclick="botTrainingCancelForm()" style="flex:1;padding:7px;background:#f3f4f6;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">คำลงท้าย</label>
+                        <input id="agentSettingParticle" class="agent-settings-input" type="text" placeholder="ครับ / ค่ะ">
                     </div>
-                </div>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">คำสั่งพิเศษ / บริบทธุรกิจ</label>
+                        <textarea id="agentSettingCustom" class="agent-settings-textarea" rows="4" style="min-height:90px;" placeholder="เช่น: โกดังหลักอยู่กรุงเทพ, ส่งEMSเป็นหลัก, ยอดขายปกติ 50,000/วัน, แบรนด์ NRSK ขายดีที่สุด..."></textarea>
+                        <div style="font-size:10px;color:#9ca3af;margin-top:3px;">AI จะจำบริบทนี้และนำไปใช้ตอบทุกคำถาม</div>
+                    </div>
 
-                <!-- Training examples list -->
-                <div id="botTrainingList" style="max-height:220px;overflow-y:auto;"></div>
+                    <div style="border-top:1px solid #e5e7eb;margin:16px 0 14px;"></div>
+                    <div style="font-size:12px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">📒 สมุดโน้ต AI</div>
+                    <div id="agentNotesList" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:6px;margin-bottom:4px;">
+                        <input id="agentNoteKey" class="agent-settings-input" type="text" placeholder="หัวข้อ" style="flex:1;font-size:12px;padding:6px 10px;">
+                        <input id="agentNoteVal" class="agent-settings-input" type="text" placeholder="ข้อมูล" style="flex:2;font-size:12px;padding:6px 10px;">
+                        <button onclick="agentAddNote()" style="padding:6px 10px;background:#1d1d1f;border:none;border-radius:8px;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap;">+ เพิ่ม</button>
+                    </div>
 
+                    <div style="border-top:1px solid #e5e7eb;margin:16px 0 14px;"></div>
+                    <div style="font-size:12px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">🤖 บอทแชทอัตโนมัติ</div>
+                    <div class="agent-settings-field" style="display:flex;align-items:center;justify-content:space-between;">
+                        <label class="agent-settings-label" style="margin:0;">เปิดใช้บอทแชท</label>
+                        <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
+                            <input type="checkbox" id="botChatEnabled" style="opacity:0;width:0;height:0;">
+                            <span onclick="document.getElementById('botChatEnabled').click()" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:24px;transition:.3s;" id="botChatToggleSlider"></span>
+                        </label>
+                    </div>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">ชื่อบอท</label>
+                        <input id="botChatName" class="agent-settings-input" type="text" placeholder="น้องนุ่น">
+                    </div>
+                    <div class="agent-settings-field">
+                        <label class="agent-settings-label">บุคลิกบอท (เพิ่มเติม)</label>
+                        <textarea id="botChatPersona" class="agent-settings-textarea" placeholder="เช่น เน้นสินค้าหมวดชุดพยาบาล มีประสบการณ์ขาย..."></textarea>
+                    </div>
+
+                    <div style="border-top:1px solid #e5e7eb;margin:16px 0 14px;"></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <div style="font-size:12px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:.5px;">📚 เทรนบอท <span id="botTrainingCount" style="font-size:11px;font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;"></span></div>
+                        <button onclick="botTrainingShowForm()" style="padding:5px 12px;background:#a855f7;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">+ เพิ่มตัวอย่าง</button>
+                    </div>
+                    <div style="font-size:11px;color:#9ca3af;margin-bottom:10px;">สอนบอทด้วยตัวอย่าง Q&A — บอทจะใช้เป็นแนวทางตอบลูกค้าอัตโนมัติ</div>
+
+                    <!-- Inline add/edit form -->
+                    <div id="botTrainingForm" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px;">
+                        <input type="hidden" id="btfId">
+                        <div style="margin-bottom:8px;">
+                            <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">❓ รูปแบบคำถาม (ที่ลูกค้ามักถาม)</label>
+                            <textarea id="btfQuestion" rows="2" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ส่งของวันไหน, มีชุดพยาบาลไหม, ราคาส่งเท่าไร..."></textarea>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">💬 แนวทางคำตอบของบอท</label>
+                            <textarea id="btfAnswer" rows="3" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;" placeholder="เช่น: ร้านส่งทุกวันอังคาร-ศุกร์ รับออเดอร์ก่อน 14.00 น. ส่งวันเดียวกันค่ะ..."></textarea>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            <button onclick="botTrainingSave()" style="flex:2;padding:7px;background:#1d1d1f;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
+                            <button onclick="botTrainingCancelForm()" style="flex:1;padding:7px;background:#f3f4f6;border:none;border-radius:8px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
+                        </div>
+                    </div>
+
+                    <!-- Training examples list -->
+                    <div id="botTrainingList"></div>
+
+                </div><!-- end .agent-settings-body -->
+
+                <!-- Footer — fixed -->
                 <div class="agent-settings-footer">
-                    <button onclick="agentCloseSettings()" style="flex:1;padding:9px;background:#f3f4f6;border:none;border-radius:10px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
-                    <button onclick="agentSaveSettings()" style="flex:2;padding:9px;background:#1d1d1f;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;">บันทึก</button>
+                    <button onclick="agentCloseSettings()" style="flex:1;padding:10px;background:#f3f4f6;border:none;border-radius:10px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;font-family:inherit;">ยกเลิก</button>
+                    <button onclick="agentSaveSettings()" style="flex:2;padding:10px;background:linear-gradient(135deg,#a855f7,#ec4899);border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;">💾 บันทึกการตั้งค่า</button>
                 </div>
+
             </div>
         </div>
 
