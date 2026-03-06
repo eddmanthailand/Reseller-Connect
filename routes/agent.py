@@ -197,6 +197,7 @@ def _agent_build_system_prompt(settings, context=None):
 - send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 - save_note: บันทึกข้อมูลสำคัญลงสมุดโน้ต AI (params: key, value) — จำได้ข้ามเซสชัน
 - toggle_facebook_ad: เปลี่ยนสถานะ Campaign/AdSet/Ad ใน Meta Ads (params: ad_id, status="ACTIVE"/"PAUSED"/"ARCHIVED") — ส่ง POST ไป Meta Marketing API จริง
+- update_product_description: แก้ไข description สินค้า (params: product_name, description) — ใช้สำหรับใส่/อัปเดตคำอธิบายสินค้าให้บอทแชทและระบบ
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
 READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
@@ -1606,6 +1607,30 @@ def agent_chat():
                                 'message': intent.get('message', f"จะบันทึกลงสมุดโน้ต: **{note_key}** = {note_value[:60]}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'update_product_description':
+                prod_name = (params.get('product_name') or '').strip()
+                new_desc  = (params.get('description') or '').strip()
+                if not prod_name or not new_desc:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ product_name และ description'}), 200
+                cursor.execute('SELECT id, name, description FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
+                prods = cursor.fetchall()
+                if not prods:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อ "{prod_name}"'}), 200
+                if len(prods) > 1:
+                    opts = ', '.join([p['name'] for p in prods])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายสินค้า: {opts} — ระบุให้ชัดขึ้น'}), 200
+                prod = prods[0]
+                plan = {
+                    'before': {'สินค้า': prod['name'], 'description เดิม': (prod['description'] or '')[:100] or '(ว่าง)'},
+                    'after':  {'สินค้า': prod['name'], 'description ใหม่': new_desc[:100]}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'product_id': prod['id'], 'old_desc': prod['description']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'product_id': prod['id']},
+                                'message': intent.get('message', f"จะอัปเดต description ของ **{prod['name']}**"),
+                                'model_used': model_used}), 200
+
             elif tool == 'toggle_facebook_ad':
                 import urllib.request as _ur2
                 import urllib.parse as _up2
@@ -1812,6 +1837,26 @@ def agent_execute():
                              ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
             conn.commit()
             return jsonify({'message': f"📝 บันทึกสมุดโน้ตสำเร็จ: **{note_key}**",
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'update_product_description':
+            product_id = params.get('product_id')
+            new_desc   = (params.get('description') or '').strip()
+            if not product_id or not new_desc:
+                return jsonify({'message': 'ข้อมูลไม่ครบ — ต้องการ product_id และ description'}), 200
+            cursor.execute('SELECT id, name, description FROM products WHERE id = %s', (product_id,))
+            prod = cursor.fetchone()
+            if not prod:
+                return jsonify({'message': f'ไม่พบสินค้า ID {product_id}'}), 200
+            old_desc = prod['description'] or ''
+            cursor.execute('UPDATE products SET description = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (new_desc, product_id))
+            before_data = {'สินค้า': prod['name'], 'description เดิม': old_desc[:120] or '(ว่าง)'}
+            after_data  = {'สินค้า': prod['name'], 'description ใหม่': new_desc[:120]}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ อัปเดต description ของ **{prod['name']}** สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
 
         elif tool == 'toggle_facebook_ad':
