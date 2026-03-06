@@ -35,17 +35,23 @@ class _PooledConnection:
 
     def close(self):
         try:
-            if not self._conn.closed:
+            if self._conn.closed:
+                try:
+                    self._pool.putconn(self._conn, close=True)
+                except Exception:
+                    pass
+            else:
                 try:
                     self._conn.rollback()
                 except Exception:
                     pass
-                self._pool.putconn(self._conn)
-            else:
                 try:
                     self._pool.putconn(self._conn)
                 except Exception:
-                    pass
+                    try:
+                        self._conn.close()
+                    except Exception:
+                        pass
         except Exception:
             try:
                 self._conn.close()
@@ -62,35 +68,48 @@ class _PooledConnection:
         self.close()
 
 def _is_connection_alive(conn):
-    """Check if a connection is still usable."""
+    """Check if a connection is truly usable by running a lightweight query."""
     try:
         if conn.closed:
             return False
-        conn.poll()
+        cur = conn.cursor()
+        cur.execute('SELECT 1')
+        cur.close()
+        conn.rollback()
         return True
     except Exception:
         return False
 
+def _discard_conn(pool, conn):
+    """Safely discard a dead connection from the pool."""
+    try:
+        pool.putconn(conn, close=True)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 def get_db():
     """Get a pooled database connection with stale-connection recovery."""
     pool = _get_pool()
-    conn = pool.getconn()
-    if not _is_connection_alive(conn):
-        try:
-            pool.putconn(conn, close=True)
-        except Exception:
-            pass
-        db_url = get_db_url()
-        conn = psycopg2.connect(
-            db_url,
-            keepalives=1,
-            keepalives_idle=30,
-            keepalives_interval=10,
-            keepalives_count=5,
-            connect_timeout=10
-        )
-        return conn
-    return _PooledConnection(conn, pool)
+    db_url = get_db_url()
+
+    for _attempt in range(pool.maxconn + 1):
+        conn = pool.getconn()
+        if _is_connection_alive(conn):
+            return _PooledConnection(conn, pool)
+        _discard_conn(pool, conn)
+
+    conn = psycopg2.connect(
+        db_url,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
+        connect_timeout=10
+    )
+    return conn
 
 def init_db():
     """Initialize database with tables and default data"""
