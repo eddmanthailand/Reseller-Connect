@@ -336,7 +336,7 @@ function _agentBubbleAI(m, i) {
     return `<div class="agent-bubble-ai">
         <div class="agent-bubble-icon"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
         <div>
-            <div class="agent-bubble-text">${_esc(m.text).replace(/\n/g, '<br>')}</div>
+            <div class="agent-bubble-text">${_renderWithImages(m.text)}</div>
             <div class="agent-feedback-row" id="fb-${i}">
                 <button class="agent-fb-btn" onclick="agentFeedback(${i},1)" title="ดีมาก">👍</button>
                 <button class="agent-fb-btn" onclick="agentFeedback(${i},-1)" title="ไม่ตรง">👎</button>
@@ -405,6 +405,19 @@ function _tableRows(obj, color) {
 
 function _esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _renderWithImages(text) {
+    let html = _esc(text).replace(/\n/g, '<br>');
+    html = html.replace(/(\/storage\/[^\s&lt;&gt;"]+\.(?:jpg|jpeg|png|gif|webp))/gi,
+        '<a href="$1" target="_blank" style="display:inline-block;margin:3px 2px;">' +
+        '<img src="$1" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;vertical-align:middle;cursor:zoom-in;border:1px solid rgba(0,0,0,0.1);" ' +
+        'onerror="this.parentNode.innerHTML=\'<span style=&quot;font-size:11px;color:#9ca3af;&quot;>[โหลดรูปไม่ได้]\' + this.parentNode.href + \'</span>\'"></a>');
+    html = html.replace(/(https?:\/\/[^\s&lt;&gt;"]+\.(?:jpg|jpeg|png|gif|webp))/gi,
+        '<a href="$1" target="_blank" style="display:inline-block;margin:3px 2px;">' +
+        '<img src="$1" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;vertical-align:middle;cursor:zoom-in;border:1px solid rgba(0,0,0,0.1);" ' +
+        'onerror="this.parentNode.innerHTML=\'<span style=&quot;font-size:11px;color:#9ca3af;&quot;>[โหลดรูปไม่ได้]\' + this.parentNode.href + \'</span>\'"></a>');
+    return html;
 }
 
 function _agentScrollBottom() {
