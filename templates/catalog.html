@@ -1216,14 +1216,17 @@
     50%{ box-shadow: 0 0 0 5px rgba(74,222,128,0); }
 }
 @keyframes gc-wiggle {
-    0%,100%{ transform: rotate(0deg) scale(1); }
-    15%{ transform: rotate(-8deg) scale(1.05); }
-    30%{ transform: rotate(7deg) scale(1.05); }
-    45%{ transform: rotate(-5deg) scale(1.02); }
-    60%{ transform: rotate(4deg) scale(1.02); }
-    75%{ transform: rotate(-2deg) scale(1); }
+    0%   { transform: scaleX(1)    scaleY(1)    translateY(0); }
+    10%  { transform: scaleX(1.12) scaleY(0.88) translateY(3px); }
+    22%  { transform: scaleX(0.82) scaleY(1.22) translateY(-14px); }
+    38%  { transform: scaleX(1.14) scaleY(0.9)  translateY(0); }
+    52%  { transform: scaleX(0.92) scaleY(1.1)  translateY(-7px); }
+    65%  { transform: scaleX(1.07) scaleY(0.95) translateY(0); }
+    78%  { transform: scaleX(0.97) scaleY(1.04) translateY(-3px); }
+    90%  { transform: scaleX(1.02) scaleY(0.99) translateY(0); }
+    100% { transform: scaleX(1)    scaleY(1)    translateY(0); }
 }
-#gc-fab.wiggle { animation: gc-wiggle .6s ease; }
+#gc-fab.wiggle { animation: gc-wiggle .95s cubic-bezier(.36,.07,.19,.97); }
 #gc-badge {
     position: absolute; top: -6px; right: -6px;
     background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
