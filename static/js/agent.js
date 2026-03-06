@@ -27,6 +27,42 @@ let _agentImageB64  = null;
 let _agentImageMime = null;
 let _agentImageName = null;
 
+const _AGENT_STORAGE_KEY  = 'ekg_agent_history';
+const _AGENT_MAX_SAVED    = 60;
+
+function _agentSaveHistory() {
+    try {
+        const toSave = _agentMessages.slice(-_AGENT_MAX_SAVED).map(m => {
+            if (m.role === 'genimage') {
+                const { image_b64, ...rest } = m;
+                return { ...rest, _image_removed: true };
+            }
+            return m;
+        });
+        sessionStorage.setItem(_AGENT_STORAGE_KEY, JSON.stringify(toSave));
+    } catch (_) {}
+}
+
+function _agentRestoreHistory() {
+    try {
+        const raw = sessionStorage.getItem(_AGENT_STORAGE_KEY);
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (!Array.isArray(saved) || saved.length === 0) return false;
+        _agentMessages = saved;
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function agentClearHistory() {
+    sessionStorage.removeItem(_AGENT_STORAGE_KEY);
+    _agentMessages = [];
+    _agentBriefed = false;
+    _agentShowWelcome();
+}
+
 function _agentCurrentPage() {
     return (window.location.hash || '').replace('#', '') || 'dashboard';
 }
@@ -41,6 +77,14 @@ function agentInitVisibility(role) {
     if (!fab) return;
     if (role === 'Super Admin') {
         fab.style.display = 'flex';
+        const hadHistory = _agentRestoreHistory();
+        if (hadHistory) {
+            _agentBriefed = true;
+            _agentRenderMessages();
+            if (_agentMessages.length > 0) {
+                _agentNotify = false;
+            }
+        }
     } else {
         fab.style.display = 'none';
         const panel = document.getElementById('agentPanel');
@@ -173,6 +217,7 @@ async function _agentLoadBriefing() {
 /* ---- Message rendering ---- */
 function _agentPush(msg) {
     _agentMessages.push(msg);
+    _agentSaveHistory();
     _agentRenderMessages();
 }
 
@@ -363,6 +408,7 @@ async function agentSend() {
 
     const userMsg = { role: 'user', text, image: _agentImageB64 ? `data:${_agentImageMime};base64,${_agentImageB64}` : null };
     _agentMessages.push(userMsg);
+    _agentSaveHistory();
     const sentImage = _agentImageB64;
     const sentMime  = _agentImageMime;
     _agentClearImage();
@@ -400,6 +446,7 @@ async function agentSend() {
         _agentMessages.push({ role: 'ai', text: '❌ ' + e.message });
     }
 
+    _agentSaveHistory();
     _agentLoading = false;
     _agentRenderMessages();
     if (!_agentOpen) { _agentNotify = true; _agentRenderNotifyDot(); }
