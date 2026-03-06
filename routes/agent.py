@@ -261,17 +261,40 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         raw = (resp.text or '').strip()
         if not raw:
             return {'type': 'chat', 'message': 'AI ไม่ได้ตอบกลับ (empty response) กรุณาลองใหม่อีกครั้ง'}
-        if raw.startswith('```'):
-            raw = raw.split('```')[1]
-            if raw.startswith('json'):
-                raw = raw[4:]
-            raw = raw.strip()
-        try:
-            result = _json.loads(raw)
-        except _json.JSONDecodeError:
-            return {'type': 'chat', 'message': raw}
-        result['_model_used'] = model
-        return result
+
+        # ลอง parse JSON จาก response — รองรับทั้ง raw JSON, code block, และ mixed text+JSON
+        def _extract_json(text):
+            # 1. ทั้ง response เป็น JSON โดยตรง
+            try:
+                return _json.loads(text)
+            except _json.JSONDecodeError:
+                pass
+            # 2. หา ```json ... ``` block ที่อยู่ตรงไหนก็ได้ใน text
+            import re as _re
+            m = _re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, _re.DOTALL)
+            if m:
+                try:
+                    return _json.loads(m.group(1))
+                except _json.JSONDecodeError:
+                    pass
+            # 3. หา JSON object {...} ที่อยู่ใน text
+            m2 = _re.search(r'\{[^{}]*"type"\s*:\s*"[^"]*"[^{}]*\}', text, _re.DOTALL)
+            if m2:
+                try:
+                    return _json.loads(m2.group(0))
+                except _json.JSONDecodeError:
+                    pass
+            return None
+
+        parsed = _extract_json(raw)
+        if parsed and isinstance(parsed, dict) and 'type' in parsed:
+            parsed['_model_used'] = model
+            return parsed
+
+        # ไม่พบ JSON ที่ถูกต้อง — strip code blocks แล้ว return เป็น chat
+        import re as _re
+        clean = _re.sub(r'```(?:json)?\s*\{.*?\}\s*```', '', raw, flags=_re.DOTALL).strip()
+        return {'type': 'chat', 'message': clean or raw, '_model_used': model}
     except Exception as e:
         return {'type': 'chat', 'message': f'เกิดข้อผิดพลาด: {str(e)}'}
 
