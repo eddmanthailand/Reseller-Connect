@@ -244,6 +244,7 @@ def _agent_build_system_prompt(settings, context=None):
 - toggle_facebook_ad: เปลี่ยนสถานะ Campaign/AdSet/Ad ใน Meta Ads (params: ad_id, status="ACTIVE"/"PAUSED"/"ARCHIVED") — ส่ง POST ไป Meta Marketing API จริง
 - update_product_description: แก้ไขคำอธิบายสินค้าชิ้นเดียว (params: product_name, description, field="bot_description"|"description") — field="bot_description" คือสำหรับบอทแชทน้องนุ่น (default), field="description" คือหน้าสาธารณะ
 - bulk_update_product_description: อัปเดตคำอธิบายสินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", description="คำอธิบาย", field="bot_description"|"description") — default field="bot_description"
+- copy_product_description: คัดลอกคำอธิบาย (bot_description หรือ description) จากสินค้าต้นทาง ไปยังสินค้าปลายทางหลายชิ้น (params: source_product_name="ชื่อสินค้าต้นทาง", target_product_names=["ชื่อสินค้า1","ชื่อสินค้า2",...], field="bot_description"|"description") — ใช้เมื่อผู้ใช้บอกว่า "เอาคำอธิบายของ X ไปใส่ใน Y และ Z"
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
 
 === DB Schema สำคัญ (สำหรับ query_db) ===
@@ -1816,6 +1817,49 @@ def agent_chat():
                                 'message': intent.get('message', f"จะอัปเดต{field_label}ของสินค้าที่มีคำว่า **{keyword}** จำนวน {len(prods)} รายการ"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'copy_product_description':
+                src_name   = (params.get('source_product_name') or '').strip()
+                tgt_names  = params.get('target_product_names') or []
+                db_field   = params.get('field', 'bot_description')
+                if db_field not in ('description', 'bot_description'):
+                    db_field = 'bot_description'
+                if not src_name or not tgt_names:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ source_product_name และ target_product_names'}), 200
+                cursor.execute(f"SELECT id, name, {db_field} as src_val FROM products WHERE name ILIKE %s LIMIT 3", (f'%{src_name}%',))
+                src_rows = cursor.fetchall()
+                if not src_rows:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าต้นทาง "{src_name}"'}), 200
+                if len(src_rows) > 1:
+                    opts = ', '.join([p['name'] for p in src_rows])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายสินค้าต้นทาง: {opts} — ระบุให้ชัดขึ้น'}), 200
+                src = src_rows[0]
+                src_desc = src['src_val'] or ''
+                if not src_desc:
+                    return jsonify({'type': 'answer', 'message': f'สินค้า "{src["name"]}" ยังไม่มีคำอธิบาย ({db_field}) — กรุณาใส่คำอธิบายก่อน'}), 200
+                tgt_ids, tgt_found, tgt_not_found = [], [], []
+                for tgt_name in tgt_names:
+                    cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s LIMIT 1", (f'%{tgt_name}%',))
+                    tgt = cursor.fetchone()
+                    if tgt:
+                        tgt_ids.append(tgt['id'])
+                        tgt_found.append(tgt['name'])
+                    else:
+                        tgt_not_found.append(tgt_name)
+                if not tgt_ids:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าปลายทางเลย: {", ".join(tgt_not_found)}'}), 200
+                field_label = 'คำอธิบายบอท' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ'
+                not_found_note = f' (ไม่พบ: {", ".join(tgt_not_found)})' if tgt_not_found else ''
+                plan = {
+                    'before': {'ต้นทาง': src['name'], f'{field_label} ที่จะคัดลอก': src_desc[:150] + ('…' if len(src_desc) > 150 else '') + f' [{len(src_desc)} ตัวอักษร]'},
+                    'after':  {'ปลายทาง': ', '.join(tgt_found) + not_found_note, 'จำนวน': f'{len(tgt_ids)} สินค้า'}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'src_id': src['id'], 'tgt_ids': tgt_ids, 'db_field': db_field})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {'src_id': src['id'], 'tgt_ids': tgt_ids, 'db_field': db_field, 'src_desc': src_desc},
+                                'message': intent.get('message', f"จะคัดลอก{field_label}จาก **{src['name']}** → {', '.join(tgt_found)}"),
+                                'model_used': model_used}), 200
+
             elif tool == 'update_product_field':
                 prod_name  = (params.get('product_name') or '').strip()
                 db_field   = (params.get('field') or '').strip()
@@ -2116,6 +2160,36 @@ def agent_execute():
                                ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
             conn.commit()
             return jsonify({'message': f"✅ อัปเดต{field_label}สำเร็จ **{updated_count} สินค้า** (keyword: {keyword})",
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'copy_product_description':
+            src_id   = params.get('src_id')
+            tgt_ids  = params.get('tgt_ids', [])
+            db_field = params.get('db_field', 'bot_description')
+            src_desc = (params.get('src_desc') or '').strip()
+            if db_field not in ('description', 'bot_description'):
+                db_field = 'bot_description'
+            if not src_id or not tgt_ids or not src_desc:
+                return jsonify({'message': 'ข้อมูลไม่ครบ — ต้องการ src_id, tgt_ids และ src_desc'}), 200
+            cursor.execute('SELECT name FROM products WHERE id = %s', (src_id,))
+            src_prod = cursor.fetchone()
+            cursor.execute('SELECT id, name FROM products WHERE id = ANY(%s)', (tgt_ids,))
+            tgt_prods = cursor.fetchall()
+            if not tgt_prods:
+                return jsonify({'message': 'ไม่พบสินค้าปลายทาง'}), 200
+            cursor.execute(f'UPDATE products SET {db_field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)',
+                           (src_desc, tgt_ids))
+            updated_count = cursor.rowcount
+            field_label = 'คำอธิบายบอท' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ'
+            tgt_names = [p['name'] for p in tgt_prods]
+            before_data = {'ต้นทาง': src_prod['name'] if src_prod else str(src_id)}
+            after_data  = {'คัดลอกสำเร็จ': f'{updated_count} สินค้า', 'ปลายทาง': ', '.join(tgt_names),
+                           f'{field_label}': src_desc[:120] + ('…' if len(src_desc) > 120 else '')}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ คัดลอก{field_label}จาก **{src_prod['name'] if src_prod else ''}** → {', '.join(tgt_names)} สำเร็จ ({updated_count} สินค้า)",
                             'before': before_data, 'after': after_data}), 200
 
         elif tool == 'update_product_field':
