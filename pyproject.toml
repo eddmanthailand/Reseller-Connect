@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "pywebpush>=2.3.0",
     "qrcode[pil]>=8.2",
+    "replit-connectors",
     "replit-object-storage>=1.0.2",
     "requests>=2.32.5",
     "werkzeug>=3.1.3",

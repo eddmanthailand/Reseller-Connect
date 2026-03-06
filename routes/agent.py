@@ -167,6 +167,13 @@ def _agent_build_system_prompt(settings, context=None):
 - list_env_var_names: รายชื่อ environment variables (ชื่อเท่านั้น ไม่มีค่า)
 - test_api_endpoint: ทดสอบ GET endpoint (params: path="/api/admin/brands")
 
+[READ — Google Workspace]
+- read_google_sheet: อ่านข้อมูลจาก Google Sheets (params: spreadsheet_id, range="Sheet1!A1:Z100", limit=50)
+- query_google_drive: ค้นหาไฟล์ใน Google Drive (params: query="ชื่อไฟล์หรือ keyword", limit=10)
+
+[WRITE — Google Workspace (ต้องขออนุมัติก่อนเสมอ)]
+- write_google_sheet: เขียน/อัปเดตข้อมูลลง Google Sheets (params: spreadsheet_id, range="Sheet1!A1", values=[["col1","col2",...]], mode="append"/"overwrite")
+
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
 - update_order_status: เปลี่ยนสถานะออเดอร์ (params: order_number, new_status)
@@ -274,6 +281,133 @@ def _agent_explain_code(original_question, code_result, settings):
         return resp.text.strip()
     except Exception:
         return code_result
+
+
+def _get_replit_connector_token(connector_name):
+    """ดึง OAuth access token จาก Replit Connectors API"""
+    import urllib.request as _ur, urllib.error as _ue, json as _j
+    hostname = os.environ.get('REPLIT_CONNECTORS_HOSTNAME')
+    if not hostname:
+        raise Exception('ไม่พบ REPLIT_CONNECTORS_HOSTNAME — กรุณา connect Google integration ก่อน')
+    repl_id  = os.environ.get('REPL_IDENTITY', '')
+    web_tok  = os.environ.get('WEB_REPL_RENEWAL', '')
+    x_token  = ('repl ' + repl_id) if repl_id else (('depl ' + web_tok) if web_tok else None)
+    if not x_token:
+        raise Exception('ไม่พบ Replit identity token')
+    req = _ur.Request(
+        f'https://{hostname}/api/v2/connection?include_secrets=true&connector_names={connector_name}',
+        headers={'Accept': 'application/json', 'X-Replit-Token': x_token}
+    )
+    with _ur.urlopen(req, timeout=8) as resp:
+        data = _j.loads(resp.read())
+    items = data.get('items', [])
+    if not items:
+        raise Exception(f'ไม่พบ connection สำหรับ {connector_name} — กรุณา authorize ก่อน')
+    s = items[0].get('settings', {})
+    token = s.get('access_token') or s.get('oauth', {}).get('credentials', {}).get('access_token')
+    if not token:
+        raise Exception(f'ไม่พบ access_token สำหรับ {connector_name}')
+    return token
+
+
+def _agent_read_google_sheet(params):
+    """อ่านข้อมูลจาก Google Sheets ผ่าน Replit Connector"""
+    import urllib.request as _ur, urllib.parse as _up, json as _j
+    sheet_id = (params.get('spreadsheet_id') or '').strip()
+    range_   = (params.get('range') or 'Sheet1').strip()
+    limit    = int(params.get('limit') or 50)
+    if not sheet_id:
+        return {'text': '⚠️ กรุณาระบุ spreadsheet_id'}
+    try:
+        token = _get_replit_connector_token('google-sheet')
+        url = f'https://sheets.googleapis.com/v4/spreadsheets/{_up.quote(sheet_id, safe="")}/values/{_up.quote(range_, safe="!:")}'
+        req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
+        with _ur.urlopen(req, timeout=10) as resp:
+            data = _j.loads(resp.read())
+        rows = data.get('values', [])
+        if not rows:
+            return {'text': f'📋 ไม่พบข้อมูลใน {range_}'}
+        header = rows[0] if rows else []
+        data_rows = rows[1:limit+1] if len(rows) > 1 else []
+        lines = [' | '.join(str(c) for c in header)]
+        lines.append('-' * max(len(lines[0]), 20))
+        for row in data_rows:
+            padded = list(row) + [''] * (len(header) - len(row))
+            lines.append(' | '.join(str(c) for c in padded[:len(header)]))
+        total = len(rows) - 1
+        note = f'\n_(แสดง {len(data_rows)}/{total} แถว)_' if total > len(data_rows) else ''
+        return {'text': f'📊 **Google Sheet:** `{range_}`\n```\n' + '\n'.join(lines) + f'\n```{note}'}
+    except Exception as e:
+        return {'text': f'❌ อ่าน Google Sheet ไม่สำเร็จ: {str(e)}'}
+
+
+def _agent_query_google_drive(params):
+    """ค้นหาไฟล์ใน Google Drive ผ่าน Replit Connector"""
+    import urllib.request as _ur, urllib.parse as _up, json as _j
+    query = (params.get('query') or '').strip()
+    limit = int(params.get('limit') or 10)
+    if not query:
+        return {'text': '⚠️ กรุณาระบุ query สำหรับค้นหา เช่น ชื่อไฟล์หรือ keyword'}
+    try:
+        token = _get_replit_connector_token('google-drive')
+        q_str = _up.quote(f"name contains '{query}' and trashed=false")
+        url = f'https://www.googleapis.com/drive/v3/files?q={q_str}&pageSize={limit}&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
+        req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
+        with _ur.urlopen(req, timeout=10) as resp:
+            data = _j.loads(resp.read())
+        files = data.get('files', [])
+        if not files:
+            return {'text': f'🔍 ไม่พบไฟล์ที่ตรงกับ "{query}"'}
+        mime_icons = {
+            'application/vnd.google-apps.spreadsheet': '📊',
+            'application/vnd.google-apps.document': '📄',
+            'application/vnd.google-apps.presentation': '📑',
+            'application/vnd.google-apps.folder': '📁',
+            'image/jpeg': '🖼️', 'image/png': '🖼️', 'application/pdf': '📕',
+        }
+        lines = [f'🔍 ผลค้นหา "{query}" ({len(files)} รายการ)\n']
+        for f in files:
+            icon = mime_icons.get(f.get('mimeType', ''), '📎')
+            mod  = (f.get('modifiedTime', '')[:10]) or '-'
+            size = f.get('size', '')
+            size_str = f' ({int(size)//1024:,} KB)' if size else ''
+            link = f.get('webViewLink', '')
+            lines.append(f"{icon} **{f['name']}**{size_str}\n   ID: `{f['id']}` | แก้ไขล่าสุด: {mod}" + (f"\n   🔗 {link}" if link else ''))
+        return {'text': '\n\n'.join(lines)}
+    except Exception as e:
+        return {'text': f'❌ ค้นหา Google Drive ไม่สำเร็จ: {str(e)}'}
+
+
+def _agent_write_google_sheet(params):
+    """เขียน/append ข้อมูลลง Google Sheets ผ่าน Replit Connector"""
+    import urllib.request as _ur, urllib.parse as _up, json as _j
+    sheet_id = (params.get('spreadsheet_id') or '').strip()
+    range_   = (params.get('range') or 'Sheet1!A1').strip()
+    values   = params.get('values', [])
+    mode     = (params.get('mode') or 'append').lower()
+    if not sheet_id:
+        return {'text': '⚠️ กรุณาระบุ spreadsheet_id'}
+    if not values or not isinstance(values, list):
+        return {'text': '⚠️ กรุณาระบุ values เป็น array 2D เช่น [["คอลัมน์1","คอลัมน์2"]]'}
+    try:
+        token = _get_replit_connector_token('google-sheet')
+        body = _j.dumps({'values': values, 'majorDimension': 'ROWS'}).encode()
+        if mode == 'overwrite':
+            url = f'https://sheets.googleapis.com/v4/spreadsheets/{_up.quote(sheet_id, safe="")}/values/{_up.quote(range_, safe="!:")}?valueInputOption=USER_ENTERED'
+            req = _ur.Request(url, data=body, headers={
+                'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'
+            }, method='PUT')
+        else:
+            url = f'https://sheets.googleapis.com/v4/spreadsheets/{_up.quote(sheet_id, safe="")}/values/{_up.quote(range_, safe="!:")}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS'
+            req = _ur.Request(url, data=body, headers={
+                'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'
+            }, method='POST')
+        with _ur.urlopen(req, timeout=10) as resp:
+            result = _j.loads(resp.read())
+        updated = result.get('updates', result).get('updatedRows', len(values))
+        return {'text': f'✅ บันทึกข้อมูลสำเร็จ — อัปเดต {updated} แถว ใน `{range_}` (mode: {mode})'}
+    except Exception as e:
+        return {'text': f'❌ เขียน Google Sheet ไม่สำเร็จ: {str(e)}'}
 
 
 def _agent_execute_read_tool(tool, params, cursor):
@@ -1073,6 +1207,13 @@ def _agent_execute_read_tool(tool, params, cursor):
         except Exception as _e:
             return {'text': f'เรียก {_path} ไม่สำเร็จ: {str(_e)}'}
 
+    # ─── Google Workspace Tools ─────────────────────────────────────────────
+    elif tool == 'read_google_sheet':
+        return _agent_read_google_sheet(params)
+
+    elif tool == 'query_google_drive':
+        return _agent_query_google_drive(params)
+
     elif tool == 'generate_image':
         import base64 as _b64
         _prompt        = (params.get('prompt') or '').strip()
@@ -1380,6 +1521,27 @@ def agent_chat():
                                 'message': intent.get('message', f"จะเปลี่ยนสถานะโฆษณา **{ad_name}** → {status_th.get(status, status)}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'write_google_sheet':
+                sheet_id = (params.get('spreadsheet_id') or '').strip()
+                range_   = (params.get('range') or 'Sheet1!A1').strip()
+                values   = params.get('values', [])
+                mode     = (params.get('mode') or 'append').lower()
+                if not sheet_id:
+                    return jsonify({'type': 'answer', 'message': '⚠️ กรุณาระบุ spreadsheet_id'}), 200
+                if not values:
+                    return jsonify({'type': 'answer', 'message': '⚠️ กรุณาระบุ values'}), 200
+                rows_preview = str(values[:3])[:120] + ('...' if len(str(values)) > 120 else '')
+                plan = {
+                    'before': {'Spreadsheet ID': sheet_id, 'Range': range_},
+                    'after':  {'Mode': mode, 'จำนวนแถว': len(values), 'ตัวอย่าง': rows_preview}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'spreadsheet_id': sheet_id, 'range': range_})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': params,
+                                'message': intent.get('message', f"จะเขียน {len(values)} แถว ลง Google Sheet `{range_}` (mode: {mode})"),
+                                'model_used': model_used}), 200
+
             return jsonify({'type': 'answer', 'message': f'tool "{tool}" ยังไม่รองรับ'}), 200
 
         elif itype == 'clarify':
@@ -1571,6 +1733,17 @@ def agent_execute():
             conn.commit()
             return jsonify({'message': f"✅ เปลี่ยนสถานะโฆษณา **{ad_name}** (ID: {ad_id}) → {status_th.get(status, status)} สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'write_google_sheet':
+            result = _agent_write_google_sheet(params)
+            before_data = {'Spreadsheet': params.get('spreadsheet_id', ''), 'Range': params.get('range', '')}
+            after_data  = {'Mode': params.get('mode', 'append'), 'แถวที่เขียน': len(params.get('values', []))}
+            if log_id:
+                cur2 = conn.cursor()
+                cur2.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                             ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+                conn.commit()
+            return jsonify({'message': result['text'], 'before': before_data, 'after': after_data}), 200
 
         return jsonify({'error': f'ไม่รองรับ tool "{tool}"'}), 400
 
