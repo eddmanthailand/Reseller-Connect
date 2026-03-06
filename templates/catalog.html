@@ -101,7 +101,11 @@
         .card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; flex-shrink: 0; }
         .card-pricing { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; margin-bottom: 8px; }
         .card-price-label { font-size: 10px; color: var(--text-muted); font-weight: 400; }
-        .card-price { font-size: 15px; font-weight: 700; color: var(--accent); }
+        .card-price { font-size: 15px; font-weight: 700; color: var(--text); }
+        .card-retail-price { font-size: 12px; color: var(--text-muted); text-decoration: line-through; margin-bottom: 2px; }
+        .card-member-row { display: flex; align-items: baseline; gap: 5px; margin-top: 2px; }
+        .card-member-price { font-size: 15px; font-weight: 700; color: #7c3aed; }
+        .card-member-label { font-size: 10px; color: var(--text-muted); }
 
         /* PROMO BANNER */
         .promo-bar { background: white; border-bottom: 1px solid var(--border); padding: 12px 20px; }
@@ -314,17 +318,35 @@
             let priceHtml = '';
             if (p.min_price > 0) {
                 const minFmt = p.min_price.toLocaleString('th-TH');
-                const maxFmt = (p.max_price || 0).toLocaleString('th-TH');
-                const priceRange = (p.max_price && p.max_price > p.min_price)
-                    ? `฿${minFmt} – ฿${maxFmt}`
-                    : `฿${minFmt}`;
-                priceHtml = `
-                    <div class="card-pricing">
-                        <div style="display:flex;align-items:baseline;gap:4px;">
-                            <span class="card-price-label">ราคาเริ่มต้น </span>
-                            <span class="card-price">${priceRange}</span>
-                        </div>
-                    </div>`;
+                const maxFmt = (p.max_price && p.max_price > p.min_price) ? p.max_price.toLocaleString('th-TH') : null;
+                const retailDisplay = maxFmt ? `฿${minFmt} – ฿${maxFmt}` : `฿${minFmt}`;
+
+                const maxDisc = p.max_discount_percent || 0;
+                const minDisc = p.min_discount_percent || 0;
+
+                if (maxDisc > 0) {
+                    const lowestMemberPrice = Math.round(p.min_price * (1 - maxDisc / 100));
+                    const highestMemberPrice = Math.round(p.min_price * (1 - minDisc / 100));
+                    const memberDisplay = (minDisc < maxDisc)
+                        ? `฿${lowestMemberPrice.toLocaleString('th-TH')} – ฿${highestMemberPrice.toLocaleString('th-TH')}`
+                        : `฿${lowestMemberPrice.toLocaleString('th-TH')}`;
+                    priceHtml = `
+                        <div class="card-pricing">
+                            <div class="card-retail-price">ราคาปกติ ${retailDisplay}</div>
+                            <div class="card-member-row">
+                                <span class="card-member-price">${memberDisplay}</span>
+                            </div>
+                            <div class="card-member-label">ราคาสมาชิก</div>
+                        </div>`;
+                } else {
+                    priceHtml = `
+                        <div class="card-pricing">
+                            <div style="display:flex;align-items:baseline;gap:4px;">
+                                <span class="card-price-label">ราคาปกติ </span>
+                                <span class="card-price">${retailDisplay}</span>
+                            </div>
+                        </div>`;
+                }
             } else {
                 priceHtml = `<div class="card-pricing"><div style="font-size:12px;color:var(--text-muted);">ติดต่อสอบถามราคา</div></div>`;
             }
