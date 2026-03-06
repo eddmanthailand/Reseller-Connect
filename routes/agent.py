@@ -249,8 +249,10 @@ def _agent_build_system_prompt(settings, context=None):
 
 === DB Schema สำคัญ (สำหรับ query_db) ===
 - ค้นสินค้า: ใช้ query_products แทน query_db เสมอ (ง่าย ถูกต้อง ไม่ต้อง JOIN เอง)
-- products: id, name, parent_sku, status, product_type, brand_id — ไม่มี column "category" หรือ "is_active" โดยตรง
+- products: id, name, parent_sku, description, bot_description, status, product_type, brand_id, size_chart_image_url, weight, length, width, height, low_stock_threshold, is_featured — ไม่มี column "category", "is_active", "image_url", "size_chart" โดยตรง
 - หมวดหมู่สินค้า: ต้อง JOIN product_categories pc ON pc.product_id=p.id JOIN categories c ON c.id=pc.category_id
+- รูปสินค้า: อยู่ในตาราง product_images (product_id, image_url, sort_order) — ต้อง JOIN เช่น LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.sort_order=0 เพื่อดูรูปแรก
+- ตารางไซส์: ใช้ column size_chart_image_url ในตาราง products (ไม่ใช่ size_chart)
 - สถานะสินค้า: ใช้ status='active' ไม่ใช่ is_active=TRUE
 - SQL ที่ส่งให้ query_db: ห้ามมี semicolon (;) ท้าย SQL
 
