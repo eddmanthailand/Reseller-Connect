@@ -781,15 +781,20 @@
             const vals = sortOptionVals(key, rawVals);
             const isColorKey = ['สี','color','COLOR'].some(k => k.toLowerCase() === key.toLowerCase());
 
-            if (vals.length === 1) {
+            if (vals.length === 1 && isColorKey) {
                 _selectedOptions[key] = String(vals[0]);
                 autoSelectedKeys.push(key);
                 optionsHtml += `<div class="auto-selected-pill">
                     <span>${escHtml(key)}:</span>
                     <strong>${escHtml(String(vals[0]))}</strong>
-                    ${isColorKey && getColorHex(vals[0]) ? `<span style="width:14px;height:14px;border-radius:50%;background:${getColorHex(vals[0])};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>` : ''}
+                    ${getColorHex(vals[0]) ? `<span style="width:14px;height:14px;border-radius:50%;background:${getColorHex(vals[0])};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>` : ''}
                 </div>`;
                 return;
+            }
+
+            if (vals.length === 1 && !isColorKey) {
+                _selectedOptions[key] = String(vals[0]);
+                autoSelectedKeys.push(key);
             }
 
             if (isColorKey) {
@@ -818,7 +823,8 @@
                     <div class="sku-options" id="opts_${escHtml(key)}">
                         ${vals.map(v => {
                             const hasStock = skus.some(s => (s.options || {})[key] === v && s.stock > 0);
-                            return `<button class="sku-opt-btn" ${!hasStock ? 'disabled' : ''} onclick="selectOpt('${escHtml(key)}','${escHtml(String(v))}')">${escHtml(String(v))}</button>`;
+                            const isPreSel = _selectedOptions[key] === String(v);
+                            return `<button class="sku-opt-btn${isPreSel ? ' selected' : ''}" ${!hasStock ? 'disabled' : ''} onclick="selectOpt('${escHtml(key)}','${escHtml(String(v))}')">${escHtml(String(v))}</button>`;
                         }).join('')}
                     </div>`;
             }
