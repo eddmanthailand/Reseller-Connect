@@ -276,6 +276,34 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         return {'type': 'chat', 'message': f'เกิดข้อผิดพลาด: {str(e)}'}
 
 
+def _agent_explain_workspace_result(original_question, tool_name, raw_result, settings):
+    """Two-pass: ให้ AI สรุปผลจาก Google Workspace tools เป็นภาษาไทยที่เป็นธรรมชาติ"""
+    try:
+        from google import genai as google_genai
+        gemini_key = os.environ.get('GEMINI_API_KEY')
+        if not gemini_key:
+            return raw_result
+        client = google_genai.Client(api_key=gemini_key)
+        name = settings.get('agent_name', 'น้องเอก')
+        particle = settings.get('ending_particle', 'ครับ')
+        tool_label = {'query_google_drive': 'Google Drive', 'read_google_sheet': 'Google Sheets'}.get(tool_name, 'Google Workspace')
+        prompt = f"""คุณชื่อ "{name}" เป็นผู้ช่วย AI ของระบบ EKG Shops
+ผู้ใช้ถามว่า: "{original_question}"
+
+ผลจาก {tool_label}:
+{raw_result}
+
+กรุณาสรุปและตอบเป็นภาษาไทยที่เป็นธรรมชาติ เป็นกันเอง ไม่ต้องแสดงข้อมูล raw ซ้ำทั้งหมด:
+- บอกว่าพบอะไร มีกี่รายการ
+- ถ้ามีไฟล์/sheet ให้บอกชื่อและข้อมูลสำคัญ
+- ถ้าผู้ใช้ถามเรื่องใดเป็นพิเศษ ให้ตอบตรงจุด
+- ใช้คำลงท้าย "{particle}" ตอบกระชับเป็นกันเอง"""
+        resp = client.models.generate_content(model='gemini-2.5-flash', contents=[prompt])
+        return (resp.text or '').strip() or raw_result
+    except Exception:
+        return raw_result
+
+
 def _agent_explain_code(original_question, code_result, settings):
     """Two-pass: ให้ AI อธิบายผลจาก code tool เป็นภาษาไทยแทนการส่ง raw code"""
     try:
@@ -1414,6 +1442,7 @@ def agent_chat():
         admin_name = session.get('full_name') or session.get('username') or 'Admin'
 
         _code_tools = {'read_code', 'search_code', 'list_files', 'analyze_syntax', 'count_code_metrics'}
+        _workspace_tools = {'query_google_drive', 'read_google_sheet'}
         if itype == 'answer':
             result = _agent_execute_read_tool(tool, params, cursor)
             if result.get('chart'):
@@ -1426,6 +1455,9 @@ def agent_chat():
             if tool in _code_tools:
                 explanation = _agent_explain_code(message, result['text'], settings)
                 return jsonify({'type': 'answer', 'message': explanation, 'model_used': model_used}), 200
+            if tool in _workspace_tools:
+                explanation = _agent_explain_workspace_result(message, tool, result['text'], settings)
+                return jsonify({'type': 'answer', 'message': explanation, 'model_used': 'gemini-2.5-flash'}), 200
             return jsonify({'type': 'answer', 'message': result['text'], 'model_used': model_used}), 200
 
         elif itype == 'plan':
