@@ -1254,9 +1254,15 @@ def _agent_execute_read_tool(tool, params, cursor):
             if not _rows:
                 return {'text': 'Query สำเร็จ — ไม่มีข้อมูล (0 แถว)'}
             _cols = list(_rows[0].keys()) if _rows else []
+            _long_cols = {'description', 'bot_description', 'content', 'note', 'note_value',
+                          'message', 'detail', 'remark', 'address', 'custom_prompt', 'comment'}
+            def _fmt_cell(col, val):
+                s = str(val) if val is not None else ''
+                limit = 300 if col.lower() in _long_cols else 60
+                return s[:limit] + ('…' if len(s) > limit else '')
             _header = ' | '.join(_cols)
             _sep = '-' * min(len(_header), 120)
-            _data = '\n'.join(' | '.join(str(r[c])[:40] for c in _cols) for r in _rows)
+            _data = '\n'.join(' | '.join(_fmt_cell(c, r[c]) for c in _cols) for r in _rows)
             return {'text': f'📊 Query Result ({len(_rows)} แถว):\n```\n{_header}\n{_sep}\n{_data}\n```'}
         except Exception as _e:
             return {'text': f'SQL Error: {str(_e)}\n\n💡 หมายเหตุ: ตาราง products ไม่มี column "category" โดยตรง — ใช้ JOIN กับ product_categories และ categories แทน หรือค้นหาจากชื่อสินค้าด้วย p.name ILIKE \'%กระโปรง%\''}
