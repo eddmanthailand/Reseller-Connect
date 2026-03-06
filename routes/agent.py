@@ -413,11 +413,11 @@ def _agent_read_google_sheet(params):
 
 
 def _agent_query_google_drive(params):
-    """ค้นหาไฟล์ใน Google Drive — ใช้ Service Account (เห็นทุกไฟล์ใน shared folder) หรือ fallback OAuth"""
+    """ค้นหาไฟล์ใน Google Drive — recursive, ใช้ Service Account หรือ fallback OAuth"""
     import urllib.request as _ur, urllib.parse as _up, json as _j
     query     = (params.get('query') or '').strip()
     folder_id = (params.get('folder_id') or '').strip()
-    limit     = int(params.get('limit') or 20)
+    limit     = int(params.get('limit') or 30)
     if not query and not folder_id:
         return {'text': '⚠️ กรุณาระบุ query หรือ folder_id'}
     try:
@@ -428,32 +428,61 @@ def _agent_query_google_drive(params):
         else:
             token = _get_replit_connector_token('google-drive')
             auth_mode = 'OAuth'
-        q_parts = ['trashed=false']
-        if query:
-            safe_q = query.replace("'", "\\'")
-            q_parts.append(f"name contains '{safe_q}'")
+
+        def _drive_list(fid, q_name='', max_items=100):
+            """ดึงไฟล์ทุกชั้นใน folder (recursive)"""
+            all_files = []
+            stack = [fid]
+            visited = set()
+            while stack and len(all_files) < max_items:
+                cur = stack.pop()
+                if cur in visited:
+                    continue
+                visited.add(cur)
+                q_parts = ['trashed=false']
+                if q_name:
+                    safe = q_name.replace("'", "\\'")
+                    q_parts.append(f"name contains '{safe}'")
+                q_parts.append(f"'{cur}' in parents")
+                qs = _up.quote(' and '.join(q_parts))
+                url = (f'https://www.googleapis.com/drive/v3/files'
+                       f'?q={qs}&pageSize=100'
+                       f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink,parents)')
+                req = _ur.Request(url, headers={'Authorization': f'Bearer {token}'})
+                with _ur.urlopen(req, timeout=10) as r:
+                    items = _j.loads(r.read()).get('files', [])
+                for item in items:
+                    if item['mimeType'] == 'application/vnd.google-apps.folder':
+                        stack.append(item['id'])
+                    else:
+                        all_files.append(item)
+                        if len(all_files) >= max_items:
+                            break
+                if not q_name:
+                    for item in items:
+                        if item['mimeType'] == 'application/vnd.google-apps.folder':
+                            all_files.append(item)
+            return all_files[:max_items]
+
         if folder_id:
-            q_parts.append(f"'{folder_id}' in parents")
-        q_str = _up.quote(' and '.join(q_parts))
-        url = (f'https://www.googleapis.com/drive/v3/files'
-               f'?q={q_str}&pageSize={limit}'
-               f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
-               f'&orderBy=modifiedTime%20desc')
-        req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
-        with _ur.urlopen(req, timeout=10) as resp:
-            data = _j.loads(resp.read())
-        files = data.get('files', [])
+            files = _drive_list(folder_id, query, limit)
+        else:
+            sandbox_id = '14hvk11Edw6arLFOwGXex_Zm5hKSr4KlA'
+            files = _drive_list(sandbox_id, query, limit)
+
         if not files:
-            label = f'"{query}"' if query else f'folder `{folder_id}`'
-            return {'text': f'🔍 ไม่พบไฟล์ใน {label}\n_หมายเหตุ: ถ้าต้องการให้ Agent เห็นไฟล์ใน folder ให้ Share folder กับ_ `ekg-ai-agent@gen-lang-client-0922232728.iam.gserviceaccount.com`'}
+            label = f'"{query}"' if query else 'folder'
+            return {'text': f'🔍 ไม่พบไฟล์ใน {label} (ค้นหาแบบ recursive ทุกชั้นแล้ว)'}
+
         mime_icons = {
             'application/vnd.google-apps.spreadsheet': '📊',
             'application/vnd.google-apps.document': '📄',
             'application/vnd.google-apps.presentation': '📑',
             'application/vnd.google-apps.folder': '📁',
-            'image/jpeg': '🖼️', 'image/png': '🖼️', 'application/pdf': '📕',
+            'image/jpeg': '🖼️', 'image/png': '🖼️', 'image/tiff': '🖼️',
+            'application/pdf': '📕',
         }
-        label = f'"{query}"' if query else f'folder'
+        label = f'"{query}"' if query else 'sandbox'
         lines = [f'🔍 ผลค้นหา {label} ({len(files)} รายการ) — via {auth_mode}\n']
         for f in files:
             icon = mime_icons.get(f.get('mimeType', ''), '📎')
@@ -461,7 +490,7 @@ def _agent_query_google_drive(params):
             size = f.get('size', '')
             size_str = f' ({int(size)//1024:,} KB)' if size else ''
             link = f.get('webViewLink', '')
-            lines.append(f"{icon} **{f['name']}**{size_str}\n   ID: `{f['id']}` | แก้ไขล่าสุด: {mod}" + (f"\n   🔗 {link}" if link else ''))
+            lines.append(f"{icon} **{f['name']}**{size_str}\n   ID: `{f['id']}` | {mod}" + (f"\n   🔗 {link}" if link else ''))
         return {'text': '\n\n'.join(lines)}
     except Exception as e:
         return {'text': f'❌ ค้นหา Google Drive ไม่สำเร็จ: {str(e)}'}
