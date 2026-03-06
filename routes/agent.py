@@ -410,7 +410,7 @@ def _agent_query_google_drive(params):
         url = (f'https://www.googleapis.com/drive/v3/files'
                f'?q={q_str}&pageSize={limit}'
                f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
-               f'&orderBy=modifiedTime desc')
+               f'&orderBy=modifiedTime%20desc')
         req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
         with _ur.urlopen(req, timeout=10) as resp:
             data = _j.loads(resp.read())
