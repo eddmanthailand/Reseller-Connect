@@ -433,15 +433,22 @@ async function agentSend() {
 
     try {
         const history = _agentMessages.slice(0, -1)
-            .filter(m => m.role === 'user' || m.role === 'ai')
+            .filter(m => ['user', 'ai', 'plan', 'success'].includes(m.role))
             .slice(-20)
             .map(m => {
-                const role = m.role === 'user' ? 'user' : 'model';
+                if (m.role === 'user') return { role: 'user', text: m.text || '' };
+                if (m.role === 'plan') {
+                    const status = m.approved ? '[อนุมัติแล้ว ดำเนินการสำเร็จ]' : '[รออนุมัติ]';
+                    return { role: 'model', text: `[แผนงาน ${m.tool}: ${m.text || ''} — ${status}]` };
+                }
+                if (m.role === 'success') {
+                    return { role: 'model', text: `[ผลลัพธ์: ${m.text || 'สำเร็จ'}]` };
+                }
                 let text = m.text || '';
-                if (role === 'model' && text.includes('📊')) {
+                if (text.includes('📊')) {
                     text = '[ผลลัพธ์ query จาก DB ก่อนหน้า — ถ้าต้องการข้อมูลต้อง query_db ใหม่]';
                 }
-                return { role, text };
+                return { role: 'model', text };
             })
             .filter(m => m.text);
         const body = { message: text, context_page: _agentCurrentPage(), history };
