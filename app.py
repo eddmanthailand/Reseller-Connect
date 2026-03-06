@@ -14849,7 +14849,33 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         reseller_row = cursor.fetchone()
         reseller_tier_id = reseller_row['reseller_tier_id'] if reseller_row else None
         reseller_tier_name = reseller_row['tier_name'] if reseller_row else 'Bronze'
+        reseller_tier_rank = reseller_row['level_rank'] if reseller_row else 1
         reseller_name = reseller_row['full_name'] if reseller_row else ''
+
+        # 6a. All tiers — build tier info text for bot
+        cursor.execute('SELECT id, name, level_rank, upgrade_threshold, is_manual_only FROM reseller_tiers ORDER BY level_rank')
+        all_tiers = cursor.fetchall()
+        _tier_lines = []
+        for t in all_tiers:
+            _is_current = (t['id'] == reseller_tier_id)
+            _marker = ' ← เกรดปัจจุบัน' if _is_current else ''
+            if t['level_rank'] == 1 or t['upgrade_threshold'] == 0:
+                _cond = 'เกรดเริ่มต้น'
+            elif t['is_manual_only']:
+                _cond = f'ยอดสะสมถึง ฿{t["upgrade_threshold"]:,.0f} (ต้องให้ Admin อัปเกรด)'
+            else:
+                _cond = f'ยอดสะสมถึง ฿{t["upgrade_threshold"]:,.0f}'
+            _tier_lines.append(f'  • {t["name"]}: {_cond}{_marker}')
+        tier_info_text = '\n'.join(_tier_lines) if _tier_lines else '(ไม่มีข้อมูล)'
+
+        # Find next tier
+        _next_tier = next((t for t in all_tiers if t['level_rank'] > reseller_tier_rank), None)
+        if _next_tier and not _next_tier['is_manual_only']:
+            _next_tier_text = f'อัปเกรดเป็น {_next_tier["name"]} ได้เมื่อยอดสะสมถึง ฿{_next_tier["upgrade_threshold"]:,.0f}'
+        elif _next_tier and _next_tier['is_manual_only']:
+            _next_tier_text = f'อัปเกรดเป็น {_next_tier["name"]} ต้องให้ Admin อัปเกรดให้ (ยอดสะสม ฿{_next_tier["upgrade_threshold"]:,.0f})'
+        else:
+            _next_tier_text = 'อยู่ในเกรดสูงสุดแล้ว'
 
         # 6b. Reseller orders (recent 5)
         cursor.execute('''
@@ -14983,8 +15009,13 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             options_str = pr.get('options_summary') or ''
             sku_info = pr.get('sku_info') or ''
             price = pr.get('min_price') or 0
+            tier_price = pr.get('tier_price') or 0
+            tier_disc = float(pr.get('tier_discount_pct') or 0)
             bot_desc = pr.get('bot_description') or ''
-            line = f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาเริ่ม฿{price:.0f}"
+            if tier_disc > 0 and tier_price > 0:
+                line = f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก{reseller_tier_name}฿{tier_price:.0f} (ส่วนลด{tier_disc:.0f}%)"
+            else:
+                line = f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาเริ่ม฿{price:.0f} (ยังไม่มีส่วนลดพิเศษสำหรับเกรด{reseller_tier_name})"
             if cat:
                 line += f" หมวด:{cat}"
             if sku_info:
@@ -15286,6 +15317,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
 - 💳 วิธีชำระเงิน: ร้านรับชำระเงินผ่านการโอนเงินเท่านั้น ไม่มีบัตรเครดิต ไม่มีเก็บเงินปลายทาง ไม่มีช่องทางอื่น — ถ้าลูกค้าถามเรื่องการชำระเงินหรือวิธีจ่ายให้ตอบว่า "ชำระผ่านการโอนเงินเข้าบัญชีธนาคารค่ะ หลังจากยืนยันออเดอร์แล้วทางร้านจะแจ้งเลขบัญชีให้ค่ะ"
 - 🏢 สร้างความมั่นใจเรื่องการชำระเงิน: ถ้าลูกค้าแสดงความกังวล ไม่มั่นใจ หรือลังเลเรื่องการโอนเงิน ให้แจ้งว่า "ร้านของเราดำเนินการโดย บริษัท เคาท์มีอินดีไซน์ จำกัด ค่ะ จดทะเบียนถูกต้องตามกฎหมาย ลูกค้าสามารถโทรสอบถามได้โดยตรงที่ 083-668-2211 ค่ะ มั่นใจได้เลยนะคะ" — ใช้เฉพาะเมื่อลูกค้าแสดงความกังวลหรือถามถึงความน่าเชื่อถือเท่านั้น ห้ามพูดโดยไม่มีเหตุ
+- 🏅 ส่วนลดตามเกรดสมาชิก: ราคาในรายการสินค้าด้านล่างเป็นราคาที่คำนวณตามเกรด {reseller_tier_name} ของสมาชิกแล้ว — เมื่อแจ้งราคาให้บอกราคาสมาชิกนั้นเสมอ พร้อมระบุว่าเป็นราคาเกรด {reseller_tier_name} ถ้าสมาชิกถามว่า "เกรดสูงกว่าได้ราคาดีกว่าไหม" → ให้ตอบว่าใช่ และบอกเงื่อนไขการอัปเกรดจากหัวข้อ "เกรดสมาชิกและส่วนลด" ด้านบน
 - 📦 สั่งจำนวนมาก/ขอส่วนลดพิเศษ:
   * ถ้าลูกค้าบอกว่าจะสั่งจำนวนมาก หรือถามส่วนลดพิเศษ → ให้ดูส่วนลดสูงสุดของสินค้าตัวนั้นจากข้อมูลสินค้าด้านล่าง แล้วแจ้งให้ลูกค้าทราบ เช่น "สินค้าตัวนี้ส่วนลดสูงสุดที่ได้รับได้คือ X% ค่ะ"
   * ถ้าลูกค้ายังดูไม่พอใจหรือต้องการต่อรองเพิ่ม → ให้บอกว่า "น้องนุ่นจะรายงานให้คุณเอ็ดทราบค่ะ ขอเบอร์โทรของคุณพี่ไว้ได้ไหมคะ ทางร้านจะโทรกลับโดยเร็วที่สุดค่ะ" แล้วรอรับเบอร์โทรจากลูกค้า เมื่อได้รับเบอร์แล้วให้ตอบรับว่า "น้องนุ่นบันทึกเบอร์ไว้แล้วค่ะ คุณเอ็ดจะติดต่อกลับโดยเร็วที่สุดเลยนะคะ 😊"
@@ -15345,6 +15377,13 @@ State: {session_data.get('state','IDLE')}
 
 === คูปองของสมาชิกคนนี้ (พร้อมใช้) ===
 {coupons_text}
+
+=== เกรดสมาชิกและส่วนลด ===
+เกรดปัจจุบัน: {reseller_tier_name}
+เงื่อนไขการอัปเกรด: {_next_tier_text}
+ตารางเกรดทั้งหมด:
+{tier_info_text}
+⚠️ ราคาในรายการสินค้าด้านล่างเป็นราคาสำหรับเกรด {reseller_tier_name} แล้ว ใช้ราคานั้นเป็นราคาที่สมาชิกจะได้รับจริง
 
 === รายการสินค้าที่เกี่ยวข้อง (ข้อมูลจริงจากระบบ — ใช้ข้อมูลนี้เท่านั้น ห้ามอ้างอิงประวัติแชท) ===
 ⚠️ ไซส์และสต็อกของแต่ละสินค้า ให้ใช้ข้อมูลจากสินค้านั้นๆ เท่านั้น ห้ามนำไซส์หรือสต็อกจากสินค้าอื่นมาระบุ และห้ามเพิ่มไซส์ที่ไม่ปรากฏในข้อมูลด้านล่าง
