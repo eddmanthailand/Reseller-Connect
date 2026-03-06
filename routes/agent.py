@@ -159,7 +159,7 @@ def _agent_build_system_prompt(settings, context=None):
 - read_notes: อ่านสมุดโน้ต AI ทั้งหมด
 - query_facebook_ads: ดึงข้อมูล Meta Ads จริงจาก Marketing API (params: period="7d"/"30d"/"90d")
 - search_web: ค้นหาข้อมูลจากอินเทอร์เน็ต (params: query)
-- generate_image: สร้างภาพด้วย AI (Imagen 4) จาก prompt ที่กำหนด (params: prompt, aspect_ratio="1:1"/"16:9"/"9:16"/"4:3", negative_prompt="สิ่งที่ไม่ต้องการในภาพ (optional)")
+- generate_image: สร้างภาพด้วย AI (Imagen 4) จาก prompt ที่กำหนด (params: prompt, aspect_ratio="1:1"/"16:9"/"9:16"/"4:3")
 - chart_sales_trend: กราฟยอดขายรายวัน Line chart (params: days=7 หรือ 30)
 - chart_sales_by_brand: กราฟยอดขายแยกแบรนด์ Doughnut chart
 - chart_order_status: กราฟสัดส่วนสถานะออเดอร์ Pie chart
@@ -1307,7 +1307,6 @@ def _agent_execute_read_tool(tool, params, cursor):
         import base64 as _b64
         _prompt        = (params.get('prompt') or '').strip()
         _aspect        = (params.get('aspect_ratio') or '1:1').strip()
-        _neg_prompt    = (params.get('negative_prompt') or '').strip()
         if not _prompt:
             return {'text': '⚠️ กรุณาระบุ prompt สำหรับสร้างภาพ'}
         _aspect_map = {'1:1': 'IMAGE_ASPECT_RATIO_SQUARE', '16:9': 'IMAGE_ASPECT_RATIO_LANDSCAPE_16_9',
@@ -1330,8 +1329,6 @@ def _agent_execute_read_tool(tool, params, cursor):
                 try:
                     _gen_cfg = {'number_of_images': 1, 'output_mime_type': 'image/png',
                                 'aspect_ratio': _ar_enum}
-                    if _neg_prompt:
-                        _gen_cfg['negative_prompt'] = _neg_prompt
                     _resp = _gclient.models.generate_images(
                         model=_m,
                         prompt=_prompt,
