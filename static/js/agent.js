@@ -315,10 +315,14 @@ function _agentGenImageCard(m, i) {
 
 function _agentModelBadge(model) {
     if (!model) return '';
-    const is31Pro = model === '3.1 Pro';
-    const isPro = model === 'Pro' || is31Pro;
-    const label = is31Pro ? '✨ 3.1 Pro' : (isPro ? '✨ Pro' : '⚡ Flash');
-    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;${isPro ? 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' : 'background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;'}">${label}</span>`;
+    const styles = {
+        '3.1 Pro':   { label: '✨ 3.1 Pro',   style: 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' },
+        'Pro':       { label: '✨ Pro',        style: 'background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;' },
+        'Flash':     { label: '⚡ Flash',      style: 'background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;' },
+        'Flash Lite':{ label: '⚡ Flash Lite', style: 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;' },
+    };
+    const s = styles[model] || { label: `⚡ ${model}`, style: 'background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;' };
+    return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;${s.style}">${s.label}</span>`;
 }
 
 function _agentBubbleAI(m, i) {
@@ -382,6 +386,7 @@ function _agentSuccessCard(m, i) {
             ${m.before ? `<div style="padding:5px 8px;background:#f3f4f6;"><span style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;">ก่อน</span></div><table style="width:100%;border-collapse:collapse;">${_tableRows(m.before,'#6b7280')}</table>` : ''}
             ${m.after  ? `<div style="padding:5px 8px;background:#f0fdf4;border-top:1px solid #e5e7eb;"><span style="font-size:10px;font-weight:600;color:#16a34a;text-transform:uppercase;">หลัง</span></div><table style="width:100%;border-collapse:collapse;">${_tableRows(m.after,'#16a34a')}</table>` : ''}
         </div>` : ''}
+        ${m.model ? `<div style="margin-top:6px;">${_agentModelBadge(m.model)}</div>` : ''}
     </div>`;
 }
 
@@ -473,7 +478,7 @@ async function agentApprovePlan(idx) {
         try { data = JSON.parse(rawText2); }
         catch (_) { throw new Error(`Server error (${res.status}): ระบบส่งข้อมูลผิดรูปแบบ กรุณาลองใหม่`); }
         if (!res.ok) throw new Error(data.error || data.message || 'ดำเนินการไม่สำเร็จ');
-        _agentMessages.push({ role: 'success', text: data.message || 'สำเร็จ', before: data.before, after: data.after });
+        _agentMessages.push({ role: 'success', text: data.message || 'สำเร็จ', before: data.before, after: data.after, model: m.model });
     } catch (e) {
         m.approved = false;
         _agentMessages.push({ role: 'ai', text: '❌ ' + e.message });
