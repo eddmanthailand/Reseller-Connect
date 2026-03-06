@@ -312,8 +312,13 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         for h in (history or []):
             role = 'user' if h.get('role') == 'user' else 'model'
             txt = (h.get('text') or '').strip()
-            if txt:
-                contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
+            if not txt:
+                continue
+            # ถ้าเป็น model response ที่มีผล query ข้อมูลดิบ ให้แทนที่ด้วย placeholder
+            # เพื่อป้องกัน AI ตอบจากข้อมูลเก่าที่อาจถูกตัดทอน
+            if role == 'model' and ('📊 Query Result' in txt or '📊 ' in txt):
+                txt = '[ผลลัพธ์ query ข้อมูลจาก DB — ข้อมูลนี้อาจไม่ครบ ถ้าต้องการข้อมูลต้อง query_db ใหม่]'
+            contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
 
         current_text = f"=== หน้าปัจจุบัน: {context_page} ===\n\nคำสั่ง: {message}"
         if image_data:
@@ -1607,7 +1612,11 @@ def agent_chat():
         # ดึง AI response ล่าสุดจาก history มาใส่ใน context ตรงๆ เพื่อให้ Agent ไม่ต้องถามซ้ำ
         last_ai_texts = [h.get('text', '') for h in history if h.get('role') == 'model' and h.get('text')]
         if last_ai_texts:
-            biz_context['last_agent_response'] = last_ai_texts[-1][:2000]
+            last_txt = last_ai_texts[-1]
+            if '📊 Query Result' in last_txt or '📊 ' in last_txt:
+                biz_context['last_agent_response'] = '[ผลลัพธ์ query ข้อมูลจาก DB — ถ้าต้องการข้อมูลนี้ต้อง query_db ใหม่]'
+            else:
+                biz_context['last_agent_response'] = last_txt[:2000]
 
         # Phase 1: Flash Lite สำหรับ READ/chat (เร็ว ประหยัด)
         intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-flash-lite', history=history, context=biz_context)
