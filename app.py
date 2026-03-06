@@ -653,6 +653,201 @@ def public_tiers():
         if conn:
             conn.close()
 
+@app.route('/api/public/chat/message', methods=['POST'])
+def public_chat_message():
+    """Guest chat bot for public catalog page — no login required."""
+    import json as _json, re as _re
+    try:
+        data = request.json or {}
+        user_msg = (data.get('message') or '').strip()[:500]
+        history = data.get('history') or []   # [{role:'user'|'bot', text:'...'}]
+        if not user_msg:
+            return jsonify({'error': 'ข้อความว่างเปล่า'}), 400
+
+        from google import genai as _genai
+        from google.genai import types as _genai_types
+        _api_key = os.environ.get('GEMINI_API_KEY', '')
+        if not _api_key:
+            return jsonify({'reply': 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'}), 200
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Bot name
+        def _fetch_settings():
+            try:
+                c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                c.execute("SELECT key, value FROM settings WHERE key IN ('bot_chat_name')")
+                return {r['key']: r['value'] for r in c.fetchall()}
+            except Exception:
+                return {}
+        if 'bot_settings' not in _BOT_CACHE:
+            _BOT_CACHE['bot_settings'] = {'data': None, 'expires': 0}
+        settings = _bot_cache_get('bot_settings', 600, _fetch_settings)
+        bot_name = settings.get('bot_chat_name') or 'น้องนุ่น'
+
+        # Categories
+        def _fetch_cats():
+            try:
+                c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                c.execute("SELECT name FROM categories WHERE is_active=true ORDER BY name")
+                return [r['name'] for r in c.fetchall()]
+            except Exception:
+                return []
+        if 'categories' not in _BOT_CACHE:
+            _BOT_CACHE['categories'] = {'data': None, 'expires': 0}
+        cats_list = _bot_cache_get('categories', 1800, _fetch_cats)
+        cats_str = ', '.join(cats_list) or 'ไม่มีข้อมูล'
+
+        # Promotions
+        def _fetch_promos():
+            try:
+                c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                c.execute("""SELECT name, description, reward_type, reward_value,
+                               condition_min_spend, type, end_date
+                             FROM promotions
+                             WHERE is_active=true AND (end_date IS NULL OR end_date >= NOW())
+                             ORDER BY created_at DESC LIMIT 5""")
+                return c.fetchall()
+            except Exception:
+                return []
+        if 'promotions' not in _BOT_CACHE:
+            _BOT_CACHE['promotions'] = {'data': None, 'expires': 0}
+        promos = _bot_cache_get('promotions', 300, _fetch_promos)
+        promos_text = ''
+        for p in promos:
+            promos_text += f"  - {p['name']}: {p.get('description') or ''}"
+            if p.get('reward_type') == 'discount_percent':
+                promos_text += f" ลด{p['reward_value']}%"
+            if p.get('condition_min_spend'):
+                promos_text += f" (ซื้อครบ฿{p['condition_min_spend']:.0f})"
+            promos_text += '\n'
+
+        # Product search — Bronze (tier_id=1) pricing
+        BRONZE_TIER_ID = 1
+        keywords = _re.sub(r'[^\wก-๙\s]', ' ', user_msg).split()
+        keywords = [k for k in keywords if len(k) >= 2][:6]
+        products_text = ''
+        if keywords:
+            kw_conditions = ' OR '.join(['p.name ILIKE %s OR p.bot_description ILIKE %s' for _ in keywords])
+            kw_params = []
+            for k in keywords:
+                kw_params += [f'%{k}%', f'%{k}%']
+            kw_params.append(BRONZE_TIER_ID)
+            kw_params.append(BRONZE_TIER_ID)
+            try:
+                cursor.execute(f"""
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                           b.name as brand_name,
+                           (SELECT c2.name FROM categories c2
+                            JOIN product_categories pc2 ON pc2.category_id = c2.id
+                            WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
+                           MIN(s.price) as min_price,
+                           ROUND(MIN(s.price) * (1 - COALESCE(
+                               (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                                WHERE ptp.product_id = p.id AND ptp.tier_id = %s), 0
+                           ) / 100), 0) as member_price,
+                           COALESCE(
+                               (SELECT ptp2.discount_percent FROM product_tier_pricing ptp2
+                                WHERE ptp2.product_id = p.id AND ptp2.tier_id = %s), 0
+                           ) as discount_pct,
+                           STRING_AGG(DISTINCT s.sku_code, ' | ' ORDER BY s.sku_code) as sku_list
+                    FROM products p
+                    LEFT JOIN brands b ON b.id = p.brand_id
+                    JOIN skus s ON s.product_id = p.id AND s.is_active = true
+                    WHERE p.status = 'active' AND ({kw_conditions})
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    ORDER BY p.name
+                    LIMIT 8
+                """, kw_params)
+                prod_rows = cursor.fetchall()
+                for pr in prod_rows:
+                    brand = pr.get('brand_name') or ''
+                    price = float(pr.get('min_price') or 0)
+                    member_price = float(pr.get('member_price') or 0)
+                    disc = float(pr.get('discount_pct') or 0)
+                    bot_desc = pr.get('bot_description') or ''
+                    cat = pr.get('cat_name') or ''
+                    skus = pr.get('sku_list') or ''
+                    if disc > 0 and member_price > 0:
+                        products_text += f"  - [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
+                    else:
+                        products_text += f"  - [{brand}] {pr['name']} ราคา฿{price:.0f}"
+                    if cat:
+                        products_text += f" หมวด:{cat}"
+                    if skus:
+                        products_text += f" ไซส์:{skus}"
+                    if bot_desc:
+                        products_text += f" ({bot_desc})"
+                    if pr.get('size_chart_image_url'):
+                        products_text += " [มีตารางไซส์]"
+                    products_text += '\n'
+            except Exception as _e:
+                print(f'[GuestBot] product search error: {_e}')
+
+        cursor.close()
+        conn.close()
+
+        system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยของร้านเสื้อผ้าคุณภาพสูง ตอบภาษาไทยเสมอ สุภาพ อ่อนน้อม กระชับ ไม่เกิน 5 ประโยคต่อการตอบ
+
+ข้อมูลบริษัท:
+- บริษัท เคาท์มีอินดีไซน์ จำกัด รับผลิตเสื้อผ้าคุณภาพสูง
+- โทรศัพท์ 083-668-2211 (คุณเอ็ด)
+- เว็บไซต์: ekgshops.com
+
+กฎที่ต้องปฏิบัติ:
+- ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่ม
+- ราคาที่แสดงคือ ราคาปกติ / ราคาสมาชิก — ราคาสมาชิกจะได้รับเมื่อสมัครสมาชิกแล้ว
+- 💳 รับชำระผ่านโอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
+- 🚚 รองรับ Dropship — ไม่ต้องสต็อกสินค้าเอง
+- 🏭 รับผลิตตามสั่ง: ถ้าลูกค้าสนใจ ให้ถามทีละข้อ: 1)รูปแบบ 2)รูปตัวอย่าง 3)จำนวน 4)วันที่ต้องการ 5)เบอร์โทรติดต่อกลับ เมื่อครบให้บอก "รับข้อมูลไว้แล้วค่ะ ทีมงานจะติดต่อกลับโดยเร็วค่ะ 😊"
+- ถ้าลูกค้าถามเบอร์ติดต่อ: ส่ง 083-668-2211 ติดต่อคุณเอ็ดได้เลยค่ะ
+- ถ้าลูกค้าสนใจสั่งสินค้า ให้แนะนำให้ สมัครสมาชิกฟรี เพื่อรับราคาพิเศษและสิทธิ์ต่างๆ
+- ห้ามเดาตัวเลขขนาดไซส์ — ถ้าถามเรื่องไซส์ให้บอกว่าต้องดูตารางไซส์ของสินค้านั้นก่อน
+- ถ้าไม่มีข้อมูลสินค้าที่ถามถึง → ขอโทษและแนะนำให้ติดต่อ 083-668-2211
+
+=== หมวดหมู่สินค้า ===
+{cats_str}
+
+=== โปรโมชั่นปัจจุบัน ===
+{promos_text or 'ไม่มีโปรโมชั่นในขณะนี้'}
+
+=== สินค้าที่เกี่ยวข้องกับคำถาม ===
+{products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา — ตอบตามข้อมูลที่มีหรือแนะนำให้ติดต่อร้าน)'}
+"""
+
+        # Build conversation contents
+        _contents = []
+        for h in (history[-8:]):
+            role = 'user' if h.get('role') == 'user' else 'model'
+            _contents.append(_genai_types.Content(role=role, parts=[_genai_types.Part.from_text(text=str(h.get('text',''))[:300])]))
+        _contents.append(_genai_types.Content(role='user', parts=[_genai_types.Part.from_text(text=user_msg)]))
+
+        _client = _genai.Client(api_key=_api_key)
+        _cfg = _genai.types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            max_output_tokens=1024,
+            temperature=0.7,
+        )
+        _response = _client.models.generate_content(
+            model='gemini-2.5-flash-lite',
+            contents=_contents,
+            config=_cfg,
+        )
+        reply_text = (_response.text or '').strip()
+
+        # Safety: strip JSON leakage
+        reply_text = _re.sub(r'\{["\']?(action|tool|function|name)["\']?\s*:', '', reply_text)
+        if not reply_text:
+            reply_text = f'ขออภัยค่ะ ไม่สามารถตอบได้ในขณะนี้ กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'
+
+        return jsonify({'reply': reply_text}), 200
+
+    except Exception as e:
+        print(f'[GuestBot] error: {e}')
+        return jsonify({'reply': 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'}), 200
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login"""

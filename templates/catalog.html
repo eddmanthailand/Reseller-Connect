@@ -1176,5 +1176,261 @@
         renderProducts(products);
     })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GUEST CHAT WIDGET
+═══════════════════════════════════════════════════════════ -->
+<style>
+#gc-fab {
+    position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+    width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    box-shadow: 0 4px 20px rgba(168,85,247,.5);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .2s, box-shadow .2s;
+}
+#gc-fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(168,85,247,.7); }
+#gc-fab svg { width: 28px; height: 28px; fill: #fff; }
+#gc-badge {
+    position: absolute; top: -4px; right: -4px;
+    background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+}
+#gc-panel {
+    position: fixed; bottom: 100px; right: 20px; z-index: 9998;
+    width: 360px; max-width: calc(100vw - 24px);
+    height: 520px; max-height: calc(100vh - 120px);
+    background: #fff; border-radius: 20px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+    display: flex; flex-direction: column; overflow: hidden;
+    transform: scale(0.85) translateY(20px); opacity: 0;
+    pointer-events: none;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s;
+}
+#gc-panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: all; }
+#gc-header {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    padding: 14px 16px; display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+}
+#gc-header .gc-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255,255,255,.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+}
+#gc-header .gc-info { flex: 1; min-width: 0; }
+#gc-header .gc-name { color: #fff; font-weight: 700; font-size: 15px; }
+#gc-header .gc-status { color: rgba(255,255,255,.85); font-size: 12px; }
+#gc-header .gc-close {
+    background: rgba(255,255,255,.2); border: none; border-radius: 50%;
+    width: 30px; height: 30px; cursor: pointer; color: #fff; font-size: 18px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background .15s;
+}
+#gc-header .gc-close:hover { background: rgba(255,255,255,.35); }
+#gc-messages {
+    flex: 1; overflow-y: auto; padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    background: #f8f5ff;
+}
+.gc-msg { display: flex; gap: 8px; max-width: 85%; }
+.gc-msg.user { flex-direction: row-reverse; align-self: flex-end; }
+.gc-msg.bot { align-self: flex-start; }
+.gc-msg .gc-bubble {
+    padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5;
+    word-break: break-word; white-space: pre-wrap;
+}
+.gc-msg.bot .gc-bubble {
+    background: #fff; color: #1f2937;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.gc-msg.user .gc-bubble {
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    color: #fff; border-bottom-right-radius: 4px;
+}
+.gc-msg .gc-ava {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg,#a855f7,#ec4899);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; align-self: flex-end;
+}
+.gc-typing { display: flex; gap: 4px; padding: 6px 2px; align-items: center; }
+.gc-typing span {
+    width: 7px; height: 7px; background: #a855f7; border-radius: 50%;
+    animation: gc-bounce .9s infinite;
+}
+.gc-typing span:nth-child(2) { animation-delay: .15s; }
+.gc-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes gc-bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+#gc-footer {
+    padding: 10px 12px; background: #fff;
+    border-top: 1px solid #f0e8ff; display: flex; gap: 8px; flex-shrink: 0;
+}
+#gc-input {
+    flex: 1; border: 1.5px solid #e0d0ff; border-radius: 22px;
+    padding: 9px 14px; font-size: 14px; outline: none; resize: none;
+    font-family: inherit; line-height: 1.4; max-height: 80px; overflow-y: auto;
+    transition: border-color .15s;
+}
+#gc-input:focus { border-color: #a855f7; }
+#gc-send {
+    width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#a855f7,#ec4899); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s, opacity .15s;
+}
+#gc-send:hover { transform: scale(1.08); }
+#gc-send:disabled { opacity: .5; cursor: default; transform: none; }
+#gc-send svg { width: 18px; height: 18px; fill: #fff; }
+</style>
+
+<!-- FAB -->
+<button id="gc-fab" aria-label="แชทกับน้องนุ่น">
+    <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+    <span id="gc-badge"></span>
+</button>
+
+<!-- Panel -->
+<div id="gc-panel" role="dialog" aria-label="แชทกับน้องนุ่น">
+    <div id="gc-header">
+        <div class="gc-avatar">🤖</div>
+        <div class="gc-info">
+            <div class="gc-name" id="gc-bot-name">น้องนุ่น</div>
+            <div class="gc-status">ผู้ช่วยร้านค้า • ตอบอัตโนมัติ</div>
+        </div>
+        <button class="gc-close" id="gc-close-btn">✕</button>
+    </div>
+    <div id="gc-messages"></div>
+    <div id="gc-footer">
+        <textarea id="gc-input" rows="1" placeholder="พิมพ์คำถามได้เลยค่ะ..."></textarea>
+        <button id="gc-send" aria-label="ส่งข้อความ">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+    </div>
+</div>
+
+<script>
+(function() {
+    const LS_KEY = 'gc_history_v1';
+    const MAX_HISTORY = 20;
+    let gcHistory = [];
+    let gcOpen = false;
+    let gcTyping = false;
+    let gcUnread = 0;
+
+    const fab = document.getElementById('gc-fab');
+    const panel = document.getElementById('gc-panel');
+    const msgs = document.getElementById('gc-messages');
+    const input = document.getElementById('gc-input');
+    const sendBtn = document.getElementById('gc-send');
+    const badge = document.getElementById('gc-badge');
+    const closeBtn = document.getElementById('gc-close-btn');
+
+    // Load history
+    try { gcHistory = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { gcHistory = []; }
+
+    function saveHistory() {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(gcHistory.slice(-MAX_HISTORY))); } catch(e) {}
+    }
+
+    function renderHistory() {
+        msgs.innerHTML = '';
+        if (!gcHistory.length) {
+            appendBotMsg('สวัสดีค่ะ 😊 น้องนุ่นผู้ช่วยร้านค้า ยินดีช่วยตอบคำถามเรื่องสินค้า ราคา หรือสั่งผลิตได้เลยนะคะ');
+            return;
+        }
+        gcHistory.forEach(h => appendMsg(h.role, h.text, false));
+        scrollBottom();
+    }
+
+    function appendMsg(role, text, save = true) {
+        const wrap = document.createElement('div');
+        wrap.className = `gc-msg ${role}`;
+        if (role === 'bot') {
+            wrap.innerHTML = `<div class="gc-ava">🤖</div><div class="gc-bubble">${escHtml(text)}</div>`;
+        } else {
+            wrap.innerHTML = `<div class="gc-bubble">${escHtml(text)}</div>`;
+        }
+        msgs.appendChild(wrap);
+        scrollBottom();
+        if (save) {
+            gcHistory.push({ role, text });
+            saveHistory();
+            if (role === 'bot' && !gcOpen) {
+                gcUnread++;
+                badge.textContent = gcUnread > 9 ? '9+' : gcUnread;
+                badge.style.display = 'flex';
+            }
+        }
+    }
+
+    function appendBotMsg(text, save = true) { appendMsg('bot', text, save); }
+
+    function showTyping() {
+        const el = document.createElement('div');
+        el.className = 'gc-msg bot'; el.id = 'gc-typing-bubble';
+        el.innerHTML = `<div class="gc-ava">🤖</div><div class="gc-bubble"><div class="gc-typing"><span></span><span></span><span></span></div></div>`;
+        msgs.appendChild(el); scrollBottom();
+    }
+    function hideTyping() { document.getElementById('gc-typing-bubble')?.remove(); }
+
+    function scrollBottom() { msgs.scrollTop = msgs.scrollHeight; }
+
+    function escHtml(t) {
+        return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    }
+
+    async function sendMessage() {
+        const text = input.value.trim();
+        if (!text || gcTyping) return;
+        input.value = ''; input.style.height = '';
+        appendMsg('user', text);
+        gcTyping = true; sendBtn.disabled = true;
+        showTyping();
+        try {
+            const resp = await fetch('/api/public/chat/message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    history: gcHistory.slice(-16).map(h => ({ role: h.role, text: h.text }))
+                })
+            });
+            const data = await resp.json();
+            hideTyping();
+            appendBotMsg(data.reply || 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะคะ');
+        } catch(e) {
+            hideTyping();
+            appendBotMsg('ขออภัยค่ะ เชื่อมต่อไม่ได้ชั่วคราว กรุณาลองใหม่ค่ะ');
+        } finally {
+            gcTyping = false; sendBtn.disabled = false;
+            input.focus();
+        }
+    }
+
+    function openPanel() {
+        gcOpen = true; panel.classList.add('open');
+        gcUnread = 0; badge.style.display = 'none';
+        renderHistory();
+        setTimeout(() => input.focus(), 300);
+    }
+    function closePanel() { gcOpen = false; panel.classList.remove('open'); }
+
+    fab.addEventListener('click', () => gcOpen ? closePanel() : openPanel());
+    closeBtn.addEventListener('click', closePanel);
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+    input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && gcOpen) closePanel(); });
+})();
+</script>
 </body>
 </html>
