@@ -82,6 +82,12 @@ The system features a modern, responsive glassmorphism design with frosted glass
 ### Technical Implementations
 The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon PostgreSQL database. It employs a custom session-based authentication system with bcrypt for password hashing and role-based access control, ensuring all admin routes are protected with input validation. The frontend uses Jinja2 templates, vanilla JavaScript, CSS Grid for responsiveness, and asynchronous Fetch API requests. Product updates use a diff-based approach to maintain SKU ID integrity. The system also includes a comprehensive warehouse management system with stock transfers, adjustments, and an audit log, as well as an order shipment system with automatic splitting and label printing.
 
+**File Structure:**
+- `app.py` — main application (~17,921 lines): all routes except AI Agent
+- `routes/agent.py` — AI Agent Blueprint (~1,731 lines): all `/api/admin/agent/*` routes, registered via `app.register_blueprint(agent_bp)`
+- `routes/__init__.py` — empty package file
+- `database.py` — DB connection pool (shared by app.py and routes/agent.py)
+
 ### Feature Specifications
 - **User & Role Management:** Super Admin, Assistant Admin, Reseller roles; 4-tier reseller system with auto-upgrade logic and manual override; role-based brand access. `total_purchases` increments on `delivered` status; `cancel_order` deducts stock if `was_delivered`.
 - **Public Catalog Page:** `/catalog` — public product catalog (no login required) with brand/category/featured filters via URL params (`?brand=`, `?category=`, `?featured=1`). Admin can mark products as "โปรโมท" (is_featured) via ★ star button in product list. Sidebar link "ดูแคตตาล็อกสินค้า" in admin dashboard opens catalog in new tab.
