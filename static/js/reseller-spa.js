@@ -4413,19 +4413,26 @@ function _renderBotTypingIndicator() {
 }
 
 let _botTypingMaxTimer = null;
+let _botFastPollInterval = null;
 
 function showBotTypingIndicatorDelayed(ms) {
     clearTimeout(_botTypingTimer);
     clearTimeout(_botTypingMaxTimer);
     _botTypingTimer = setTimeout(() => {
         _renderBotTypingIndicator();
-        _botTypingMaxTimer = setTimeout(() => cancelBotTypingIndicator(), 30000);
+        _botTypingMaxTimer = setTimeout(() => cancelBotTypingIndicator(), 90000);
+        // Fast-poll every 2s while waiting for bot reply
+        if (_botFastPollInterval) clearInterval(_botFastPollInterval);
+        _botFastPollInterval = setInterval(() => {
+            if (resellerChatThreadId) loadResellerChatMessages();
+        }, 2000);
     }, ms || 800);
 }
 
 function cancelBotTypingIndicator() {
     clearTimeout(_botTypingTimer);
     clearTimeout(_botTypingMaxTimer);
+    if (_botFastPollInterval) { clearInterval(_botFastPollInterval); _botFastPollInterval = null; }
     _botTypingTimer = null;
     _botTypingMaxTimer = null;
     const el = document.getElementById('botTypingIndicator');
