@@ -15373,7 +15373,7 @@ State: {session_data.get('state','IDLE')}
         # Use Flash (full) model when size chart vision is needed — better multi-step arithmetic
         _bot_model = 'gemini-2.5-flash' if size_chart_image_bytes else 'gemini-2.5-flash-lite'
         # Fallback model chain if primary is overloaded (503)
-        _fallback_models = ['gemini-2.0-flash', 'gemini-2.5-flash'] if not size_chart_image_bytes else ['gemini-2.0-flash']
+        _fallback_models = ['gemini-2.5-flash'] if not size_chart_image_bytes else []
         _all_models = [_bot_model] + _fallback_models
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
@@ -15391,10 +15391,10 @@ State: {session_data.get('state','IDLE')}
                 break
             except Exception as _api_err:
                 _err_str = str(_api_err)
-                if '503' in _err_str or 'UNAVAILABLE' in _err_str or '429' in _err_str:
+                if any(x in _err_str for x in ('503', 'UNAVAILABLE', '429', '404', 'NOT_FOUND', 'no longer available')):
                     print(f'[BOT] Model {_try_model} unavailable, trying next...')
                     continue
-                raise  # re-raise non-503 errors immediately
+                raise  # re-raise other unexpected errors
 
         # 11. Parse JSON — handles: valid JSON, truncated JSON, plain text
         m = _re.search(r'\{[\s\S]*\}', raw)
