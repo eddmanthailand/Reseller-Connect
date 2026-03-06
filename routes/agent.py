@@ -1740,7 +1740,7 @@ def agent_chat():
                     db_field = 'bot_description'
                 if not prod_name or not new_desc:
                     return jsonify({'type': 'answer', 'message': 'กรุณาระบุ product_name และ description'}), 200
-                cursor.execute(f'SELECT id, name, description, bot_description FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
+                cursor.execute(f"SELECT id, name, description, bot_description FROM products WHERE name ILIKE %s AND status='active' LIMIT 3", (f'%{prod_name}%',))
                 prods = cursor.fetchall()
                 if not prods:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อ "{prod_name}"'}), 200
@@ -1768,7 +1768,7 @@ def agent_chat():
                     db_field = 'bot_description'
                 if not keyword or not new_desc:
                     return jsonify({'type': 'answer', 'message': 'กรุณาระบุ keyword และ description'}), 200
-                cursor.execute('SELECT id, name FROM products WHERE name ILIKE %s AND is_active=true ORDER BY name', (f'%{keyword}%',))
+                cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' ORDER BY name", (f'%{keyword}%',))
                 prods = cursor.fetchall()
                 if not prods:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าที่ชื่อมีคำว่า "{keyword}"'}), 200
@@ -1806,7 +1806,7 @@ def agent_chat():
                     return jsonify({'type': 'answer', 'message': f'field ที่รองรับ: {opts}'}), 200
                 if not prod_name or new_value is None:
                     return jsonify({'type': 'answer', 'message': 'กรุณาระบุ product_name, field และ value'}), 200
-                cursor.execute('SELECT id, name FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
+                cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' LIMIT 3", (f'%{prod_name}%',))
                 prods = cursor.fetchall()
                 if not prods:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อ "{prod_name}"'}), 200
