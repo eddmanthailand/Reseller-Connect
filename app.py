@@ -14773,8 +14773,9 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             except Exception:
                 session_data = {}
 
-        # 4b. Load customer measurements from session (24-hour TTL)
+        # 4b. Load customer measurements — session first, fallback to permanent DB storage
         from datetime import datetime as _dt, timedelta as _td
+        _ordering_for = session_data.get('ordering_for') or 'self'  # 'self' or friend name
         _meas = session_data.get('measurements') or {}
         _meas_age_ok = False
         if _meas.get('measured_at'):
@@ -14786,6 +14787,15 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         if not _meas_age_ok:
             _meas = {}
             session_data.pop('measurements', None)
+            # Fallback: load from permanent body_measurements in users table
+            cursor.execute('SELECT body_measurements FROM users WHERE id = %s', (reseller_id,))
+            _bm_row = cursor.fetchone()
+            if _bm_row and _bm_row.get('body_measurements'):
+                _bm = _bm_row['body_measurements'] if isinstance(_bm_row['body_measurements'], dict) else {}
+                if _ordering_for == 'self':
+                    _meas = _bm.get('self') or {}
+                else:
+                    _meas = (_bm.get('friends') or {}).get(_ordering_for) or {}
         customer_chest = _meas.get('chest')
         customer_waist = _meas.get('waist')
         customer_hips  = _meas.get('hips')
@@ -14794,7 +14804,23 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         if customer_chest: _meas_parts.append(f"รอบอก {customer_chest} นิ้ว")
         if customer_waist: _meas_parts.append(f"รอบเอว {customer_waist} นิ้ว")
         if customer_hips:  _meas_parts.append(f"รอบสะโพก {customer_hips} นิ้ว")
-        measurements_text = ', '.join(_meas_parts) if _meas_parts else '(ยังไม่มีข้อมูล)'
+        _ordering_for_label = 'ของตัวเอง' if _ordering_for == 'self' else f'ของเพื่อน "{_ordering_for}"'
+        measurements_text = (', '.join(_meas_parts) + f' ({_ordering_for_label})') if _meas_parts else '(ยังไม่มีข้อมูล)'
+        # Also load all known friends for prompt context
+        _all_friends_text = '(ยังไม่มี)'
+        try:
+            cursor.execute('SELECT body_measurements FROM users WHERE id = %s', (reseller_id,))
+            _bm2 = cursor.fetchone()
+            if _bm2 and _bm2.get('body_measurements'):
+                _bmd = _bm2['body_measurements'] if isinstance(_bm2['body_measurements'], dict) else {}
+                _fr = _bmd.get('friends') or {}
+                if _fr:
+                    _all_friends_text = ', '.join(
+                        f'{fn}: อก={fd.get("chest","?")} เอว={fd.get("waist","?")} สะโพก={fd.get("hips","?")}'
+                        for fn, fd in _fr.items()
+                    )
+        except Exception:
+            pass
 
         # 5. Recent conversation history (last 8 messages)
         cursor.execute('''
@@ -15256,7 +15282,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - 📏 ขนาดร่างกายสมาชิก: ดูจากหัวข้อ "ขนาดร่างกายของสมาชิก" ด้านล่าง
   * ถ้ามีข้อมูลแล้ว → ห้ามถามซ้ำ ใช้ค่านั้นได้เลย (เช่น ถ้ามีรอบเอวแล้วไม่ต้องถามรอบเอวอีก)
   * ถ้าขาดข้อมูลบางส่วน → ถามเฉพาะที่ขาด (เช่น มีเอว+สะโพกแล้ว ถามแค่รอบอก)
-  * ถ้าสมาชิกบอกขนาดใหม่ในข้อความนี้ → บันทึกลง new_state.measurements ทันที
+  * ถ้าสมาชิกบอกขนาดใหม่ในข้อความนี้ → บันทึกลง new_state.measurements ทันที **ทุกครั้ง**
+  * ⚠️ ห้ามลืม return new_state.measurements แม้จะได้รับขนาดเพียงบางส่วน (เช่น บอกแค่สะโพก)
+  * เมื่อบันทึกขนาดสำเร็จ → แจ้งสมาชิกว่า "น้องนุ่นจำไว้ในระบบแล้วค่ะ ครั้งหน้าไม่ต้องบอกซ้ำนะคะ 😊" พร้อมเสนอว่า "ถ้าคราวหน้าจะสั่งให้เพื่อน แจ้งชื่อเพื่อนมาพร้อมขนาดได้เลย น้องนุ่นจะจำไว้ให้ด้วยค่ะ"
+- 👥 การสั่งให้เพื่อน (ordering_for):
+  * ถ้าสมาชิกบอกว่าจะ "สั่งให้เพื่อน/น้อง/พี่ [ชื่อ]" → ถามชื่อถ้าไม่ได้บอก แล้วตั้ง new_state.ordering_for = ชื่อนั้น
+  * เมื่อ ordering_for ≠ "self" → ใช้ขนาดของเพื่อนคนนั้นจากหัวข้อ "ขนาดร่างกายของเพื่อน" ด้านล่าง ไม่ใช่ขนาดของสมาชิก
+  * เมื่อได้รับขนาดของเพื่อน → บันทึกใน new_state.measurements เหมือนเดิม แล้วระบุ new_state.ordering_for = ชื่อเพื่อน
+  * ถ้ากลับมาสั่งเพื่อตัวเอง → ตั้ง new_state.ordering_for = "self"
 - ถ้าสต็อกเหลือน้อย (≤3) → บอกว่า "เหลือน้อยนะคะ"
 - ถ้าไม่รู้คำตอบหรือลูกค้าต้องการคุยเรื่องพิเศษ (ต่อรอง/ปัญหาออเดอร์) → แนะนำให้กดปุ่ม "ขอคุยกับ Admin"
 - ข้อความต้องสั้นกระชับ ไม่เกิน 3 บรรทัด{size_chart_hint}
@@ -15276,8 +15309,12 @@ State: {session_data.get('state','IDLE')}
 สินค้าที่กำลังดู ID: {current_product_id or 'ไม่มี'}
 ไซส์ที่ต้องการ: {desired_size or 'ยังไม่ได้ระบุ'}
 
-=== ขนาดร่างกายของสมาชิก (บันทึกไว้ในการสนทนา — ใช้ได้เลยไม่ต้องถามซ้ำ) ===
+=== ขนาดร่างกายของสมาชิก (บันทึกถาวรในระบบ — ใช้ได้ทุกครั้ง ไม่ต้องถามซ้ำ) ===
+กำลังสั่งซื้อให้: {_ordering_for_label}
 {measurements_text}
+
+=== ขนาดร่างกายของเพื่อน (ที่เคยบันทึกไว้) ===
+{_all_friends_text}
 
 === ประวัติออเดอร์ล่าสุดของสมาชิก ===
 {orders_text}
@@ -15304,7 +15341,8 @@ State: {session_data.get('state','IDLE')}
     "state": "IDLE|BROWSING_CATEGORY|VIEWING_PRODUCT|SUGGEST_ALTERNATIVE",
     "current_product_id": null,
     "category_id": null,
-    "desired_size": null
+    "desired_size": null,
+    "ordering_for": "self"
   }},
   "add_to_cart": {{"product_id": null, "size": null, "quantity": 0}},
   "needs_admin": false
@@ -15313,8 +15351,9 @@ State: {session_data.get('state','IDLE')}
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี) — ดึง ID จากรายการสินค้าด้านบน (ตัวเลขหลัง "ID:") ห้ามถามสมาชิก
 - "add_to_cart": ใส่ข้อมูลเมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "ขอ L 2 ตัว" หรือ "สั่งเลยค่ะ" — ให้ใส่ product_id (จากรายการสินค้า), size (ชื่อไซส์เช่น "L"), quantity (จำนวน) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย
+- "new_state.ordering_for": "self" (ซื้อให้ตัวเอง) หรือ ชื่อเพื่อน เช่น "น้อง" (ซื้อให้เพื่อน) — ใส่ทุกครั้งที่ส่ง new_state
 - "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่
-- "new_state.measurements": ⚠️ ถ้าสมาชิกบอกขนาดร่างกาย (รอบอก/เอว/สะโพก) ในข้อความนี้ → ต้องอัปเดตทันที รูปแบบ: {{"chest": 32, "waist": 28, "hips": 35, "measured_at": "2026-01-01T00:00:00"}} ใส่เฉพาะค่าที่สมาชิกบอก ไม่ต้องใส่ที่ไม่รู้ ถ้าไม่มีการบอกขนาดให้ละ field นี้ทิ้งไป (ไม่ต้อง return)"""
+- "new_state.measurements": ⚠️ ถ้าสมาชิกบอกขนาดร่างกาย (รอบอก/เอว/สะโพก) ในข้อความนี้ → ต้องอัปเดตทันที **ห้ามลืมใส่** รูปแบบ: {{"chest": 32, "waist": 28, "hips": 35}} ใส่เฉพาะค่าที่บอกมา ถ้าไม่มีการบอกขนาดให้ละ field นี้ทิ้งไป"""
 
         # 11. Call Flash Lite (with Vision if size chart available)
         import os as _os
@@ -15513,14 +15552,36 @@ State: {session_data.get('state','IDLE')}
 
         # Merge measurements: preserve existing + override with new values from this turn
         _new_meas = new_state.pop('measurements', None)
+        # Extract ordering_for from new_state (keep 'self' as default)
+        _new_ordering_for = new_state.get('ordering_for') or _ordering_for or 'self'
         merged_state = {**session_data, **new_state}
+        merged_state['ordering_for'] = _new_ordering_for
         if _new_meas and isinstance(_new_meas, dict):
+            # Remove Gemini-supplied measured_at (server sets it)
+            _new_meas.pop('measured_at', None)
             # Merge individual fields so partial update doesn't wipe other measurements
             _existing_meas = merged_state.get('measurements') or {}
             _merged_meas = {**_existing_meas, **_new_meas}
-            # Always set measured_at to server time (ignore Gemini's value)
             _merged_meas['measured_at'] = _dt.utcnow().isoformat()
             merged_state['measurements'] = _merged_meas
+            # Persist to users.body_measurements (permanent, no TTL)
+            try:
+                cursor.execute('SELECT body_measurements FROM users WHERE id = %s', (reseller_id,))
+                _bm_cur = cursor.fetchone()
+                _bm_dict = {}
+                if _bm_cur and _bm_cur.get('body_measurements'):
+                    _bm_dict = _bm_cur['body_measurements'] if isinstance(_bm_cur['body_measurements'], dict) else {}
+                _save_meas = {k: v for k, v in _merged_meas.items() if k != 'measured_at'}
+                if _new_ordering_for == 'self':
+                    _bm_dict['self'] = _save_meas
+                else:
+                    if 'friends' not in _bm_dict:
+                        _bm_dict['friends'] = {}
+                    _bm_dict['friends'][_new_ordering_for] = _save_meas
+                cursor.execute('UPDATE users SET body_measurements = %s::jsonb WHERE id = %s',
+                               (_json.dumps(_bm_dict), reseller_id))
+            except Exception as _bm_err:
+                print(f'[BOT] body_measurements save error: {_bm_err}')
         elif _meas:
             # Keep existing valid measurements (already loaded above)
             merged_state['measurements'] = _meas
