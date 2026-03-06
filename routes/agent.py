@@ -429,7 +429,7 @@ def _agent_explain_workspace_result(original_question, tool_name, raw_result, se
 - ถ้ามีไฟล์/sheet ให้บอกชื่อและข้อมูลสำคัญ
 - ถ้าผู้ใช้ถามเรื่องใดเป็นพิเศษ ให้ตอบตรงจุด
 - ใช้คำลงท้าย "{particle}" ตอบกระชับเป็นกันเอง"""
-        resp = client.models.generate_content(model='gemini-2.5-flash', contents=[prompt])
+        resp = client.models.generate_content(model='gemini-2.5-flash-lite', contents=[prompt])
         return (resp.text or '').strip() or raw_result
     except Exception:
         return raw_result
@@ -457,7 +457,7 @@ def _agent_explain_code(original_question, code_result, settings):
 3. ถ้ามีปัญหาหรือสิ่งที่ควรปรับปรุง ให้แนะนำด้วย
 
 ใช้คำลงท้าย "{particle}" ตอบสั้นกระชับได้เลย"""
-        resp = client.models.generate_content(model='gemini-2.5-flash', contents=[prompt])
+        resp = client.models.generate_content(model='gemini-2.5-flash-lite', contents=[prompt])
         return resp.text.strip()
     except Exception:
         return code_result
@@ -1679,7 +1679,7 @@ def agent_chat():
                 return jsonify({'type': 'answer', 'message': explanation, 'model_used': model_used}), 200
             if tool in _workspace_tools:
                 explanation = _agent_explain_workspace_result(message, tool, result['text'], settings)
-                return jsonify({'type': 'answer', 'message': explanation, 'model_used': 'gemini-2.5-flash'}), 200
+                return jsonify({'type': 'answer', 'message': explanation, 'model_used': 'gemini-2.5-flash-lite'}), 200
             return jsonify({'type': 'answer', 'message': result['text'], 'model_used': model_used}), 200
 
         elif itype == 'plan':
