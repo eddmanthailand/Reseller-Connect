@@ -4224,9 +4224,9 @@ function buildResellerMessageHtml(msg, isMine, isRead) {
                 ${couponCardHtml}
                 ${orderCardHtml}
                 ${productCardHtml}
-                ${msg.content && !hasSpecialCard ? `<div style="font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${escapeHtmlChat(msg.content)}</div>` : ''}
-                ${hasOrderCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.7);">${escapeHtmlChat(msg.content)}</div>` : ''}
-                ${hasCouponCard && !hasOrderCard && msg.content ? `<div style="margin-top:6px;font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word;color:rgba(255,255,255,0.85);background:rgba(17,153,142,0.15);border:1px solid rgba(56,239,125,0.2);border-radius:10px;padding:8px 12px;">${escapeHtmlChat(msg.content)}</div>` : ''}
+                ${msg.content && !hasSpecialCard ? `<div style="font-size: 14px; line-height: 1.6; word-break: break-word;">${renderResellerChatContent(msg.content)}</div>` : ''}
+                ${hasOrderCard && msg.content ? `<div style="padding: 6px 12px 10px; font-size: 12px; line-height: 1.4; word-break: break-word; color: rgba(255,255,255,0.7);">${renderResellerChatContent(msg.content)}</div>` : ''}
+                ${hasCouponCard && !hasOrderCard && msg.content ? `<div style="margin-top:6px;font-size:12px;line-height:1.4;word-break:break-word;color:rgba(255,255,255,0.85);background:rgba(17,153,142,0.15);border:1px solid rgba(56,239,125,0.2);border-radius:10px;padding:8px 12px;">${renderResellerChatContent(msg.content)}</div>` : ''}
                 ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att =>
                     att.file_type && att.file_type.startsWith('image/')
                         ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer; ${hasOrderCard ? 'margin: 8px 12px;' : ''}" onclick="window.open('${att.file_url}', '_blank')">`
@@ -4352,6 +4352,18 @@ function _ccFz(code, panelMode) {
 function escapeHtmlChat(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderResellerChatContent(text) {
+    if (!text) return '';
+    let html = escapeHtmlChat(text).replace(/\n/g, '<br>');
+    const imgTag = (url) =>
+        `<a href="${url}" target="_blank" style="display:block;margin:4px 0;">` +
+        `<img src="${url}" style="max-width:100%;max-height:220px;border-radius:10px;object-fit:contain;cursor:zoom-in;border:1px solid rgba(255,255,255,0.15);" ` +
+        `onerror="this.style.display='none'"></a>`;
+    html = html.replace(/(\/storage\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
+    html = html.replace(/(https?:\/\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
+    return html;
 }
 
 function formatChatTimestamp(dateStr) {

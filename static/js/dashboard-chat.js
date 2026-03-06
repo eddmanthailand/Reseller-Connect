@@ -279,6 +279,18 @@ function formatChatDateSeparator(dateStr) {
     return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
 }
 
+function renderChatContent(text) {
+    if (!text) return '';
+    let html = escapeHtml(text).replace(/\n/g, '<br>');
+    const imgTag = (url) =>
+        `<a href="${url}" target="_blank" style="display:block;margin:4px 0;">` +
+        `<img src="${url}" style="max-width:100%;max-height:220px;border-radius:10px;object-fit:contain;cursor:zoom-in;border:1px solid rgba(255,255,255,0.15);" ` +
+        `onerror="this.style.display='none'"></a>`;
+    html = html.replace(/(\/storage\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
+    html = html.replace(/(https?:\/\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
+    return html;
+}
+
 function renderChatMessageHtml(msg, otherLastRead) {
     const isMine = Number(msg.sender_id) === Number(currentUserId);
     const isRead = isMine && msg.id <= otherLastRead;
@@ -315,7 +327,7 @@ function renderChatMessageHtml(msg, otherLastRead) {
             <div style="max-width: 70%; padding: 12px 16px; border-radius: 16px; ${isBot && !isMine ? 'background:#2d2235; border:1px solid rgba(139,92,246,0.3);' : isMine ? 'background: linear-gradient(135deg, #667eea, #764ba2);' : 'background: #3a3a3c;'} color: #fff; ${isMine ? 'border-bottom-right-radius: 4px;' : 'border-bottom-left-radius: 4px;'}">
                 ${msg.is_broadcast ? '<div style="font-size: 10px; opacity: 0.6; margin-bottom: 4px;">📢 Broadcast</div>' : ''}
                 ${productCardHtml}
-                ${msg.content ? `<div style="font-size: 14px; line-height: 1.5;">${escapeHtml(msg.content)}</div>` : ''}
+                ${msg.content ? `<div style="font-size: 14px; line-height: 1.6;">${renderChatContent(msg.content)}</div>` : ''}
                 ${msg.attachments && msg.attachments.length > 0 ? msg.attachments.map(att => 
                     att.file_type && att.file_type.startsWith('image/') 
                         ? `<img src="${att.file_url}" style="max-width: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" onclick="window.open('${att.file_url}', '_blank')">`
