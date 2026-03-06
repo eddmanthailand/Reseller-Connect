@@ -468,6 +468,55 @@ def public_categories():
         if cursor: cursor.close()
         if conn: conn.close()
 
+@app.route('/api/public/promotions', methods=['GET'])
+def public_promotions():
+    """Get active promotions and shipping promotions for public catalog (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        now = __import__('datetime').datetime.now()
+
+        cursor.execute('''
+            SELECT id, name, promo_type, reward_type, reward_value,
+                   condition_min_spend, start_date, end_date
+            FROM promotions
+            WHERE is_active = TRUE
+              AND (start_date IS NULL OR start_date <= %s)
+              AND (end_date IS NULL OR end_date >= %s)
+            ORDER BY priority DESC, created_at DESC
+        ''', (now, now))
+        promos = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            d['reward_value'] = float(d['reward_value']) if d.get('reward_value') is not None else 0
+            d['condition_min_spend'] = float(d['condition_min_spend']) if d.get('condition_min_spend') is not None else 0
+            d['type'] = 'promotion'
+            promos.append(d)
+
+        cursor.execute('''
+            SELECT id, name, promo_type, min_order_value, discount_amount, start_date, end_date
+            FROM shipping_promotions
+            WHERE is_active = TRUE
+              AND (start_date IS NULL OR start_date <= %s)
+              AND (end_date IS NULL OR end_date >= %s)
+            ORDER BY min_order_value ASC
+        ''', (now, now))
+        for r in cursor.fetchall():
+            d = dict(r)
+            d['min_order_value'] = float(d['min_order_value']) if d.get('min_order_value') is not None else 0
+            d['type'] = 'shipping'
+            promos.append(d)
+
+        return jsonify({'promotions': promos}), 200
+    except Exception as e:
+        return jsonify({'promotions': []}), 200
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/catalog')
 def public_catalog():
     """Public product catalog page - no login required"""
