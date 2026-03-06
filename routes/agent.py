@@ -95,10 +95,26 @@ def _agent_build_system_prompt(settings, context=None):
     active_resellers = ctx.get('active_resellers', '?')
 
     notes_section = ''
+    sandbox_section = ''
     notes = ctx.get('notes', [])
     if notes:
+        import json as _j
         notes_lines = '\n'.join([f"- {n['note_key']}: {n['note_value']}" for n in notes])
         notes_section = f'\n=== บันทึก (สมุดโน้ต AI) ===\n{notes_lines}'
+        for n in notes:
+            if n['note_key'] == 'google_drive_sandbox':
+                try:
+                    sb = _j.loads(n['note_value']) if isinstance(n['note_value'], str) else n['note_value']
+                    fid = sb.get('folder_id', '')
+                    fname = sb.get('folder_name', 'Sandbox')
+                    fdesc = sb.get('description', '')
+                    sandbox_section = f'''\n=== Google Drive Sandbox ===
+- Sandbox Folder: "{fname}" (ID: {fid})
+- {fdesc}
+- เมื่อทำงานกับ Google Drive/Sheets ให้ระบุ folder_id={fid} ใน query_google_drive เสมอ
+- สามารถสร้าง Sheet ใหม่ อ่าน เขียน ค้นหาไฟล์ใน sandbox ได้เต็มที่'''
+                except Exception:
+                    pass
 
     return f"""คุณชื่อ "{name}" เป็น AI ผู้ช่วยส่วนตัวของ Superadmin ระบบร้านค้า EKG Shops
 น้ำเสียง: {tone_desc} ใช้คำลงท้าย "{particle}" เสมอ
@@ -124,7 +140,7 @@ def _agent_build_system_prompt(settings, context=None):
 - แบรนด์ที่ใช้งาน: {brand_names}
 - โกดัง: {warehouse_names}
 - ระดับตัวแทน (Tier): {tier_names}
-- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{notes_section}
+- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{notes_section}{sandbox_section}
 
 === TOOLS ที่ใช้ได้ ===
 [READ — ธุรกิจ]
@@ -169,7 +185,7 @@ def _agent_build_system_prompt(settings, context=None):
 
 [READ — Google Workspace]
 - read_google_sheet: อ่านข้อมูลจาก Google Sheets (params: spreadsheet_id, range="Sheet1!A1:Z100", limit=50)
-- query_google_drive: ค้นหาไฟล์ใน Google Drive (params: query="ชื่อไฟล์หรือ keyword", limit=10)
+- query_google_drive: ค้นหาไฟล์ใน Google Drive (params: query="keyword" optional, folder_id="ID" optional สำหรับกรองเฉพาะ folder, limit=10)
 
 [WRITE — Google Workspace (ต้องขออนุมัติก่อนเสมอ)]
 - write_google_sheet: เขียน/อัปเดตข้อมูลลง Google Sheets (params: spreadsheet_id, range="Sheet1!A1", values=[["col1","col2",...]], mode="append"/"overwrite")
@@ -344,13 +360,19 @@ def _agent_read_google_sheet(params):
 def _agent_query_google_drive(params):
     """ค้นหาไฟล์ใน Google Drive ผ่าน Replit Connector"""
     import urllib.request as _ur, urllib.parse as _up, json as _j
-    query = (params.get('query') or '').strip()
-    limit = int(params.get('limit') or 10)
-    if not query:
-        return {'text': '⚠️ กรุณาระบุ query สำหรับค้นหา เช่น ชื่อไฟล์หรือ keyword'}
+    query     = (params.get('query') or '').strip()
+    folder_id = (params.get('folder_id') or '').strip()
+    limit     = int(params.get('limit') or 10)
+    if not query and not folder_id:
+        return {'text': '⚠️ กรุณาระบุ query หรือ folder_id'}
     try:
         token = _get_replit_connector_token('google-drive')
-        q_str = _up.quote(f"name contains '{query}' and trashed=false")
+        q_parts = ['trashed=false']
+        if query:
+            q_parts.append(f"name contains '{query}'")
+        if folder_id:
+            q_parts.append(f"'{folder_id}' in parents")
+        q_str = _up.quote(' and '.join(q_parts))
         url = f'https://www.googleapis.com/drive/v3/files?q={q_str}&pageSize={limit}&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
         req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
         with _ur.urlopen(req, timeout=10) as resp:
