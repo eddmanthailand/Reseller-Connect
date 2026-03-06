@@ -106,7 +106,11 @@ def _agent_build_system_prompt(settings, context=None):
 
 === ข้อมูลระบบ ===
 - Models ที่ใช้ในระบบ:
-  • Agent (ตัวคุณเอง): gemini-3.1-pro-preview
+  • Agent READ/chat (Phase 1): gemini-2.5-flash-lite (เร็ว ประหยัด)
+  • Agent WRITE tools (Phase 2 verify): gemini-3.1-pro-preview (แม่นยำ ปลอดภัย)
+  • Agent code explain: gemini-2.5-flash
+  • search_web: gemini-2.5-flash (Google Search Grounding)
+  • generate_image: Imagen 4
   • Auto-Chat Bot (ข้อความทั่วไป): gemini-2.5-flash-lite
   • Auto-Chat Bot (อ่านรูป size chart): gemini-2.5-flash
   • OCR ใบปะหน้า (Quick Order): gemini-2.5-flash
@@ -266,7 +270,7 @@ def _agent_explain_code(original_question, code_result, settings):
 3. ถ้ามีปัญหาหรือสิ่งที่ควรปรับปรุง ให้แนะนำด้วย
 
 ใช้คำลงท้าย "{particle}" ตอบสั้นกระชับได้เลย"""
-        resp = client.models.generate_content(model='gemini-3.1-pro-preview', contents=[prompt])
+        resp = client.models.generate_content(model='gemini-2.5-flash', contents=[prompt])
         return resp.text.strip()
     except Exception:
         return code_result
@@ -1185,17 +1189,21 @@ def agent_chat():
         settings = _agent_load_settings(cursor)
         biz_context = _agent_load_business_context(cursor)
 
-        # Phase 1: 3.1 Pro Preview สำหรับ routing (ฉลาด เข้าใจโค้ดได้)
-        intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-3.1-pro-preview', history=history, context=biz_context)
+        # Phase 1: Flash Lite สำหรับ READ/chat (เร็ว ประหยัด)
+        intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-flash-lite', history=history, context=biz_context)
         itype  = intent.get('type', 'chat')
-        model_used = '3.1 Pro'
+        model_used = 'Flash Lite'
 
-        # Phase 2: ถ้าเป็น WRITE tool ให้ 3.1 Pro ตรวจสอบ params ให้รอบคอบขึ้น
+        # Phase 2: ถ้าเป็น WRITE tool ให้ 3.1 Pro ตรวจสอบ params ให้รอบคอบและปลอดภัย
         if itype == 'plan':
             pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-3.1-pro-preview', history=history, context=biz_context)
             if pro_intent.get('type') in ('plan', 'clarify'):
                 intent = pro_intent
                 itype  = intent.get('type', 'plan')
+                model_used = '3.1 Pro'
+            else:
+                itype  = pro_intent.get('type', 'chat')
+                intent = pro_intent
                 model_used = '3.1 Pro'
 
         tool   = intent.get('tool', '')
