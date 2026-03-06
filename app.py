@@ -15390,7 +15390,7 @@ State: {session_data.get('state','IDLE')}
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.3 if size_chart_image_bytes else 0.7,
-            max_output_tokens=2048 if size_chart_image_bytes else 1024
+            max_output_tokens=2048
         )
         raw = ''
         for _try_model in _all_models:
@@ -15439,8 +15439,14 @@ State: {session_data.get('state','IDLE')}
                 if _plain_text_fallback:
                     print(f'[BOT] Plain text response | model={_bot_model} | text={_plain_text_fallback[:120]}')
 
+        _raw_fallback = _plain_text_fallback
+        # Safety net: if fallback looks like raw JSON (starts with { and contains "message":)
+        # it means truncation happened and extraction failed — never show raw JSON to user
+        if _raw_fallback and _raw_fallback.lstrip().startswith('{') and '"message"' in _raw_fallback:
+            print(f'[BOT] Raw JSON leaked into fallback — suppressing | model={_bot_model} | len={len(_raw_fallback)}')
+            _raw_fallback = ''
         bot_text = (parsed.get('message', '').strip()
-                    or _plain_text_fallback
+                    or _raw_fallback
                     or 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ')
         if not bot_text or bot_text == 'ขอโทษนะคะ ลองใหม่อีกครั้งได้เลยค่ะ':
             print(f'[BOT] Empty/fallback | model={_bot_model} | user_msg={user_message_text[:80]}')
