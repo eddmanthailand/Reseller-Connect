@@ -1258,7 +1258,12 @@ def _agent_execute_read_tool(tool, params, cursor):
                           'message', 'detail', 'remark', 'address', 'custom_prompt', 'comment'}
             def _fmt_cell(col, val):
                 s = str(val) if val is not None else ''
-                limit = 300 if col.lower() in _long_cols else 60
+                if col.lower() in _long_cols:
+                    total = len(s)
+                    truncated = s[:600]
+                    suffix = f'… [{total} ตัวอักษร]' if total > 600 else f' [{total} ตัวอักษร]'
+                    return truncated + suffix
+                limit = 60
                 return s[:limit] + ('…' if len(s) > limit else '')
             _header = ' | '.join(_cols)
             _sep = '-' * min(len(_header), 120)
