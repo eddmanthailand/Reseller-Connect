@@ -130,7 +130,11 @@ function _agentDoOpen() {
     _agentNotify = false;
     _agentRenderNotifyDot();
     _agentRenderChips();
-    if (_agentMessages.length === 0) _agentShowWelcome();
+    if (_agentMessages.length === 0) {
+        _agentShowWelcome();
+    } else {
+        _agentRenderMessages();
+    }
     if (!_agentBriefed) { _agentBriefed = true; _agentLoadBriefing(); }
     _agentScrollBottom();
     setTimeout(() => document.getElementById('agentInput')?.focus(), 200);
