@@ -343,7 +343,7 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
 
         # ลอง parse JSON จาก response — รองรับทั้ง raw JSON, code block, และ mixed text+JSON
         def _extract_json(text):
-            import re as _re
+            import re as _re, ast as _ast
             # 1. ทั้ง response เป็น JSON โดยตรง
             try:
                 return _json.loads(text)
@@ -363,17 +363,33 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
                     return _json.loads(m2.group(0))
                 except _json.JSONDecodeError:
                     pass
-            # 4. Heuristic: Gemini ส่ง JSON ที่มี unescaped quotes ใน message (ภาษาไทยที่มี " " ในข้อความ)
+            # 4. Python dict format (single quotes) — Gemini Flash Lite บางครั้งตอบเป็น {'key': 'val'}
+            m3 = _re.search(r"(\{[^{}]*'type'\s*:\s*'[^']*'.*?\})", text, _re.DOTALL)
+            if m3:
+                try:
+                    result = _ast.literal_eval(m3.group(1))
+                    if isinstance(result, dict) and 'type' in result:
+                        return result
+                except Exception:
+                    pass
+            # ลอง literal_eval ทั้ง text ถ้ามี {...} ครอบ
+            stripped = text.strip()
+            if stripped.startswith('{') and stripped.endswith('}'):
+                try:
+                    result = _ast.literal_eval(stripped)
+                    if isinstance(result, dict) and 'type' in result:
+                        return result
+                except Exception:
+                    pass
+            # 5. Heuristic: Gemini ส่ง JSON ที่มี unescaped quotes ใน message (ภาษาไทยที่มี " " ในข้อความ)
             #    ดึง type ก่อน แล้วค่อย reconstruct message จาก raw text
-            type_m = _re.search(r'"type"\s*:\s*"(\w+)"', text)
+            type_m = _re.search(r'["\']type["\'\s]*:\s*["\'](\w+)["\']', text)
             if type_m:
                 extracted_type = type_m.group(1)
-                # ดึง message: หาตำแหน่งหลัง "message": " แล้วเอาทุกอย่างจนถึง "} หรือ end
-                msg_pos = _re.search(r'"message"\s*:\s*"', text)
+                msg_pos = _re.search(r'["\']message["\'\s]*:\s*["\']', text)
                 if msg_pos:
                     raw_after = text[msg_pos.end():]
-                    # ลบ trailing "} หรือ " จากท้าย
-                    raw_msg = _re.sub(r'"\s*\}?\s*$', '', raw_after).strip()
+                    raw_msg = _re.sub(r'["\'\s]*\}?\s*$', '', raw_after).strip()
                     return {'type': extracted_type, 'message': raw_msg}
                 return {'type': extracted_type, 'message': text}
             return None
