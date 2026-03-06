@@ -409,14 +409,13 @@ function _esc(s) {
 
 function _renderWithImages(text) {
     let html = _esc(text).replace(/\n/g, '<br>');
-    html = html.replace(/(\/storage\/[^\s&lt;&gt;"]+\.(?:jpg|jpeg|png|gif|webp))/gi,
-        '<a href="$1" target="_blank" style="display:inline-block;margin:3px 2px;">' +
-        '<img src="$1" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;vertical-align:middle;cursor:zoom-in;border:1px solid rgba(0,0,0,0.1);" ' +
-        'onerror="this.parentNode.innerHTML=\'<span style=&quot;font-size:11px;color:#9ca3af;&quot;>[โหลดรูปไม่ได้]\' + this.parentNode.href + \'</span>\'"></a>');
-    html = html.replace(/(https?:\/\/[^\s&lt;&gt;"]+\.(?:jpg|jpeg|png|gif|webp))/gi,
-        '<a href="$1" target="_blank" style="display:inline-block;margin:3px 2px;">' +
-        '<img src="$1" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;vertical-align:middle;cursor:zoom-in;border:1px solid rgba(0,0,0,0.1);" ' +
-        'onerror="this.parentNode.innerHTML=\'<span style=&quot;font-size:11px;color:#9ca3af;&quot;>[โหลดรูปไม่ได้]\' + this.parentNode.href + \'</span>\'"></a>');
+    const imgTag = (url) =>
+        `<a href="${url}" target="_blank" style="display:inline-block;margin:4px 2px;">` +
+        `<img src="${url}" style="max-width:200px;max-height:200px;border-radius:8px;object-fit:cover;` +
+        `vertical-align:middle;cursor:zoom-in;border:1px solid rgba(0,0,0,0.1);" ` +
+        `onerror="this.style.display='none'"></a>`;
+    html = html.replace(/(\/storage\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
+    html = html.replace(/(https?:\/\/[^<>\s"']+\.(?:jpg|jpeg|png|gif|webp))/gi, (m) => imgTag(m));
     return html;
 }
 
