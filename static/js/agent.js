@@ -435,7 +435,14 @@ async function agentSend() {
         const history = _agentMessages.slice(0, -1)
             .filter(m => m.role === 'user' || m.role === 'ai')
             .slice(-20)
-            .map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text || '' }))
+            .map(m => {
+                const role = m.role === 'user' ? 'user' : 'model';
+                let text = m.text || '';
+                if (role === 'model' && text.includes('📊')) {
+                    text = '[ผลลัพธ์ query จาก DB ก่อนหน้า — ถ้าต้องการข้อมูลต้อง query_db ใหม่]';
+                }
+                return { role, text };
+            })
             .filter(m => m.text);
         const body = { message: text, context_page: _agentCurrentPage(), history };
         if (sentImage) { body.image_data = sentImage; body.image_mime = sentMime; }
