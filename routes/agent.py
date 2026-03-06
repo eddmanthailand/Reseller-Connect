@@ -267,26 +267,39 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
 
         # ลอง parse JSON จาก response — รองรับทั้ง raw JSON, code block, และ mixed text+JSON
         def _extract_json(text):
+            import re as _re
             # 1. ทั้ง response เป็น JSON โดยตรง
             try:
                 return _json.loads(text)
             except _json.JSONDecodeError:
                 pass
             # 2. หา ```json ... ``` block ที่อยู่ตรงไหนก็ได้ใน text
-            import re as _re
             m = _re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, _re.DOTALL)
             if m:
                 try:
                     return _json.loads(m.group(1))
                 except _json.JSONDecodeError:
                     pass
-            # 3. หา JSON object {...} ที่อยู่ใน text
+            # 3. หา JSON object {...} ที่อยู่ใน text (เฉพาะ simple value ไม่มี nested obj)
             m2 = _re.search(r'\{[^{}]*"type"\s*:\s*"[^"]*"[^{}]*\}', text, _re.DOTALL)
             if m2:
                 try:
                     return _json.loads(m2.group(0))
                 except _json.JSONDecodeError:
                     pass
+            # 4. Heuristic: Gemini ส่ง JSON ที่มี unescaped quotes ใน message (ภาษาไทยที่มี " " ในข้อความ)
+            #    ดึง type ก่อน แล้วค่อย reconstruct message จาก raw text
+            type_m = _re.search(r'"type"\s*:\s*"(\w+)"', text)
+            if type_m:
+                extracted_type = type_m.group(1)
+                # ดึง message: หาตำแหน่งหลัง "message": " แล้วเอาทุกอย่างจนถึง "} หรือ end
+                msg_pos = _re.search(r'"message"\s*:\s*"', text)
+                if msg_pos:
+                    raw_after = text[msg_pos.end():]
+                    # ลบ trailing "} หรือ " จากท้าย
+                    raw_msg = _re.sub(r'"\s*\}?\s*$', '', raw_after).strip()
+                    return {'type': extracted_type, 'message': raw_msg}
+                return {'type': extracted_type, 'message': text}
             return None
 
         parsed = _extract_json(raw)

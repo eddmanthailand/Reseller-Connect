@@ -456,7 +456,18 @@ async function agentSend() {
         } else if (data.type === 'plan') {
             _agentMessages.push({ role: 'plan', text: data.message, plan: data.plan, log_id: data.log_id, tool: data.tool, params: data.params, approved: false, model: data.model_used });
         } else {
-            _agentMessages.push({ role: 'ai', text: data.message, model: data.model_used });
+            let msgText = data.message || '';
+            // Safety: ถ้า message เป็น raw JSON string ที่หลุดมา ให้ดึงเฉพาะ message field
+            if (msgText.trim().startsWith('{') && msgText.includes('"message"')) {
+                try {
+                    const inner = JSON.parse(msgText);
+                    if (inner && inner.message) msgText = inner.message;
+                } catch (_) {
+                    const m = msgText.match(/"message"\s*:\s*"([\s\S]*?)"(?:\s*[,}])/);
+                    if (m && m[1]) msgText = m[1];
+                }
+            }
+            _agentMessages.push({ role: 'ai', text: msgText, model: data.model_used });
         }
     } catch (e) {
         _agentMessages.push({ role: 'ai', text: '❌ ' + e.message });
