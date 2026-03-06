@@ -14923,6 +14923,20 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     for _i in range(len(_msg_c) - _nl + 1):
                         _msg_ngs.add(_msg_c[_i:_i + _nl])
                 _hits_current = sum(1 for ng in _msg_ngs if ng in _cp_name)
+                # Generic-hit guard: if every N-gram that hit the current product also
+                # matches many other products (>3), it's too generic → treat as no specific hit
+                if _hits_current > 0:
+                    _has_specific = False
+                    for _hng in [ng for ng in _msg_ngs if ng in _cp_name]:
+                        cursor.execute(
+                            "SELECT COUNT(*) as cnt FROM products WHERE status='active' AND name ILIKE %s",
+                            (f'%{_hng}%',)
+                        )
+                        if (_safe_int((cursor.fetchone() or {}).get('cnt')) or 0) <= 3:
+                            _has_specific = True
+                            break
+                    if not _has_specific:
+                        _hits_current = 0
                 if _hits_current == 0 and _msg_ngs:
                     for _ng in sorted(_msg_ngs, key=len, reverse=True)[:8]:
                         cursor.execute(
