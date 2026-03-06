@@ -653,6 +653,32 @@ def public_tiers():
         if conn:
             conn.close()
 
+@app.route('/api/admin/guest-chat-stats', methods=['GET'])
+@login_required
+def admin_guest_chat_stats():
+    """Return top guest questions from catalog chat."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        limit = min(int(request.args.get('limit', 100)), 500)
+        cursor.execute("""
+            SELECT question, count, first_seen, last_seen
+            FROM guest_chat_log
+            ORDER BY count DESC, last_seen DESC
+            LIMIT %s
+        """, (limit,))
+        rows = cursor.fetchall()
+        total = sum(r['count'] for r in rows)
+        return jsonify({'rows': rows, 'total_questions': len(rows), 'total_messages': total}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/public/chat/message', methods=['POST'])
 def public_chat_message():
     """Guest chat bot for public catalog page — no login required."""
@@ -672,6 +698,23 @@ def public_chat_message():
 
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Log question (dedup via pg_trgm similarity ≥ 0.6)
+        try:
+            _norm = _re.sub(r'[^\wก-๙]', ' ', user_msg.lower()).strip()[:200]
+            cursor.execute("""
+                UPDATE guest_chat_log SET count=count+1, last_seen=NOW()
+                WHERE id=(SELECT id FROM guest_chat_log WHERE similarity(normalized_q,%s)>=0.6
+                          ORDER BY similarity(normalized_q,%s) DESC LIMIT 1)
+            """, (_norm, _norm))
+            if cursor.rowcount == 0:
+                cursor.execute("INSERT INTO guest_chat_log(question,normalized_q) VALUES(%s,%s)",
+                               (user_msg[:500], _norm))
+            conn.commit()
+        except Exception as _le:
+            print(f'[GuestBot] log error: {_le}')
+            try: conn.rollback()
+            except Exception: pass
 
         # Bot name
         def _fetch_settings():

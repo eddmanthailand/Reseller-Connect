@@ -1444,3 +1444,54 @@ async function confirmFailedDelivery() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', init);
 
+// ── Guest Chat Stats ──────────────────────────────────────────────────────
+let _guestStatsData = [];
+
+async function openGuestChatStats() {
+    document.getElementById('guestChatStatsModal').style.display = 'block';
+    document.getElementById('guestStatsSearch').value = '';
+    const body = document.getElementById('guestChatStatsBody');
+    body.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:40px;">กำลังโหลด...</div>';
+    try {
+        const res = await fetch('/api/admin/guest-chat-stats', { credentials: 'include' });
+        const data = await res.json();
+        _guestStatsData = data.rows || [];
+        document.getElementById('guestChatStatsSummary').textContent =
+            `${data.total_questions || 0} คำถาม • ${data.total_messages || 0} ครั้งทั้งหมด`;
+        renderGuestStats(_guestStatsData);
+    } catch(e) {
+        body.innerHTML = '<div style="text-align:center;color:#f87171;padding:40px;">โหลดข้อมูลไม่สำเร็จ</div>';
+    }
+}
+
+function closeGuestChatStats() {
+    document.getElementById('guestChatStatsModal').style.display = 'none';
+}
+
+function filterGuestStats(q) {
+    const kw = q.trim().toLowerCase();
+    renderGuestStats(kw ? _guestStatsData.filter(r => r.question.toLowerCase().includes(kw)) : _guestStatsData);
+}
+
+function renderGuestStats(rows) {
+    const body = document.getElementById('guestChatStatsBody');
+    if (!rows.length) { body.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:40px;">ไม่พบข้อมูล</div>'; return; }
+    const fmtDate = dt => dt ? new Date(dt).toLocaleDateString('th-TH', {day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+    const maxCount = rows[0]?.count || 1;
+    body.innerHTML = rows.map((r, i) => `
+        <div style="padding:10px 12px;border-radius:10px;margin-bottom:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+                <span style="font-size:11px;font-weight:700;min-width:22px;color:${i<3?'#f59e0b':'rgba(255,255,255,0.4)'};">#${i+1}</span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;color:#fff;line-height:1.4;word-break:break-word;">${r.question.replace(/</g,'&lt;')}</div>
+                    <div style="margin-top:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <div style="height:4px;width:${Math.round((r.count/maxCount)*80)+20}px;max-width:160px;background:linear-gradient(90deg,#a855f7,#ec4899);border-radius:2px;flex-shrink:0;"></div>
+                        <span style="font-size:12px;font-weight:700;color:#a855f7;">${r.count} ครั้ง</span>
+                        <span style="font-size:11px;color:rgba(255,255,255,0.35);">ล่าสุด ${fmtDate(r.last_seen)}</span>
+                    </div>
+                </div>
+            </div>
+        </div>`).join('');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
