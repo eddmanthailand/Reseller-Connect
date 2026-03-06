@@ -15336,7 +15336,7 @@ State: {session_data.get('state','IDLE')}
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.3 if size_chart_image_bytes else 0.7,
-            max_output_tokens=2048 if size_chart_image_bytes else 600
+            max_output_tokens=2048 if size_chart_image_bytes else 1024
         )
         raw = ''
         for _try_model in _all_models:
