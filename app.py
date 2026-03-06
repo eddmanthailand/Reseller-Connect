@@ -382,7 +382,8 @@ def public_products():
                 (SELECT MIN(s.price) FROM skus s WHERE s.product_id = p.id) as min_price,
                 (SELECT MAX(s.price) FROM skus s WHERE s.product_id = p.id) as max_price,
                 COALESCE((SELECT SUM(s.stock) FROM skus s WHERE s.product_id = p.id), 0) as total_stock,
-                (SELECT STRING_AGG(c.name, ', ') FROM product_categories pc JOIN categories c ON c.id = pc.category_id WHERE pc.product_id = p.id) as category_names
+                (SELECT STRING_AGG(c.name, \', \') FROM product_categories pc JOIN categories c ON c.id = pc.category_id WHERE pc.product_id = p.id) as category_names,
+                (SELECT MAX(ptp.discount_percent) FROM product_tier_pricing ptp WHERE ptp.product_id = p.id) as max_discount_percent
             FROM products p
             LEFT JOIN brands b ON p.brand_id = b.id
             WHERE p.status = \'active\'
@@ -408,6 +409,7 @@ def public_products():
             d['min_price'] = float(d['min_price']) if d.get('min_price') is not None else 0
             d['max_price'] = float(d['max_price']) if d.get('max_price') is not None else 0
             d['total_stock'] = int(d['total_stock']) if d.get('total_stock') is not None else 0
+            d['max_discount_percent'] = float(d['max_discount_percent']) if d.get('max_discount_percent') is not None else 0
             products.append(d)
 
         return jsonify({'products': products}), 200

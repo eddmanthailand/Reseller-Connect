@@ -3399,6 +3399,60 @@ async function loadFacebookAdsPage() {
     loadFbAdsPixelSettings();
     loadFacebookAdsStats();
     loadMetaApiStatus();
+    loadAdLandingUrls();
+}
+
+async function loadAdLandingUrls() {
+    const container = document.getElementById('adLandingUrls');
+    if (!container) return;
+    const base = window.location.origin;
+
+    try {
+        const [brandsRes, catsRes] = await Promise.all([
+            fetch('/api/public/brands').then(r => r.json()).catch(() => ({ brands: [] })),
+            fetch('/api/public/categories').then(r => r.json()).catch(() => ({ categories: [] }))
+        ]);
+
+        const urlRow = (label, url, desc) => `
+            <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); margin-bottom: 3px;">${label}</div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 4px;">${desc}</div>
+                    <code style="font-size: 12px; color: #a5f3fc; word-break: break-all;">${url}</code>
+                </div>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <button onclick="copyAdUrl('${url.replace(/'/g, "\\'")}', this)" style="background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); color: #a5b4fc; font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;">Copy</button>
+                    <a href="${url}" target="_blank" style="background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; font-size: 11px; padding: 5px 10px; border-radius: 6px; text-decoration: none; white-space: nowrap;">ดู ↗</a>
+                </div>
+            </div>`;
+
+        let html = urlRow('ทุกสินค้า (หน้าหลัก)', `${base}/catalog`, 'แสดงสินค้าทั้งหมด เหมาะกับโฆษณา Awareness');
+        html += urlRow('เฉพาะสินค้าโปรโมท', `${base}/catalog?featured=1`, 'แสดงเฉพาะสินค้าที่ติด ★ ไว้ เหมาะกับ Campaign เฉพาะกิจ');
+
+        (brandsRes.brands || []).forEach(b => {
+            html += urlRow(`แบรนด์: ${b.name}`, `${base}/catalog?brand=${b.id}`, `แสดงเฉพาะสินค้าแบรนด์ ${b.name}`);
+        });
+        (catsRes.categories || []).forEach(c => {
+            html += urlRow(`หมวด: ${c.name}`, `${base}/catalog?category=${c.id}`, `แสดงเฉพาะหมวด ${c.name}`);
+        });
+        (brandsRes.brands || []).forEach(b => {
+            html += urlRow(`แบรนด์ ${b.name} + โปรโมท`, `${base}/catalog?brand=${b.id}&featured=1`, `สินค้าโปรโมทของแบรนด์ ${b.name} เท่านั้น`);
+        });
+
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="opacity:0.5;font-size:13px;">โหลด URL ไม่สำเร็จ</div>`;
+    }
+}
+
+function copyAdUrl(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        btn.style.background = 'rgba(16,185,129,0.25)';
+        btn.style.color = '#6ee7b7';
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; }, 2000);
+    });
 }
 
 /* ─── Meta Marketing API ─── */

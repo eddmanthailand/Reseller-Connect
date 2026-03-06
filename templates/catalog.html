@@ -87,21 +87,27 @@
             background: white; border-radius: var(--radius); overflow: hidden;
             box-shadow: var(--card-shadow); transition: all 0.22s; position: relative;
             border: 1.5px solid transparent;
+            display: flex; flex-direction: column;
         }
         .product-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); border-color: rgba(124,58,237,0.2); }
-        .card-img-wrap { position: relative; aspect-ratio: 1; overflow: hidden; background: #f3f4f6; }
+        .card-img-wrap { position: relative; aspect-ratio: 1; overflow: hidden; background: #f3f4f6; flex-shrink: 0; }
         .card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
         .product-card:hover .card-img { transform: scale(1.04); }
         .card-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 48px; background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
         .badge-featured { position: absolute; top: 8px; left: 8px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 100px; display: flex; align-items: center; gap: 3px; box-shadow: 0 2px 6px rgba(245,158,11,0.4); }
         .badge-oos { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.55); color: white; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 100px; }
-        .card-body { padding: 10px 12px 12px; }
-        .card-brand { font-size: 10px; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-        .card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .card-price { font-size: 15px; font-weight: 700; color: var(--accent); }
+        .card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; flex: 1; }
+        .card-brand { font-size: 10px; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; flex-shrink: 0; }
+        .card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; flex-shrink: 0; }
+        .card-pricing { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; margin-bottom: 8px; }
+        .card-retail { font-size: 11px; color: var(--text-muted); text-decoration: line-through; }
+        .card-member-price { display: flex; align-items: baseline; gap: 4px; }
+        .card-price { font-size: 16px; font-weight: 700; color: var(--accent); }
+        .card-discount-badge { background: linear-gradient(135deg, #dc2626, #ef4444); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .card-price-label { font-size: 10px; color: var(--text-muted); font-weight: 400; }
-        .card-footer { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-        .card-cta { display: block; text-align: center; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 12px; font-weight: 600; padding: 7px; border-radius: 8px; text-decoration: none; transition: opacity 0.2s; }
+        .card-member-label { font-size: 10px; color: var(--green); font-weight: 600; }
+        .card-footer { padding-top: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+        .card-cta { display: block; text-align: center; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 12px; font-weight: 600; padding: 8px; border-radius: 8px; text-decoration: none; transition: opacity 0.2s; }
         .card-cta:hover { opacity: 0.9; }
         .card-cta.oos { background: #e5e7eb; color: var(--text-muted); cursor: default; }
 
@@ -287,12 +293,37 @@
 
         grid.innerHTML = products.map(p => {
             const inStock = p.total_stock > 0;
-            const priceHtml = p.min_price > 0
-                ? `<div class="card-price"><span class="card-price-label">ราคาเริ่มต้น </span>฿${p.min_price.toLocaleString('th-TH')}</div>`
-                : `<div class="card-price" style="color:var(--text-muted);font-size:12px;">ติดต่อสอบถามราคา</div>`;
             const imgHtml = p.image_url
                 ? `<img class="card-img" src="${escHtml(p.image_url)}" alt="${escHtml(p.name)}" loading="lazy">`
                 : `<div class="card-img-placeholder">👗</div>`;
+
+            let priceHtml = '';
+            if (p.min_price > 0) {
+                const disc = p.max_discount_percent || 0;
+                if (disc > 0) {
+                    const memberPrice = Math.round(p.min_price * (1 - disc / 100));
+                    priceHtml = `
+                        <div class="card-pricing">
+                            <div class="card-retail">ราคาปกติ ฿${p.min_price.toLocaleString('th-TH')}</div>
+                            <div class="card-member-price">
+                                <span class="card-price">฿${memberPrice.toLocaleString('th-TH')}</span>
+                                <span class="card-discount-badge">ลด ${disc}%</span>
+                            </div>
+                            <div class="card-member-label">✓ ราคาสมาชิกสูงสุด</div>
+                        </div>`;
+                } else {
+                    priceHtml = `
+                        <div class="card-pricing">
+                            <div class="card-member-price">
+                                <span class="card-price-label">ราคาเริ่มต้น </span>
+                                <span class="card-price">฿${p.min_price.toLocaleString('th-TH')}</span>
+                            </div>
+                        </div>`;
+                }
+            } else {
+                priceHtml = `<div class="card-pricing"><div style="font-size:12px;color:var(--text-muted);">ติดต่อสอบถามราคา</div></div>`;
+            }
+
             return `
             <div class="product-card">
                 <div class="card-img-wrap">
