@@ -103,7 +103,14 @@ function _agentFitPanel() {
     const panel = document.getElementById('agentPanel');
     if (!panel) return;
     const vw = window.innerWidth;
-    if (vw <= 480) return;
+    if (vw <= 480) {
+        panel.style.width    = '';
+        panel.style.maxWidth = '';
+        panel.style.right    = '';
+        panel.style.left     = '';
+        panel.style.bottom   = '';
+        return;
+    }
     const sidebar = document.getElementById('sidebar');
     const sidebarRight = sidebar ? sidebar.getBoundingClientRect().right : 0;
     const available = vw - sidebarRight - 48;
@@ -807,6 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(() => {});
 
     window.addEventListener('resize', () => { if (_agentOpen) _agentFitPanel(); });
+    window.addEventListener('orientationchange', () => { setTimeout(() => { if (_agentOpen) _agentFitPanel(); }, 150); });
 
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
