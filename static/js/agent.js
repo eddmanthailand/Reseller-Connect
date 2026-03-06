@@ -381,8 +381,11 @@ async function agentSend() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             credentials: 'include', body: JSON.stringify(body)
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+        const rawText = await res.text();
+        let data;
+        try { data = JSON.parse(rawText); }
+        catch (_) { throw new Error(`Server error (${res.status}): ระบบส่งข้อมูลผิดรูปแบบ กรุณาลองใหม่`); }
+        if (!res.ok) throw new Error(data.error || data.message || `เกิดข้อผิดพลาด (${res.status})`);
 
         if (data.type === 'chart') {
             _agentMessages.push({ role: 'chart', text: data.message, chartConfig: data.chart, model: data.model_used });
@@ -414,8 +417,11 @@ async function agentApprovePlan(idx) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             credentials: 'include', body: JSON.stringify({ log_id: m.log_id, tool: m.tool, params: m.params })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'ดำเนินการไม่สำเร็จ');
+        const rawText2 = await res.text();
+        let data;
+        try { data = JSON.parse(rawText2); }
+        catch (_) { throw new Error(`Server error (${res.status}): ระบบส่งข้อมูลผิดรูปแบบ กรุณาลองใหม่`); }
+        if (!res.ok) throw new Error(data.error || data.message || 'ดำเนินการไม่สำเร็จ');
         _agentMessages.push({ role: 'success', text: data.message || 'สำเร็จ', before: data.before, after: data.after });
     } catch (e) {
         m.approved = false;
