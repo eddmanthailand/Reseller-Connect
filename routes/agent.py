@@ -258,13 +258,18 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
 
         config = genai_types.GenerateContentConfig(system_instruction=system_prompt)
         resp = client.models.generate_content(model=model, contents=contents, config=config)
-        raw = resp.text.strip()
+        raw = (resp.text or '').strip()
+        if not raw:
+            return {'type': 'chat', 'message': 'AI ไม่ได้ตอบกลับ (empty response) กรุณาลองใหม่อีกครั้ง'}
         if raw.startswith('```'):
             raw = raw.split('```')[1]
             if raw.startswith('json'):
                 raw = raw[4:]
             raw = raw.strip()
-        result = _json.loads(raw)
+        try:
+            result = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return {'type': 'chat', 'message': raw}
         result['_model_used'] = model
         return result
     except Exception as e:
