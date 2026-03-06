@@ -197,8 +197,9 @@ def _agent_build_system_prompt(settings, context=None):
 - send_chat_message: ส่งข้อความหาตัวแทน (params: reseller_name, message)
 - save_note: บันทึกข้อมูลสำคัญลงสมุดโน้ต AI (params: key, value) — จำได้ข้ามเซสชัน
 - toggle_facebook_ad: เปลี่ยนสถานะ Campaign/AdSet/Ad ใน Meta Ads (params: ad_id, status="ACTIVE"/"PAUSED"/"ARCHIVED") — ส่ง POST ไป Meta Marketing API จริง
-- update_product_description: แก้ไข description สินค้าชิ้นเดียว (params: product_name, description)
-- bulk_update_product_description: อัปเดต description สินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า เช่น กระโปรง", description="คำอธิบาย") — ค้นหาสินค้าทุกชิ้นที่ชื่อมีคำนั้น แล้วอัปเดตพร้อมกัน
+- update_product_description: แก้ไขคำอธิบายสินค้าชิ้นเดียว (params: product_name, description, field="bot_description"|"description") — field="bot_description" คือสำหรับบอทแชทน้องนุ่น (default), field="description" คือหน้าสาธารณะ
+- bulk_update_product_description: อัปเดตคำอธิบายสินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", description="คำอธิบาย", field="bot_description"|"description") — default field="bot_description"
+- update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
 READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
@@ -1611,9 +1612,12 @@ def agent_chat():
             elif tool == 'update_product_description':
                 prod_name = (params.get('product_name') or '').strip()
                 new_desc  = (params.get('description') or '').strip()
+                db_field  = params.get('field', 'bot_description')
+                if db_field not in ('description', 'bot_description'):
+                    db_field = 'bot_description'
                 if not prod_name or not new_desc:
                     return jsonify({'type': 'answer', 'message': 'กรุณาระบุ product_name และ description'}), 200
-                cursor.execute('SELECT id, name, description FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
+                cursor.execute(f'SELECT id, name, description, bot_description FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
                 prods = cursor.fetchall()
                 if not prods:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อ "{prod_name}"'}), 200
@@ -1621,37 +1625,85 @@ def agent_chat():
                     opts = ', '.join([p['name'] for p in prods])
                     return jsonify({'type': 'answer', 'message': f'พบหลายสินค้า: {opts} — ระบุให้ชัดขึ้น'}), 200
                 prod = prods[0]
+                field_label = 'คำอธิบายบอท (bot_description)' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ (description)'
                 plan = {
-                    'before': {'สินค้า': prod['name'], 'description เดิม': (prod['description'] or '')[:100] or '(ว่าง)'},
-                    'after':  {'สินค้า': prod['name'], 'description ใหม่': new_desc[:100]}
+                    'before': {'สินค้า': prod['name'], f'{field_label} เดิม': (prod[db_field] or '')[:100] or '(ว่าง)'},
+                    'after':  {'สินค้า': prod['name'], f'{field_label} ใหม่': new_desc[:100]}
                 }
                 log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
-                                          params, {'product_id': prod['id'], 'old_desc': prod['description']})
+                                          params, {'product_id': prod['id'], 'old_desc': prod[db_field], 'db_field': db_field})
                 return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
-                                'params': {**params, 'product_id': prod['id']},
-                                'message': intent.get('message', f"จะอัปเดต description ของ **{prod['name']}**"),
+                                'params': {**params, 'product_id': prod['id'], 'db_field': db_field},
+                                'message': intent.get('message', f"จะอัปเดต {field_label} ของ **{prod['name']}**"),
                                 'model_used': model_used}), 200
 
             elif tool == 'bulk_update_product_description':
                 keyword  = (params.get('keyword') or '').strip()
                 new_desc = (params.get('description') or '').strip()
+                db_field = params.get('field', 'bot_description')
+                if db_field not in ('description', 'bot_description'):
+                    db_field = 'bot_description'
                 if not keyword or not new_desc:
                     return jsonify({'type': 'answer', 'message': 'กรุณาระบุ keyword และ description'}), 200
-                cursor.execute('SELECT id, name, description FROM products WHERE name ILIKE %s AND is_active=true ORDER BY name', (f'%{keyword}%',))
+                cursor.execute('SELECT id, name FROM products WHERE name ILIKE %s AND is_active=true ORDER BY name', (f'%{keyword}%',))
                 prods = cursor.fetchall()
                 if not prods:
                     return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าที่ชื่อมีคำว่า "{keyword}"'}), 200
                 prod_ids = [p['id'] for p in prods]
                 prod_names = [p['name'] for p in prods]
+                field_label = 'คำอธิบายบอท' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ'
                 plan = {
                     'before': {'สินค้าที่จะอัปเดต': f'{len(prods)} รายการ: ' + ', '.join(prod_names[:5]) + (f' ... และอีก {len(prods)-5} รายการ' if len(prods) > 5 else '')},
-                    'after':  {'description ใหม่ (ทุกรายการ)': new_desc[:120]}
+                    'after':  {f'{field_label} ใหม่ (ทุกรายการ)': new_desc[:120]}
                 }
                 log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
-                                          params, {'product_ids': prod_ids, 'count': len(prods)})
+                                          params, {'product_ids': prod_ids, 'count': len(prods), 'db_field': db_field})
                 return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
-                                'params': {**params, 'product_ids': prod_ids},
-                                'message': intent.get('message', f"จะอัปเดต description ของสินค้าที่มีคำว่า **{keyword}** จำนวน {len(prods)} รายการ"),
+                                'params': {**params, 'product_ids': prod_ids, 'db_field': db_field},
+                                'message': intent.get('message', f"จะอัปเดต{field_label}ของสินค้าที่มีคำว่า **{keyword}** จำนวน {len(prods)} รายการ"),
+                                'model_used': model_used}), 200
+
+            elif tool == 'update_product_field':
+                prod_name  = (params.get('product_name') or '').strip()
+                db_field   = (params.get('field') or '').strip()
+                new_value  = params.get('value')
+                allowed_fields = {
+                    'is_featured':        ('boolean', 'สินค้าแนะนำ (is_featured)'),
+                    'low_stock_threshold':('integer', 'ขีดแจ้งเตือนสต็อกต่ำ'),
+                    'weight':             ('numeric', 'น้ำหนัก (kg)'),
+                    'length':             ('numeric', 'ความยาว (cm)'),
+                    'width':              ('numeric', 'ความกว้าง (cm)'),
+                    'height':             ('numeric', 'ความสูง (cm)'),
+                    'name':               ('text',    'ชื่อสินค้า'),
+                    'production_days':    ('integer', 'จำนวนวันผลิต'),
+                    'deposit_percent':    ('integer', 'มัดจำ (%)'),
+                }
+                if db_field not in allowed_fields:
+                    opts = ', '.join(allowed_fields.keys())
+                    return jsonify({'type': 'answer', 'message': f'field ที่รองรับ: {opts}'}), 200
+                if not prod_name or new_value is None:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ product_name, field และ value'}), 200
+                cursor.execute('SELECT id, name FROM products WHERE name ILIKE %s AND is_active=true LIMIT 3', (f'%{prod_name}%',))
+                prods = cursor.fetchall()
+                if not prods:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าชื่อ "{prod_name}"'}), 200
+                if len(prods) > 1:
+                    opts = ', '.join([p['name'] for p in prods])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายสินค้า: {opts} — ระบุให้ชัดขึ้น'}), 200
+                prod = prods[0]
+                field_label = allowed_fields[db_field][1]
+                cursor.execute(f'SELECT {db_field} FROM products WHERE id=%s', (prod['id'],))
+                old_row = cursor.fetchone()
+                old_val = old_row[db_field] if old_row else None
+                plan = {
+                    'before': {'สินค้า': prod['name'], field_label: str(old_val)},
+                    'after':  {'สินค้า': prod['name'], field_label: str(new_value)}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'product_id': prod['id'], 'old_val': old_val, 'db_field': db_field})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'product_id': prod['id'], 'db_field': db_field},
+                                'message': intent.get('message', f"จะแก้ไข {field_label} ของ **{prod['name']}** เป็น {new_value}"),
                                 'model_used': model_used}), 200
 
             elif tool == 'toggle_facebook_ad':
@@ -1865,44 +1917,93 @@ def agent_execute():
         elif tool == 'update_product_description':
             product_id = params.get('product_id')
             new_desc   = (params.get('description') or '').strip()
+            db_field   = params.get('db_field', params.get('field', 'bot_description'))
+            if db_field not in ('description', 'bot_description'):
+                db_field = 'bot_description'
             if not product_id or not new_desc:
                 return jsonify({'message': 'ข้อมูลไม่ครบ — ต้องการ product_id และ description'}), 200
-            cursor.execute('SELECT id, name, description FROM products WHERE id = %s', (product_id,))
+            cursor.execute(f'SELECT id, name, {db_field} as cur_val FROM products WHERE id = %s', (product_id,))
             prod = cursor.fetchone()
             if not prod:
                 return jsonify({'message': f'ไม่พบสินค้า ID {product_id}'}), 200
-            old_desc = prod['description'] or ''
-            cursor.execute('UPDATE products SET description = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (new_desc, product_id))
-            before_data = {'สินค้า': prod['name'], 'description เดิม': old_desc[:120] or '(ว่าง)'}
-            after_data  = {'สินค้า': prod['name'], 'description ใหม่': new_desc[:120]}
+            old_val = prod['cur_val'] or ''
+            field_label = 'คำอธิบายบอท' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ'
+            cursor.execute(f'UPDATE products SET {db_field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (new_desc, product_id))
+            before_data = {'สินค้า': prod['name'], f'{field_label} เดิม': old_val[:120] or '(ว่าง)'}
+            after_data  = {'สินค้า': prod['name'], f'{field_label} ใหม่': new_desc[:120]}
             if log_id:
                 cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
                                ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
             conn.commit()
-            return jsonify({'message': f"✅ อัปเดต description ของ **{prod['name']}** สำเร็จ",
+            return jsonify({'message': f"✅ อัปเดต{field_label}ของ **{prod['name']}** สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
 
         elif tool == 'bulk_update_product_description':
             product_ids = params.get('product_ids', [])
             new_desc    = (params.get('description') or '').strip()
             keyword     = (params.get('keyword') or '').strip()
+            db_field    = params.get('db_field', params.get('field', 'bot_description'))
+            if db_field not in ('description', 'bot_description'):
+                db_field = 'bot_description'
             if not product_ids or not new_desc:
                 return jsonify({'message': 'ข้อมูลไม่ครบ — ต้องการ product_ids และ description'}), 200
             cursor.execute('SELECT id, name FROM products WHERE id = ANY(%s)', (product_ids,))
             prods = cursor.fetchall()
             if not prods:
                 return jsonify({'message': 'ไม่พบสินค้าที่ระบุ'}), 200
-            cursor.execute('UPDATE products SET description = %s, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)', (new_desc, product_ids))
+            cursor.execute(f'UPDATE products SET {db_field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)', (new_desc, product_ids))
             updated_count = cursor.rowcount
             prod_names = [p['name'] for p in prods]
+            field_label = 'คำอธิบายบอท' if db_field == 'bot_description' else 'คำอธิบายสาธารณะ'
             before_data = {'จำนวนสินค้า': f'{len(prods)} รายการ', 'keyword': keyword}
-            after_data  = {'อัปเดตสำเร็จ': f'{updated_count} รายการ', 'description ใหม่': new_desc[:100],
+            after_data  = {'อัปเดตสำเร็จ': f'{updated_count} รายการ', f'{field_label} ใหม่': new_desc[:100],
                            'สินค้า': ', '.join(prod_names[:5]) + (f' ... +{len(prod_names)-5}' if len(prod_names) > 5 else '')}
             if log_id:
                 cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
                                ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
             conn.commit()
-            return jsonify({'message': f"✅ อัปเดต description สำเร็จ **{updated_count} สินค้า** (keyword: {keyword})",
+            return jsonify({'message': f"✅ อัปเดต{field_label}สำเร็จ **{updated_count} สินค้า** (keyword: {keyword})",
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'update_product_field':
+            product_id = params.get('product_id')
+            db_field   = (params.get('db_field') or params.get('field') or '').strip()
+            new_value  = params.get('value')
+            allowed_fields = {
+                'is_featured':         ('boolean', 'สินค้าแนะนำ'),
+                'low_stock_threshold': ('integer', 'ขีดแจ้งเตือนสต็อกต่ำ'),
+                'weight':              ('numeric', 'น้ำหนัก (kg)'),
+                'length':              ('numeric', 'ความยาว (cm)'),
+                'width':               ('numeric', 'ความกว้าง (cm)'),
+                'height':              ('numeric', 'ความสูง (cm)'),
+                'name':                ('text',    'ชื่อสินค้า'),
+                'production_days':     ('integer', 'จำนวนวันผลิต'),
+                'deposit_percent':     ('integer', 'มัดจำ (%)'),
+            }
+            if db_field not in allowed_fields or not product_id or new_value is None:
+                return jsonify({'message': 'ข้อมูลไม่ครบหรือ field ไม่รองรับ'}), 200
+            dtype, field_label = allowed_fields[db_field]
+            if dtype == 'boolean':
+                typed_val = str(new_value).lower() in ('true', '1', 'yes')
+            elif dtype == 'integer':
+                typed_val = int(new_value)
+            elif dtype == 'numeric':
+                typed_val = float(new_value)
+            else:
+                typed_val = str(new_value)
+            cursor.execute(f'SELECT id, name, {db_field} as cur_val FROM products WHERE id = %s', (product_id,))
+            prod = cursor.fetchone()
+            if not prod:
+                return jsonify({'message': f'ไม่พบสินค้า ID {product_id}'}), 200
+            old_val = prod['cur_val']
+            cursor.execute(f'UPDATE products SET {db_field} = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s', (typed_val, product_id))
+            before_data = {'สินค้า': prod['name'], f'{field_label} เดิม': str(old_val)}
+            after_data  = {'สินค้า': prod['name'], f'{field_label} ใหม่': str(typed_val)}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ อัปเดต{field_label}ของ **{prod['name']}** สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
 
         elif tool == 'toggle_facebook_ad':
