@@ -187,6 +187,7 @@ def _agent_build_system_prompt(settings, context=None):
 - query_sales_by_brand: ยอดขายแยกตามแบรนด์
 - query_top_products: สินค้าขายดี
 - query_low_stock: สินค้าสต็อกต่ำ/ใกล้หมด (params: threshold=5)
+- query_products: ดูรายชื่อสินค้าพร้อม filter (params: keyword, category, brand, product_type, limit) — ใช้แทนการ query_db เมื่อต้องการค้นสินค้า, รองรับ category เช่น "ชุดพยาบาล"
 - query_stock_product: สต็อกสินค้าเฉพาะตัว (params: product_name)
 - query_order_counts: จำนวนออเดอร์ทุกสถานะ
 - query_pending_orders: ออเดอร์ที่รอดำเนินการ (params: limit=10)
@@ -239,6 +240,13 @@ def _agent_build_system_prompt(settings, context=None):
 - update_product_description: แก้ไขคำอธิบายสินค้าชิ้นเดียว (params: product_name, description, field="bot_description"|"description") — field="bot_description" คือสำหรับบอทแชทน้องนุ่น (default), field="description" คือหน้าสาธารณะ
 - bulk_update_product_description: อัปเดตคำอธิบายสินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", description="คำอธิบาย", field="bot_description"|"description") — default field="bot_description"
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
+
+=== DB Schema สำคัญ (สำหรับ query_db) ===
+- ค้นสินค้า: ใช้ query_products แทน query_db เสมอ (ง่าย ถูกต้อง ไม่ต้อง JOIN เอง)
+- products: id, name, parent_sku, status, product_type, brand_id — ไม่มี column "category" หรือ "is_active" โดยตรง
+- หมวดหมู่สินค้า: ต้อง JOIN product_categories pc ON pc.product_id=p.id JOIN categories c ON c.id=pc.category_id
+- สถานะสินค้า: ใช้ status='active' ไม่ใช่ is_active=TRUE
+- SQL ที่ส่งให้ query_db: ห้ามมี semicolon (;) ท้าย SQL
 
 === รูปแบบตอบกลับ (JSON เท่านั้น) ===
 READ: {{"type":"answer","tool":"tool_name","params":{{...}},"message":"สรุปผลสั้น"}}
@@ -683,6 +691,57 @@ def _agent_execute_read_tool(tool, params, cursor):
             return {'text': f'ไม่พบสินค้าที่ชื่อใกล้เคียง "{name}"'}
         lines = [f"• {r['sku_code']} — {r['stock']} ชิ้น" for r in rows]
         return {'text': f"📦 สต็อก {rows[0]['product_name']}:\n" + "\n".join(lines)}
+
+    elif tool == 'query_products':
+        keyword  = (params.get('keyword') or params.get('product_name') or '').strip()
+        category = (params.get('category') or '').strip()
+        brand    = (params.get('brand') or '').strip()
+        prod_type = (params.get('product_type') or '').strip()
+        limit    = min(50, max(1, int(params.get('limit') or 30)))
+        conditions = ["p.status = 'active'"]
+        values = []
+        if keyword:
+            conditions.append("p.name ILIKE %s")
+            values.append(f'%{keyword}%')
+        if category:
+            conditions.append("c.name ILIKE %s")
+            values.append(f'%{category}%')
+        if brand:
+            conditions.append("b.name ILIKE %s")
+            values.append(f'%{brand}%')
+        if prod_type:
+            conditions.append("p.product_type = %s")
+            values.append(prod_type)
+        where = ' AND '.join(conditions)
+        cursor.execute(f'''
+            SELECT p.id, p.name, p.parent_sku, p.product_type, b.name as brand_name,
+                   STRING_AGG(DISTINCT c.name, ', ') as categories
+            FROM products p
+            LEFT JOIN brands b ON b.id = p.brand_id
+            LEFT JOIN product_categories pc ON pc.product_id = p.id
+            LEFT JOIN categories c ON c.id = pc.category_id
+            WHERE {where}
+            GROUP BY p.id, p.name, p.parent_sku, p.product_type, b.name
+            ORDER BY b.name, p.name
+            LIMIT %s
+        ''', values + [limit])
+        rows = cursor.fetchall()
+        if not rows:
+            filters = []
+            if keyword: filters.append(f'ชื่อ "{keyword}"')
+            if category: filters.append(f'หมวดหมู่ "{category}"')
+            if brand: filters.append(f'แบรนด์ "{brand}"')
+            return {'text': f'ไม่พบสินค้า ({", ".join(filters) or "ทั้งหมด"})'}
+        lines = []
+        for r in rows:
+            cats = r['categories'] or '-'
+            lines.append(f"• {r['name']} | SKU: {r['parent_sku']} | แบรนด์: {r['brand_name']} | หมวด: {cats} | ประเภท: {r['product_type']}")
+        header_parts = []
+        if keyword: header_parts.append(f'ชื่อ "{keyword}"')
+        if category: header_parts.append(f'หมวด "{category}"')
+        if brand: header_parts.append(f'แบรนด์ "{brand}"')
+        header = f"🛍️ สินค้า ({', '.join(header_parts) or 'ทั้งหมด'}) — {len(rows)} รายการ:"
+        return {'text': header + '\n' + '\n'.join(lines)}
 
     elif tool == 'query_order_counts':
         cursor.execute('''SELECT status, COUNT(*) as cnt FROM orders WHERE is_quick_order = FALSE GROUP BY status ORDER BY cnt DESC''')
@@ -1161,7 +1220,7 @@ def _agent_execute_read_tool(tool, params, cursor):
             return {'text': f'📊 ตารางทั้งหมดใน DB ({len(_tables)} ตาราง):\n' + '\n'.join(f'  • {t}' for t in _tables)}
 
     elif tool == 'query_db':
-        _sql = (params.get('sql') or '').strip()
+        _sql = (params.get('sql') or '').strip().rstrip(';').strip()
         if not _sql:
             return {'text': 'กรุณาระบุ SQL เช่น "SELECT * FROM orders LIMIT 5"'}
         _sql_upper = _sql.upper().lstrip()
@@ -1185,7 +1244,7 @@ def _agent_execute_read_tool(tool, params, cursor):
             _data = '\n'.join(' | '.join(str(r[c])[:40] for c in _cols) for r in _rows)
             return {'text': f'📊 Query Result ({len(_rows)} แถว):\n```\n{_header}\n{_sep}\n{_data}\n```'}
         except Exception as _e:
-            return {'text': f'SQL Error: {str(_e)}'}
+            return {'text': f'SQL Error: {str(_e)}\n\n💡 หมายเหตุ: ตาราง products ไม่มี column "category" โดยตรง — ใช้ JOIN กับ product_categories และ categories แทน หรือค้นหาจากชื่อสินค้าด้วย p.name ILIKE \'%กระโปรง%\''}
 
     # ─── System Status Tools ──────────────────────────────────────────────────
     elif tool == 'check_system_status':
