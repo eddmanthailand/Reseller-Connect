@@ -326,6 +326,28 @@ def _get_replit_connector_token(connector_name):
     return token
 
 
+def _get_service_account_token(scopes=None):
+    """สร้าง access token จาก Google Service Account JSON"""
+    import json as _j
+    if scopes is None:
+        scopes = [
+            'https://www.googleapis.com/auth/drive.readonly',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
+    sa_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
+    if not sa_json:
+        return None, 'ไม่พบ GOOGLE_SERVICE_ACCOUNT_JSON'
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests as _gatr
+        sa_info = _j.loads(sa_json)
+        creds = service_account.Credentials.from_service_account_info(sa_info, scopes=scopes)
+        creds.refresh(_gatr.Request())
+        return creds.token, None
+    except Exception as e:
+        return None, f'Service Account error: {str(e)}'
+
+
 def _agent_read_google_sheet(params):
     """อ่านข้อมูลจาก Google Sheets ผ่าน Replit Connector"""
     import urllib.request as _ur, urllib.parse as _up, json as _j
@@ -358,28 +380,39 @@ def _agent_read_google_sheet(params):
 
 
 def _agent_query_google_drive(params):
-    """ค้นหาไฟล์ใน Google Drive ผ่าน Replit Connector"""
+    """ค้นหาไฟล์ใน Google Drive — ใช้ Service Account (เห็นทุกไฟล์ใน shared folder) หรือ fallback OAuth"""
     import urllib.request as _ur, urllib.parse as _up, json as _j
     query     = (params.get('query') or '').strip()
     folder_id = (params.get('folder_id') or '').strip()
-    limit     = int(params.get('limit') or 10)
+    limit     = int(params.get('limit') or 20)
     if not query and not folder_id:
         return {'text': '⚠️ กรุณาระบุ query หรือ folder_id'}
     try:
-        token = _get_replit_connector_token('google-drive')
+        sa_token, sa_err = _get_service_account_token(['https://www.googleapis.com/auth/drive.readonly'])
+        if sa_token:
+            token = sa_token
+            auth_mode = 'Service Account'
+        else:
+            token = _get_replit_connector_token('google-drive')
+            auth_mode = 'OAuth'
         q_parts = ['trashed=false']
         if query:
-            q_parts.append(f"name contains '{query}'")
+            safe_q = query.replace("'", "\\'")
+            q_parts.append(f"name contains '{safe_q}'")
         if folder_id:
             q_parts.append(f"'{folder_id}' in parents")
         q_str = _up.quote(' and '.join(q_parts))
-        url = f'https://www.googleapis.com/drive/v3/files?q={q_str}&pageSize={limit}&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
+        url = (f'https://www.googleapis.com/drive/v3/files'
+               f'?q={q_str}&pageSize={limit}'
+               f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)'
+               f'&orderBy=modifiedTime desc')
         req = _ur.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
         with _ur.urlopen(req, timeout=10) as resp:
             data = _j.loads(resp.read())
         files = data.get('files', [])
         if not files:
-            return {'text': f'🔍 ไม่พบไฟล์ที่ตรงกับ "{query}"'}
+            label = f'"{query}"' if query else f'folder `{folder_id}`'
+            return {'text': f'🔍 ไม่พบไฟล์ใน {label}\n_หมายเหตุ: ถ้าต้องการให้ Agent เห็นไฟล์ใน folder ให้ Share folder กับ_ `ekg-ai-agent@gen-lang-client-0922232728.iam.gserviceaccount.com`'}
         mime_icons = {
             'application/vnd.google-apps.spreadsheet': '📊',
             'application/vnd.google-apps.document': '📄',
@@ -387,7 +420,8 @@ def _agent_query_google_drive(params):
             'application/vnd.google-apps.folder': '📁',
             'image/jpeg': '🖼️', 'image/png': '🖼️', 'application/pdf': '📕',
         }
-        lines = [f'🔍 ผลค้นหา "{query}" ({len(files)} รายการ)\n']
+        label = f'"{query}"' if query else f'folder'
+        lines = [f'🔍 ผลค้นหา {label} ({len(files)} รายการ) — via {auth_mode}\n']
         for f in files:
             icon = mime_icons.get(f.get('mimeType', ''), '📎')
             mod  = (f.get('modifiedTime', '')[:10]) or '-'
