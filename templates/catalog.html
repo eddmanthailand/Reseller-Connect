@@ -1381,9 +1381,7 @@
     ];
     let _bubbleIdx = 0;
 
-    function showBubble() {
-        if (gcOpen) return;
-        bubble.textContent = BUBBLE_MSGS[_bubbleIdx % BUBBLE_MSGS.length];
+bubbleIdx % BUBBLE_MSGS.length];
         _bubbleIdx++;
         bubble.classList.add('show');
         setTimeout(() => bubble.classList.remove('show'), 4500);
