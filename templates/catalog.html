@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="แคตตาล็อกสินค้า EKG Shops — เสื้อผ้าและสินค้าคุณภาพ ราคาพิเศษสำหรับสมาชิก">
+    <title>แคตตาล็อกสินค้า | EKG Shops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary: #7c3aed;
+            --primary-dark: #6d28d9;
+            --accent: #ec4899;
+            --green: #10b981;
+            --yellow: #fbbf24;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f9fafb;
+            --white: #ffffff;
+            --card-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            --radius: 14px;
+        }
+        body { font-family: 'Noto Sans Thai', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* HEADER */
+        .site-header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+        }
+        .header-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 60px; gap: 12px;
+        }
+        .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .logo-icon svg { width: 20px; height: 20px; stroke: white; }
+        .logo-text { font-size: 18px; font-weight: 700; color: var(--primary); }
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .btn-login { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; border: 1.5px solid var(--border); color: var(--text); background: var(--white); transition: all 0.2s; }
+        .btn-login:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-register { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; border: none; transition: all 0.2s; box-shadow: 0 2px 8px rgba(124,58,237,0.3); }
+        .btn-register:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(124,58,237,0.4); }
+
+        /* HERO BANNER */
+        .hero {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
+            padding: 40px 20px 36px;
+            text-align: center;
+            color: white;
+        }
+        .hero h1 { font-size: clamp(22px, 5vw, 36px); font-weight: 700; margin-bottom: 8px; }
+        .hero p { font-size: 14px; opacity: 0.9; margin-bottom: 20px; }
+        .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: white; color: var(--primary); font-weight: 700; font-size: 14px; padding: 11px 24px; border-radius: 100px; text-decoration: none; box-shadow: 0 4px 16px rgba(0,0,0,0.2); transition: all 0.2s; }
+        .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+        .hero-badge { display: inline-block; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 100px; padding: 4px 14px; font-size: 12px; margin-bottom: 12px; }
+
+        /* FILTER BAR */
+        .filter-section { background: white; border-bottom: 1px solid var(--border); padding: 12px 20px; position: sticky; top: 60px; z-index: 90; }
+        .filter-inner { max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .filter-label { font-size: 12px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
+        .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; align-items: center; }
+        .chip { padding: 5px 14px; border-radius: 100px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); background: white; color: var(--text-muted); transition: all 0.18s; white-space: nowrap; }
+        .chip:hover { border-color: var(--primary); color: var(--primary); }
+        .chip.active { background: var(--primary); border-color: var(--primary); color: white; }
+        .chip.featured-chip { border-color: var(--yellow); color: #92400e; background: #fef3c7; }
+        .chip.featured-chip.active { background: var(--yellow); border-color: var(--yellow); color: #78350f; }
+        .filter-divider { width: 1px; height: 20px; background: var(--border); }
+
+        /* MAIN CONTENT */
+        .main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
+        .results-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 13px; color: var(--text-muted); }
+        .results-count { font-weight: 600; color: var(--text); }
+
+        /* PRODUCT GRID */
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+        @media (max-width: 480px) { .product-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
+        /* PRODUCT CARD */
+        .product-card {
+            background: white; border-radius: var(--radius); overflow: hidden;
+            box-shadow: var(--card-shadow); transition: all 0.22s; position: relative;
+            border: 1.5px solid transparent;
+        }
+        .product-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); border-color: rgba(124,58,237,0.2); }
+        .card-img-wrap { position: relative; aspect-ratio: 1; overflow: hidden; background: #f3f4f6; }
+        .card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .product-card:hover .card-img { transform: scale(1.04); }
+        .card-img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 48px; background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
+        .badge-featured { position: absolute; top: 8px; left: 8px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 100px; display: flex; align-items: center; gap: 3px; box-shadow: 0 2px 6px rgba(245,158,11,0.4); }
+        .badge-oos { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.55); color: white; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 100px; }
+        .card-body { padding: 10px 12px 12px; }
+        .card-brand { font-size: 10px; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .card-price { font-size: 15px; font-weight: 700; color: var(--accent); }
+        .card-price-label { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+        .card-footer { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+        .card-cta { display: block; text-align: center; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 12px; font-weight: 600; padding: 7px; border-radius: 8px; text-decoration: none; transition: opacity 0.2s; }
+        .card-cta:hover { opacity: 0.9; }
+        .card-cta.oos { background: #e5e7eb; color: var(--text-muted); cursor: default; }
+
+        /* EMPTY STATE */
+        .empty-state { text-align: center; padding: 60px 20px; }
+        .empty-state-icon { font-size: 56px; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .empty-state p { color: var(--text-muted); font-size: 14px; }
+
+        /* SKELETON */
+        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .skel-card { background: white; border-radius: var(--radius); overflow: hidden; box-shadow: var(--card-shadow); }
+        .skel-img { aspect-ratio: 1; }
+        .skel-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .skel-line { height: 12px; }
+        .skel-line.short { width: 40%; }
+        .skel-line.medium { width: 70%; }
+
+        /* CTA BANNER */
+        .cta-banner { margin-top: 48px; background: linear-gradient(135deg, #7c3aed, #ec4899); border-radius: 20px; padding: 32px 24px; text-align: center; color: white; }
+        .cta-banner h2 { font-size: clamp(18px, 4vw, 26px); font-weight: 700; margin-bottom: 8px; }
+        .cta-banner p { opacity: 0.9; font-size: 14px; margin-bottom: 20px; }
+        .cta-banner-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .cta-btn-white { background: white; color: var(--primary); font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 100px; text-decoration: none; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: all 0.2s; }
+        .cta-btn-white:hover { transform: translateY(-2px); }
+        .cta-btn-outline { background: transparent; border: 2px solid rgba(255,255,255,0.6); color: white; font-weight: 600; font-size: 14px; padding: 12px 28px; border-radius: 100px; text-decoration: none; transition: all 0.2s; }
+        .cta-btn-outline:hover { background: rgba(255,255,255,0.15); }
+
+        /* FOOTER */
+        .site-footer { background: var(--text); color: rgba(255,255,255,0.6); text-align: center; padding: 20px; font-size: 12px; }
+        .site-footer a { color: rgba(255,255,255,0.8); text-decoration: none; }
+
+        /* LOADING */
+        #loading-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.7); z-index: 999; align-items: center; justify-content: center; }
+        #loading-overlay.show { display: flex; }
+        .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="loading-overlay"><div class="spinner"></div></div>
+
+<!-- HEADER -->
+<header class="site-header">
+    <div class="header-inner">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            </div>
+            <span class="logo-text">EKG Shops</span>
+        </a>
+        <div class="header-actions">
+            <a href="/login" class="btn-login">เข้าสู่ระบบ</a>
+            <a href="/join" class="btn-register">สมัครสมาชิก</a>
+        </div>
+    </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-badge">🛍️ สินค้าคุณภาพ ราคาพิเศษสำหรับสมาชิก</div>
+    <h1>แคตตาล็อกสินค้า</h1>
+    <p>เลือกดูสินค้าของเรา สมัครสมาชิกเพื่อรับราคาพิเศษและสิทธิประโยชน์เพิ่มเติม</p>
+    <a href="/join" class="hero-cta">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        สมัครสมาชิกฟรี
+    </a>
+</section>
+
+<!-- FILTER BAR -->
+<div class="filter-section">
+    <div class="filter-inner">
+        <span class="filter-label">กรอง:</span>
+        <div class="filter-chips" id="brandChips"></div>
+        <div class="filter-divider" id="catDivider" style="display:none;"></div>
+        <div class="filter-chips" id="categoryChips"></div>
+        <div class="filter-divider"></div>
+        <button class="chip featured-chip" id="featuredChip" onclick="toggleFeatured()">★ โปรโมท</button>
+    </div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+    <div class="results-info">
+        <span id="resultsText" class="results-count">กำลังโหลด...</span>
+        <span id="activeFilterTag" style="font-size:12px; color: var(--primary);"></span>
+    </div>
+    <div class="product-grid" id="productGrid">
+        <!-- Skeleton -->
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+        <div class="skel-card"><div class="skel-img skeleton"></div><div class="skel-body"><div class="skel-line short skeleton"></div><div class="skel-line medium skeleton"></div><div class="skel-line short skeleton"></div></div></div>
+    </div>
+
+    <!-- CTA BANNER -->
+    <div class="cta-banner">
+        <h2>รับราคาพิเศษสำหรับสมาชิก</h2>
+        <p>สมัครฟรี ไม่มีค่าใช้จ่าย รับสิทธิ์ซื้อสินค้าในราคาส่งทันที</p>
+        <div class="cta-banner-btns">
+            <a href="/join" class="cta-btn-white">สมัครสมาชิกฟรี</a>
+            <a href="/login" class="cta-btn-outline">เข้าสู่ระบบ</a>
+        </div>
+    </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="site-footer">
+    <p>© 2025 EKG Shops · <a href="/">หน้าหลัก</a> · <a href="/join">สมัครสมาชิก</a> · <a href="/login">เข้าสู่ระบบ</a></p>
+</footer>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    let activeBrand = params.get('brand') ? parseInt(params.get('brand')) : null;
+    let activeCategory = params.get('category') ? parseInt(params.get('category')) : null;
+    let activeFeatured = params.get('featured') === '1';
+
+    async function loadFilters() {
+        const [brandsRes, catsRes] = await Promise.all([
+            fetch('/api/public/brands').then(r => r.json()).catch(() => ({ brands: [] })),
+            fetch('/api/public/categories').then(r => r.json()).catch(() => ({ categories: [] }))
+        ]);
+
+        const brandChips = document.getElementById('brandChips');
+        const categoryChips = document.getElementById('categoryChips');
+        const catDivider = document.getElementById('catDivider');
+
+        const allChip = `<button class="chip ${!activeBrand ? 'active' : ''}" onclick="filterBrand(null)">ทั้งหมด</button>`;
+        const brandHtml = brandsRes.brands.map(b =>
+            `<button class="chip ${activeBrand === b.id ? 'active' : ''}" onclick="filterBrand(${b.id})">${b.name}</button>`
+        ).join('');
+        brandChips.innerHTML = allChip + brandHtml;
+
+        const cats = catsRes.categories || [];
+        if (cats.length > 0) {
+            catDivider.style.display = '';
+            categoryChips.innerHTML = cats.map(c =>
+                `<button class="chip ${activeCategory === c.id ? 'active' : ''}" onclick="filterCategory(${c.id})">${c.name}</button>`
+            ).join('');
+        }
+
+        const featuredChip = document.getElementById('featuredChip');
+        if (activeFeatured) featuredChip.classList.add('active');
+    }
+
+    async function loadProducts() {
+        const urlParams = new URLSearchParams();
+        if (activeBrand) urlParams.set('brand', activeBrand);
+        if (activeCategory) urlParams.set('category', activeCategory);
+        if (activeFeatured) urlParams.set('featured', '1');
+
+        const res = await fetch('/api/public/products?' + urlParams.toString());
+        const data = await res.json();
+        return data.products || [];
+    }
+
+    function renderProducts(products) {
+        const grid = document.getElementById('productGrid');
+        const resultsText = document.getElementById('resultsText');
+        const filterTag = document.getElementById('activeFilterTag');
+
+        resultsText.textContent = `${products.length} รายการ`;
+
+        let tags = [];
+        if (activeBrand) tags.push('กรองตามแบรนด์');
+        if (activeCategory) tags.push('กรองตามหมวดหมู่');
+        if (activeFeatured) tags.push('★ เฉพาะสินค้าโปรโมท');
+        filterTag.textContent = tags.length ? tags.join(' · ') : '';
+
+        if (products.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1;">
+                    <div class="empty-state-icon">🔍</div>
+                    <h3>ไม่พบสินค้า</h3>
+                    <p>ลองเปลี่ยนตัวกรองหรือดูสินค้าทั้งหมด</p>
+                </div>`;
+            return;
+        }
+
+        grid.innerHTML = products.map(p => {
+            const inStock = p.total_stock > 0;
+            const priceHtml = p.min_price > 0
+                ? `<div class="card-price"><span class="card-price-label">ราคาเริ่มต้น </span>฿${p.min_price.toLocaleString('th-TH')}</div>`
+                : `<div class="card-price" style="color:var(--text-muted);font-size:12px;">ติดต่อสอบถามราคา</div>`;
+            const imgHtml = p.image_url
+                ? `<img class="card-img" src="${escHtml(p.image_url)}" alt="${escHtml(p.name)}" loading="lazy">`
+                : `<div class="card-img-placeholder">👗</div>`;
+            return `
+            <div class="product-card">
+                <div class="card-img-wrap">
+                    ${imgHtml}
+                    ${p.is_featured ? '<div class="badge-featured">★ โปรโมท</div>' : ''}
+                    ${!inStock ? '<div class="badge-oos">สินค้าหมด</div>' : ''}
+                </div>
+                <div class="card-body">
+                    ${p.brand_name ? `<div class="card-brand">${escHtml(p.brand_name)}</div>` : ''}
+                    <div class="card-name">${escHtml(p.name)}</div>
+                    ${priceHtml}
+                    <div class="card-footer">
+                        <a href="/join" class="card-cta ${!inStock ? 'oos' : ''}">
+                            ${inStock ? 'สมัครเพื่อซื้อในราคาพิเศษ' : 'สินค้าหมดชั่วคราว'}
+                        </a>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function updateUrl() {
+        const p = new URLSearchParams();
+        if (activeBrand) p.set('brand', activeBrand);
+        if (activeCategory) p.set('category', activeCategory);
+        if (activeFeatured) p.set('featured', '1');
+        const newUrl = window.location.pathname + (p.toString() ? '?' + p.toString() : '');
+        history.replaceState(null, '', newUrl);
+    }
+
+    function filterBrand(brandId) {
+        activeBrand = brandId;
+        updateUrl();
+        refreshAll();
+    }
+
+    function filterCategory(catId) {
+        activeCategory = activeCategory === catId ? null : catId;
+        updateUrl();
+        refreshAll();
+    }
+
+    function toggleFeatured() {
+        activeFeatured = !activeFeatured;
+        document.getElementById('featuredChip').classList.toggle('active', activeFeatured);
+        updateUrl();
+        refreshProducts();
+    }
+
+    async function refreshAll() {
+        await loadFilters();
+        await refreshProducts();
+    }
+
+    async function refreshProducts() {
+        document.getElementById('loading-overlay').classList.add('show');
+        try {
+            const products = await loadProducts();
+            renderProducts(products);
+        } finally {
+            document.getElementById('loading-overlay').classList.remove('show');
+        }
+    }
+
+    (async () => {
+        await loadFilters();
+        const products = await loadProducts();
+        renderProducts(products);
+    })();
+</script>
+</body>
+</html>

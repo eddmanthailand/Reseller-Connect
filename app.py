@@ -360,29 +360,56 @@ def category_management():
 
 @app.route('/api/public/products', methods=['GET'])
 def public_products():
-    """Get products for public landing page (no login required)"""
+    """Get products for public catalog/landing page (no login required)"""
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        
-        cursor.execute('''
-            SELECT 
+
+        brand_id = request.args.get('brand')
+        category_id = request.args.get('category')
+        featured_only = request.args.get('featured') == '1'
+
+        query = '''
+            SELECT
                 p.id,
                 p.name,
+                p.is_featured,
+                b.id as brand_id,
                 b.name as brand_name,
-                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as image_url,
-                (SELECT MIN(s.price) FROM skus s WHERE s.product_id = p.id) as retail_price,
-                COALESCE((SELECT SUM(s.stock) FROM skus s WHERE s.product_id = p.id), 0) as total_stock
+                (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
+                (SELECT MIN(s.price) FROM skus s WHERE s.product_id = p.id) as min_price,
+                (SELECT MAX(s.price) FROM skus s WHERE s.product_id = p.id) as max_price,
+                COALESCE((SELECT SUM(s.stock) FROM skus s WHERE s.product_id = p.id), 0) as total_stock,
+                (SELECT STRING_AGG(c.name, ', ') FROM product_categories pc JOIN categories c ON c.id = pc.category_id WHERE pc.product_id = p.id) as category_names
             FROM products p
             LEFT JOIN brands b ON p.brand_id = b.id
-            WHERE p.status = 'active'
-            ORDER BY p.created_at DESC
-            LIMIT 8
-        ''')
-        products = cursor.fetchall()
-        
+            WHERE p.status = \'active\'
+        '''
+        params = []
+
+        if brand_id:
+            query += ' AND p.brand_id = %s'
+            params.append(int(brand_id))
+        if category_id:
+            query += ' AND EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = p.id AND pc.category_id = %s)'
+            params.append(int(category_id))
+        if featured_only:
+            query += ' AND p.is_featured = TRUE'
+
+        query += ' ORDER BY p.is_featured DESC, p.created_at DESC'
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        products = []
+        for r in rows:
+            d = dict(r)
+            d['min_price'] = float(d['min_price']) if d.get('min_price') is not None else 0
+            d['max_price'] = float(d['max_price']) if d.get('max_price') is not None else 0
+            d['total_stock'] = int(d['total_stock']) if d.get('total_stock') is not None else 0
+            products.append(d)
+
         return jsonify({'products': products}), 200
     except Exception as e:
         print(f"Error fetching public products: {e}")
@@ -392,6 +419,57 @@ def public_products():
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/public/brands', methods=['GET'])
+def public_brands():
+    """Get all brands for public catalog filter (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT b.id, b.name
+            FROM brands b
+            WHERE EXISTS (SELECT 1 FROM products p WHERE p.brand_id = b.id AND p.status = \'active\')
+            ORDER BY b.name
+        ''')
+        return jsonify({'brands': cursor.fetchall()}), 200
+    except Exception as e:
+        return jsonify({'brands': []}), 200
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@app.route('/api/public/categories', methods=['GET'])
+def public_categories():
+    """Get all categories for public catalog filter (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT c.id, c.name
+            FROM categories c
+            WHERE EXISTS (
+                SELECT 1 FROM product_categories pc
+                JOIN products p ON p.id = pc.product_id
+                WHERE pc.category_id = c.id AND p.status = \'active\'
+            )
+            ORDER BY c.name
+        ''')
+        return jsonify({'categories': cursor.fetchall()}), 200
+    except Exception as e:
+        return jsonify({'categories': []}), 200
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@app.route('/catalog')
+def public_catalog():
+    """Public product catalog page - no login required"""
+    return render_template('catalog.html')
 
 @app.route('/api/public/tiers', methods=['GET'])
 def public_tiers():
@@ -1888,6 +1966,7 @@ def get_products():
                 COALESCE(p.status, 'active') as status,
                 p.created_at,
                 COALESCE(p.low_stock_threshold, 5) as low_stock_threshold,
+                COALESCE(p.is_featured, FALSE) as is_featured,
                 COUNT(DISTINCT s.id) as sku_count,
                 COALESCE(MIN(s.price), 0) as min_price,
                 COALESCE(MAX(s.price), 0) as max_price,
@@ -1918,13 +1997,13 @@ def get_products():
                 )
             '''
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold, p.is_featured
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query, (user_id,))
         else:
             base_query += '''
-                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold
+                GROUP BY p.id, p.name, p.parent_sku, p.description, p.size_chart_image_url, p.brand_id, b.name, p.status, p.created_at, p.low_stock_threshold, p.is_featured
                 ORDER BY p.created_at DESC
             '''
             cursor.execute(base_query)
@@ -2607,6 +2686,32 @@ def update_product_status(product_id):
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/products/<int:product_id>/featured', methods=['PATCH'])
+@admin_required
+def toggle_product_featured(product_id):
+    """Toggle is_featured flag on a product"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        is_featured = bool(data.get('is_featured', False))
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE products SET is_featured = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s RETURNING id
+        ''', (is_featured, product_id))
+        if not cursor.fetchone():
+            return jsonify({'error': 'ไม่พบสินค้า'}), 404
+        conn.commit()
+        return jsonify({'message': 'อัพเดทสำเร็จ', 'is_featured': is_featured}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @app.route('/api/products/<int:product_id>', methods=['DELETE'])
 @admin_required

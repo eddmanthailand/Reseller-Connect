@@ -1158,6 +1158,7 @@ function renderProducts() {
             </td>
             <td>
                 <div class="action-btns">
+                    <button onclick="toggleProductFeatured(${product.id}, ${!product.is_featured})" class="action-btn" title="${product.is_featured ? 'ยกเลิกโปรโมท' : 'ตั้งเป็นสินค้าโปรโมท'}" style="background:${product.is_featured ? 'rgba(251,191,36,0.25)' : 'rgba(255,255,255,0.07)'}; border:1px solid ${product.is_featured ? 'rgba(251,191,36,0.6)' : 'rgba(255,255,255,0.15)'}; color:${product.is_featured ? '#fbbf24' : 'rgba(255,255,255,0.5)'}; padding:4px 8px; border-radius:6px; font-size:14px; cursor:pointer;">★</button>
                     <a href="/admin/products/edit/${product.id}" class="action-btn btn-edit-sm">แก้ไข</a>
                     <button onclick="deleteProduct(${product.id}, '${(product.name || '').replace(/'/g, "\\'")}')" class="action-btn btn-delete-sm">ลบ</button>
                 </div>
@@ -1321,6 +1322,24 @@ async function bulkDelete() {
     } catch (error) {
         console.error('Error bulk deleting:', error);
         alert('เกิดข้อผิดพลาดในการลบสินค้า');
+    }
+}
+
+// Toggle product featured (star button)
+async function toggleProductFeatured(productId, isFeatured) {
+    try {
+        const response = await fetch(`${API_URL}/products/${productId}/featured`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_featured: isFeatured })
+        });
+        if (!response.ok) throw new Error('Failed');
+        const product = allProducts.find(p => p.id === productId);
+        if (product) product.is_featured = isFeatured;
+        renderProducts();
+        showAlert(isFeatured ? '★ ตั้งเป็นสินค้าโปรโมทแล้ว' : 'ยกเลิกการโปรโมทแล้ว', 'success');
+    } catch (error) {
+        showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
     }
 }
 
