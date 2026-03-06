@@ -453,39 +453,33 @@ def _agent_query_google_drive(params):
             auth_mode = 'OAuth'
 
         def _drive_list(fid, q_name='', max_items=100):
-            """ดึงไฟล์ทุกชั้นใน folder (recursive)"""
+            """ดึงไฟล์/โฟลเดอร์ทุกชั้น (recursive) — filter ฝั่ง client เพื่อให้ recurse ได้ถูกต้อง"""
             all_files = []
             stack = [fid]
             visited = set()
+            q_lower = q_name.lower() if q_name else ''
             while stack and len(all_files) < max_items:
                 cur = stack.pop()
                 if cur in visited:
                     continue
                 visited.add(cur)
-                q_parts = ['trashed=false']
-                if q_name:
-                    safe = q_name.replace("'", "\\'")
-                    q_parts.append(f"name contains '{safe}'")
-                q_parts.append(f"'{cur}' in parents")
-                qs = _up.quote(' and '.join(q_parts))
+                qs = _up.quote(f"trashed=false and '{cur}' in parents")
                 url = (f'https://www.googleapis.com/drive/v3/files'
                        f'?q={qs}&pageSize=100'
-                       f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink,parents)')
+                       f'&fields=files(id,name,mimeType,modifiedTime,size,webViewLink)')
                 req = _ur.Request(url, headers={'Authorization': f'Bearer {token}'})
                 with _ur.urlopen(req, timeout=10) as r:
                     items = _j.loads(r.read()).get('files', [])
                 for item in items:
-                    if item['mimeType'] == 'application/vnd.google-apps.folder':
-                        stack.append(item['id'])
-                    else:
+                    is_folder = item['mimeType'] == 'application/vnd.google-apps.folder'
+                    name_match = (not q_lower) or (q_lower in item['name'].lower())
+                    if is_folder:
+                        stack.append(item['id'])  # เสมอ recurse เข้า subfolder
+                    if name_match:
                         all_files.append(item)
                         if len(all_files) >= max_items:
-                            break
-                if not q_name:
-                    for item in items:
-                        if item['mimeType'] == 'application/vnd.google-apps.folder':
-                            all_files.append(item)
-            return all_files[:max_items]
+                            return all_files
+            return all_files
 
         if folder_id:
             files = _drive_list(folder_id, query, limit)
