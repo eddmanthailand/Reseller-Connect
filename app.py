@@ -523,6 +523,61 @@ def public_promotions():
         if conn: conn.close()
 
 
+@app.route('/api/public/product/<int:product_id>/skus', methods=['GET'])
+def public_product_skus(product_id):
+    """Get SKU variants for a product for the public catalog cart (no login required)"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('''
+            SELECT p.id, p.name, p.product_type,
+                   (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
+                   (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                     JOIN reseller_tiers rt ON rt.id = ptp.tier_id
+                     WHERE ptp.product_id = p.id ORDER BY rt.upgrade_threshold ASC LIMIT 1) as tier1_discount
+            FROM products p
+            WHERE p.id = %s AND p.status = 'active'
+        ''', (product_id,))
+        product = cursor.fetchone()
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+
+        cursor.execute('''
+            SELECT s.id, s.sku_code, s.price, s.stock,
+                   COALESCE(
+                       json_object_agg(o.name, ov.value) FILTER (WHERE o.id IS NOT NULL),
+                       '{}'::json
+                   ) as options
+            FROM skus s
+            LEFT JOIN sku_values_map svm ON svm.sku_id = s.id
+            LEFT JOIN option_values ov ON ov.id = svm.option_value_id
+            LEFT JOIN options o ON o.id = ov.option_id
+            WHERE s.product_id = %s
+            GROUP BY s.id, s.sku_code, s.price, s.stock
+            ORDER BY s.price ASC, s.id ASC
+        ''', (product_id,))
+        skus = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            d['price'] = float(d['price']) if d.get('price') else 0
+            d['stock'] = int(d['stock']) if d.get('stock') else 0
+            if d.get('options') is None:
+                d['options'] = {}
+            skus.append(d)
+
+        p = dict(product)
+        p['tier1_discount'] = float(p['tier1_discount']) if p.get('tier1_discount') is not None else 0
+        return jsonify({'product': p, 'skus': skus}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/catalog')
 def public_catalog():
     """Public product catalog page - no login required"""
