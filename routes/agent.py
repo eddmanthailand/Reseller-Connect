@@ -56,6 +56,11 @@ def _agent_load_business_context(cursor):
     except Exception:
         ctx['brands'] = []
     try:
+        cursor.execute("SELECT id, name FROM categories ORDER BY name")
+        ctx['categories'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['categories'] = []
+    try:
         cursor.execute("SELECT id, name, province FROM warehouses WHERE is_active=TRUE ORDER BY name")
         ctx['warehouses'] = [dict(r) for r in cursor.fetchall()]
     except Exception:
@@ -74,6 +79,22 @@ def _agent_load_business_context(cursor):
         ctx['active_products'] = 0
         ctx['active_resellers'] = 0
     try:
+        cursor.execute("""
+            SELECT p.id, p.name, p.parent_sku, p.product_type, b.name as brand_name,
+                   STRING_AGG(DISTINCT c.name, ', ') as categories
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            LEFT JOIN categories c ON pc.category_id = c.id
+            WHERE p.status = 'active'
+            GROUP BY p.id, p.name, p.parent_sku, p.product_type, b.name
+            ORDER BY b.name, p.name
+            LIMIT 200
+        """)
+        ctx['products'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['products'] = []
+    try:
         cursor.execute("SELECT note_key, note_value FROM agent_notes ORDER BY updated_at DESC")
         ctx['notes'] = [dict(r) for r in cursor.fetchall()]
     except Exception:
@@ -89,10 +110,27 @@ def _agent_build_system_prompt(settings, context=None):
     ctx = context or {}
 
     brand_names = ', '.join([b['name'] for b in ctx.get('brands', [])]) or 'ยังไม่มีข้อมูล'
+    category_names = ', '.join([c['name'] for c in ctx.get('categories', [])]) or 'ยังไม่มีข้อมูล'
     warehouse_names = ', '.join([f"{w['name']} ({w.get('province','') or '-'})" for w in ctx.get('warehouses', [])]) or 'ยังไม่มีข้อมูล'
     tier_names = ', '.join([t['name'] for t in ctx.get('tiers', [])]) or 'Bronze, Silver, Gold, Platinum'
     active_products = ctx.get('active_products', '?')
     active_resellers = ctx.get('active_resellers', '?')
+
+    # สร้าง product list แบ่งตามหมวดหมู่
+    products_section = ''
+    products = ctx.get('products', [])
+    if products:
+        from collections import defaultdict
+        by_cat = defaultdict(list)
+        for p in products:
+            cat = p.get('categories') or 'ไม่มีหมวดหมู่'
+            by_cat[cat].append(f"{p['name']} (SKU:{p.get('parent_sku','?')}, แบรนด์:{p.get('brand_name','?')}, ประเภท:{p.get('product_type','?')})")
+        lines = ['\n=== รายชื่อสินค้า active ในระบบ (แยกตามหมวดหมู่) ===']
+        for cat, items in sorted(by_cat.items()):
+            lines.append(f'[{cat}]')
+            for item in items:
+                lines.append(f'  - {item}')
+        products_section = '\n'.join(lines)
 
     notes_section = ''
     sandbox_section = ''
@@ -138,9 +176,10 @@ def _agent_build_system_prompt(settings, context=None):
 
 === บริบทธุรกิจปัจจุบัน ===
 - แบรนด์ที่ใช้งาน: {brand_names}
+- หมวดหมู่สินค้า (Categories): {category_names}
 - โกดัง: {warehouse_names}
 - ระดับตัวแทน (Tier): {tier_names}
-- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{notes_section}{sandbox_section}
+- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{products_section}{notes_section}{sandbox_section}
 
 === TOOLS ที่ใช้ได้ ===
 [READ — ธุรกิจ]
