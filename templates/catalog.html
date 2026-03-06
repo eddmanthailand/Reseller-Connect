@@ -1181,18 +1181,51 @@
      GUEST CHAT WIDGET
 ═══════════════════════════════════════════════════════════ -->
 <style>
+#gc-fab-wrap {
+    position: fixed; bottom: 28px; right: 20px; z-index: 9999;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+#gc-bubble {
+    background: #fff; color: #1f2937; font-size: 13px; font-weight: 500;
+    padding: 9px 14px; border-radius: 18px 18px 4px 18px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.15);
+    max-width: 210px; line-height: 1.4; pointer-events: none;
+    opacity: 0; transform: translateY(8px) scale(.92);
+    transition: opacity .3s, transform .3s;
+}
+#gc-bubble.show { opacity: 1; transform: translateY(0) scale(1); }
 #gc-fab {
-    position: fixed; bottom: 28px; right: 28px; z-index: 9999;
-    width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer;
+    height: 48px; border-radius: 28px; border: none; cursor: pointer;
     background: linear-gradient(135deg, #a855f7, #ec4899);
     box-shadow: 0 4px 20px rgba(168,85,247,.5);
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 18px 0 14px;
     transition: transform .2s, box-shadow .2s;
+    position: relative;
 }
-#gc-fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(168,85,247,.7); }
-#gc-fab svg { width: 28px; height: 28px; fill: #fff; }
+#gc-fab:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(168,85,247,.7); }
+#gc-fab svg { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; }
+#gc-fab-label { color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; }
+#gc-online-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: #4ade80;
+    border: 2px solid #fff; flex-shrink: 0;
+    animation: gc-pulse-dot 2s infinite;
+}
+@keyframes gc-pulse-dot {
+    0%,100%{ box-shadow: 0 0 0 0 rgba(74,222,128,.6); }
+    50%{ box-shadow: 0 0 0 5px rgba(74,222,128,0); }
+}
+@keyframes gc-wiggle {
+    0%,100%{ transform: rotate(0deg) scale(1); }
+    15%{ transform: rotate(-8deg) scale(1.05); }
+    30%{ transform: rotate(7deg) scale(1.05); }
+    45%{ transform: rotate(-5deg) scale(1.02); }
+    60%{ transform: rotate(4deg) scale(1.02); }
+    75%{ transform: rotate(-2deg) scale(1); }
+}
+#gc-fab.wiggle { animation: gc-wiggle .6s ease; }
 #gc-badge {
-    position: absolute; top: -4px; right: -4px;
+    position: absolute; top: -6px; right: -6px;
     background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
     width: 20px; height: 20px; border-radius: 50%;
     display: none; align-items: center; justify-content: center;
@@ -1287,11 +1320,16 @@
 #gc-send svg { width: 18px; height: 18px; fill: #fff; }
 </style>
 
-<!-- FAB -->
-<button id="gc-fab" aria-label="แชทกับน้องนุ่น">
-    <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
-    <span id="gc-badge"></span>
-</button>
+<!-- FAB + Bubble wrapper -->
+<div id="gc-fab-wrap">
+    <div id="gc-bubble"></div>
+    <button id="gc-fab" aria-label="แชทกับน้องนุ่น">
+        <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+        <span id="gc-fab-label">น้องนุ่น</span>
+        <span id="gc-online-dot"></span>
+        <span id="gc-badge"></span>
+    </button>
+</div>
 
 <!-- Panel -->
 <div id="gc-panel" role="dialog" aria-label="แชทกับน้องนุ่น">
@@ -1328,6 +1366,44 @@
     const sendBtn = document.getElementById('gc-send');
     const badge = document.getElementById('gc-badge');
     const closeBtn = document.getElementById('gc-close-btn');
+    const bubble = document.getElementById('gc-bubble');
+
+    const BUBBLE_MSGS = [
+        'เฮ้~ กดมาคุยกันดิ 😏',
+        'โปรฯ ดีมากนะ... แต่ไม่บอกหรอก 🤭',
+        'ไซส์สงสัยไหม? น้องช่วยได้ค่ะ 📏',
+        'ว่างอยู่นะคะ กดมาเลย! 👆',
+        'สั่งผลิตได้ด้วยนะ บอกไว้ก่อน 🧵',
+        'ถามฟรี ไม่มีค่าใช้จ่าย 🎉',
+        'สินค้าใหม่มาแล้วว~ อยากรู้มั้ย? 👀',
+    ];
+    let _bubbleIdx = 0;
+
+    function showBubble() {
+        if (gcOpen) return;
+        bubble.textContent = BUBBLE_MSGS[_bubbleIdx % BUBBLE_MSGS.length];
+        _bubbleIdx++;
+        bubble.classList.add('show');
+        setTimeout(() => bubble.classList.remove('show'), 4500);
+    }
+
+    function startBubbleCycle() {
+        setTimeout(() => {
+            showBubble();
+            setInterval(showBubble, 22000);
+        }, 5000);
+    }
+
+    function triggerWiggle() {
+        if (gcOpen) return;
+        fab.classList.remove('wiggle');
+        void fab.offsetWidth;
+        fab.classList.add('wiggle');
+        fab.addEventListener('animationend', () => fab.classList.remove('wiggle'), { once: true });
+    }
+
+    startBubbleCycle();
+    setInterval(triggerWiggle, 8000);
 
     // Load history
     try { gcHistory = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { gcHistory = []; }
@@ -1414,6 +1490,7 @@
     function openPanel() {
         gcOpen = true; panel.classList.add('open');
         gcUnread = 0; badge.style.display = 'none';
+        bubble.classList.remove('show');
         renderHistory();
         setTimeout(() => input.focus(), 300);
     }
