@@ -438,11 +438,11 @@ async function agentSend() {
             .map(m => {
                 if (m.role === 'user') return { role: 'user', text: m.text || '' };
                 if (m.role === 'plan') {
-                    const status = m.approved ? '[อนุมัติแล้ว ดำเนินการสำเร็จ]' : '[รออนุมัติ]';
-                    return { role: 'model', text: `[แผนงาน ${m.tool}: ${m.text || ''} — ${status}]` };
+                    if (!m.approved) return null;
+                    return { role: 'model', text: `{"type":"executed","tool":"${m.tool}","status":"approved_and_done"}` };
                 }
                 if (m.role === 'success') {
-                    return { role: 'model', text: `[ผลลัพธ์: ${m.text || 'สำเร็จ'}]` };
+                    return { role: 'model', text: `{"type":"executed","status":"success","summary":${JSON.stringify((m.text||'').substring(0,80))}}` };
                 }
                 let text = m.text || '';
                 if (text.includes('📊')) {
@@ -450,7 +450,7 @@ async function agentSend() {
                 }
                 return { role: 'model', text };
             })
-            .filter(m => m.text);
+            .filter(m => m && m.text);
         const body = { message: text, context_page: _agentCurrentPage(), history };
         if (sentImage) { body.image_data = sentImage; body.image_mime = sentMime; }
         const res  = await fetch('/api/admin/agent/chat', {
