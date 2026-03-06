@@ -310,6 +310,50 @@
         .btn-sku-add:disabled { background: #e5e7eb; color: var(--text-muted); box-shadow: none; cursor: not-allowed; }
         .sku-modal-divider { height: 1px; background: var(--border); margin: 0 20px 18px; }
 
+        /* SIZE CHART */
+        .size-chart-btn {
+            display: flex; align-items: center; gap: 8px; width: 100%;
+            background: linear-gradient(135deg, #f5f3ff, #fdf4ff);
+            border: 1.5px solid #e9d5ff; border-radius: 10px;
+            padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+            color: var(--primary); font-family: inherit; transition: all 0.15s; margin-bottom: 16px;
+        }
+        .size-chart-btn:hover { background: linear-gradient(135deg, #ede9fe, #fae8ff); border-color: var(--primary); }
+        .size-chart-lightbox {
+            display: none; position: fixed; inset: 0; z-index: 700;
+            background: rgba(0,0,0,0.88); backdrop-filter: blur(6px);
+            align-items: center; justify-content: center; padding: 16px;
+        }
+        .size-chart-lightbox.show { display: flex; }
+        .size-chart-inner { position: relative; max-width: 540px; width: 100%; }
+        .size-chart-img { width: 100%; border-radius: 16px; box-shadow: 0 12px 48px rgba(0,0,0,0.6); display: block; }
+        .size-chart-close-btn {
+            position: absolute; top: -14px; right: -14px;
+            width: 36px; height: 36px; background: white; border: none; border-radius: 50%;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); color: var(--text); transition: all 0.15s;
+        }
+        .size-chart-close-btn:hover { transform: scale(1.1); }
+
+        /* COLOR SWATCH */
+        .color-swatch {
+            width: 36px; height: 36px; border-radius: 50%; border: 2.5px solid var(--border);
+            cursor: pointer; transition: all 0.15s; position: relative; flex-shrink: 0;
+        }
+        .color-swatch:hover:not(:disabled) { border-color: var(--primary); transform: scale(1.1); }
+        .color-swatch.selected { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,58,237,0.25); }
+        .color-swatch:disabled { opacity: 0.3; cursor: not-allowed; }
+        .color-swatch-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .color-swatch-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        /* AUTO-SELECTED OPTION PILL */
+        .auto-selected-pill {
+            display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px;
+            background: #f3f4f6; border-radius: 100px; font-size: 12px; color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .auto-selected-pill strong { color: var(--text); }
+
         /* TOAST */
         .toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -425,6 +469,16 @@
             ยืนยันคำสั่งซื้อ — เข้าสู่ระบบ
         </button>
         <button class="btn-continue" onclick="closeCart()">เลือกสินค้าเพิ่ม</button>
+    </div>
+</div>
+
+<!-- SIZE CHART LIGHTBOX -->
+<div class="size-chart-lightbox" id="sizeChartLightbox" onclick="closeSizeChart()">
+    <div class="size-chart-inner" onclick="event.stopPropagation()">
+        <img class="size-chart-img" id="sizeChartImg" src="" alt="ตารางไซส์">
+        <button class="size-chart-close-btn" onclick="closeSizeChart()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
     </div>
 </div>
 
@@ -620,6 +674,61 @@
         }
     }
 
+    /* ── SIZE CHART LIGHTBOX ── */
+    function openSizeChart(url) {
+        document.getElementById('sizeChartImg').src = url;
+        document.getElementById('sizeChartLightbox').classList.add('show');
+    }
+    function closeSizeChart() {
+        document.getElementById('sizeChartLightbox').classList.remove('show');
+    }
+
+    /* ── SORT HELPERS ── */
+    const SIZE_ORDER = ['XXXXS','XXXS','XXS','XS','S','M','L','XL','2XL','XXL','3XL','XXXL','4XL','5XL','6XL'];
+    const OPTION_KEY_ORDER = ['ขนาด','size','SIZE','สี','color','COLOR'];
+
+    function sortOptionKeys(keys) {
+        return [...keys].sort((a, b) => {
+            const ai = OPTION_KEY_ORDER.findIndex(k => k.toLowerCase() === a.toLowerCase());
+            const bi = OPTION_KEY_ORDER.findIndex(k => k.toLowerCase() === b.toLowerCase());
+            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        });
+    }
+
+    function sortOptionVals(key, vals) {
+        const isSize = ['ขนาด','size','SIZE'].some(k => k.toLowerCase() === key.toLowerCase());
+        if (!isSize) return vals;
+        return [...vals].sort((a, b) => {
+            const ai = SIZE_ORDER.indexOf(String(a).toUpperCase());
+            const bi = SIZE_ORDER.indexOf(String(b).toUpperCase());
+            if (ai !== -1 && bi !== -1) return ai - bi;
+            if (ai !== -1) return -1;
+            if (bi !== -1) return 1;
+            return String(a).localeCompare(String(b));
+        });
+    }
+
+    const COLOR_MAP = {
+        'white': '#ffffff', 'ขาว': '#ffffff', 'white/ขาว': '#ffffff',
+        'black': '#1f2937', 'ดำ': '#1f2937',
+        'navy': '#1e3a8a', 'กรมท่า': '#1e3a8a', 'navy blue': '#1e3a8a',
+        'blue': '#3b82f6', 'ฟ้า': '#87ceeb',
+        'red': '#ef4444', 'แดง': '#ef4444',
+        'pink': '#ec4899', 'ชมพู': '#ec4899',
+        'green': '#10b981', 'เขียว': '#10b981',
+        'grey': '#9ca3af', 'gray': '#9ca3af', 'เทา': '#9ca3af',
+        'yellow': '#fbbf24', 'เหลือง': '#fbbf24',
+        'purple': '#8b5cf6', 'ม่วง': '#8b5cf6',
+        'beige': '#d4b896', 'ครีม': '#d4b896',
+        'brown': '#92400e', 'น้ำตาล': '#92400e',
+        'orange': '#f97316', 'ส้ม': '#f97316',
+    };
+
+    function getColorHex(val) {
+        const lower = String(val).toLowerCase().trim();
+        return COLOR_MAP[lower] || null;
+    }
+
     function openSkuModal(data, tier1Discount) {
         const product = data.product;
         const skus = data.skus || [];
@@ -627,7 +736,8 @@
         const header = document.getElementById('skuModalHeader');
         const body = document.getElementById('skuModalBody');
 
-        const allOptionKeys = [...new Set(skus.flatMap(s => Object.keys(s.options || {})))];
+        const rawKeys = [...new Set(skus.flatMap(s => Object.keys(s.options || {})))];
+        const allOptionKeys = sortOptionKeys(rawKeys);
 
         const priceRange = (() => {
             const prices = skus.map(s => s.price);
@@ -664,19 +774,66 @@
             </button>`;
 
         let optionsHtml = '';
+        const autoSelectedKeys = [];
+
         allOptionKeys.forEach(key => {
-            const vals = [...new Set(skus.map(s => (s.options || {})[key]).filter(v => v != null))];
-            optionsHtml += `
-                <div class="sku-section-label">${escHtml(key)}</div>
-                <div class="sku-options" id="opts_${escHtml(key)}">
-                    ${vals.map(v => {
+            const rawVals = [...new Set(skus.map(s => (s.options || {})[key]).filter(v => v != null))];
+            const vals = sortOptionVals(key, rawVals);
+            const isColorKey = ['สี','color','COLOR'].some(k => k.toLowerCase() === key.toLowerCase());
+
+            if (vals.length === 1) {
+                _selectedOptions[key] = String(vals[0]);
+                autoSelectedKeys.push(key);
+                optionsHtml += `<div class="auto-selected-pill">
+                    <span>${escHtml(key)}:</span>
+                    <strong>${escHtml(String(vals[0]))}</strong>
+                    ${isColorKey && getColorHex(vals[0]) ? `<span style="width:14px;height:14px;border-radius:50%;background:${getColorHex(vals[0])};border:1px solid rgba(0,0,0,0.15);display:inline-block;"></span>` : ''}
+                </div>`;
+                return;
+            }
+
+            if (isColorKey) {
+                const allHaveHex = vals.every(v => getColorHex(v));
+                optionsHtml += `<div class="sku-section-label">${escHtml(key)}</div>
+                    <div class="sku-options color-swatch-wrap" id="opts_${escHtml(key)}" style="margin-bottom:16px;">`;
+                if (allHaveHex) {
+                    optionsHtml += vals.map(v => {
+                        const hex = getColorHex(v);
+                        const hasStock = skus.some(s => (s.options || {})[key] === v && s.stock > 0);
+                        const needBorder = hex === '#ffffff' || hex === '#d4b896' || hex === '#d4b896';
+                        return `<button class="color-swatch" title="${escHtml(String(v))}"
+                            style="background:${hex};${needBorder ? 'border-color:#d1d5db;' : ''}"
+                            ${!hasStock ? 'disabled' : ''}
+                            onclick="selectOpt('${escHtml(key)}','${escHtml(String(v))}')"></button>`;
+                    }).join('');
+                } else {
+                    optionsHtml += vals.map(v => {
                         const hasStock = skus.some(s => (s.options || {})[key] === v && s.stock > 0);
                         return `<button class="sku-opt-btn" ${!hasStock ? 'disabled' : ''} onclick="selectOpt('${escHtml(key)}','${escHtml(String(v))}')">${escHtml(String(v))}</button>`;
-                    }).join('')}
-                </div>`;
+                    }).join('');
+                }
+                optionsHtml += `</div>`;
+            } else {
+                optionsHtml += `<div class="sku-section-label">${escHtml(key)}</div>
+                    <div class="sku-options" id="opts_${escHtml(key)}">
+                        ${vals.map(v => {
+                            const hasStock = skus.some(s => (s.options || {})[key] === v && s.stock > 0);
+                            return `<button class="sku-opt-btn" ${!hasStock ? 'disabled' : ''} onclick="selectOpt('${escHtml(key)}','${escHtml(String(v))}')">${escHtml(String(v))}</button>`;
+                        }).join('')}
+                    </div>`;
+            }
         });
 
+        const needSelection = allOptionKeys.filter(k => !autoSelectedKeys.includes(k));
+        const sizeChartUrl = product.size_chart_image_url;
+
         body.innerHTML = `
+            ${sizeChartUrl ? `
+            <button class="size-chart-btn" onclick="openSizeChart('${escHtml(sizeChartUrl)}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M2 4h20M8 4v16M16 4v16"/></svg>
+                ดูตารางไซส์
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:auto"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </button>` : ''}
             ${optionsHtml}
             <div class="sku-qty-row">
                 <span class="sku-qty-label">จำนวน</span>
@@ -687,34 +844,42 @@
                 </div>
                 <span class="sku-stock-info" id="skuStockInfo"></span>
             </div>
-            <button class="btn-sku-add" id="btnSkuAdd" onclick="confirmSkuAdd()" disabled>
-                ${allOptionKeys.length > 0 ? 'กรุณาเลือกตัวเลือก' : 'ใส่ตะกร้า'}
+            <button class="btn-sku-add" id="btnSkuAdd" onclick="confirmSkuAdd()" ${needSelection.length > 0 ? 'disabled' : ''}>
+                ${needSelection.length > 0 ? `กรุณาเลือก${needSelection.join('/')}` : 'ใส่ตะกร้า'}
             </button>`;
 
         wrap.classList.add('show');
         showOverlay();
 
-        if (allOptionKeys.length === 0 && skus.length > 0) {
+        if (needSelection.length === 0) {
             updateSkuAddBtn(skus, tier1Discount, allOptionKeys, product);
         }
     }
 
     function selectOpt(key, val) {
         _selectedOptions[key] = val;
-        const allOptionKeys = [...new Set((_skuData.skus || []).flatMap(s => Object.keys(s.options || {})))];
+        const skus = _skuData.skus || [];
+        const rawKeys = [...new Set(skus.flatMap(s => Object.keys(s.options || {})))];
+        const allOptionKeys = sortOptionKeys(rawKeys);
+
         allOptionKeys.forEach(k => {
             const container = document.getElementById(`opts_${k}`);
             if (!container) return;
             container.querySelectorAll('.sku-opt-btn').forEach(btn => {
                 btn.classList.toggle('selected', btn.textContent.trim() === String(_selectedOptions[k] || ''));
             });
+            container.querySelectorAll('.color-swatch').forEach(btn => {
+                btn.classList.toggle('selected', btn.title === String(_selectedOptions[k] || ''));
+            });
         });
-        updateSkuAddBtn(_skuData.skus || [], _skuData.product?.tier1_discount || 0, allOptionKeys, _skuData.product);
+        updateSkuAddBtn(skus, _skuData.product?.tier1_discount || 0, allOptionKeys, _skuData.product);
     }
 
     function changeSkuQty(delta) {
-        const allOptionKeys = [...new Set((_skuData.skus || []).flatMap(s => Object.keys(s.options || {})))];
-        const matched = findMatchedSku(_skuData.skus || [], allOptionKeys);
+        const skus = _skuData.skus || [];
+        const rawKeys = [...new Set(skus.flatMap(s => Object.keys(s.options || {})))];
+        const allOptionKeys = sortOptionKeys(rawKeys);
+        const matched = findMatchedSku(skus, allOptionKeys);
         const maxStock = matched ? matched.stock : 99;
         _skuQty = Math.max(1, Math.min(maxStock, _skuQty + delta));
         document.getElementById('skuQtyNum').textContent = _skuQty;
@@ -762,7 +927,7 @@
         const skus = _skuData.skus || [];
         const product = _skuData.product;
         const tier1Discount = product?.tier1_discount || 0;
-        const allOptionKeys = [...new Set(skus.flatMap(s => Object.keys(s.options || {})))];
+        const allOptionKeys = sortOptionKeys([...new Set(skus.flatMap(s => Object.keys(s.options || {})))]);
         const matched = findMatchedSku(skus, allOptionKeys);
         if (!matched || matched.stock <= 0) return;
 

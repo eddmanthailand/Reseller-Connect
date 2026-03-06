@@ -533,7 +533,7 @@ def public_product_skus(product_id):
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cursor.execute('''
-            SELECT p.id, p.name, p.product_type,
+            SELECT p.id, p.name, p.product_type, p.size_chart_image_url,
                    (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
                    (SELECT ptp.discount_percent FROM product_tier_pricing ptp
                      JOIN reseller_tiers rt ON rt.id = ptp.tier_id
