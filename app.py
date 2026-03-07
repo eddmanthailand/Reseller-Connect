@@ -941,11 +941,12 @@ def public_chat_message():
                 _lconn.commit()
                 _lc.close()
                 _lconn.close()
-                send_push_to_admins(
+                notify_admins_guest_lead(
                     '📞 Guest ทิ้งเบอร์ในแชท',
                     f'เบอร์: {_phone_val} | {_interest_val[:60]}',
-                    url='/admin#guest-leads',
-                    tag=f'guest-lead-phone-{_phone_val}'
+                    notification_type='lead',
+                    push_url='/admin#guest-leads',
+                    push_tag=f'guest-lead-phone-{_phone_val}'
                 )
             except Exception as _le2:
                 print(f'[GuestBot] lead save error: {_le2}')
@@ -969,11 +970,12 @@ def public_chat_message():
                 _lconn2.commit()
                 _lc2.close()
                 _lconn2.close()
-                send_push_to_admins(
+                notify_admins_guest_lead(
                     '🏭 Guest สนใจสั่งผลิต/ราคาส่ง',
                     user_msg[:80],
-                    url='/admin#guest-leads',
-                    tag=f'guest-custom-order-{int(__import__("time").time())}'
+                    notification_type='lead',
+                    push_url='/admin#guest-leads',
+                    push_tag=f'guest-custom-order-{int(__import__("time").time())}'
                 )
             except Exception as _le3:
                 print(f'[GuestBot] custom order lead save error: {_le3}')
@@ -1242,11 +1244,12 @@ def public_chat_message():
                 ''', (_ra_pid, _ra_size, _ra_pname, _ra_phone, _ra_session))
                 db_conn.commit()
                 print(f'[GuestBot] Restock alert saved: pid={_ra_pid} size={_ra_size} phone={_ra_phone}')
-                send_push_to_admins(
+                notify_admins_guest_lead(
                     '🔔 Guest ฝากแจ้งเตือนสต็อก',
                     f'{_ra_pname} ไซส์ {_ra_size} | เบอร์: {_ra_phone}',
-                    url='/admin#restock-alerts',
-                    tag=f'guest-restock-{_ra_pid}-{_ra_size}'
+                    notification_type='restock',
+                    push_url='/admin#restock-alerts',
+                    push_tag=f'guest-restock-{_ra_pid}-{_ra_size}'
                 )
             except Exception as _ra_e:
                 print(f'[GuestBot] restock_alert save error: {_ra_e}')
@@ -17900,6 +17903,37 @@ def send_push_to_admins(title, body, url='/', tag='admin-notification'):
             cursor.close()
         if conn:
             conn.close()
+
+
+def notify_admins_guest_lead(title, message, notification_type='info', reference_type=None, reference_id=None, push_url='/admin', push_tag='admin-guest-lead'):
+    """Send push notification + persist in-app notification bell for all admins. Runs in background thread."""
+    def _run():
+        conn = None
+        cursor = None
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT DISTINCT u.id FROM users u
+                JOIN roles r ON r.id = u.role_id
+                WHERE r.name IN ('Super Admin', 'Assistant Admin')
+            ''')
+            admin_ids = [row[0] for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            for aid in admin_ids:
+                create_notification(aid, title, message, notification_type, reference_type, reference_id)
+                send_push_notification(aid, title, message[:100], url=push_url, tag=push_tag)
+        except Exception as _e:
+            print(f'[notify_admins_guest_lead] error: {_e}')
+        finally:
+            if cursor:
+                try: cursor.close()
+                except: pass
+            if conn:
+                try: conn.close()
+                except: pass
+    threading.Thread(target=_run, daemon=True).start()
 
 # ==================== END PWA & PUSH NOTIFICATIONS ====================
 
