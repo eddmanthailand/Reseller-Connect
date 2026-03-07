@@ -720,18 +720,40 @@ def public_chat_message():
             except Exception:
                 pass
 
-        # Bot name
-        def _fetch_settings():
+        # Bot name + persona — from agent_settings (same source as member bot)
+        def _fetch_agent_settings():
             try:
                 c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                c.execute("SELECT key, value FROM settings WHERE key IN ('bot_chat_name')")
-                return {r['key']: r['value'] for r in c.fetchall()}
+                c.execute("SELECT * FROM agent_settings WHERE id = 1")
+                return c.fetchone() or {}
             except Exception:
                 return {}
-        if 'bot_settings' not in _BOT_CACHE:
-            _BOT_CACHE['bot_settings'] = {'data': None, 'expires': 0}
-        settings = _bot_cache_get('bot_settings', 600, _fetch_settings)
-        bot_name = settings.get('bot_chat_name') or 'น้องนุ่น'
+        if 'guest_agent_settings' not in _BOT_CACHE:
+            _BOT_CACHE['guest_agent_settings'] = {'data': None, 'expires': 0}
+        _agent_cfg = _bot_cache_get('guest_agent_settings', 600, _fetch_agent_settings)
+        bot_name = _agent_cfg.get('bot_chat_name') or 'น้องนุ่น'
+        extra_persona = _agent_cfg.get('bot_chat_persona') or ''
+
+        # Training Q&A from Admin (bot_training_examples)
+        def _fetch_training():
+            try:
+                c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                c.execute("""SELECT question_pattern, answer_template
+                             FROM bot_training_examples
+                             WHERE is_active = TRUE
+                             ORDER BY sort_order, id""")
+                return c.fetchall()
+            except Exception:
+                return []
+        if 'guest_training' not in _BOT_CACHE:
+            _BOT_CACHE['guest_training'] = {'data': None, 'expires': 0}
+        training_rows = _bot_cache_get('guest_training', 600, _fetch_training)
+        training_block = ''
+        if training_rows:
+            qa_lines = '\n'.join(
+                f'Q: {r["question_pattern"]}\nA: {r["answer_template"]}' for r in training_rows
+            )
+            training_block = f'\n\n📚 ตัวอย่างการตอบที่ถูกต้อง (Admin กำหนด — ให้ใช้เป็นต้นแบบ):\n{qa_lines}'
 
         # Categories
         def _fetch_cats():
@@ -770,8 +792,36 @@ def public_chat_message():
                 promos_text += f" (ซื้อครบ฿{p['condition_min_spend']:.0f})"
             promos_text += '\n'
 
-        # Product search — Bronze (tier_id=1) pricing
-        # Ensure clean transaction state before product search
+        # Parse measurements from conversation history (session memory)
+        _session_meas = {}
+        for _h in history:
+            if _h.get('role') == 'user':
+                _ht = str(_h.get('text', ''))
+                for _pat, _key in [(r'อก\s*(\d+)', 'chest'), (r'เอว\s*(\d+)', 'waist'), (r'สะโพก\s*(\d+)', 'hips')]:
+                    _m = _re.search(_pat, _ht)
+                    if _m:
+                        _session_meas[_key] = int(_m.group(1))
+        for _pat, _key in [(r'อก\s*(\d+)', 'chest'), (r'เอว\s*(\d+)', 'waist'), (r'สะโพก\s*(\d+)', 'hips')]:
+            _m = _re.search(_pat, user_msg)
+            if _m:
+                _session_meas[_key] = int(_m.group(1))
+        _meas_parts = []
+        if _session_meas.get('chest'): _meas_parts.append(f"รอบอก {_session_meas['chest']} นิ้ว")
+        if _session_meas.get('waist'): _meas_parts.append(f"รอบเอว {_session_meas['waist']} นิ้ว")
+        if _session_meas.get('hips'):  _meas_parts.append(f"รอบสะโพก {_session_meas['hips']} นิ้ว")
+        meas_text = ', '.join(_meas_parts) if _meas_parts else '(ยังไม่ได้บอกขนาด)'
+
+        # Question count — upsell nudge after 5th question
+        _user_q_count = sum(1 for _h in history if _h.get('role') == 'user') + 1
+        _upsell_note = ''
+        if _user_q_count >= 5:
+            _upsell_note = (
+                '\n\n[ใส่ท้ายคำตอบ] หลังตอบคำถามแล้ว ให้เพิ่มประโยคสั้นชวนสมัครสมาชิก'
+                ' เช่น "สมัครสมาชิกฟรีเพื่อรับราคาพิเศษและสิทธิ์เพิ่มเติมได้เลยนะคะ 😊"'
+                ' และให้ใส่ "สมัครสมาชิกฟรี" ใน quick_replies ด้วย'
+            )
+
+        # Product search — Bronze (tier_id=1) pricing + image_url
         try:
             conn.rollback()
             cursor.close()
@@ -782,6 +832,7 @@ def public_chat_message():
         keywords = _re.sub(r'[^\wก-๙\s]', ' ', user_msg).split()
         keywords = [k for k in keywords if len(k) >= 2][:6]
         products_text = ''
+        prod_list = []
         if keywords:
             kw_conditions = ' OR '.join(['p.name ILIKE %s OR p.bot_description ILIKE %s' for _ in keywords])
             kw_params = [BRONZE_TIER_ID, BRONZE_TIER_ID]
@@ -794,6 +845,9 @@ def public_chat_message():
                            (SELECT c2.name FROM categories c2
                             JOIN product_categories pc2 ON pc2.category_id = c2.id
                             WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
+                           (SELECT pi.image_url FROM product_images pi
+                            WHERE pi.product_id = p.id
+                            ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
                            MIN(s.price) as min_price,
                            ROUND(MIN(s.price) * (1 - COALESCE(
                                (SELECT ptp.discount_percent FROM product_tier_pricing ptp
@@ -821,10 +875,18 @@ def public_chat_message():
                     bot_desc = pr.get('bot_description') or ''
                     cat = pr.get('cat_name') or ''
                     skus = pr.get('sku_list') or ''
+                    img = pr.get('image_url') or ''
+                    prod_list.append({
+                        'id': pr['id'],
+                        'name': pr['name'],
+                        'image_url': img,
+                        'price': f'฿{price:.0f}',
+                        'member_price': f'฿{member_price:.0f}' if member_price > 0 else '',
+                    })
                     if disc > 0 and member_price > 0:
-                        products_text += f"  - [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
+                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
                     else:
-                        products_text += f"  - [{brand}] {pr['name']} ราคา฿{price:.0f}"
+                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคา฿{price:.0f}"
                     if cat:
                         products_text += f" หมวด:{cat}"
                     if skus:
@@ -837,36 +899,90 @@ def public_chat_message():
             except Exception as _e:
                 print(f'[GuestBot] product search error: {_e}')
 
+        # Save guest lead if phone number detected in message
+        _phone_pat = r'0[689]\d{8}|0\d{8,9}'
+        _phone_match = _re.search(_phone_pat, user_msg)
+        if _phone_match:
+            try:
+                _lconn = get_db()
+                _lc = _lconn.cursor()
+                _phone_val = _phone_match.group()
+                _interest_val = user_msg[:300]
+                _conv_summary = ' | '.join(
+                    f"{_h.get('role','?')}: {str(_h.get('text',''))[:80]}"
+                    for _h in history[-4:]
+                )
+                _lc.execute(
+                    "INSERT INTO guest_leads (phone, interest_text, conversation_summary) VALUES (%s, %s, %s)",
+                    (_phone_val, _interest_val, _conv_summary)
+                )
+                _lconn.commit()
+                _lc.close()
+                _lconn.close()
+            except Exception as _le2:
+                print(f'[GuestBot] lead save error: {_le2}')
+
         cursor.close()
         conn.close()
 
-        system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยของร้านเสื้อผ้าคุณภาพสูง ตอบภาษาไทยเสมอ สุภาพ อ่อนน้อม กระชับ ไม่เกิน 5 ประโยคต่อการตอบ
+        _GUEST_FABRIC_KNOWLEDGE = """
+=== ความรู้เรื่องผ้าและหลักสรีรศาสตร์การเลือกเสื้อผ้า ===
+[หลักสรีรศาสตร์] เมื่อนั่ง สะโพกขยาย 1"–1.5" จากท่ายืน
+[ผ้าไม่ยืด เช่น วาเลนติโน่ ซาติน ฝ้าย ลินิน โพลีเอสเตอร์ทอ]: ต้องเผื่อสะโพก 1.5"–2"
+  - ช่องว่าง < 1.5" = แน่นมาก นั่งไม่สบาย → ห้ามแนะนำ
+  - ช่องว่าง 1.5"–2" = พอดี ยืนสบาย (ต้องแจ้งว่านั่งนานๆ อาจกระชับ)
+  - ช่องว่าง 2"–4" = สบายมาก  - ช่องว่าง > 4" = หลวม
+[ผ้ายืด stretch/jersey/spandex]: เผื่อสะโพก 0.5"–1" ก็พอ
+[เอว ผ้าไม่ยืด]: ช่องว่าง 0–1" = พอดี, < 0 = ใส่ไม่ได้, > 2" = หลวม
+ขั้นตอนแนะนำไซส์: 1)อ่านตารางไซส์ 2)ดูประเภทผ้า 3)คำนวณช่องว่าง 4)ตอบพร้อมเหตุผล
+🚫 ห้ามเดาตัวเลขไซส์ — ต้องอ่านจากตารางไซส์สินค้าเท่านั้น"""
+
+        system_prompt = f"""คุณชื่อ "{bot_name}" เป็นผู้ช่วยขายสินค้าออนไลน์ที่เป็นมืออาชีพ สุภาพ อ่อนน้อม และเน้นการปิดการขาย ตอบภาษาไทยเสมอ ลงท้าย "ค่ะ" เสมอ
+{extra_persona}{training_block}
+{_GUEST_FABRIC_KNOWLEDGE}
 
 ข้อมูลบริษัท:
 - บริษัท เคาท์มีอินดีไซน์ จำกัด รับผลิตเสื้อผ้าคุณภาพสูง
 - โทรศัพท์ 083-668-2211 (คุณเอ็ด)
 - เว็บไซต์: ekgshops.com
 
-กฎที่ต้องปฏิบัติ:
+กฎสำคัญ:
 - ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่ม
-- ราคาที่แสดงคือ ราคาปกติ / ราคาสมาชิก — ราคาสมาชิกจะได้รับเมื่อสมัครสมาชิกแล้ว
+- ราคาที่แสดง: ราคาปกติ / ราคาสมาชิก (ได้รับเมื่อสมัครสมาชิก)
 - 💳 รับชำระผ่านโอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
 - 🚚 รองรับ Dropship — ไม่ต้องสต็อกสินค้าเอง
-- 🏭 รับผลิตตามสั่ง: ถ้าลูกค้าสนใจ ให้ถามทีละข้อ: 1)รูปแบบ 2)รูปตัวอย่าง 3)จำนวน 4)วันที่ต้องการ 5)เบอร์โทรติดต่อกลับ เมื่อครบให้บอก "รับข้อมูลไว้แล้วค่ะ ทีมงานจะติดต่อกลับโดยเร็วค่ะ 😊"
-- ถ้าลูกค้าถามเบอร์ติดต่อ: ส่ง 083-668-2211 ติดต่อคุณเอ็ดได้เลยค่ะ
-- ถ้าลูกค้าสนใจสั่งสินค้า ให้แนะนำให้ สมัครสมาชิกฟรี เพื่อรับราคาพิเศษและสิทธิ์ต่างๆ
-- ห้ามเดาตัวเลขขนาดไซส์ — ถ้าถามเรื่องไซส์ให้บอกว่าต้องดูตารางไซส์ของสินค้านั้นก่อน
-- ถ้าไม่มีข้อมูลสินค้าที่ถามถึง → ขอโทษและแนะนำให้ติดต่อ 083-668-2211
+- 🏭 รับผลิตตามสั่ง: ถ้าสนใจ ถามทีละข้อ: 1)รูปแบบ 2)รูปตัวอย่าง 3)จำนวน 4)วันที่ 5)เบอร์โทร
+- 🖼️ show_product_ids: ใส่ product ID เฉพาะเมื่อลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ" ชัดเจน เท่านั้น
+  * product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42
+  * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" ในข้อความตอบเด็ดขาด
+- 📋 เมื่อถามว่ามีแบบไหนบ้าง: แสดงรายชื่อสินค้าทั้งหมดก่อน ห้ามใส่ show_product_ids ตอนนี้ รอให้ลูกค้าเลือกชิ้นที่สนใจก่อน
+- ❓ ถ้าถามไซส์แต่ไม่ระบุสินค้า → ถามกลับว่าสนใจสินค้าประเภทไหน แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริง
+- ถ้าไม่มีข้อมูลสินค้า → แนะนำโทรถาม 083-668-2211
+{_upsell_note}
 
-=== หมวดหมู่สินค้า ===
+=== ขนาดร่างกายที่บอกไว้ในการสนทนานี้ ===
+{meas_text}
+(ถ้ามีข้อมูลแล้ว ห้ามถามซ้ำ ให้ใช้ค่านี้ได้เลย)
+
+=== หมวดหมู่สินค้าในร้าน ===
 {cats_str}
 
 === โปรโมชั่นปัจจุบัน ===
 {promos_text or 'ไม่มีโปรโมชั่นในขณะนี้'}
 
 === สินค้าที่เกี่ยวข้องกับคำถาม ===
-{products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา — ตอบตามข้อมูลที่มีหรือแนะนำให้ติดต่อร้าน)'}
-"""
+{products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
+
+⚠️ ตอบกลับเป็น JSON เท่านั้น ห้ามตอบเป็นข้อความธรรมดาเด็ดขาด:
+{{
+  "message": "ข้อความตอบกลับ (string)",
+  "quick_replies": ["ตัวเลือก1", "ตัวเลือก2"],
+  "show_product_ids": [id1, id2]
+}}
+- "quick_replies": ปุ่มตัวเลือกให้กด ไม่เกิน 4 ปุ่ม ([] ถ้าไม่ต้องการ)
+- "show_product_ids": product ID ที่ต้องการแสดงรูปสินค้า ([] ถ้าไม่มี)
+- quick_replies เรื่องหมวดหมู่: ใช้ชื่อจริงจาก "หมวดหมู่สินค้าในร้าน" เท่านั้น
+- quick_replies เรื่องสินค้า: ใช้ชื่อสินค้าจริงจากรายการด้านบน ห้ามตั้งชื่อเอง"""
 
         # Build conversation contents
         _contents = []
@@ -881,19 +997,50 @@ def public_chat_message():
             max_output_tokens=1024,
             temperature=0.7,
         )
-        _response = _client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=_contents,
-            config=_cfg,
-        )
-        reply_text = (_response.text or '').strip()
+        _all_models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
+        _response = None
+        for _model in _all_models:
+            try:
+                _response = _client.models.generate_content(
+                    model=_model,
+                    contents=_contents,
+                    config=_cfg,
+                )
+                if _response and _response.text:
+                    break
+            except Exception as _me:
+                if '503' in str(_me) or 'overloaded' in str(_me).lower():
+                    continue
+                raise
+        raw_text = (_response.text if _response else '') or ''
 
-        # Safety: strip JSON leakage
-        reply_text = _re.sub(r'\{["\']?(action|tool|function|name)["\']?\s*:', '', reply_text)
-        if not reply_text:
-            reply_text = f'ขออภัยค่ะ ไม่สามารถตอบได้ในขณะนี้ กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'
+        # Parse JSON response
+        bot_text = ''
+        quick_replies = []
+        show_product_ids = []
+        try:
+            _json_match = _re.search(r'\{.*\}', raw_text, _re.DOTALL)
+            if _json_match:
+                _parsed = _json.loads(_json_match.group())
+                bot_text = str(_parsed.get('message') or _parsed.get('reply') or '').strip()
+                quick_replies = [str(x) for x in (_parsed.get('quick_replies') or []) if x][:4]
+                show_product_ids = [int(x) for x in (_parsed.get('show_product_ids') or []) if str(x).isdigit()]
+        except Exception:
+            pass
+        if not bot_text:
+            bot_text = _re.sub(r'\{.*?\}', '', raw_text, flags=_re.DOTALL).strip()
+        if not bot_text:
+            bot_text = 'ขออภัยค่ะ ไม่สามารถตอบได้ในขณะนี้ กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'
 
-        return jsonify({'reply': reply_text}), 200
+        # Filter prod_list to only the IDs requested for image display
+        _id_set = set(show_product_ids)
+        show_products = [p for p in prod_list if p['id'] in _id_set][:4]
+
+        return jsonify({
+            'reply': bot_text,
+            'quick_replies': quick_replies,
+            'show_products': show_products,
+        }), 200
 
     except Exception as e:
         print(f'[GuestBot] error: {e}')

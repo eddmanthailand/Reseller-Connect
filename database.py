@@ -1339,6 +1339,19 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_guest_chat_log_norm ON guest_chat_log USING gin(normalized_q gin_trgm_ops)"
         )
 
+        # Guest leads from catalog chat bot
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS guest_leads (
+                id SERIAL PRIMARY KEY,
+                phone VARCHAR(30),
+                name VARCHAR(100),
+                interest_text TEXT,
+                conversation_summary TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_guest_leads_created ON guest_leads(created_at DESC)")
+
         # Migration: Add Meta Marketing API credentials to facebook_pixel_settings
         cursor.execute("""
             ALTER TABLE facebook_pixel_settings
