@@ -162,6 +162,15 @@
             display: flex; align-items: center; gap: 10px;
             padding: 10px 16px; border-radius: 12px; flex: 1; min-width: 220px;
         }
+        @media (max-width: 520px) {
+            .promo-bar { padding: 10px 12px; }
+            .promo-bar-inner { gap: 8px; }
+            .promo-card { min-width: 140px; padding: 8px 12px; gap: 8px; }
+            .promo-icon { font-size: 18px; }
+            .promo-title { font-size: 12px; }
+            .promo-sub { font-size: 10px; }
+            .filter-section { padding: 10px 12px; }
+        }
         .promo-card.shipping { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 1.5px solid #6ee7b7; }
         .promo-card.discount { background: linear-gradient(135deg, #fdf4ff, #fae8ff); border: 1.5px solid #e9d5ff; }
         .promo-icon { font-size: 22px; flex-shrink: 0; }
