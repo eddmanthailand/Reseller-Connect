@@ -1369,7 +1369,7 @@
 <!-- FAB + Bubble wrapper -->
 <div id="gc-fab-wrap">
     <div id="gc-bubble"></div>
-    <button id="gc-fab" aria-label="แชทกับน้องนุ่น">
+    <button type="button" id="gc-fab" aria-label="แชทกับน้องนุ่น">
         <span class="gc-ring"></span>
         <span class="gc-ring gc-ring2"></span>
         <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
@@ -1387,12 +1387,12 @@
             <div class="gc-name" id="gc-bot-name">น้องนุ่น</div>
             <div class="gc-status">ผู้ช่วยร้านค้า • ตอบอัตโนมัติ</div>
         </div>
-        <button class="gc-close" id="gc-close-btn">✕</button>
+        <button type="button" class="gc-close" id="gc-close-btn">✕</button>
     </div>
     <div id="gc-messages"></div>
     <div id="gc-footer">
         <textarea id="gc-input" rows="1" placeholder="พิมพ์คำถามได้เลยค่ะ..."></textarea>
-        <button id="gc-send" aria-label="ส่งข้อความ">
+        <button type="button" id="gc-send" aria-label="ส่งข้อความ">
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         </button>
     </div>
@@ -1545,10 +1545,18 @@
 
     async function sendMessage() {
         const text = input.value.trim();
-        if (!text || gcTyping) return;
+        if (gcTyping) return;
+        if (!text) {
+            input.style.borderColor = '#ef4444';
+            input.style.animation = 'none';
+            setTimeout(() => { input.style.borderColor = ''; }, 800);
+            input.focus();
+            return;
+        }
         input.value = ''; input.style.height = '';
         appendMsg('user', text);
         gcTyping = true; sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.6';
         showTyping();
         try {
             const resp = await fetch('/api/public/chat/message', {
@@ -1566,7 +1574,9 @@
             hideTyping();
             appendBotMsg('ขออภัยค่ะ เชื่อมต่อไม่ได้ชั่วคราว กรุณาลองใหม่ค่ะ');
         } finally {
-            gcTyping = false; sendBtn.disabled = false;
+            gcTyping = false;
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '';
             input.focus();
         }
     }
