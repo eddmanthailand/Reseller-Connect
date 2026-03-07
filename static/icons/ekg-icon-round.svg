@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a2e5a"/>
+      <stop offset="100%" stop-color="#2a4a8a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="50" fill="url(#bg)"/>
+  <!-- EKG waveform scaled to fit inside circle -->
+  <path
+    d="M 5,50 L 28,50 L 33,55 L 39,12 L 46,65 L 52,50 L 60,50
+       C 64,50 65.5,37 71,37
+       C 76.5,37 78,50 82,50
+       L 95,50"
+    stroke="white"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>
