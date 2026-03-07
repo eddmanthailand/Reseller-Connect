@@ -6084,6 +6084,87 @@ def add_to_cart():
         if conn:
             conn.close()
 
+@app.route('/api/cart/migrate-guest', methods=['POST'])
+@login_required
+def migrate_guest_cart():
+    """Migrate guest localStorage cart items into the logged-in member's server-side cart."""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json() or {}
+        items = data.get('items') or []
+        if not items:
+            return jsonify({'migrated': 0}), 200
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cart_id = get_or_create_cart(user_id, cursor)
+
+        migrated = 0
+        for item in items:
+            try:
+                sku_id = int(item.get('skuId') or item.get('sku_id') or 0)
+                quantity = max(1, int(item.get('qty') or item.get('quantity') or 1))
+                if not sku_id:
+                    continue
+
+                cursor.execute('''
+                    SELECT s.id, s.price, s.stock, p.id as product_id
+                    FROM skus s JOIN products p ON p.id = s.product_id
+                    WHERE s.id = %s AND p.status = 'active'
+                ''', (sku_id,))
+                sku = cursor.fetchone()
+                if not sku:
+                    continue
+
+                cursor.execute('''
+                    SELECT ptp.discount_percent
+                    FROM users u
+                    JOIN product_tier_pricing ptp ON ptp.tier_id = u.reseller_tier_id
+                    WHERE u.id = %s AND ptp.product_id = %s
+                ''', (user_id, sku['product_id']))
+                tier_pricing = cursor.fetchone()
+                discount_percent = float(tier_pricing['discount_percent']) if tier_pricing else 0
+
+                cursor.execute('''
+                    SELECT id, quantity FROM cart_items
+                    WHERE cart_id = %s AND sku_id = %s
+                ''', (cart_id, sku_id))
+                existing = cursor.fetchone()
+
+                if existing:
+                    new_qty = min(existing['quantity'] + quantity, int(sku['stock']))
+                    cursor.execute('''
+                        UPDATE cart_items SET quantity = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    ''', (new_qty, existing['id']))
+                else:
+                    qty_to_add = min(quantity, int(sku['stock']))
+                    if qty_to_add < 1:
+                        continue
+                    cursor.execute('''
+                        INSERT INTO cart_items (cart_id, sku_id, quantity, unit_price, tier_discount_percent)
+                        VALUES (%s, %s, %s, %s, %s)
+                    ''', (cart_id, sku_id, qty_to_add, sku['price'], discount_percent))
+                migrated += 1
+            except Exception:
+                continue
+
+        conn.commit()
+        return jsonify({'migrated': migrated}), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route('/api/cart/items/<int:item_id>', methods=['PATCH'])
 @login_required
 def update_cart_item(item_id):

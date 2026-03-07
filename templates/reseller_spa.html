@@ -3464,5 +3464,20 @@
     <script src="/static/js/reseller-spa.js?v=20260305k"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
+    <script>
+        (function() {
+            try {
+                var _gc = JSON.parse(localStorage.getItem('ekg_cart') || '[]');
+                if (!_gc.length) return;
+                fetch('/api/cart/migrate-guest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: _gc })
+                }).then(function(r) {
+                    if (r.ok) localStorage.removeItem('ekg_cart');
+                }).catch(function() {});
+            } catch(_e) {}
+        })();
+    </script>
 </body>
 </html>

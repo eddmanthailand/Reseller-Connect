@@ -413,6 +413,17 @@
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'เกิดข้อผิดพลาด');
                 showAlert('เข้าสู่ระบบสำเร็จ!', 'success');
+                try {
+                    const _gc = JSON.parse(localStorage.getItem('ekg_cart') || '[]');
+                    if (_gc.length > 0) {
+                        await fetch('/api/cart/migrate-guest', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ items: _gc })
+                        });
+                        localStorage.removeItem('ekg_cart');
+                    }
+                } catch(_e) {}
                 setTimeout(() => { window.location.href = result.redirect || '/dashboard'; }, 800);
             } catch (error) {
                 showAlert(error.message, 'error');
