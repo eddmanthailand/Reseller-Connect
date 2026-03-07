@@ -40,7 +40,7 @@
         }
         .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
         .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
-        .logo-icon svg { width: 62px; height: auto; stroke: white; flex-shrink: 0; }
+        .logo-icon svg { width: 100%; height: 100%; stroke: white; flex-shrink: 0; }
         .logo-text { font-size: 18px; font-weight: 700; color: var(--primary); }
         .header-actions { display: flex; align-items: center; gap: 8px; }
         .btn-login { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; border: 1.5px solid var(--border); color: var(--text); background: var(--white); transition: all 0.2s; }
@@ -102,7 +102,7 @@
             .site-header { padding: 0 10px; }
             .header-inner { gap: 8px; }
             .logo-icon { width: 28px; height: 28px; border-radius: 7px; }
-            .logo-icon svg { width: 52px; }
+            .logo-icon svg { width: 100%; }
             .logo-text { font-size: 15px; }
             .btn-login { display: none; }
             .header-actions { gap: 6px; }
@@ -110,7 +110,7 @@
         @media (max-width: 360px) {
             .logo-text { font-size: 13px; }
             .logo-icon { width: 24px; height: 24px; }
-            .logo-icon svg { width: 44px; }
+            .logo-icon svg { width: 100%; }
             .btn-register { padding: 6px 10px; font-size: 12px; }
         }
 
@@ -402,7 +402,7 @@
     <div class="header-inner">
         <a href="/" class="logo">
             <div class="logo-icon">
-                <svg viewBox="0 0 280 90" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 0,60 L 52,60 L 65,70 L 74,11 L 83,76 L 94,60 L 106,60 L 114,44 L 123,60 L 131,38 L 141,60 L 280,60" stroke-width="14"/></svg>
+                <svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 0,68 L 18,68 L 24,78 L 32,14 L 40,86 L 48,68 L 56,68 L 63,50 L 71,68 L 78,42 L 86,68 L 100,68" stroke-width="15"/></svg>
             </div>
             <span class="logo-text">EKG Shops</span>
         </a>
