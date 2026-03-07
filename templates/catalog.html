@@ -1184,26 +1184,35 @@
 #gc-fab-wrap {
     position: fixed; bottom: 28px; right: 20px; z-index: 9999;
     display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    animation: gc-float 3s ease-in-out infinite;
+}
+@keyframes gc-float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-7px); }
 }
 #gc-bubble {
-    background: #fff; color: #1f2937; font-size: 13px; font-weight: 500;
+    background: linear-gradient(135deg,#fdf4ff,#fff0fa);
+    color: #1f2937; font-size: 13px; font-weight: 500;
     padding: 9px 14px; border-radius: 18px 18px 4px 18px;
-    box-shadow: 0 4px 18px rgba(0,0,0,.15);
+    box-shadow: 0 4px 18px rgba(168,85,247,.25);
+    border-left: 3px solid #a855f7;
     max-width: 210px; line-height: 1.4; pointer-events: none;
     opacity: 0; transform: translateY(8px) scale(.92);
-    transition: opacity .3s, transform .3s;
+    transition: opacity .35s, transform .35s;
 }
 #gc-bubble.show { opacity: 1; transform: translateY(0) scale(1); }
 #gc-fab {
     height: 48px; border-radius: 28px; border: none; cursor: pointer;
-    background: linear-gradient(135deg, #a855f7, #ec4899);
+    background: linear-gradient(135deg, #a855f7, #ec4899, #f97316, #a855f7);
+    background-size: 300% 300%;
+    animation: gc-gradient-shift 5s ease infinite;
     box-shadow: 0 4px 20px rgba(168,85,247,.5);
     display: flex; align-items: center; gap: 8px;
     padding: 0 18px 0 14px;
     transition: transform .2s, box-shadow .2s;
-    position: relative;
+    position: relative; overflow: visible;
 }
-#gc-fab:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(168,85,247,.7); }
+#gc-fab:hover { transform: scale(1.07); box-shadow: 0 6px 32px rgba(168,85,247,.8); }
 #gc-fab svg { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; }
 #gc-fab-label { color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; }
 #gc-online-dot {
@@ -1214,6 +1223,11 @@
 @keyframes gc-pulse-dot {
     0%,100%{ box-shadow: 0 0 0 0 rgba(74,222,128,.6); }
     50%{ box-shadow: 0 0 0 5px rgba(74,222,128,0); }
+}
+@keyframes gc-gradient-shift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 @keyframes gc-wiggle {
     0%   { transform: scaleX(1)    scaleY(1)    translateY(0); }
@@ -1226,7 +1240,36 @@
     90%  { transform: scaleX(1.02) scaleY(0.99) translateY(0); }
     100% { transform: scaleX(1)    scaleY(1)    translateY(0); }
 }
-#gc-fab.wiggle { animation: gc-wiggle .95s cubic-bezier(.36,.07,.19,.97); }
+#gc-fab.wiggle { animation: gc-gradient-shift 5s ease infinite, gc-wiggle .95s cubic-bezier(.36,.07,.19,.97); }
+.gc-ring {
+    position: absolute; inset: 0; border-radius: 28px;
+    border: 2.5px solid rgba(168,85,247,.5);
+    animation: gc-ring-pulse 2.4s ease-out infinite;
+    pointer-events: none;
+}
+.gc-ring2 { animation-delay: 1.2s; border-color: rgba(236,72,153,.4); }
+@keyframes gc-ring-pulse {
+    0%   { transform: scale(1);    opacity: .8; }
+    100% { transform: scale(1.65); opacity: 0;  }
+}
+.gc-sparkle {
+    position: absolute; font-size: 14px; pointer-events: none;
+    animation: gc-sparkle-anim .9s ease-out forwards;
+    z-index: 10000;
+}
+@keyframes gc-sparkle-anim {
+    0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(var(--sx),var(--sy)) scale(.3) rotate(var(--sr)); }
+}
+.gc-burst {
+    position: fixed; pointer-events: none; font-size: 18px;
+    animation: gc-burst-anim .75s ease-out forwards;
+    z-index: 10001;
+}
+@keyframes gc-burst-anim {
+    0%   { opacity: 1; transform: translate(0,0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--bx),var(--by)) scale(.2); }
+}
 #gc-badge {
     position: absolute; top: -6px; right: -6px;
     background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
@@ -1327,6 +1370,8 @@
 <div id="gc-fab-wrap">
     <div id="gc-bubble"></div>
     <button id="gc-fab" aria-label="แชทกับน้องนุ่น">
+        <span class="gc-ring"></span>
+        <span class="gc-ring gc-ring2"></span>
         <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
         <span id="gc-fab-label">น้องนุ่น</span>
         <span id="gc-online-dot"></span>
@@ -1381,29 +1426,68 @@
     ];
     let _bubbleIdx = 0;
 
-bubbleIdx % BUBBLE_MSGS.length];
-        _bubbleIdx++;
-        bubble.classList.add('show');
-        setTimeout(() => bubble.classList.remove('show'), 4500);
+    const SPARKLE_EMOJIS = ['✨','💫','⭐','🌟','💜','💗','🎀'];
+    const BURST_EMOJIS   = ['✨','💫','🌟','💜','💗','⭐','🎉','🌸'];
+
+    function spawnSparkles() {
+        const rect = fab.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top  + rect.height / 2;
+        const count = 7;
+        for (let i = 0; i < count; i++) {
+            const el = document.createElement('span');
+            el.className = 'gc-sparkle';
+            el.textContent = SPARKLE_EMOJIS[i % SPARKLE_EMOJIS.length];
+            const angle = (360 / count) * i + Math.random() * 30;
+            const dist  = 48 + Math.random() * 28;
+            const rad   = angle * Math.PI / 180;
+            el.style.cssText = `left:${cx - 8}px;top:${cy - 8}px;
+                --sx:${Math.cos(rad)*dist}px;--sy:${Math.sin(rad)*dist}px;
+                --sr:${Math.random()*360}deg;
+                animation-delay:${i * 60}ms;`;
+            document.body.appendChild(el);
+            el.addEventListener('animationend', () => el.remove(), { once: true });
+        }
     }
 
-    function startBubbleCycle() {
-        setTimeout(() => {
-            showBubble();
-            setInterval(showBubble, 22000);
-        }, 5000);
-    }
-
-    function triggerWiggle() {
+    function triggerAttention() {
         if (gcOpen) return;
+        const msg = BUBBLE_MSGS[_bubbleIdx % BUBBLE_MSGS.length];
+        _bubbleIdx++;
+        bubble.textContent = msg;
+        bubble.classList.add('show');
+        setTimeout(() => bubble.classList.remove('show'), 4800);
         fab.classList.remove('wiggle');
         void fab.offsetWidth;
         fab.classList.add('wiggle');
         fab.addEventListener('animationend', () => fab.classList.remove('wiggle'), { once: true });
+        spawnSparkles();
     }
 
-    startBubbleCycle();
-    setInterval(triggerWiggle, 8000);
+    setTimeout(() => {
+        triggerAttention();
+        setInterval(triggerAttention, 14000);
+    }, 3500);
+
+    fab.addEventListener('click', () => {
+        if (!gcOpen) {
+            const rect = fab.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top  + rect.height / 2;
+            for (let i = 0; i < 8; i++) {
+                const el = document.createElement('span');
+                el.className = 'gc-burst';
+                el.textContent = BURST_EMOJIS[i % BURST_EMOJIS.length];
+                const angle = (360 / 8) * i;
+                const dist  = 60 + Math.random() * 30;
+                const rad   = angle * Math.PI / 180;
+                el.style.cssText = `left:${cx - 10}px;top:${cy - 10}px;
+                    --bx:${Math.cos(rad)*dist}px;--by:${Math.sin(rad)*dist}px;`;
+                document.body.appendChild(el);
+                el.addEventListener('animationend', () => el.remove(), { once: true });
+            }
+        }
+    });
 
     // Load history
     try { gcHistory = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { gcHistory = []; }
