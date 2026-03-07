@@ -47,7 +47,7 @@ app.secret_key = session_secret
 
 # Configure session cookie for iframe embedding (Replit preview)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -15861,6 +15861,36 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         else:
             coupons_text = '  (สมาชิกยังไม่มีคูปอง)'
 
+        # 7c. Shipping rates — reuse guest bot cache ('shipping_data' key, format: {'rates':[], 'promos':[]})
+        def _member_fetch_shipping():
+            try:
+                _mc = cursor
+                _mc.execute("SELECT min_weight, max_weight, rate FROM shipping_weight_rates ORDER BY sort_order")
+                _rates = _mc.fetchall()
+                _mc.execute("SELECT name, promo_type, min_order_value FROM shipping_promotions WHERE is_active=TRUE AND (end_date IS NULL OR end_date >= NOW()) LIMIT 3")
+                _promos = _mc.fetchall()
+                return {'rates': _rates, 'promos': _promos}
+            except Exception:
+                return {'rates': [], 'promos': []}
+        if 'shipping_data' not in _BOT_CACHE:
+            _BOT_CACHE['shipping_data'] = {'data': None, 'expires': 0}
+        _member_ship_data = _bot_cache_get('shipping_data', 3600, _member_fetch_shipping)
+        _member_ship_rates = (_member_ship_data or {}).get('rates', [])
+        _member_ship_promos = (_member_ship_data or {}).get('promos', [])
+        _member_ship_text = ''
+        if _member_ship_rates:
+            _msl = []
+            for _mr in _member_ship_rates:
+                _mmax = f"{_mr['max_weight']}g" if _mr.get('max_weight') else 'ขึ้นไป'
+                _msl.append(f"{_mr['min_weight']}-{_mmax}: {_mr['rate']:.0f} บาท")
+            _member_ship_text = 'อัตราค่าส่ง: ' + ' | '.join(_msl[:5])
+        if _member_ship_promos:
+            for _msp in _member_ship_promos:
+                if _msp.get('promo_type') == 'free_shipping' and _msp.get('min_order_value'):
+                    _member_ship_text += f"\n🎁 ส่งฟรีเมื่อซื้อครบ ฿{float(_msp['min_order_value']):.0f}"
+        if not _member_ship_text:
+            _member_ship_text = 'สอบถามค่าส่งได้ที่ 083-668-2211'
+
         # 8. Product search based on current session or message keywords
         # Safely cast to int — Gemini sometimes stores text like "เสื้อพยาบาล" instead of an integer
         def _safe_int(v):
@@ -16232,6 +16262,11 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - 🚚 ระบบ Dropship & การสต็อกสินค้า: ร้านของเรารองรับระบบ Dropship อย่างเต็มรูปแบบ — สมาชิกไม่จำเป็นต้องสต็อกสินค้าเองเลยค่ะ เพราะบริษัทฯ ผลิตสินค้าเองทั้งหมด จึงสามารถเติมสต็อกได้ตลอดเวลา ถ้าสมาชิกต้องการเปิดหน้าร้านก็ไม่จำเป็นต้องสั่งสต็อกจำนวนมาก สั่งตามออเดอร์ลูกค้าได้เลย — ห้ามบอกว่า "สินค้ามีจำนวนจำกัด" หรือกดดันให้สต็อกของ เพราะเราเติมได้เสมอ
 - ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
 - 💳 วิธีชำระเงิน: ร้านรับชำระเงินผ่านการโอนเงินเท่านั้น ไม่มีบัตรเครดิต ไม่มีเก็บเงินปลายทาง ไม่มีช่องทางอื่น — ถ้าลูกค้าถามเรื่องการชำระเงินหรือวิธีจ่ายให้ตอบว่า "ชำระผ่านการโอนเงินเข้าบัญชีธนาคารค่ะ หลังจากยืนยันออเดอร์แล้วทางร้านจะแจ้งเลขบัญชีให้ค่ะ"
+- 🕐 เวลาทำการ: ไม่มีข้อมูลเวลาเปิด-ปิดในระบบ — ถ้าลูกค้าถามเรื่องเวลาทำการให้ตอบว่า "ติดต่อได้ตลอด 24 ชั่วโมงผ่านแชทนี้ค่ะ หรือโทร 083-668-2211 ได้เลยค่ะ" ห้ามระบุเวลาเปิด-ปิดที่เฉพาะเจาะจงเด็ดขาด
+- 🚚 ข้อมูลการจัดส่ง (ใช้ข้อมูลนี้เมื่อลูกค้าถามค่าส่ง): {_member_ship_text}
+  * บริษัทขนส่งที่ใช้: Kerry Express, Flash Express, ไปรษณีย์ไทย
+  * ระยะเวลาจัดส่ง: 1-3 วันทำการหลังยืนยันชำระเงิน
+  * ไม่มีบริการส่งต่างประเทศ
 - 🏢 ข้อมูลบริษัท (ใช้เมื่อถูกถามถึงที่มา ความน่าเชื่อถือ หรือประวัติบริษัท):
   * บริษัท เคาท์มีอินดีไซน์ จำกัด ผลิตเสื้อผ้าคุณภาพสูง ทั้งแฟชั่นและยูนิฟอร์ม มีทั้งสินค้าสำเร็จรูปและสั่งผลิต
   * ผลิตเสื้อผ้าให้แบรนด์แฟชั่นชั้นนำหลายแบรนด์ เช่น Curvf, Laboutique, oOdinaryjun
@@ -16370,7 +16405,7 @@ State: {session_data.get('state','IDLE')}
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.3 if size_chart_image_bytes else 0.7,
-            max_output_tokens=2048
+            max_output_tokens=3000
         )
         raw = ''
         for _try_model in _all_models:
@@ -16389,6 +16424,26 @@ State: {session_data.get('state','IDLE')}
                 raise  # re-raise other unexpected errors
 
         # 11. Parse JSON — handles: valid JSON, truncated JSON, plain text
+        def _sanitize_json_str(s):
+            """Fix unescaped newlines/tabs inside JSON string values (common Gemini issue)"""
+            out, in_str, esc = [], False, False
+            for c in s:
+                if esc:
+                    out.append(c); esc = False
+                elif c == '\\':
+                    out.append(c); esc = True
+                elif c == '"':
+                    out.append(c); in_str = not in_str
+                elif in_str and c == '\n':
+                    out.append('\\n')
+                elif in_str and c == '\r':
+                    out.append('\\r')
+                elif in_str and c == '\t':
+                    out.append('\\t')
+                else:
+                    out.append(c)
+            return ''.join(out)
+
         m = _re.search(r'\{[\s\S]*\}', raw)
         parsed = {}
         _plain_text_fallback = ''
@@ -16396,13 +16451,16 @@ State: {session_data.get('state','IDLE')}
             try:
                 parsed = _json.loads(m.group())
             except Exception:
-                # JSON truncated or malformed — try to extract "message" field directly
-                _msg_match = _re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', m.group())
-                if _msg_match:
-                    _plain_text_fallback = _msg_match.group(1).replace('\\n', '\n').replace('\\"', '"')
-                else:
-                    _plain_text_fallback = raw.strip()
-                print(f'[BOT] Truncated/invalid JSON | extracted={_plain_text_fallback[:80]}')
+                try:
+                    parsed = _json.loads(_sanitize_json_str(m.group()))
+                except Exception:
+                    # JSON truncated or malformed — try to extract "message" field directly
+                    _msg_match = _re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"', m.group())
+                    if _msg_match:
+                        _plain_text_fallback = _msg_match.group(1).replace('\\n', '\n').replace('\\"', '"')
+                    else:
+                        _plain_text_fallback = raw.strip()
+                    print(f'[BOT] Truncated/invalid JSON | extracted={_plain_text_fallback[:80]}')
         else:
             raw_stripped = raw.strip()
             # Check if it looks like JSON that got split (starts with { but no closing })
