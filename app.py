@@ -653,6 +653,60 @@ def public_tiers():
         if conn:
             conn.close()
 
+@app.route('/api/admin/catalog-bot/sessions', methods=['GET'])
+@login_required
+def admin_catalog_bot_sessions():
+    if session.get('role') not in ['Super Admin', 'Assistant Admin']:
+        return jsonify({'error': 'Forbidden'}), 403
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        limit = min(int(request.args.get('limit', 100)), 500)
+        offset = max(int(request.args.get('offset', 0)), 0)
+        cursor.execute('''
+            SELECT session_id, ip, started_at, last_seen, msg_count
+            FROM guest_chat_sessions
+            ORDER BY last_seen DESC
+            LIMIT %s OFFSET %s
+        ''', (limit, offset))
+        sessions = [dict(r) for r in cursor.fetchall()]
+        cursor.execute('SELECT COUNT(*) AS total FROM guest_chat_sessions')
+        total = cursor.fetchone()['total']
+        return jsonify({'sessions': sessions, 'total': total}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/catalog-bot/sessions/<path:session_id>/messages', methods=['GET'])
+@login_required
+def admin_catalog_bot_messages(session_id):
+    if session.get('role') not in ['Super Admin', 'Assistant Admin']:
+        return jsonify({'error': 'Forbidden'}), 403
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT id, user_msg, bot_reply, created_at
+            FROM guest_chat_messages
+            WHERE session_id = %s
+            ORDER BY created_at ASC
+        ''', (session_id,))
+        messages = [dict(r) for r in cursor.fetchall()]
+        return jsonify({'messages': messages}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @app.route('/api/admin/guest-chat-stats', methods=['GET'])
 @login_required
 def admin_guest_chat_stats():
@@ -1253,6 +1307,30 @@ def public_chat_message():
                 )
             except Exception as _ra_e:
                 print(f'[GuestBot] restock_alert save error: {_ra_e}')
+
+        # Save full conversation to DB for admin review (background, non-blocking)
+        def _save_convo(_sid, _ip, _umsg, _breply):
+            try:
+                _sc = get_db()
+                _cc = _sc.cursor()
+                _cc.execute('''
+                    INSERT INTO guest_chat_sessions (session_id, ip, last_seen, msg_count)
+                    VALUES (%s, %s, NOW(), 1)
+                    ON CONFLICT (session_id) DO UPDATE
+                    SET last_seen = NOW(), msg_count = guest_chat_sessions.msg_count + 1
+                ''', (_sid, _ip))
+                _cc.execute('''
+                    INSERT INTO guest_chat_messages (session_id, user_msg, bot_reply)
+                    VALUES (%s, %s, %s)
+                ''', (_sid, _umsg, _breply))
+                _sc.commit()
+                _cc.close()
+                _sc.close()
+            except Exception as _ce:
+                print(f'[GuestBot] convo save error: {_ce}')
+        _sess_id = request.headers.get('X-Session-Id', '') or str(request.remote_addr)
+        _client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        threading.Thread(target=_save_convo, args=(_sess_id, _client_ip, user_msg, bot_text), daemon=True).start()
 
         _resp = {
             'reply': bot_text,

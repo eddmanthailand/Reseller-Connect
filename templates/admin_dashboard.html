@@ -676,6 +676,15 @@
                     </span>
                     <span class="sidebar-text">Activity Log</span>
                 </a>
+
+                <a href="#" class="nav-item" data-page="catalog-bot">
+                    <span class="icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">Bot แคตตาล็อค</span>
+                </a>
                 
                 <a href="#" class="nav-item" data-page="settings" data-role="Super Admin">
                     <span class="icon">
@@ -1110,6 +1119,43 @@
                             <div id="logPaginationInfo" style="font-size: 13px; color: rgba(255,255,255,0.7);">แสดง 0-0 จาก 0 รายการ</div>
                             <div id="logPagination" style="display: flex; gap: 8px;"></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Catalog Bot Conversations Page -->
+            <div id="page-catalog-bot" class="page-content">
+                <div class="page-header">
+                    <h1>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:10px;">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        บทสนทนา Bot แคตตาล็อค
+                    </h1>
+                    <p>ตรวจสอบการตอบคำถามของ bot กับลูกค้าทุกคนแบบ real-time</p>
+                </div>
+                <div class="content-wrapper">
+                    <div style="display:flex;gap:16px;height:calc(100vh - 220px);min-height:400px;">
+
+                        <!-- Session list (left panel) -->
+                        <div style="width:320px;flex-shrink:0;background:rgba(255,255,255,0.05);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;">
+                            <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between;">
+                                <div style="font-size:13px;font-weight:700;color:#fff;">Sessions <span id="cbSessionCount" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.5);"></span></div>
+                                <button onclick="loadCatalogBotSessions()" style="padding:4px 10px;background:rgba(255,255,255,0.1);border:none;border-radius:6px;font-size:11px;color:#fff;cursor:pointer;font-family:inherit;">🔄 รีเฟรช</button>
+                            </div>
+                            <div id="cbSessionList" style="flex:1;overflow-y:auto;padding:8px;"></div>
+                        </div>
+
+                        <!-- Conversation view (right panel) -->
+                        <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;">
+                            <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <div id="cbConvoHeader" style="font-size:13px;font-weight:700;color:#fff;">เลือก session ทางซ้ายเพื่อดูบทสนทนา</div>
+                            </div>
+                            <div id="cbConvoBody" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;">
+                                <div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;margin-top:40px;">ยังไม่ได้เลือก session</div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -4752,6 +4798,86 @@
 
     <script src="/static/js/agent.js?v=20260305k"></script>
     <!-- ===== END AI AGENT ===== -->
+
+<script>
+// ===== Catalog Bot Conversations =====
+let _cbSelectedSession = null;
+
+function loadCatalogBotSessions() {
+    fetch('/api/admin/catalog-bot/sessions?limit=100')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('cbSessionCount').textContent = `(${data.total || 0})`;
+            const list = document.getElementById('cbSessionList');
+            if (!data.sessions || data.sessions.length === 0) {
+                list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:12px;padding:20px;">ยังไม่มีบทสนทนา</div>';
+                return;
+            }
+            list.innerHTML = data.sessions.map(s => {
+                const lastSeen = new Date(s.last_seen).toLocaleString('th-TH', {dateStyle:'short', timeStyle:'short'});
+                const isActive = _cbSelectedSession === s.session_id;
+                const shortId = s.session_id.length > 16 ? s.session_id.slice(0, 16) + '…' : s.session_id;
+                return `<div onclick="loadCatalogBotMessages('${s.session_id.replace(/'/g,"\\'")}', '${s.ip}', ${s.msg_count})"
+                    style="padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;
+                    background:${isActive ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.05)'};
+                    border:1px solid ${isActive ? 'rgba(168,85,247,0.6)' : 'transparent'};
+                    transition:background .15s;">
+                    <div style="font-size:12px;font-weight:600;color:#fff;margin-bottom:2px;">📱 ${shortId}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);">IP: ${s.ip || '-'} · ${s.msg_count} ข้อความ</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.4);">${lastSeen}</div>
+                </div>`;
+            }).join('');
+        })
+        .catch(() => {});
+}
+
+function loadCatalogBotMessages(sessionId, ip, msgCount) {
+    _cbSelectedSession = sessionId;
+    loadCatalogBotSessions();
+    document.getElementById('cbConvoHeader').textContent = `Session: ${sessionId} · IP: ${ip} · ${msgCount} ข้อความ`;
+    const body = document.getElementById('cbConvoBody');
+    body.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:12px;padding:20px;">กำลังโหลด...</div>';
+    fetch(`/api/admin/catalog-bot/sessions/${encodeURIComponent(sessionId)}/messages`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.messages || data.messages.length === 0) {
+                body.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);font-size:13px;padding:20px;">ไม่มีข้อความ</div>';
+                return;
+            }
+            body.innerHTML = data.messages.map(m => {
+                const ts = new Date(m.created_at).toLocaleString('th-TH', {dateStyle:'short', timeStyle:'short'});
+                return `<div style="display:flex;flex-direction:column;gap:6px;">
+                    <div style="align-self:flex-end;max-width:75%;background:rgba(99,102,241,0.3);border-radius:12px 12px 2px 12px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#c7d2fe;margin-bottom:4px;font-weight:600;">👤 ลูกค้า</div>
+                        <div style="font-size:13px;color:#fff;white-space:pre-wrap;">${escHtml(m.user_msg)}</div>
+                        <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:4px;text-align:right;">${ts}</div>
+                    </div>
+                    <div style="align-self:flex-start;max-width:80%;background:rgba(255,255,255,0.08);border-radius:12px 12px 12px 2px;padding:10px 14px;">
+                        <div style="font-size:12px;color:#a7f3d0;margin-bottom:4px;font-weight:600;">🤖 Bot</div>
+                        <div style="font-size:13px;color:#fff;white-space:pre-wrap;">${escHtml(m.bot_reply)}</div>
+                    </div>
+                </div>`;
+            }).join('');
+            body.scrollTop = body.scrollHeight;
+        })
+        .catch(() => { body.innerHTML = '<div style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">โหลดไม่สำเร็จ</div>'; });
+}
+
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Auto-load when switching to catalog-bot page
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-page="catalog-bot"]').forEach(el => {
+        el.addEventListener('click', function() {
+            setTimeout(loadCatalogBotSessions, 100);
+        });
+    });
+});
+// ===== END Catalog Bot Conversations =====
+</script>
 
 </body>
 </html>

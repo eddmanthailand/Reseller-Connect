@@ -1370,6 +1370,30 @@ def init_db():
         ''')
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_restock_alerts_status ON restock_alerts(status, product_id)")
 
+        # Guest catalog bot full conversation log
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS guest_chat_sessions (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(200) UNIQUE NOT NULL,
+                ip VARCHAR(60),
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                msg_count INTEGER DEFAULT 0
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gcs_last_seen ON guest_chat_sessions(last_seen DESC)")
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS guest_chat_messages (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(200) NOT NULL,
+                user_msg TEXT,
+                bot_reply TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gcm_session ON guest_chat_messages(session_id, created_at)")
+
         # Migration: Add Meta Marketing API credentials to facebook_pixel_settings
         cursor.execute("""
             ALTER TABLE facebook_pixel_settings
