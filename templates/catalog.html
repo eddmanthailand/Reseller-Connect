@@ -39,8 +39,8 @@
             height: 60px; gap: 12px;
         }
         .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-        .logo-icon { height: 30px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 6px 10px; }
-        .logo-icon svg { width: 46px; height: auto; stroke: white; }
+        .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+        .logo-icon svg { width: 62px; height: auto; stroke: white; flex-shrink: 0; }
         .logo-text { font-size: 18px; font-weight: 700; color: var(--primary); }
         .header-actions { display: flex; align-items: center; gap: 8px; }
         .btn-login { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; border: 1.5px solid var(--border); color: var(--text); background: var(--white); transition: all 0.2s; }
@@ -101,15 +101,16 @@
         @media (max-width: 520px) {
             .site-header { padding: 0 10px; }
             .header-inner { gap: 8px; }
-            .logo-icon { padding: 5px 7px; height: 28px; }
-            .logo-icon svg { width: 34px; }
+            .logo-icon { width: 28px; height: 28px; border-radius: 7px; }
+            .logo-icon svg { width: 52px; }
             .logo-text { font-size: 15px; }
             .btn-login { display: none; }
             .header-actions { gap: 6px; }
         }
         @media (max-width: 360px) {
             .logo-text { font-size: 13px; }
-            .logo-icon svg { width: 26px; }
+            .logo-icon { width: 24px; height: 24px; }
+            .logo-icon svg { width: 44px; }
             .btn-register { padding: 6px 10px; font-size: 12px; }
         }
 
@@ -401,7 +402,7 @@
     <div class="header-inner">
         <a href="/" class="logo">
             <div class="logo-icon">
-                <svg viewBox="0 0 280 90" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 0,55 L 72,55 L 82,62 L 93,8 L 106,70 L 118,55 L 138,55 C 148,55 152,32 165,32 C 178,32 182,55 192,55 L 280,55" stroke-width="9"/></svg>
+                <svg viewBox="0 0 280 90" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 0,55 L 72,55 L 82,62 L 93,8 L 106,70 L 118,55 L 138,55 C 148,55 152,32 165,32 C 178,32 182,55 192,55 L 280,55" stroke-width="14"/></svg>
             </div>
             <span class="logo-text">EKG Shops</span>
         </a>
