@@ -1352,6 +1352,24 @@ def init_db():
         ''')
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_guest_leads_created ON guest_leads(created_at DESC)")
 
+        # Restock alerts — capture customer interest when desired size is out of stock
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS restock_alerts (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+                sku_id INTEGER,
+                size VARCHAR(50),
+                product_name TEXT,
+                user_id INTEGER,
+                session_id VARCHAR(200),
+                phone VARCHAR(30),
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notified_at TIMESTAMP
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_restock_alerts_status ON restock_alerts(status, product_id)")
+
         # Migration: Add Meta Marketing API credentials to facebook_pixel_settings
         cursor.execute("""
             ALTER TABLE facebook_pixel_settings
