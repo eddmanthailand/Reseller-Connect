@@ -97,6 +97,22 @@
         .results-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; font-size: 13px; color: var(--text-muted); }
         .results-count { font-weight: 600; color: var(--text); }
 
+        /* MOBILE HEADER */
+        @media (max-width: 520px) {
+            .site-header { padding: 0 10px; }
+            .header-inner { gap: 8px; }
+            .logo-icon { padding: 5px 7px; height: 28px; }
+            .logo-icon svg { width: 34px; }
+            .logo-text { font-size: 15px; }
+            .btn-login { display: none; }
+            .header-actions { gap: 6px; }
+        }
+        @media (max-width: 360px) {
+            .logo-text { font-size: 13px; }
+            .logo-icon svg { width: 26px; }
+            .btn-register { padding: 6px 10px; font-size: 12px; }
+        }
+
         /* PRODUCT GRID */
         .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
         @media (max-width: 480px) { .product-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
@@ -1181,6 +1197,12 @@
      GUEST CHAT WIDGET
 ═══════════════════════════════════════════════════════════ -->
 <style>
+@media (max-width: 400px) {
+    #gc-fab-wrap { right: 12px; bottom: 20px; }
+    #gc-panel { right: 12px; bottom: 88px; max-width: calc(100vw - 24px); }
+    .gc-qr-wrap { padding-left: 28px; }
+    .gc-products-wrap { padding-left: 28px; }
+}
 #gc-fab-wrap {
     position: fixed; bottom: 28px; right: 20px; z-index: 9999;
     display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
