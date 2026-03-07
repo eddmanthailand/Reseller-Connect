@@ -846,6 +846,36 @@ def public_chat_message():
                 promos_text += f" (ซื้อครบ฿{p['condition_min_spend']:.0f})"
             promos_text += '\n'
 
+        # Shipping rates + free shipping promotion
+        def _fetch_shipping():
+            try:
+                c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                c.execute("SELECT min_weight, max_weight, rate FROM shipping_weight_rates ORDER BY sort_order")
+                rates = c.fetchall()
+                c.execute("SELECT name, promo_type, min_order_value FROM shipping_promotions WHERE is_active=true AND (end_date IS NULL OR end_date >= NOW()) LIMIT 3")
+                promos_ship = c.fetchall()
+                return {'rates': rates, 'promos': promos_ship}
+            except Exception:
+                return {'rates': [], 'promos': []}
+        if 'shipping_data' not in _BOT_CACHE:
+            _BOT_CACHE['shipping_data'] = {'data': None, 'expires': 0}
+        _ship_data = _bot_cache_get('shipping_data', 3600, _fetch_shipping)
+        _ship_rates = _ship_data.get('rates', [])
+        _ship_promos = _ship_data.get('promos', [])
+        shipping_text = ''
+        if _ship_rates:
+            _rate_lines = []
+            for r in _ship_rates:
+                _max = f"{r['max_weight']}g" if r['max_weight'] else 'ขึ้นไป'
+                _rate_lines.append(f"{r['min_weight']}-{_max}: {r['rate']:.0f} บาท")
+            shipping_text = 'อัตราค่าส่ง: ' + ' | '.join(_rate_lines)
+        if _ship_promos:
+            for sp in _ship_promos:
+                if sp.get('promo_type') == 'free_shipping' and sp.get('min_order_value'):
+                    shipping_text += f"\n🎁 ส่งฟรีเมื่อซื้อครบ ฿{float(sp['min_order_value']):.0f}"
+        if not shipping_text:
+            shipping_text = 'ติดต่อ 083-668-2211 เพื่อสอบถามค่าส่ง'
+
         # Parse measurements from conversation history (session memory)
         _session_meas = {}
         for _h in history:
@@ -1079,8 +1109,9 @@ def public_chat_message():
 - บริษัท เคาท์มีอินดีไซน์ จำกัด ผลิตเสื้อผ้าคุณภาพสูง ทั้งแฟชั่นและยูนิฟอร์ม มีทั้งสินค้าสำเร็จรูปและสั่งผลิต
 - ผลิตเสื้อผ้าให้แบรนด์แฟชั่นชั้นนำหลายแบรนด์ เช่น Curvf, Laboutique, oOdinaryjun
 - ลูกค้าองค์กร เช่น Impact เมืองทองธานี, Unilever, มูลนิธิแม่ฟ้าหลวงฯ
-- โทรศัพท์ 083-668-2211 (คุณเอ็ด)
-- เว็บไซต์: ekgshops.com
+- โทรศัพท์ 083-668-2211 (คุณเอ็ด) | เว็บไซต์: ekgshops.com
+- 👤 สมัครสมาชิกฟรีได้ที่: ekgshops.com/register (รับราคาสมาชิกทันที)
+- 📦 ราคาส่ง/Wholesale: ติดต่อ 083-668-2211 หรือพูดถึงในแชทนี้เพื่อให้เจ้าหน้าที่ติดตามกลับ
 
 กฎสำคัญ:
 - ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่ม
@@ -1113,11 +1144,14 @@ def public_chat_message():
   ขั้น 3 (ลูกค้าให้เบอร์): ตอบรับว่า "น้องนุ่นบันทึกไว้แล้วค่ะ จะแจ้งทันทีที่มีสต็อกนะคะ 😊" แล้วใส่ restock_alert ใน JSON พร้อม confirmed=true และเสนอสินค้าทดแทน
   ⚠️ ห้ามใส่ restock_alert ใน JSON จนกว่าลูกค้าจะ: ยืนยัน AND ให้เบอร์โทรแล้ว เท่านั้น
 - 🔍 เปรียบเทียบสินค้า: ถ้าลูกค้าถามเปรียบเทียบ 2 สินค้า → ตอบแบบข้อๆ เทียบ: ชื่อสินค้า | ผ้า/วัสดุ | ไซส์ที่มี | ราคา | จุดเด่น — ดึงข้อมูลจากรายการสินค้าด้านล่างเท่านั้น ห้ามแต่งข้อมูล
-- 📐 ความยาวชุด: ถ้าลูกค้าถามว่า "ชุดยาวถึงไหน/ใส่แล้วคลุมแค่ไหน/ยาวแค่ไหน" → ถามส่วนสูงก่อนถ้าไม่รู้ แล้วคำนวณ:
-  * กระโปรง: วัดจากเอวลงมา เช่น ส่วนสูง 160 cm เอวอยู่ที่ ~60% = 96 cm จากพื้น ถ้าชุดยาว 65 cm → ปลายชุดอยู่ที่ 96-65 = 31 cm จากพื้น → ประมาณตำแหน่ง เช่น "น่าจะยาวคลุมเข่าพอดีค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
-  * เสื้อ/เดรส/ชุดตัวยาว: วัดจากจุดข้างคอ (ไหล่ต่อคอ) ลงมา เช่น ส่วนสูง 160 cm จุดข้างคออยู่ที่ ~85% = 136 cm จากพื้น ถ้าชุดยาว 110 cm → ปลายอยู่ที่ 136-110 = 26 cm จากพื้น → ประมาณตำแหน่ง
-  * ตอบเป็นภาษาธรรมชาติ เช่น "น่าจะยาวคลุมเข่าคุณพี่พอดีค่ะ" หรือ "น่าจะอยู่กลางน่องค่ะ"
-  * ถ้าสเปคสินค้าไม่มีตัวเลขความยาว → บอกว่า "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองติดต่อ 083-668-2211 สอบถามได้นะคะ"
+- 📐 ความยาวชุด: ถ้าลูกค้าถามว่า "ชุดยาวถึงไหน/ใส่แล้วคลุมแค่ไหน/ยาวแค่ไหน"
+  * ขั้นตอน: ถามส่วนสูงก่อนถ้าไม่รู้ แล้วคำนวณ:
+  * กระโปรง: เอวอยู่ที่ ~60% ของส่วนสูง เช่น สูง 160 → เอวสูง 96 cm จากพื้น ถ้าชุดยาว 65 cm → ปลายอยู่ที่ 96−65 = 31 cm จากพื้น
+  * เสื้อ/เดรส: จุดข้างคออยู่ที่ ~85% ของส่วนสูง เช่น สูง 160 → คอสูง 136 cm จากพื้น ถ้าชุดยาว 110 cm → ปลายอยู่ที่ 136−110 = 26 cm จากพื้น
+  * ตำแหน่งโดยประมาณ: 0-15 cm = ต้นขาสูง | 15-30 cm = กลางต้นขา | 30-40 cm = เหนือเข่า | 40-50 cm = ใต้เข่า | 50+ cm = กลางน่อง-ข้อเท้า
+  * ตอบเป็นภาษาธรรมชาติ เช่น "น่าจะยาวคลุมเข่าค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
+  * ถ้าลูกค้าถามความยาวชุดโดยทั่วไป (ยังไม่ได้ระบุสินค้า): อธิบายวิธีคำนวณและถามส่วนสูงของลูกค้าก่อน ห้ามตอบว่า "ไม่มีข้อมูล" ถ้ายังไม่รู้สินค้า
+  * ถ้าระบุสินค้าแล้วแต่สเปคไม่มีตัวเลขความยาว → บอก "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองติดต่อ 083-668-2211 ได้เลยนะคะ"
 {_upsell_note}
 
 === ขนาดร่างกายที่บอกไว้ในการสนทนานี้ ===
@@ -1129,6 +1163,12 @@ def public_chat_message():
 
 === โปรโมชั่นปัจจุบัน ===
 {promos_text or 'ไม่มีโปรโมชั่นในขณะนี้'}
+
+=== ค่าส่งและการจัดส่ง ===
+{shipping_text}
+- ระยะเวลาจัดส่ง: 1-3 วันทำการหลังยืนยันการชำระเงิน
+- ช่องทางจัดส่ง: Kerry / Flash Express / ไปรษณีย์ไทย (ขึ้นอยู่กับพื้นที่)
+- ชำระเงิน: โอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
 
 === สินค้าที่เกี่ยวข้องกับคำถาม ===
 {products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
@@ -1166,19 +1206,28 @@ def public_chat_message():
         )
         _all_models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'] if _guest_chart_bytes else ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
         _response = None
+        _retryable = ('503', '429', 'overloaded', 'quota', 'resource_exhausted', 'rate limit')
+        import time as _time
         for _model in _all_models:
-            try:
-                _response = _client.models.generate_content(
-                    model=_model,
-                    contents=_contents,
-                    config=_cfg,
-                )
-                if _response and _response.text:
-                    break
-            except Exception as _me:
-                if '503' in str(_me) or 'overloaded' in str(_me).lower():
-                    continue
-                raise
+            for _attempt in range(2):
+                try:
+                    _response = _client.models.generate_content(
+                        model=_model,
+                        contents=_contents,
+                        config=_cfg,
+                    )
+                    if _response and _response.text:
+                        break
+                except Exception as _me:
+                    _me_str = str(_me).lower()
+                    if any(k in _me_str for k in _retryable):
+                        if _attempt == 0:
+                            _time.sleep(3)
+                            continue
+                        break
+                    raise
+            if _response and _response.text:
+                break
         raw_text = (_response.text if _response else '') or ''
 
         # Parse JSON response
@@ -1186,6 +1235,7 @@ def public_chat_message():
         quick_replies = []
         show_product_ids = []
         add_to_cart_raw = {}
+        _restock_raw = {}
         try:
             _json_match = _re.search(r'\{.*\}', raw_text, _re.DOTALL)
             if _json_match:
