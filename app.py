@@ -1039,7 +1039,11 @@ def public_chat_message():
   * ตัวอย่าง: สะโพกลูกค้า 44", bot_description บอก "เผื่อ 1"-2"" → ต้องการไซส์ที่สะโพกในตาราง ≥ 45" (44+1) ไม่ใช่ 44" พอดี
   * "พอดี" = แน่นเกินไปสำหรับผ้าไม่ยืด — ต้องมีช่องว่างเผื่อเคลื่อนไหว
   * ต้องอ้างอิงกฎนี้จาก bot_description ของสินค้านั้น ห้ามข้ามไปแนะนำไซส์โดยไม่ดู bot_description
-- 🔔 ไซส์หมดสต็อก: ถ้าไซส์ที่ลูกค้าต้องการหมด → บอกว่า "ขออภัยค่ะ ไซส์นั้นหมดชั่วคราว ถ้ามีสินค้าเข้ามาแล้วจะแจ้งให้ทราบทันทีเลยนะคะ 😊 ขอเบอร์โทรไว้แจ้งได้เลยคะ" → รอรับเบอร์โทร เมื่อได้รับเบอร์แล้วใส่ restock_alert ใน JSON พร้อมตอบรับว่า "น้องนุ่นบันทึกไว้แล้วค่ะ จะแจ้งทันทีที่มีสต็อกนะคะ 😊" พร้อมเสนอสินค้าทดแทนที่มีไซส์นั้น
+- 🔔 แจ้งเตือนสต็อกคืน (ขั้นตอนสำคัญ ห้ามข้าม):
+  ขั้น 1 (ไซส์หมด): ตอบว่า "ขออภัยค่ะ ไซส์ [X] ของ [ชื่อสินค้า] หมดชั่วคราว ต้องการให้น้องนุ่นแจ้งเตือนเมื่อมีสต็อกคืนไหมคะ?" แล้ว quick_replies: ["ยืนยัน แจ้งเตือนฉัน 🔔", "ไม่ต้องค่ะ"]
+  ขั้น 2 (ลูกค้ากด "ยืนยัน แจ้งเตือนฉัน 🔔"): ถามว่า "ขอเบอร์โทรของคุณพี่ไว้แจ้งได้เลยนะคะ 😊"
+  ขั้น 3 (ลูกค้าให้เบอร์): ตอบรับว่า "น้องนุ่นบันทึกไว้แล้วค่ะ จะแจ้งทันทีที่มีสต็อกนะคะ 😊" แล้วใส่ restock_alert ใน JSON พร้อม confirmed=true และเสนอสินค้าทดแทน
+  ⚠️ ห้ามใส่ restock_alert ใน JSON จนกว่าลูกค้าจะ: ยืนยัน AND ให้เบอร์โทรแล้ว เท่านั้น
 - 🔍 เปรียบเทียบสินค้า: ถ้าลูกค้าถามเปรียบเทียบ 2 สินค้า → ตอบแบบข้อๆ เทียบ: ชื่อสินค้า | ผ้า/วัสดุ | ไซส์ที่มี | ราคา | จุดเด่น — ดึงข้อมูลจากรายการสินค้าด้านล่างเท่านั้น ห้ามแต่งข้อมูล
 - 📐 ความยาวชุด: ถ้าลูกค้าถามว่า "ชุดยาวถึงไหน/ใส่แล้วคลุมแค่ไหน/ยาวแค่ไหน" → ถามส่วนสูงก่อนถ้าไม่รู้ แล้วคำนวณ:
   * กระโปรง: วัดจากเอวลงมา เช่น ส่วนสูง 160 cm เอวอยู่ที่ ~60% = 96 cm จากพื้น ถ้าชุดยาว 65 cm → ปลายชุดอยู่ที่ 96-65 = 31 cm จากพื้น → ประมาณตำแหน่ง เช่น "น่าจะยาวคลุมเข่าพอดีค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
@@ -1067,12 +1071,12 @@ def public_chat_message():
   "quick_replies": ["ตัวเลือก1", "ตัวเลือก2"],
   "show_product_ids": [id1, id2],
   "add_to_cart": {{"product_id": null, "size": null, "quantity": 0}},
-  "restock_alert": {{"product_id": null, "product_name": null, "size": null, "phone": null}}
+  "restock_alert": {{"product_id": null, "product_name": null, "size": null, "phone": null, "confirmed": false}}
 }}
 - "quick_replies": ปุ่มตัวเลือกให้กด ไม่เกิน 4 ปุ่ม ([] ถ้าไม่ต้องการ)
 - "show_product_ids": product ID ที่ต้องการแสดงรูปสินค้า ([] ถ้าไม่มี)
 - "add_to_cart": ใส่เมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "เอา L 2 ตัว" หรือ "สั่งเลยค่ะ" → ใส่ product_id (จาก ID:ตัวเลข), size (ชื่อไซส์เช่น "L" หรือ "XL"), quantity (จำนวนเต็ม) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0 — ลูกค้าจะต้อง login เพื่อชำระเงิน
-- "restock_alert": ใส่เมื่อลูกค้าแจ้งเบอร์โทรเพื่อรับแจ้งสต็อกคืน → ใส่ product_id, product_name, size ที่ต้องการ, phone ที่ได้รับ ถ้าไม่มีให้ใส่ null ทั้งหมด
+- "restock_alert": ใส่เฉพาะเมื่อลูกค้า ยืนยัน + ให้เบอร์โทรแล้ว → confirmed=true, product_id, product_name, size, phone ครบทุก field ห้ามใส่ก่อนลูกค้ายืนยัน
 - quick_replies เรื่องหมวดหมู่: ใช้ชื่อจริงจาก "หมวดหมู่สินค้าในร้าน" เท่านั้น
 - quick_replies เรื่องสินค้า: ใช้ชื่อสินค้าจริงจากรายการด้านบน ห้ามตั้งชื่อเอง"""
 
@@ -1209,8 +1213,9 @@ def public_chat_message():
             except Exception as _atc_e:
                 print(f'[GuestBot] add_to_cart lookup error: {_atc_e}')
 
-        # Handle restock_alert — save to DB
+        # Handle restock_alert — save to DB only when confirmed=True AND phone provided
         if (isinstance(_restock_raw, dict)
+                and _restock_raw.get('confirmed') is True
                 and _restock_raw.get('phone')
                 and _restock_raw.get('product_id')):
             try:
@@ -1456,11 +1461,12 @@ def send_order_status_chat(reseller_id, order_number, status, extra_info='', ord
         'reship': f'🔄 คำสั่งซื้อ {order_number} กำลังจัดส่งใหม่',
         'refunded': f'💸 คำสั่งซื้อ {order_number} คืนเงินสำเร็จแล้ว',
         'pending_payment_reminder': f'🛒 คำสั่งซื้อ {order_number} สร้างเรียบร้อยแล้ว!\n⏰ กรุณาชำระเงินและส่งสลิปภายใน 24 ชั่วโมง มิฉะนั้นระบบจะยกเลิกอัตโนมัติและคืนสินค้าเข้าสต็อก',
-        'auto_cancelled': f'🚫 คำสั่งซื้อ {order_number} ถูกยกเลิกอัตโนมัติ เนื่องจากไม่ได้รับการชำระเงินภายใน 24 ชั่วโมง สต็อกสินค้าได้รับการคืนเรียบร้อยแล้ว หากต้องการสั่งซื้ออีกครั้ง กรุณาสร้างคำสั่งซื้อใหม่'
+        'auto_cancelled': f'🚫 คำสั่งซื้อ {order_number} ถูกยกเลิกอัตโนมัติ เนื่องจากไม่ได้รับการชำระเงินภายใน 24 ชั่วโมง สต็อกสินค้าได้รับการคืนเรียบร้อยแล้ว หากต้องการสั่งซื้ออีกครั้ง กรุณาสร้างคำสั่งซื้อใหม่',
+        'restock': '',
     }
     message = status_messages.get(status, f'📋 คำสั่งซื้อ {order_number} อัปเดตสถานะ: {status}')
     if extra_info:
-        message += f'\n{extra_info}'
+        message = (message + '\n' + extra_info).strip() if message else extra_info
     
     conn = None
     cursor = None
@@ -15623,6 +15629,26 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         _done_text = '\n'.join(_fmt_order_block(o) for o in _done_orders) if _done_orders else '  (ไม่มี)'
         orders_text = f"[ออเดอร์ที่ยังไม่จบ]\n{_active_text}\n\n[ออเดอร์ที่จบแล้ว — 3 รายการล่าสุด]\n{_done_text}"
 
+        # 6c. Pending restock alerts for this member
+        cursor.execute('''
+            SELECT ra.id, ra.size, ra.product_name,
+                   COALESCE(p.name, ra.product_name) as pname,
+                   ra.created_at::date as alert_date
+            FROM restock_alerts ra
+            LEFT JOIN products p ON p.id = ra.product_id
+            WHERE ra.user_id = %s AND ra.status = 'pending'
+            ORDER BY ra.created_at ASC
+        ''', (reseller_id,))
+        _pending_alerts = cursor.fetchall()
+        if _pending_alerts:
+            _alert_lines = []
+            for _a in _pending_alerts:
+                _size_part = f' ไซส์ {_a["size"]}' if _a.get('size') else ''
+                _alert_lines.append(f"  - {_a['pname']}{_size_part} (ขอแจ้งเมื่อ {_a['alert_date']})")
+            _restock_pending_text = '\n'.join(_alert_lines)
+        else:
+            _restock_pending_text = '  (ไม่มีรายการรอแจ้งเตือนสต็อก)'
+
         # 7. Active promotions (cached 5 min)
         def _fetch_promos():
             cursor.execute('''
@@ -16044,7 +16070,10 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
   [ตัวอย่าง] ผ้าไม่ยืด, สะโพก 37", M=37.5" → ช่องว่าง 0.5" < 2" → แน่นมาก → แนะนำ L และเตือนว่าผ้าไม่ยืด นั่งอาจแน่นนิดหน่อย
   * เอว: ดูเป็นข้อมูลรอง ถ้าสะโพกผ่านแล้ว เอวในตารางต้องไม่เล็กกว่าตัวลูกค้า
 - ถ้าลูกค้าสนใจสินค้า → ถามไซส์และจำนวน → ชวนสั่งซื้อทันที
-- 🔔 ไซส์หมดสต็อก: ถ้าไซส์ที่ลูกค้าต้องการหมด → บอกว่า "ขออภัยค่ะ ไซส์นั้นหมดชั่วคราว ถ้ามีสินค้าเข้ามาแล้วจะแจ้งให้ทราบทันทีเลยนะคะ 😊 ขอเบอร์โทรไว้แจ้งได้เลยคะ" → รอรับเบอร์โทร เมื่อได้รับเบอร์แล้วใส่ restock_alert ใน JSON พร้อมตอบรับว่า "น้องนุ่นบันทึกไว้แล้วค่ะ จะแจ้งทันทีที่มีสต็อกนะคะ 😊" พร้อมเสนอสินค้าทดแทนที่มีไซส์นั้น
+- 🔔 แจ้งเตือนสต็อกคืน (ขั้นตอนสำคัญ ห้ามข้าม):
+  ขั้น 1 (ไซส์หมด): ตอบว่า "ขออภัยค่ะ ไซส์ [X] ของ [ชื่อสินค้า] หมดชั่วคราว ต้องการให้น้องนุ่นแจ้งเตือนเมื่อมีสต็อกคืนไหมคะ?" แล้ว quick_replies: ["ยืนยัน แจ้งเตือนฉัน 🔔", "ไม่ต้องค่ะ"]
+  ขั้น 2 (สมาชิกกด "ยืนยัน แจ้งเตือนฉัน 🔔"): ตอบรับว่า "น้องนุ่นบันทึกไว้แล้วค่ะ จะแจ้งทันทีเมื่อมีสต็อกนะคะ 😊 (ระบบแจ้งผ่านแชทนี้เลย)" แล้วใส่ restock_alert ใน JSON พร้อม confirmed=true ทันที (ไม่ต้องถามเบอร์เพราะแจ้งผ่านแชทได้เลย) พร้อมเสนอสินค้าทดแทน
+  ⚠️ ห้ามใส่ restock_alert ใน JSON จนกว่าสมาชิกจะกด "ยืนยัน" ก่อน
 - 🔍 เปรียบเทียบสินค้า: ถ้าลูกค้าถามเปรียบเทียบ 2 สินค้า → ตอบแบบข้อๆ เทียบ: ชื่อสินค้า | ผ้า/วัสดุ | ไซส์ที่มี | ราคา | จุดเด่น — ดึงข้อมูลจากรายการสินค้าด้านล่างเท่านั้น ห้ามแต่งข้อมูล
 - 📐 ความยาวชุด: ถ้าลูกค้าถามว่า "ชุดยาวถึงไหน/ใส่แล้วคลุมแค่ไหน/ยาวแค่ไหน" → ถามส่วนสูงก่อนถ้าไม่รู้ แล้วคำนวณ:
   * กระโปรง: วัดจากเอวลงมา เช่น ส่วนสูง 160 cm เอวอยู่ที่ ~60% = 96 cm จากพื้น ถ้าชุดยาว 65 cm → ปลายชุดอยู่ที่ 96-65 = 31 cm จากพื้น = คลุมแค่ 31 cm เหนือพื้น → ประมาณตำแหน่ง เช่น "น่าจะยาวคลุมเข่าพอดีค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
@@ -16128,6 +16157,10 @@ State: {session_data.get('state','IDLE')}
 === คูปองของสมาชิกคนนี้ (พร้อมใช้) ===
 {coupons_text}
 
+=== สิ่งที่ต้องทำ — รอแจ้งเตือนสต็อกคืน ===
+{_restock_pending_text}
+(รายการนี้คืองานที่รอดำเนินการอยู่ เมื่อระบบแจ้งสต็อกคืนแล้ว รายการจะหายไปเองอัตโนมัติ)
+
 === เกรดสมาชิกและส่วนลด ===
 เกรดปัจจุบัน: {reseller_tier_name}
 เงื่อนไขการอัปเกรด: {_next_tier_text}
@@ -16155,13 +16188,14 @@ State: {session_data.get('state','IDLE')}
     "ordering_for": "self"
   }},
   "add_to_cart": {{"product_id": null, "size": null, "quantity": 0}},
-  "restock_alert": {{"product_id": null, "product_name": null, "size": null, "phone": null}},
+  "restock_alert": {{"product_id": null, "product_name": null, "size": null, "phone": null, "confirmed": false}},
   "needs_admin": false
 }}
 - "quick_replies": ปุ่มตัวเลือกให้กด (ไม่เกิน 4 ปุ่ม หรือ [] ถ้าไม่ต้องการ)
 - "show_product_ids": รายการ product ID ที่ต้องการแสดงรูป ([] ถ้าไม่มี) — ดึง ID จากรายการสินค้าด้านบน (ตัวเลขหลัง "ID:") ห้ามถามสมาชิก
 - "add_to_cart": ใส่ข้อมูลเมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "ขอ L 2 ตัว" หรือ "สั่งเลยค่ะ" — ให้ใส่ product_id (จากรายการสินค้า), size (ชื่อไซส์เช่น "L"), quantity (จำนวน) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย
+- "restock_alert": ใส่เฉพาะเมื่อสมาชิกกด "ยืนยัน แจ้งเตือนฉัน 🔔" แล้ว → confirmed=true, product_id, product_name, size (phone ไม่บังคับ เพราะระบบแจ้งผ่านแชทได้เลย) ห้ามใส่ก่อนยืนยัน
 - "new_state.ordering_for": "self" (ซื้อให้ตัวเอง) หรือ ชื่อเพื่อน เช่น "น้อง" (ซื้อให้เพื่อน) — ใส่ทุกครั้งที่ส่ง new_state
 - "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่
 - "new_state.measurements": ⚠️ ถ้าสมาชิกบอกขนาดร่างกาย (รอบอก/เอว/สะโพก) ในข้อความนี้ → ต้องอัปเดตทันที **ห้ามลืมใส่** รูปแบบ: {{"chest": 32, "waist": 28, "hips": 35}} ใส่เฉพาะค่าที่บอกมา ถ้าไม่มีการบอกขนาดให้ละ field นี้ทิ้งไป
@@ -16254,8 +16288,9 @@ State: {session_data.get('state','IDLE')}
         add_to_cart_data = parsed.get('add_to_cart') or {}
         _member_restock_raw = parsed.get('restock_alert') or {}
 
-        # Handle restock_alert from member bot — save to DB + note user_id
+        # Handle restock_alert from member bot — save only when confirmed=True
         if (isinstance(_member_restock_raw, dict)
+                and _member_restock_raw.get('confirmed') is True
                 and _member_restock_raw.get('product_id')):
             try:
                 _mra_pid = int(_member_restock_raw['product_id'])
