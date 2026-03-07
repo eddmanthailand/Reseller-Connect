@@ -66,6 +66,19 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Cropper.js**: Image cropping.
 - **Chart.js**: For sales charts.
 
+### Payment System Roadmap (รอ API Keys จากผู้ใช้)
+ผู้ใช้กำลังสมัครบริการต่อไปนี้ เมื่อได้รับ API Keys จะ implement พร้อมกัน:
+- **Omise (Opn Payments)** — บัตรเครดิต/เดบิต (Public Key + Secret Key)
+- **EasySlip API** — ตรวจสลิป PromptPay อัตโนมัติ (API Key)
+- **iShip COD** — เก็บเงินปลายทาง (ถ้ามี key เพิ่มเติม)
+
+แนวทาง implement:
+- PromptPay/โอนเงิน: ใช้ระบบเดิม + เพิ่ม EasySlip verify อัตโนมัติ (fallback ให้ Admin ตรวจถ้า verify ล้มเหลว)
+- บัตรเครดิต: เพิ่ม Omise ใน checkout flow (hosted payment form, tokenization)
+- COD: เพิ่มผ่าน iShip API เป็นตัวเลือกที่ 3
+- แยกเป็น module ภายใน: `routes/payment.py`, `routes/payment_omise.py`, `routes/payment_cod.py`
+- ไม่แยกเป็น service แยก (ไม่จำเป็นสำหรับ scale ปัจจุบัน)
+
 ### AI Bot Known Fixes (app.py)
 - **Guest bot `InFailedSqlTransaction` cascade**: Each `except Exception` in fetch functions (`_fetch_agent_settings`, `_fetch_training`, `_fetch_cats`, `_fetch_promos`, `_fetch_shipping`) now calls `conn.rollback()` to clear aborted transaction before the next fetch, preventing silent cascading failures.
 - **Guest bot `_fetch_promos()` wrong SQL**: Fixed columns from non-existent `description`, `type` → correct `promo_type`, `start_date`; `promos_text` builder updated to match.
