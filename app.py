@@ -781,6 +781,8 @@ def public_chat_message():
                 c.execute("SELECT * FROM agent_settings WHERE id = 1")
                 return c.fetchone() or {}
             except Exception:
+                try: conn.rollback()
+                except Exception: pass
                 return {}
         if 'guest_agent_settings' not in _BOT_CACHE:
             _BOT_CACHE['guest_agent_settings'] = {'data': None, 'expires': 0}
@@ -798,6 +800,8 @@ def public_chat_message():
                              ORDER BY sort_order, id""")
                 return c.fetchall()
             except Exception:
+                try: conn.rollback()
+                except Exception: pass
                 return []
         if 'guest_training' not in _BOT_CACHE:
             _BOT_CACHE['guest_training'] = {'data': None, 'expires': 0}
@@ -816,6 +820,8 @@ def public_chat_message():
                 c.execute("SELECT name FROM categories WHERE is_active=true ORDER BY name")
                 return [r['name'] for r in c.fetchall()]
             except Exception:
+                try: conn.rollback()
+                except Exception: pass
                 return []
         if 'categories' not in _BOT_CACHE:
             _BOT_CACHE['categories'] = {'data': None, 'expires': 0}
@@ -826,42 +832,57 @@ def public_chat_message():
         def _fetch_promos():
             try:
                 c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                c.execute("""SELECT name, description, reward_type, reward_value,
-                               condition_min_spend, type, end_date
+                c.execute("""SELECT name, promo_type, reward_type, reward_value,
+                               condition_min_spend, start_date, end_date
                              FROM promotions
                              WHERE is_active=true AND (end_date IS NULL OR end_date >= NOW())
                              ORDER BY created_at DESC LIMIT 5""")
                 return c.fetchall()
             except Exception:
-                return []
+                try: conn.rollback()
+                except Exception: pass
+                import traceback; traceback.print_exc()
+                return None  # don't cache on error — retry next request
         if 'promotions' not in _BOT_CACHE:
             _BOT_CACHE['promotions'] = {'data': None, 'expires': 0}
         promos = _bot_cache_get('promotions', 300, _fetch_promos)
         promos_text = ''
-        for p in promos:
-            promos_text += f"  - {p['name']}: {p.get('description') or ''}"
-            if p.get('reward_type') == 'discount_percent':
-                promos_text += f" ลด{p['reward_value']}%"
-            if p.get('condition_min_spend'):
-                promos_text += f" (ซื้อครบ฿{p['condition_min_spend']:.0f})"
-            promos_text += '\n'
+        for p in (promos or []):
+            _rv = p.get('reward_value') or 0
+            if p.get('reward_type') in ('percent', 'discount_percent'):
+                _reward_str = f"ลด {_rv:.0f}%"
+            elif p.get('reward_type') in ('fixed', 'fixed_discount', 'fixed_amount'):
+                _reward_str = f"ลด ฿{_rv:.0f}"
+            elif 'shipping' in (p.get('reward_type') or ''):
+                _reward_str = "ส่งฟรี"
+            else:
+                _reward_str = f"ลด {_rv:.0f}%"
+            _min = f" (ซื้อขั้นต่ำ ฿{p['condition_min_spend']:.0f})" if p.get('condition_min_spend') else ""
+            _p_end = p.get('end_date')
+            _end = f" หมดเขต {_p_end.strftime('%d/%m/%Y') if hasattr(_p_end,'strftime') else str(_p_end)[:10]}" if _p_end else ""
+            promos_text += f"  • {p['name']}: {_reward_str}{_min}{_end}\n"
 
         # Shipping rates + free shipping promotion
         def _fetch_shipping():
             try:
+                conn.rollback()  # clear any aborted-transaction state from earlier silently-caught errors
                 c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 c.execute("SELECT min_weight, max_weight, rate FROM shipping_weight_rates ORDER BY sort_order")
                 rates = c.fetchall()
                 c.execute("SELECT name, promo_type, min_order_value FROM shipping_promotions WHERE is_active=true AND (end_date IS NULL OR end_date >= NOW()) LIMIT 3")
                 promos_ship = c.fetchall()
+                c.close()
+                if not rates:
+                    return None  # don't cache empty — will retry next request
                 return {'rates': rates, 'promos': promos_ship}
             except Exception:
-                return {'rates': [], 'promos': []}
+                import traceback; traceback.print_exc()
+                return None  # don't cache on error — will retry next request
         if 'shipping_data' not in _BOT_CACHE:
             _BOT_CACHE['shipping_data'] = {'data': None, 'expires': 0}
         _ship_data = _bot_cache_get('shipping_data', 3600, _fetch_shipping)
-        _ship_rates = _ship_data.get('rates', [])
-        _ship_promos = _ship_data.get('promos', [])
+        _ship_rates = (_ship_data or {}).get('rates', [])
+        _ship_promos = (_ship_data or {}).get('promos', [])
         shipping_text = ''
         if _ship_rates:
             _rate_lines = []
@@ -874,7 +895,7 @@ def public_chat_message():
                 if sp.get('promo_type') == 'free_shipping' and sp.get('min_order_value'):
                     shipping_text += f"\n🎁 ส่งฟรีเมื่อซื้อครบ ฿{float(sp['min_order_value']):.0f}"
         if not shipping_text:
-            shipping_text = 'ติดต่อ 083-668-2211 เพื่อสอบถามค่าส่ง'
+            shipping_text = 'ค่าส่งขึ้นอยู่กับน้ำหนักสินค้า สอบถามเพิ่มเติมได้ในแชทนี้ค่ะ'
 
         # Parse measurements from conversation history (session memory)
         _session_meas = {}
@@ -1111,7 +1132,7 @@ def public_chat_message():
 - ลูกค้าองค์กร เช่น Impact เมืองทองธานี, Unilever, มูลนิธิแม่ฟ้าหลวงฯ
 - โทรศัพท์ 083-668-2211 (คุณเอ็ด) | เว็บไซต์: ekgshops.com
 - 👤 สมัครสมาชิกฟรีได้ที่: ekgshops.com/register (รับราคาสมาชิกทันที)
-- 📦 ราคาส่ง/Wholesale: ติดต่อ 083-668-2211 หรือพูดถึงในแชทนี้เพื่อให้เจ้าหน้าที่ติดตามกลับ
+- 📦 ราคาส่ง/Wholesale: ตอบจากข้อมูลในระบบที่มีให้เสมอ หากต้องการข้อมูลเพิ่มเติมแนะนำให้แจ้งในแชทนี้
 
 กฎสำคัญ:
 - ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่ม
@@ -1124,7 +1145,7 @@ def public_chat_message():
   * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" ในข้อความตอบเด็ดขาด
 - 📋 เมื่อถามว่ามีแบบไหนบ้าง: แสดงรายชื่อสินค้าทั้งหมดก่อน ห้ามใส่ show_product_ids ตอนนี้ รอให้ลูกค้าเลือกชิ้นที่สนใจก่อน
 - ❓ ถ้าถามไซส์แต่ยังไม่ได้ระบุว่าสนใจสินค้าชิ้นไหนหรือประเภทไหน → ให้ถามกลับก่อนเสมอ เช่น "สนใจสินค้าประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ — ห้ามตอบตัวเลขไซส์โดยไม่รู้ก่อนว่าเป็นสินค้าอะไร
-- ถ้าไม่มีข้อมูลสินค้า → แนะนำโทรถาม 083-668-2211
+- ถ้าไม่มีข้อมูลสินค้า → แนะนำให้แจ้งความต้องการในแชทนี้ได้เลยค่ะ
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
   * ✅ ถ้ารายการมีสินค้า → ต้องตอบตามนั้น ห้ามบอกว่า "ไม่มี" หรือ "มีเฉพาะ..." อื่น ถึงแม้ประวัติแชทก่อนหน้าจะพูดถึงสินค้าอื่น
   * ❌ ห้ามใช้ประวัติแชทเดิมเป็นข้อมูลสินค้า ต้องอ้างอิงจากรายการสินค้าด้านล่างเท่านั้น
@@ -1132,7 +1153,7 @@ def public_chat_message():
 - 🖼️ เมื่อลูกค้าถามดูตารางไซส์หรือรูปสินค้า: ให้ตอบพร้อมบอกว่า "กดดูในรายละเอียดสินค้าที่ส่งให้ได้เลยนะคะ ถ้าไม่แน่ใจการเลือกไซส์ น้องนุ่นช่วยได้ค่ะ" เสมอ
 - 📏 ตารางไซส์ (เด็ดขาด): ห้ามเดาหรือแต่งตัวเลขขนาดไซส์ (เช่น อก/เอว/สะโพกของแต่ละไซส์) ห้ามใช้ความรู้ทั่วไปหรือประมาณเอาเอง
   * ถ้าสินค้ามี [มีตารางไซส์] → แนะนำลูกค้าให้กดดูตารางไซส์ในรายละเอียดสินค้า
-  * ถ้าสินค้าไม่มีตารางไซส์ → บอกว่า "ไม่มีตารางไซส์สำหรับสินค้านี้ค่ะ กรุณาติดต่อ 083-668-2211 ได้เลยนะคะ"
+  * ถ้าสินค้าไม่มีตารางไซส์ → บอกว่า "ไม่มีตารางไซส์สำหรับสินค้านี้ค่ะ ลองสอบถามไซส์โดยบอกขนาดร่างกายของคุณพี่ได้เลยนะคะ น้องนุ่นช่วยได้ค่ะ"
 - ⚠️ กฎการเลือกไซส์จาก bot_description (ใช้ทุกกรณีที่แนะนำไซส์ ไม่ว่าจะมีหรือไม่มีตารางไซส์):
   * ถ้า bot_description มีข้อความ "เผื่อที่ X"-Y"" หรือ "ผ้าไม่ยืด" → ต้องบวกเพิ่มเข้าไปในการคำนวณเสมอ
   * ตัวอย่าง: สะโพกลูกค้า 44", bot_description บอก "เผื่อ 1"-2"" → ต้องการไซส์ที่สะโพกในตาราง ≥ 45" (44+1) ไม่ใช่ 44" พอดี
@@ -1151,7 +1172,8 @@ def public_chat_message():
   * ตำแหน่งโดยประมาณ: 0-15 cm = ต้นขาสูง | 15-30 cm = กลางต้นขา | 30-40 cm = เหนือเข่า | 40-50 cm = ใต้เข่า | 50+ cm = กลางน่อง-ข้อเท้า
   * ตอบเป็นภาษาธรรมชาติ เช่น "น่าจะยาวคลุมเข่าค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
   * ถ้าลูกค้าถามความยาวชุดโดยทั่วไป (ยังไม่ได้ระบุสินค้า): อธิบายวิธีคำนวณและถามส่วนสูงของลูกค้าก่อน ห้ามตอบว่า "ไม่มีข้อมูล" ถ้ายังไม่รู้สินค้า
-  * ถ้าระบุสินค้าแล้วแต่สเปคไม่มีตัวเลขความยาว → บอก "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองติดต่อ 083-668-2211 ได้เลยนะคะ"
+  * ถ้าระบุสินค้าแล้วแต่สเปคไม่มีตัวเลขความยาว → บอก "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองบอกส่วนสูงของคุณพี่ น้องนุ่นจะประมาณให้ค่ะ"
+- 📵 กฎเบอร์โทร 083-668-2211 (เด็ดขาด): ห้ามให้เบอร์โทรในกรณีทั่วไป ให้เบอร์โทรได้เฉพาะ 3 กรณีนี้เท่านั้น: 1) ลูกค้าขอเบอร์ติดต่อโดยตรง 2) ลูกค้าแสดงความกังวลหรือลังเลเรื่องการชำระเงิน 3) ลูกค้าต้องการสั่งผลิตสินค้าและขอเบอร์เอง — ห้ามให้เบอร์เมื่อถามเรื่องค่าส่ง ไซส์ ราคา สินค้า หรือคำถามทั่วไปอื่นๆ
 {_upsell_note}
 
 === ขนาดร่างกายที่บอกไว้ในการสนทนานี้ ===
@@ -1161,10 +1183,10 @@ def public_chat_message():
 === หมวดหมู่สินค้าในร้าน ===
 {cats_str}
 
-=== โปรโมชั่นปัจจุบัน ===
+=== โปรโมชั่นปัจจุบัน (หากมีรายการด้านล่าง ให้แจ้งทุกรายการเมื่อลูกค้าถาม — ห้ามบอกว่า "ไม่มีโปรโมชั่น" ถ้ายังมีข้อมูลด้านล่าง) ===
 {promos_text or 'ไม่มีโปรโมชั่นในขณะนี้'}
 
-=== ค่าส่งและการจัดส่ง ===
+=== ค่าส่งและการจัดส่ง (เมื่อลูกค้าถามค่าส่ง ต้องตอบด้วยตัวเลขจากส่วนนี้ทันที ห้ามบอกว่า "ขึ้นอยู่กับน้ำหนัก" โดยไม่ระบุราคา) ===
 {shipping_text}
 - ระยะเวลาจัดส่ง: 1-3 วันทำการหลังยืนยันการชำระเงิน
 - ช่องทางจัดส่ง: Kerry / Flash Express / ไปรษณีย์ไทย (ขึ้นอยู่กับพื้นที่)
@@ -15800,13 +15822,21 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 
         # 7. Active promotions (cached 5 min)
         def _fetch_promos():
-            cursor.execute('''
-                SELECT name, promo_type, reward_type, reward_value, condition_min_spend,
-                       start_date, end_date FROM promotions
-                WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-                LIMIT 5
-            ''')
-            return cursor.fetchall()
+            try:
+                conn.rollback()  # clear any aborted-transaction state
+                _pc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                _pc.execute('''
+                    SELECT name, promo_type, reward_type, reward_value, condition_min_spend,
+                           start_date, end_date FROM promotions
+                    WHERE is_active = TRUE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+                    LIMIT 5
+                ''')
+                _rows = _pc.fetchall()
+                _pc.close()
+                return _rows
+            except Exception:
+                import traceback; traceback.print_exc()
+                return None  # don't cache on error — retry next request
         promos = _bot_cache_get('promotions', 300, _fetch_promos)
         if promos:
             _promo_lines = []
@@ -15864,14 +15894,19 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # 7c. Shipping rates — reuse guest bot cache ('shipping_data' key, format: {'rates':[], 'promos':[]})
         def _member_fetch_shipping():
             try:
-                _mc = cursor
+                conn.rollback()  # clear any aborted-transaction state
+                _mc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 _mc.execute("SELECT min_weight, max_weight, rate FROM shipping_weight_rates ORDER BY sort_order")
                 _rates = _mc.fetchall()
                 _mc.execute("SELECT name, promo_type, min_order_value FROM shipping_promotions WHERE is_active=TRUE AND (end_date IS NULL OR end_date >= NOW()) LIMIT 3")
                 _promos = _mc.fetchall()
+                _mc.close()
+                if not _rates:
+                    return None  # don't cache empty — will retry next request
                 return {'rates': _rates, 'promos': _promos}
             except Exception:
-                return {'rates': [], 'promos': []}
+                import traceback; traceback.print_exc()
+                return None  # don't cache on error — will retry next request
         if 'shipping_data' not in _BOT_CACHE:
             _BOT_CACHE['shipping_data'] = {'data': None, 'expires': 0}
         _member_ship_data = _bot_cache_get('shipping_data', 3600, _member_fetch_shipping)
@@ -15889,7 +15924,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                 if _msp.get('promo_type') == 'free_shipping' and _msp.get('min_order_value'):
                     _member_ship_text += f"\n🎁 ส่งฟรีเมื่อซื้อครบ ฿{float(_msp['min_order_value']):.0f}"
         if not _member_ship_text:
-            _member_ship_text = 'สอบถามค่าส่งได้ที่ 083-668-2211'
+            _member_ship_text = 'ค่าส่งขึ้นอยู่กับน้ำหนักสินค้า สอบถามเพิ่มเติมได้ในแชทนี้ค่ะ'
 
         # 8. Product search based on current session or message keywords
         # Safely cast to int — Gemini sometimes stores text like "เสื้อพยาบาล" instead of an integer
@@ -16258,9 +16293,10 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
   * กระโปรง: วัดจากเอวลงมา เช่น ส่วนสูง 160 cm เอวอยู่ที่ ~60% = 96 cm จากพื้น ถ้าชุดยาว 65 cm → ปลายชุดอยู่ที่ 96-65 = 31 cm จากพื้น = คลุมแค่ 31 cm เหนือพื้น → ประมาณตำแหน่ง เช่น "น่าจะยาวคลุมเข่าพอดีค่ะ" หรือ "น่าจะอยู่กลางต้นขาค่ะ"
   * เสื้อ/เดรส/ชุดตัวยาว: วัดจากจุดข้างคอ (ไหล่ต่อคอ) ลงมา เช่น ส่วนสูง 160 cm จุดข้างคออยู่ที่ ~85% = 136 cm จากพื้น ถ้าชุดยาว 110 cm → ปลายอยู่ที่ 136-110 = 26 cm จากพื้น → ประมาณตำแหน่ง
   * ตอบเป็นภาษาธรรมชาติ เช่น "น่าจะยาวคลุมเข่าคุณพี่พอดีค่ะ" หรือ "น่าจะอยู่กลางน่องค่ะ"
-  * ถ้าสเปคสินค้าไม่มีตัวเลขความยาว → บอกว่า "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองติดต่อ 083-668-2211 สอบถามได้นะคะ"
+  * ถ้าสเปคสินค้าไม่มีตัวเลขความยาว → บอกว่า "ไม่มีข้อมูลความยาวในสเปคสินค้าค่ะ ลองบอกส่วนสูงของคุณพี่ น้องนุ่นจะประมาณให้ค่ะ"
+- 📵 กฎเบอร์โทร 083-668-2211 (เด็ดขาด): ห้ามให้เบอร์โทรในกรณีทั่วไป ให้เบอร์โทรได้เฉพาะ 3 กรณีนี้เท่านั้น: 1) สมาชิกขอเบอร์ติดต่อโดยตรง 2) สมาชิกแสดงความกังวลหรือลังเลเรื่องการชำระเงิน 3) สมาชิกต้องการสั่งผลิตสินค้าและขอเบอร์เอง — ห้ามให้เบอร์เมื่อถามเรื่องค่าส่ง ไซส์ ราคา สินค้า เวลาทำการ หรือคำถามทั่วไปอื่นๆ
 - 🚚 ระบบ Dropship & การสต็อกสินค้า: ร้านของเรารองรับระบบ Dropship อย่างเต็มรูปแบบ — สมาชิกไม่จำเป็นต้องสต็อกสินค้าเองเลยค่ะ เพราะบริษัทฯ ผลิตสินค้าเองทั้งหมด จึงสามารถเติมสต็อกได้ตลอดเวลา ถ้าสมาชิกต้องการเปิดหน้าร้านก็ไม่จำเป็นต้องสั่งสต็อกจำนวนมาก สั่งตามออเดอร์ลูกค้าได้เลย — ห้ามบอกว่า "สินค้ามีจำนวนจำกัด" หรือกดดันให้สต็อกของ เพราะเราเติมได้เสมอ
-- ถ้ามีโปรโมชั่น → แจ้งเสมอก่อนลูกค้าถาม
+- 🎁 โปรโมชั่น (เด็ดขาด): ถ้าส่วน "=== โปรโมชั่นที่มีอยู่ ===" มีข้อมูล → ต้องแจ้งทุกรายการเสมอเมื่อลูกค้าถามถึงโปรโมชั่น ห้ามบอกว่า "ไม่มีโปรโมชั่น" ถ้าส่วนนั้นมีข้อมูลอยู่ นอกจากนี้ให้แจ้งโปรโมชั่นเชิงรุกก่อนลูกค้าถาม
 - 💳 วิธีชำระเงิน: ร้านรับชำระเงินผ่านการโอนเงินเท่านั้น ไม่มีบัตรเครดิต ไม่มีเก็บเงินปลายทาง ไม่มีช่องทางอื่น — ถ้าลูกค้าถามเรื่องการชำระเงินหรือวิธีจ่ายให้ตอบว่า "ชำระผ่านการโอนเงินเข้าบัญชีธนาคารค่ะ หลังจากยืนยันออเดอร์แล้วทางร้านจะแจ้งเลขบัญชีให้ค่ะ"
 - 🕐 เวลาทำการ: ระบบรับออเดอร์และแชทตลอด 24 ชั่วโมงค่ะ — ถ้าลูกค้าถามเรื่องเวลาทำการหรือเวลาเปิด-ปิดให้ตอบว่า "ระบบของเราทำงานตลอด 24 ชั่วโมงค่ะ สั่งได้ทุกเวลาเลย พนักงานจะจัดส่งสินค้าให้ในวันรุ่งขึ้นค่ะ 😊" ห้ามระบุเวลาเปิด-ปิดที่เฉพาะเจาะจงเด็ดขาด
 - 🚚 ข้อมูลการจัดส่ง (ใช้ข้อมูลนี้เมื่อลูกค้าถามค่าส่ง): {_member_ship_text}
@@ -16335,7 +16371,7 @@ State: {session_data.get('state','IDLE')}
 === สถานะออเดอร์ของสมาชิก (ข้อมูลจริงจากระบบ ณ ขณะนี้) ===
 {orders_text}
 
-=== โปรโมชั่นที่มีอยู่ ===
+=== โปรโมชั่นที่มีอยู่ (หากมีรายการด้านล่าง ให้แจ้งทุกรายการเมื่อลูกค้าถามถึงโปรโมชั่น — ห้ามบอกว่า "ไม่มีโปรโมชั่น" ถ้ายังมีข้อมูลด้านล่าง) ===
 {promos_text}
 
 === คูปองของสมาชิกคนนี้ (พร้อมใช้) ===

@@ -66,6 +66,15 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Cropper.js**: Image cropping.
 - **Chart.js**: For sales charts.
 
+### AI Bot Known Fixes (app.py)
+- **Guest bot `InFailedSqlTransaction` cascade**: Each `except Exception` in fetch functions (`_fetch_agent_settings`, `_fetch_training`, `_fetch_cats`, `_fetch_promos`, `_fetch_shipping`) now calls `conn.rollback()` to clear aborted transaction before the next fetch, preventing silent cascading failures.
+- **Guest bot `_fetch_promos()` wrong SQL**: Fixed columns from non-existent `description`, `type` → correct `promo_type`, `start_date`; `promos_text` builder updated to match.
+- **Cache poisoning**: All fetch functions return `None` (not `[]`/`{}`) on DB error; `_bot_cache_get` treats `None` as "retry always" (never stale-caches errors).
+- **Member bot `_fetch_promos()` + `_member_fetch_shipping()`**: Added `conn.rollback()` + try/except for the same InFailedSqlTransaction protection.
+- **Phone number rule (STRICT)**: `083-668-2211` shown only in 3 cases: (1) customer explicitly asks, (2) payment trust concern, (3) custom order request.
+- **Promotions in system prompt**: Added inline instruction at section header `=== โปรโมชั่น... ===` to force Gemini to list all promos when asked (prevents "ไม่มีโปรโมชั่น" when data is present).
+- **Opening hours (member bot)**: "ระบบทำงานตลอด 24 ชม. พนักงานจะจัดส่งในวันรุ่งขึ้น"
+
 ### Active Integrations
 - **iShip (ตัวกลางการขนส่ง)**: Webhook integration (`POST /api/webhook/iship`) for shipping status updates.
 - **Meta Marketing API**: Facebook Ads real data integration (`/api/admin/facebook-ads/meta-insights`) for analyzing ad performance and controlling campaigns via the AI Agent.
