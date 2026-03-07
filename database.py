@@ -1321,6 +1321,24 @@ def init_db():
             )
         ''')
         
+        # Enable pg_trgm for similarity search
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+
+        # Guest chat log for tracking public catalog bot questions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS guest_chat_log (
+                id SERIAL PRIMARY KEY,
+                question TEXT NOT NULL,
+                normalized_q TEXT NOT NULL,
+                count INTEGER DEFAULT 1,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_guest_chat_log_norm ON guest_chat_log USING gin(normalized_q gin_trgm_ops)"
+        )
+
         # Migration: Add Meta Marketing API credentials to facebook_pixel_settings
         cursor.execute("""
             ALTER TABLE facebook_pixel_settings

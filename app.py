@@ -713,8 +713,12 @@ def public_chat_message():
             conn.commit()
         except Exception as _le:
             print(f'[GuestBot] log error: {_le}')
-            try: conn.rollback()
-            except Exception: pass
+            try:
+                conn.rollback()
+                cursor.close()
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            except Exception:
+                pass
 
         # Bot name
         def _fetch_settings():
@@ -767,17 +771,22 @@ def public_chat_message():
             promos_text += '\n'
 
         # Product search — Bronze (tier_id=1) pricing
+        # Ensure clean transaction state before product search
+        try:
+            conn.rollback()
+            cursor.close()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        except Exception:
+            pass
         BRONZE_TIER_ID = 1
         keywords = _re.sub(r'[^\wก-๙\s]', ' ', user_msg).split()
         keywords = [k for k in keywords if len(k) >= 2][:6]
         products_text = ''
         if keywords:
             kw_conditions = ' OR '.join(['p.name ILIKE %s OR p.bot_description ILIKE %s' for _ in keywords])
-            kw_params = []
+            kw_params = [BRONZE_TIER_ID, BRONZE_TIER_ID]
             for k in keywords:
                 kw_params += [f'%{k}%', f'%{k}%']
-            kw_params.append(BRONZE_TIER_ID)
-            kw_params.append(BRONZE_TIER_ID)
             try:
                 cursor.execute(f"""
                     SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
@@ -797,7 +806,7 @@ def public_chat_message():
                            STRING_AGG(DISTINCT s.sku_code, ' | ' ORDER BY s.sku_code) as sku_list
                     FROM products p
                     LEFT JOIN brands b ON b.id = p.brand_id
-                    JOIN skus s ON s.product_id = p.id AND s.is_active = true
+                    JOIN skus s ON s.product_id = p.id
                     WHERE p.status = 'active' AND ({kw_conditions})
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                     ORDER BY p.name
