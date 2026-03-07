@@ -941,6 +941,12 @@ def public_chat_message():
                 _lconn.commit()
                 _lc.close()
                 _lconn.close()
+                send_push_to_admins(
+                    '📞 Guest ทิ้งเบอร์ในแชท',
+                    f'เบอร์: {_phone_val} | {_interest_val[:60]}',
+                    url='/admin#guest-leads',
+                    tag=f'guest-lead-phone-{_phone_val}'
+                )
             except Exception as _le2:
                 print(f'[GuestBot] lead save error: {_le2}')
 
@@ -963,6 +969,12 @@ def public_chat_message():
                 _lconn2.commit()
                 _lc2.close()
                 _lconn2.close()
+                send_push_to_admins(
+                    '🏭 Guest สนใจสั่งผลิต/ราคาส่ง',
+                    user_msg[:80],
+                    url='/admin#guest-leads',
+                    tag=f'guest-custom-order-{int(__import__("time").time())}'
+                )
             except Exception as _le3:
                 print(f'[GuestBot] custom order lead save error: {_le3}')
 
@@ -1230,6 +1242,12 @@ def public_chat_message():
                 ''', (_ra_pid, _ra_size, _ra_pname, _ra_phone, _ra_session))
                 db_conn.commit()
                 print(f'[GuestBot] Restock alert saved: pid={_ra_pid} size={_ra_size} phone={_ra_phone}')
+                send_push_to_admins(
+                    '🔔 Guest ฝากแจ้งเตือนสต็อก',
+                    f'{_ra_pname} ไซส์ {_ra_size} | เบอร์: {_ra_phone}',
+                    url='/admin#restock-alerts',
+                    tag=f'guest-restock-{_ra_pid}-{_ra_size}'
+                )
             except Exception as _ra_e:
                 print(f'[GuestBot] restock_alert save error: {_ra_e}')
 
