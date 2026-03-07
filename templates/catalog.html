@@ -1698,6 +1698,10 @@
             const qr = Array.isArray(data.quick_replies) ? data.quick_replies : [];
             const sp = Array.isArray(data.show_products) ? data.show_products : [];
             appendBotMsg(replyText, true, qr, sp);
+            if (data.add_to_cart_item) {
+                const item = data.add_to_cart_item;
+                addItemToCart(item);
+            }
         } catch(e) {
             hideTyping();
             appendBotMsg('ขออภัยค่ะ เชื่อมต่อไม่ได้ชั่วคราว กรุณาลองใหม่ค่ะ');

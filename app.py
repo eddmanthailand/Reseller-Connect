@@ -1012,10 +1012,12 @@ def public_chat_message():
 {{
   "message": "ข้อความตอบกลับ (string)",
   "quick_replies": ["ตัวเลือก1", "ตัวเลือก2"],
-  "show_product_ids": [id1, id2]
+  "show_product_ids": [id1, id2],
+  "add_to_cart": {{"product_id": null, "size": null, "quantity": 0}}
 }}
 - "quick_replies": ปุ่มตัวเลือกให้กด ไม่เกิน 4 ปุ่ม ([] ถ้าไม่ต้องการ)
 - "show_product_ids": product ID ที่ต้องการแสดงรูปสินค้า ([] ถ้าไม่มี)
+- "add_to_cart": ใส่เมื่อลูกค้าตัดสินใจสั่งซื้อชัดเจน (ระบุสินค้า+ไซส์+จำนวน) เช่น "เอา L 2 ตัว" หรือ "สั่งเลยค่ะ" → ใส่ product_id (จาก ID:ตัวเลข), size (ชื่อไซส์เช่น "L" หรือ "XL"), quantity (จำนวนเต็ม) ถ้าไม่ใช่การสั่งซื้อให้ใส่ null/0 — ลูกค้าจะต้อง login เพื่อชำระเงิน
 - quick_replies เรื่องหมวดหมู่: ใช้ชื่อจริงจาก "หมวดหมู่สินค้าในร้าน" เท่านั้น
 - quick_replies เรื่องสินค้า: ใช้ชื่อสินค้าจริงจากรายการด้านบน ห้ามตั้งชื่อเอง"""
 
@@ -1053,6 +1055,7 @@ def public_chat_message():
         bot_text = ''
         quick_replies = []
         show_product_ids = []
+        add_to_cart_raw = {}
         try:
             _json_match = _re.search(r'\{.*\}', raw_text, _re.DOTALL)
             if _json_match:
@@ -1060,6 +1063,7 @@ def public_chat_message():
                 bot_text = str(_parsed.get('message') or _parsed.get('reply') or '').strip()
                 quick_replies = [str(x) for x in (_parsed.get('quick_replies') or []) if x][:4]
                 show_product_ids = [int(x) for x in (_parsed.get('show_product_ids') or []) if str(x).isdigit()]
+                add_to_cart_raw = _parsed.get('add_to_cart') or {}
         except Exception:
             pass
         if not bot_text:
@@ -1071,11 +1075,88 @@ def public_chat_message():
         _id_set = set(show_product_ids)
         show_products = [p for p in prod_list if p['id'] in _id_set][:4]
 
-        return jsonify({
+        # Handle add_to_cart — look up matching SKU by product_id + size
+        add_to_cart_item = None
+        if (isinstance(add_to_cart_raw, dict)
+                and add_to_cart_raw.get('product_id')
+                and add_to_cart_raw.get('size')):
+            try:
+                _atc_pid = int(add_to_cart_raw['product_id'])
+                _atc_size = str(add_to_cart_raw['size']).strip()
+                _atc_qty = max(1, int(add_to_cart_raw.get('quantity') or 1))
+                cursor.execute('''
+                    SELECT p.id, p.name,
+                           (SELECT pi.image_url FROM product_images pi
+                            WHERE pi.product_id = p.id ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
+                           (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                             JOIN reseller_tiers rt ON rt.id = ptp.tier_id
+                             WHERE ptp.product_id = p.id ORDER BY rt.upgrade_threshold ASC LIMIT 1) as tier1_discount
+                    FROM products p WHERE p.id = %s AND p.status = %s
+                ''', (_atc_pid, 'active'))
+                _atc_prod = cursor.fetchone()
+                if _atc_prod:
+                    cursor.execute('''
+                        SELECT s.id, s.sku_code, s.price, s.stock,
+                               COALESCE(json_object_agg(o.name, ov.value)
+                                        FILTER (WHERE o.id IS NOT NULL), '{}'::json) as options
+                        FROM skus s
+                        LEFT JOIN sku_values_map svm ON svm.sku_id = s.id
+                        LEFT JOIN option_values ov ON ov.id = svm.option_value_id
+                        LEFT JOIN options o ON o.id = ov.option_id
+                        WHERE s.product_id = %s
+                        GROUP BY s.id, s.sku_code, s.price, s.stock
+                    ''', (_atc_pid,))
+                    _atc_skus = cursor.fetchall()
+                    _matched = None
+                    # Try in-stock match first
+                    for _s in _atc_skus:
+                        _opts = _s['options'] or {}
+                        for _ov in _opts.values():
+                            if str(_ov).upper().strip() == _atc_size.upper():
+                                if int(_s['stock'] or 0) > 0:
+                                    _matched = _s
+                                break
+                        if _matched:
+                            break
+                    # Fall back to any matching SKU (regardless of stock)
+                    if not _matched:
+                        for _s in _atc_skus:
+                            _opts = _s['options'] or {}
+                            for _ov in _opts.values():
+                                if str(_ov).upper().strip() == _atc_size.upper():
+                                    _matched = _s
+                                    break
+                            if _matched:
+                                break
+                    if _matched:
+                        _tier1 = float(_atc_prod['tier1_discount'] or 0)
+                        _price = float(_matched['price'])
+                        _member_price = round(_price * (1 - _tier1 / 100)) if _tier1 > 0 else _price
+                        _opt_label = ' / '.join(str(v) for v in (_matched['options'] or {}).values())
+                        add_to_cart_item = {
+                            'productId': _atc_pid,
+                            'name': _atc_prod['name'],
+                            'imageUrl': _atc_prod['image_url'] or '',
+                            'skuId': _matched['id'],
+                            'skuCode': _matched['sku_code'],
+                            'optionLabel': _opt_label,
+                            'price': _price,
+                            'memberPrice': _member_price,
+                            'tier1Discount': _tier1,
+                            'qty': _atc_qty,
+                            'stock': int(_matched['stock'] or 0),
+                        }
+            except Exception as _atc_e:
+                print(f'[GuestBot] add_to_cart lookup error: {_atc_e}')
+
+        _resp = {
             'reply': bot_text,
             'quick_replies': quick_replies,
             'show_products': show_products,
-        }), 200
+        }
+        if add_to_cart_item:
+            _resp['add_to_cart_item'] = add_to_cart_item
+        return jsonify(_resp), 200
 
     except Exception as e:
         print(f'[GuestBot] error: {e}')
