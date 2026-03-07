@@ -833,6 +833,7 @@ def public_chat_message():
         keywords = [k for k in keywords if len(k) >= 2][:6]
         products_text = ''
         prod_list = []
+        prod_rows = []
         if keywords:
             kw_conditions = ' OR '.join(['p.name ILIKE %s OR p.bot_description ILIKE %s' for _ in keywords])
             kw_params = [BRONZE_TIER_ID, BRONZE_TIER_ID]
@@ -899,6 +900,27 @@ def public_chat_message():
             except Exception as _e:
                 print(f'[GuestBot] product search error: {_e}')
 
+        # Load size chart image for Vision when user asks about sizes (guest bot)
+        _guest_chart_bytes = None
+        _guest_chart_mime = 'image/jpeg'
+        _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
+        if any(kw in user_msg.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
+            for _pr2 in prod_rows:
+                _chart_url2 = _pr2.get('size_chart_image_url')
+                if _chart_url2 and _chart_url2.startswith('/storage/'):
+                    try:
+                        from replit.object_storage import Client as _OSClient2
+                        _storage_key2 = _chart_url2.replace('/storage/', '')
+                        _raw = _OSClient2().download_as_bytes(_storage_key2)
+                        if _raw:
+                            _guest_chart_bytes = _raw
+                            if _chart_url2.lower().endswith('.png'):
+                                _guest_chart_mime = 'image/png'
+                            products_text = products_text.replace('[มีตารางไซส์]', '[ตารางไซส์แนบเป็นรูปภาพ — อ่านตัวเลขจากรูปได้เลย]')
+                            break
+                    except Exception as _img_e:
+                        print(f'[GuestBot] size chart load error: {_img_e}')
+
         # Save guest lead if phone number detected in message
         _phone_pat = r'0[689]\d{8}|0\d{8,9}'
         _phone_match = _re.search(_phone_pat, user_msg)
@@ -921,6 +943,28 @@ def public_chat_message():
                 _lconn.close()
             except Exception as _le2:
                 print(f'[GuestBot] lead save error: {_le2}')
+
+        # Log custom-order / high-intent guest leads (even without phone)
+        _CUSTOM_ORDER_KW = ('สั่งผลิต', 'ผลิตตามสั่ง', 'สั่งตัด', 'ตัดชุด', 'ทำยูนิฟอร์ม',
+                            'ทำเครื่องแบบ', 'ออกแบบ', 'สั่งทำ', 'ต้องการสั่ง', 'อยากสั่ง',
+                            'จำนวนมาก', 'wholesale', 'bulk', 'ซื้อเยอะ', 'ราคาส่ง')
+        if any(kw in user_msg for kw in _CUSTOM_ORDER_KW):
+            try:
+                _lconn2 = get_db()
+                _lc2 = _lconn2.cursor()
+                _conv2 = ' | '.join(
+                    f"{_h.get('role','?')}: {str(_h.get('text',''))[:80]}"
+                    for _h in history[-4:]
+                )
+                _lc2.execute(
+                    "INSERT INTO guest_leads (phone, interest_text, conversation_summary) VALUES (%s, %s, %s)",
+                    (None, f'[สั่งผลิต/สนใจสั่ง] {user_msg[:300]}', _conv2)
+                )
+                _lconn2.commit()
+                _lc2.close()
+                _lconn2.close()
+            except Exception as _le3:
+                print(f'[GuestBot] custom order lead save error: {_le3}')
 
         cursor.close()
         conn.close()
@@ -1025,18 +1069,21 @@ def public_chat_message():
 
         # Build conversation contents
         _contents = []
-        for h in (history[-8:]):
+        for h in (history[-16:]):
             role = 'user' if h.get('role') == 'user' else 'model'
             _contents.append(_genai_types.Content(role=role, parts=[_genai_types.Part.from_text(text=str(h.get('text',''))[:300])]))
-        _contents.append(_genai_types.Content(role='user', parts=[_genai_types.Part.from_text(text=user_msg)]))
+        _last_parts = [_genai_types.Part.from_text(text=user_msg)]
+        if _guest_chart_bytes:
+            _last_parts.append(_genai_types.Part.from_bytes(data=_guest_chart_bytes, mime_type=_guest_chart_mime))
+        _contents.append(_genai_types.Content(role='user', parts=_last_parts))
 
         _client = _genai.Client(api_key=_api_key)
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
             max_output_tokens=1024,
-            temperature=0.7,
+            temperature=0.3 if _guest_chart_bytes else 0.7,
         )
-        _all_models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
+        _all_models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'] if _guest_chart_bytes else ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
         _response = None
         for _model in _all_models:
             try:
@@ -15470,19 +15517,81 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         else:
             _next_tier_text = 'อยู่ในเกรดสูงสุดแล้ว'
 
-        # 6b. Reseller orders (recent 5)
+        # 6b. Reseller orders — active (not done) + last 3 completed
+        _STATUS_TH = {
+            'pending_payment': 'รอชำระเงิน',
+            'pending': 'รอดำเนินการ',
+            'payment_review': 'ตรวจสอบหลักฐานชำระเงิน',
+            'confirmed': 'ยืนยันแล้ว กำลังเตรียมสินค้า',
+            'processing': 'กำลังผลิต/เตรียมสินค้า',
+            'shipped': 'จัดส่งแล้ว',
+            'delivered': 'ส่งถึงผู้รับแล้ว',
+            'cancelled': 'ยกเลิก',
+            'refunded': 'คืนเงินแล้ว',
+        }
+        def _fmt_order_block(o, label=''):
+            status_th = _STATUS_TH.get(o.get('status', ''), o.get('status', '-'))
+            lines = [f"  {'[' + label + '] ' if label else ''}ออเดอร์ #{o.get('order_number','-')}"]
+            lines.append(f"    สถานะ: {status_th}")
+            lines.append(f"    วันสั่ง: {o.get('order_date', '-')}")
+            if o.get('paid_at'):
+                lines.append(f"    ชำระเงิน: {str(o['paid_at'])[:16]}")
+            if o.get('shipped_at'):
+                lines.append(f"    จัดส่ง: {str(o['shipped_at'])[:16]}")
+            if o.get('delivered_at'):
+                lines.append(f"    ส่งถึง: {str(o['delivered_at'])[:16]}")
+            if o.get('tracking_number'):
+                sp = f" ({o['shipping_provider']})" if o.get('shipping_provider') else ''
+                lines.append(f"    เลขพัสดุ: {o['tracking_number']}{sp}")
+            if o.get('final_amount'):
+                lines.append(f"    ยอดรวม: ฿{float(o['final_amount']):,.0f}")
+            if o.get('items'):
+                lines.append(f"    สินค้า: {o['items']}")
+            return '\n'.join(lines)
+
         cursor.execute('''
-            SELECT order_number, status, created_at::date as order_date,
+            SELECT o.id, o.order_number, o.status, o.final_amount,
+                   o.created_at::date as order_date, o.paid_at,
                    (SELECT string_agg(oi.product_name || ' x' || oi.quantity::text, ', ')
-                    FROM order_items oi WHERE oi.order_id = o.id) as items
-            FROM orders o WHERE user_id = %s ORDER BY id DESC LIMIT 5
+                    FROM order_items oi WHERE oi.order_id = o.id) as items,
+                   (SELECT os2.tracking_number FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as tracking_number,
+                   (SELECT os2.shipping_provider FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as shipping_provider,
+                   (SELECT os2.shipped_at FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as shipped_at,
+                   (SELECT os2.delivered_at FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as delivered_at
+            FROM orders o
+            WHERE o.user_id = %s
+              AND o.status NOT IN ('delivered', 'cancelled', 'refunded')
+            ORDER BY o.id DESC LIMIT 10
         ''', (reseller_id,))
-        orders = cursor.fetchall()
-        orders_text = ''
-        for o in orders:
-            orders_text += f"  - #{o['order_number']} สถานะ:{o['status']} ({o['order_date']}) สินค้า:{o.get('items','')}\n"
-        if not orders_text:
-            orders_text = '  (ยังไม่มีออเดอร์)\n'
+        _active_orders = cursor.fetchall()
+
+        cursor.execute('''
+            SELECT o.id, o.order_number, o.status, o.final_amount,
+                   o.created_at::date as order_date, o.paid_at,
+                   (SELECT string_agg(oi.product_name || ' x' || oi.quantity::text, ', ')
+                    FROM order_items oi WHERE oi.order_id = o.id) as items,
+                   (SELECT os2.tracking_number FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as tracking_number,
+                   (SELECT os2.shipping_provider FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as shipping_provider,
+                   (SELECT os2.shipped_at FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as shipped_at,
+                   (SELECT os2.delivered_at FROM order_shipments os2
+                    WHERE os2.order_id = o.id ORDER BY os2.id DESC LIMIT 1) as delivered_at
+            FROM orders o
+            WHERE o.user_id = %s
+              AND o.status IN ('delivered', 'cancelled', 'refunded')
+            ORDER BY o.id DESC LIMIT 3
+        ''', (reseller_id,))
+        _done_orders = cursor.fetchall()
+
+        _active_text = '\n'.join(_fmt_order_block(o) for o in _active_orders) if _active_orders else '  (ไม่มีออเดอร์ที่ค้างอยู่)'
+        _done_text = '\n'.join(_fmt_order_block(o) for o in _done_orders) if _done_orders else '  (ไม่มี)'
+        orders_text = f"[ออเดอร์ที่ยังไม่จบ]\n{_active_text}\n\n[ออเดอร์ที่จบแล้ว — 3 รายการล่าสุด]\n{_done_text}"
 
         # 7. Active promotions (cached 5 min)
         def _fetch_promos():
@@ -15921,6 +16030,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
   * ถ้าลูกค้าบอกว่าจะสั่งจำนวนมาก หรือถามส่วนลดพิเศษ → ให้ดูส่วนลดสูงสุดของสินค้าตัวนั้นจากข้อมูลสินค้าด้านล่าง แล้วแจ้งให้ลูกค้าทราบ เช่น "สินค้าตัวนี้ส่วนลดสูงสุดที่ได้รับได้คือ X% ค่ะ"
   * ถ้าลูกค้ายังดูไม่พอใจหรือต้องการต่อรองเพิ่ม → ให้บอกว่า "น้องนุ่นจะรายงานให้คุณเอ็ดทราบค่ะ ขอเบอร์โทรของคุณพี่ไว้ได้ไหมคะ ทางร้านจะโทรกลับโดยเร็วที่สุดค่ะ" แล้วรอรับเบอร์โทรจากลูกค้า เมื่อได้รับเบอร์แล้วให้ตอบรับว่า "น้องนุ่นบันทึกเบอร์ไว้แล้วค่ะ คุณเอ็ดจะติดต่อกลับโดยเร็วที่สุดเลยนะคะ 😊"
   * ถ้าลูกค้าขอเบอร์ติดต่อเองหรืออยากโทรหาเอง → ส่งเบอร์ 083-668-2211 และแจ้งว่า "ติดต่อคุณเอ็ดได้โดยตรงเลยค่ะ"
+- 📦 สถานะออเดอร์: เมื่อสมาชิกถามถึงออเดอร์/การสั่งซื้อ/พัสดุ → ดูจากหัวข้อ "สถานะออเดอร์ของสมาชิก" ด้านล่าง แล้วแจ้งทุกออเดอร์ที่ค้างอยู่พร้อมลำดับเหตุการณ์ครบถ้วน ดังนี้:
+  * ลำดับสถานะตามปกติ: วันสั่งซื้อ → ชำระเงิน → ยืนยันคำสั่ง → เตรียมสินค้า → จัดส่ง → ส่งถึง
+  * บอกสถานะปัจจุบันอยู่ขั้นไหน เช่น "ตอนนี้อยู่ขั้นจัดส่งแล้วค่ะ"
+  * ถ้ามีเลขพัสดุ → แจ้งเลขพัสดุและบริษัทขนส่งให้ด้วยเสมอ
+  * ถ้าไม่มีออเดอร์ค้างอยู่ → แจ้งว่า "ไม่มีออเดอร์ที่รอดำเนินการค่ะ"
+  * ถ้าสมาชิกถามถึงออเดอร์เฉพาะเจาะจง → หาจากออเดอร์ที่จบแล้วด้วย
 - 🎟️ คูปองของสมาชิก: ถ้าสมาชิกถามว่า "มีคูปองไหม" หรือ "คูปองของฉัน" → ดูจากหัวข้อ "คูปองของสมาชิกคนนี้" ด้านล่าง แล้วตอบรายละเอียดที่ถูกต้อง ถ้าไม่มีให้บอกว่า "ยังไม่มีคูปองค่ะ" อย่าบอกว่า "สามารถแจ้งทางร้านได้"
 - 📏 ขนาดร่างกายสมาชิก: ดูจากหัวข้อ "ขนาดร่างกายของสมาชิก" ด้านล่าง
   * ถ้ามีข้อมูลแล้ว → ห้ามถามซ้ำ ใช้ค่านั้นได้เลย (เช่น ถ้ามีรอบเอวแล้วไม่ต้องถามรอบเอวอีก)
@@ -15968,7 +16083,7 @@ State: {session_data.get('state','IDLE')}
 === ขนาดร่างกายของเพื่อน (ที่เคยบันทึกไว้) ===
 {_all_friends_text}
 
-=== ประวัติออเดอร์ล่าสุดของสมาชิก ===
+=== สถานะออเดอร์ของสมาชิก (ข้อมูลจริงจากระบบ ณ ขณะนี้) ===
 {orders_text}
 
 === โปรโมชั่นที่มีอยู่ ===
