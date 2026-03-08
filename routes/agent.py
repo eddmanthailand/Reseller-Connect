@@ -2593,9 +2593,12 @@ def agent_execute():
             import json as _csg_json2
             _cx_name    = (params.get('name') or '').strip()
             _cx_desc    = (params.get('description') or '').strip()
-            _cx_cols    = params.get('columns', [])
+            _cx_cols    = list(params.get('columns', []))
             _cx_rows    = params.get('rows', [])
             _cx_keyword = (params.get('product_keyword') or '').strip()
+            _cx_first_name = (_cx_cols[0].get('name', '') if isinstance(_cx_cols[0], dict) else str(_cx_cols[0])) if _cx_cols else ''
+            if _cx_first_name != 'ขนาด':
+                _cx_cols = [{'name': 'ขนาด', 'unit': ''}] + _cx_cols
             if not _cx_name or not _cx_cols or not _cx_rows:
                 return jsonify({'error': 'ข้อมูลไม่ครบ ต้องมี name, columns, rows'}), 400
             cursor.execute('SELECT id FROM size_chart_groups WHERE name = %s', (_cx_name,))
@@ -2636,9 +2639,12 @@ def agent_execute():
         elif tool == 'create_size_chart_from_image':
             import json as _csfi_json
             _csfi_name    = (params.get('chart_name') or '').strip()
-            _csfi_cols    = params.get('columns', [])
+            _csfi_cols    = list(params.get('columns', []))
             _csfi_rows    = params.get('rows', [])
             _csfi_keyword = (params.get('product_keyword') or '').strip()
+            _csfi_first_name = (_csfi_cols[0].get('name', '') if isinstance(_csfi_cols[0], dict) else str(_csfi_cols[0])) if _csfi_cols else ''
+            if _csfi_first_name != 'ขนาด':
+                _csfi_cols = [{'name': 'ขนาด', 'unit': ''}] + _csfi_cols
             if not _csfi_name or not _csfi_cols or not _csfi_rows:
                 return jsonify({'error': 'ข้อมูลไม่ครบ ต้องมี chart_name, columns, rows (ควร confirm จาก plan ที่ Vision AI สร้างให้)'}), 400
             cursor.execute('SELECT id FROM size_chart_groups WHERE name = %s', (_csfi_name,))

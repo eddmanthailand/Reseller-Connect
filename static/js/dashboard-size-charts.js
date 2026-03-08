@@ -145,7 +145,7 @@ const SizeCharts = (() => {
         const cols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
         const rows = Array.isArray(g.rows) ? g.rows : JSON.parse(g.rows || '[]');
         const sizes = rows.map(r => r.size).join(', ') || '-';
-        const colLabels = cols.map(c => {
+        const colLabels = cols.filter(c => _colName(c) !== 'ขนาด').map(c => {
           const n = _colName(c); const u = _colUnit(c);
           return u ? `${n} (${u})` : n;
         }).join(' | ');
