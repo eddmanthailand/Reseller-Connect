@@ -137,6 +137,11 @@ def _agent_build_system_prompt(settings, context=None):
     if last_resp:
         last_response_section = f'\n=== ข้อความล่าสุดที่หนูตอบไป (ใช้เป็น context สำหรับคำสั่งต่อไปได้เลย) ===\n{last_resp}'
 
+    completed_actions_section = ''
+    completed_actions_str = ctx.get('completed_actions', '')
+    if completed_actions_str:
+        completed_actions_section = f'\n=== งานที่ทำไปแล้วในเซสชันนี้ (ห้าม copy ข้อความเหล่านี้ออกมา) ===\n{completed_actions_str}'
+
     notes_section = ''
     sandbox_section = ''
     notes = ctx.get('notes', [])
@@ -184,7 +189,7 @@ def _agent_build_system_prompt(settings, context=None):
 - หมวดหมู่สินค้า (Categories): {category_names}
 - โกดัง: {warehouse_names}
 - ระดับตัวแทน (Tier): {tier_names}
-- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{products_section}{last_response_section}{notes_section}{sandbox_section}
+- สินค้า active: {active_products} รายการ | ตัวแทน active: {active_resellers} คน{products_section}{last_response_section}{completed_actions_section}{notes_section}{sandbox_section}
 
 === TOOLS ที่ใช้ได้ ===
 [READ — ธุรกิจ]
@@ -1760,6 +1765,11 @@ def agent_chat():
         settings = _agent_load_settings(cursor)
         biz_context = _agent_load_business_context(cursor)
 
+        # completed_actions จาก frontend (plan+success ที่ทำไปแล้วในเซสชันนี้)
+        completed_actions = data.get('completed_actions') or []
+        if completed_actions:
+            biz_context['completed_actions'] = '\n'.join(completed_actions[-10:])
+
         # ดึง AI response ล่าสุดจาก history มาใส่ใน context ตรงๆ เพื่อให้ Agent ไม่ต้องถามซ้ำ
         last_ai_texts = [h.get('text', '') for h in history if h.get('role') == 'model' and h.get('text')]
         if last_ai_texts:
@@ -1774,9 +1784,15 @@ def agent_chat():
         itype  = intent.get('type', 'chat')
         model_used = 'Flash Lite'
 
-        # Guard: ถ้า AI hallucinate ด้วย type="executed"/"approved_and_done" ให้ retry โดยไม่ส่ง history
-        if itype in ('executed', 'approved_and_done') or intent.get('status') == 'approved_and_done':
-            print(f'[AGENT_DEBUG] hallucination detected (type={itype}), retrying without history')
+        # Guard: ถ้า AI hallucinate ให้ retry โดยไม่ส่ง history
+        _raw_msg = intent.get('message', '')
+        _is_hallucination = (
+            itype in ('executed', 'approved_and_done')
+            or intent.get('status') == 'approved_and_done'
+            or (isinstance(_raw_msg, str) and _raw_msg.startswith('[CONTEXT:'))
+        )
+        if _is_hallucination:
+            print(f'[AGENT_DEBUG] hallucination detected (type={itype} msg_prefix={repr(_raw_msg[:60])}), retrying without history')
             intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-pro', history=[], context=biz_context)
             itype  = intent.get('type', 'chat')
             model_used = '2.5 Pro (retry)'

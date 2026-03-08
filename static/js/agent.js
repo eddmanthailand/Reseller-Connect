@@ -444,27 +444,39 @@ async function agentSend() {
     _agentRenderMessages();
 
     try {
-        const history = _agentMessages.slice(0, -1)
+        // Build conversation history (user/ai only) — plan/success go to completed_actions
+        const _rawHistory = _agentMessages.slice(0, -1)
             .filter(m => ['user', 'ai', 'plan', 'success'].includes(m.role))
-            .slice(-20)
-            .map(m => {
-                if (m.role === 'user') return { role: 'user', text: m.text || '' };
-                if (m.role === 'plan') {
-                    if (!m.approved) return null;
-                    const _pKey = m.params ? (m.params.chart_name || m.params.name || m.params.product_name || m.params.group_name || m.params.new_name || '') : '';
-                    return { role: 'model', text: `[CONTEXT: งาน "${m.tool}" สำหรับ "${_pKey}" ได้รับการอนุมัติและส่งไปดำเนินการแล้ว]` };
-                }
-                if (m.role === 'success') {
-                    return { role: 'model', text: `[CONTEXT: ผลลัพธ์ — ${(m.text||'').substring(0,120)}]` };
-                }
+            .slice(-20);
+
+        // completed_actions: plan+success pairs (what was actually done)
+        const completed_actions = [];
+        _rawHistory.forEach(m => {
+            if (m.role === 'plan' && m.approved) {
+                const _pKey = m.params ? (m.params.chart_name || m.params.name || m.params.product_name || m.params.group_name || m.params.new_name || '') : '';
+                completed_actions.push(`ทำแล้ว: ${m.tool} → "${_pKey}"`);
+            } else if (m.role === 'success') {
+                completed_actions.push(`ผลลัพธ์: ${(m.text||'').substring(0, 100)}`);
+            }
+        });
+
+        // conversation history: user+ai only, deduplicate consecutive identical user messages
+        const history = [];
+        let _lastUserText = null;
+        _rawHistory.forEach(m => {
+            if (m.role === 'user') {
+                if (m.text === _lastUserText) return; // skip duplicate
+                _lastUserText = m.text;
+                history.push({ role: 'user', text: m.text || '' });
+            } else if (m.role === 'ai') {
+                _lastUserText = null;
                 let text = m.text || '';
-                if (text.includes('📊')) {
-                    text = '[ผลลัพธ์ query จาก DB ก่อนหน้า — ถ้าต้องการข้อมูลต้อง query_db ใหม่]';
-                }
-                return { role: 'model', text };
-            })
-            .filter(m => m && m.text);
-        const body = { message: text, context_page: _agentCurrentPage(), history };
+                if (text.includes('📊')) text = '[ผลลัพธ์ query จาก DB — ถ้าต้องการข้อมูลต้อง query_db ใหม่]';
+                if (text) history.push({ role: 'model', text });
+            }
+        });
+
+        const body = { message: text, context_page: _agentCurrentPage(), history, completed_actions };
         if (sentImage) { body.image_data = sentImage; body.image_mime = sentMime; }
         const res  = await fetch('/api/admin/agent/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
