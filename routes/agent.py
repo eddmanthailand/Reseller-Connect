@@ -249,6 +249,8 @@ def _agent_build_system_prompt(settings, context=None):
 - assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
 - create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"ซม."}},...], rows=[{{"size":"S","values":["88","68","59"]}},{{"size":"M","values":["92","72","60"]}},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
 - create_size_chart_from_image: อ่านรูปตารางไซส์จากสินค้าด้วย Vision AI แล้วสร้างกลุ่มตารางขนาดทันที (params: source_product_name="ชื่อสินค้าที่มีรูปตารางไซส์", chart_name="ชื่อกลุ่มตารางที่จะสร้าง", product_keyword="คำในชื่อสินค้าที่จะผูก" optional) — ใช้เมื่อผู้ใช้บอกว่า "อ่านรูปจากสินค้า X" หรือ "ดึงข้อมูลตารางไซส์จากภาพ"
+- update_size_chart_group: แก้ไขกลุ่มตารางขนาดที่มีอยู่แล้ว (params: name="ชื่อกลุ่มที่จะแก้ไข", new_name="ชื่อใหม่" optional, description="คำอธิบายใหม่" optional, columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"ซม."}},...] optional, rows=[{{"size":"S","values":["88","68"]}},{{"size":"M","values":["92","72"]}},...] optional) — ระบุเฉพาะ field ที่ต้องการแก้ไข ไม่จำเป็นต้องส่งทุก field
+- delete_size_chart_group: ลบกลุ่มตารางขนาด (params: name="ชื่อกลุ่มที่จะลบ") — สินค้าที่ผูกอยู่จะถูก unlink อัตโนมัติ
 
 [READ — ตารางขนาด]
 - query_size_chart_groups: ดูรายชื่อกลุ่มตารางขนาดทั้งหมดพร้อมจำนวนสินค้า
@@ -2170,6 +2172,67 @@ def agent_chat():
                                 'message': intent.get('message', f"จะผูกกลุ่มตารางขนาด **{_asg_grp['name']}** กับสินค้า {len(_asg_prods)} รายการ"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'update_size_chart_group':
+                import json as _upd_json
+                _upd_name = (params.get('name') or '').strip()
+                if not _upd_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ name (ชื่อกลุ่มที่ต้องการแก้ไข)'}), 200
+                cursor.execute('SELECT id, name, description FROM size_chart_groups WHERE name ILIKE %s LIMIT 3', (f'%{_upd_name}%',))
+                _upd_groups = cursor.fetchall()
+                if not _upd_groups:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบกลุ่มตารางขนาดชื่อ "{_upd_name}"'}), 200
+                if len(_upd_groups) > 1:
+                    _upd_opts = ', '.join([g['name'] for g in _upd_groups])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายกลุ่ม: {_upd_opts} — ระบุชื่อให้ชัดขึ้น'}), 200
+                _upd_grp = _upd_groups[0]
+                _upd_new_name = (params.get('new_name') or '').strip()
+                _upd_desc     = params.get('description')
+                _upd_cols     = params.get('columns')
+                _upd_rows     = params.get('rows')
+                _upd_after = {}
+                if _upd_new_name:
+                    _upd_after['ชื่อใหม่'] = _upd_new_name
+                if _upd_desc is not None:
+                    _upd_after['คำอธิบาย'] = str(_upd_desc)[:60]
+                if _upd_cols is not None:
+                    _upd_after['คอลัมน์'] = ' | '.join((c.get('name', '') if isinstance(c, dict) else str(c)) for c in _upd_cols)
+                if _upd_rows is not None:
+                    _upd_after['จำนวนไซส์'] = str(len(_upd_rows)) + ' แถว'
+                if not _upd_after:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุสิ่งที่ต้องการแก้ไข: new_name, description, columns, หรือ rows'}), 200
+                _upd_log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                              params, {'group_id': _upd_grp['id'], 'old_name': _upd_grp['name']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': _upd_log_id,
+                                'plan': {'before': {'ชื่อ': _upd_grp['name']}, 'after': _upd_after},
+                                'params': {**params, 'group_id': _upd_grp['id']},
+                                'message': intent.get('message', f"จะแก้ไขกลุ่มตารางขนาด **{_upd_grp['name']}**"),
+                                'model_used': model_used}), 200
+
+            elif tool == 'delete_size_chart_group':
+                _del_name = (params.get('name') or '').strip()
+                if not _del_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ name (ชื่อกลุ่มที่ต้องการลบ)'}), 200
+                cursor.execute('SELECT id, name FROM size_chart_groups WHERE name ILIKE %s LIMIT 3', (f'%{_del_name}%',))
+                _del_groups = cursor.fetchall()
+                if not _del_groups:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบกลุ่มตารางขนาดชื่อ "{_del_name}"'}), 200
+                if len(_del_groups) > 1:
+                    _del_opts = ', '.join([g['name'] for g in _del_groups])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายกลุ่ม: {_del_opts} — ระบุชื่อให้ชัดขึ้น'}), 200
+                _del_grp = _del_groups[0]
+                cursor.execute("SELECT COUNT(*) as cnt FROM products WHERE size_chart_group_id = %s AND status != 'deleted'", (_del_grp['id'],))
+                _del_linked_count = cursor.fetchone()['cnt']
+                _del_log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                              params, {'group_id': _del_grp['id'], 'group_name': _del_grp['name']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': _del_log_id,
+                                'plan': {
+                                    'before': {'ชื่อ': _del_grp['name'], 'สินค้าที่ผูกอยู่': str(_del_linked_count) + ' รายการ'},
+                                    'after':  {'สถานะ': '🗑 ลบแล้ว', 'หมายเหตุ': 'สินค้า ' + str(_del_linked_count) + ' รายการจะถูก unlink อัตโนมัติ' if _del_linked_count else 'ไม่มีสินค้าที่ผูกอยู่'}
+                                },
+                                'params': {'group_id': _del_grp['id'], 'group_name': _del_grp['name']},
+                                'message': intent.get('message', f"จะลบกลุ่มตารางขนาด **{_del_grp['name']}**" + (' (จะ unlink สินค้า ' + str(_del_linked_count) + ' รายการด้วย)' if _del_linked_count else '')),
+                                'model_used': model_used}), 200
+
             elif tool == 'toggle_facebook_ad':
                 import urllib.request as _ur2
                 import urllib.parse as _up2
@@ -2608,6 +2671,70 @@ def agent_execute():
             if _csfi_linked:
                 msg += f"\n📎 ผูกกับสินค้า {_csfi_linked} รายการ: {', '.join(_csfi_prod_names[:5])}{'...' if len(_csfi_prod_names)>5 else ''}"
             return jsonify({'message': msg, 'before': _csfi_before, 'after': _csfi_after}), 200
+
+        elif tool == 'update_size_chart_group':
+            import json as _upd_json2
+            _ux_group_id = params.get('group_id')
+            if not _ux_group_id:
+                return jsonify({'error': 'ไม่พบ group_id'}), 400
+            cursor.execute('SELECT id, name, description FROM size_chart_groups WHERE id = %s', (_ux_group_id,))
+            _ux_grp = cursor.fetchone()
+            if not _ux_grp:
+                return jsonify({'error': 'ไม่พบกลุ่มตารางขนาดนี้'}), 400
+            _ux_new_name = (params.get('new_name') or '').strip()
+            _ux_desc     = params.get('description')
+            _ux_cols     = params.get('columns')
+            _ux_rows     = params.get('rows')
+            _ux_fields = []
+            _ux_vals   = []
+            if _ux_new_name:
+                _ux_fields.append('name=%s')
+                _ux_vals.append(_ux_new_name)
+            if _ux_desc is not None:
+                _ux_fields.append('description=%s')
+                _ux_vals.append(_ux_desc)
+            if _ux_cols is not None:
+                _ux_fields.append('columns=%s::jsonb')
+                _ux_vals.append(_upd_json2.dumps(_ux_cols, ensure_ascii=False))
+            if _ux_rows is not None:
+                _ux_fields.append('rows=%s::jsonb')
+                _ux_vals.append(_upd_json2.dumps(_ux_rows, ensure_ascii=False))
+            if not _ux_fields:
+                return jsonify({'error': 'ไม่มีข้อมูลที่จะอัปเดต'}), 400
+            _ux_fields.append('updated_at=CURRENT_TIMESTAMP')
+            _ux_vals.append(_ux_group_id)
+            cursor.execute('UPDATE size_chart_groups SET ' + ', '.join(_ux_fields) + ' WHERE id=%s', _ux_vals)
+            _ux_after = {}
+            if _ux_new_name: _ux_after['ชื่อใหม่'] = _ux_new_name
+            if _ux_desc is not None: _ux_after['คำอธิบาย'] = str(_ux_desc)[:60]
+            if _ux_cols is not None: _ux_after['คอลัมน์'] = ' | '.join((c.get('name', '') if isinstance(c, dict) else str(c)) for c in _ux_cols)
+            if _ux_rows is not None: _ux_after['จำนวนไซส์'] = str(len(_ux_rows)) + ' แถว'
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _upd_json2.dumps({'ชื่อ': _ux_grp['name']}), _upd_json2.dumps(_ux_after), log_id))
+            conn.commit()
+            _ux_display_name = _ux_new_name or _ux_grp['name']
+            return jsonify({'message': '✅ แก้ไขกลุ่มตารางขนาด **' + _ux_display_name + '** สำเร็จ',
+                            'before': {'ชื่อ': _ux_grp['name']}, 'after': _ux_after}), 200
+
+        elif tool == 'delete_size_chart_group':
+            import json as _del_json2
+            _dx_group_id   = params.get('group_id')
+            _dx_group_name = params.get('group_name', '')
+            if not _dx_group_id:
+                return jsonify({'error': 'ไม่พบ group_id'}), 400
+            cursor.execute('UPDATE products SET size_chart_group_id=NULL, updated_at=CURRENT_TIMESTAMP WHERE size_chart_group_id=%s', (_dx_group_id,))
+            _dx_unlinked = cursor.rowcount
+            cursor.execute('DELETE FROM size_chart_groups WHERE id=%s', (_dx_group_id,))
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _del_json2.dumps({'ชื่อ': _dx_group_name, 'unlinked': _dx_unlinked}), _del_json2.dumps({'สถานะ': 'ลบแล้ว'}), log_id))
+            conn.commit()
+            msg = '✅ ลบกลุ่มตารางขนาด **' + _dx_group_name + '** สำเร็จ'
+            if _dx_unlinked:
+                msg += '\n📎 Unlink สินค้า ' + str(_dx_unlinked) + ' รายการแล้ว'
+            return jsonify({'message': msg,
+                            'before': {'ชื่อ': _dx_group_name}, 'after': {'สถานะ': 'ลบแล้ว'}}), 200
 
         elif tool == 'toggle_facebook_ad':
             import urllib.request as _ur3
