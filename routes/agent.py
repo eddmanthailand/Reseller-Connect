@@ -1681,7 +1681,7 @@ def _vision_extract_size_chart(image_url):
         "ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น"
     )
     _vresp = _vclient.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         contents=[_vtypes.Content(role='user', parts=[
             _vtypes.Part(text=_vprompt),
             _vtypes.Part.from_bytes(data=_img_bytes, mime_type=_mime)
