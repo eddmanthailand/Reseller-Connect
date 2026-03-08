@@ -81,17 +81,36 @@ const SizeCharts = (() => {
     const q = _filterText.trim().toLowerCase();
     const filtered = q ? _allProducts.filter(p => p.name.toLowerCase().includes(q)) : _allProducts;
     if (!filtered.length) {
-      el.innerHTML = `<span style="color:#9ca3af;font-size:13px;">ไม่พบสินค้าที่ค้นหา "${_filterText}"</span>`;
+      el.innerHTML = `<div style="padding:12px;color:#9ca3af;font-size:13px;">ไม่พบสินค้าที่ค้นหา "${_filterText}"</div>`;
       return;
     }
     el.innerHTML = filtered.map(p => {
       const checked = _selectedProductIds.has(p.id);
-      const otherChart = (!checked && p.chart_group_name) ? ` <span style="font-size:11px;color:#f59e0b;">(${p.chart_group_name})</span>` : '';
-      return `<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:${checked ? '#ede9fe' : '#fff'};border:1px solid ${checked ? '#a78bfa' : '#e5e7eb'};border-radius:20px;cursor:pointer;font-size:13px;user-select:none;" onclick="SizeCharts.toggleProduct(${p.id},this)">
-        <input type="checkbox" ${checked ? 'checked' : ''} style="display:none;">
-        ${p.name}${otherChart}
+      const otherChart = (!checked && p.chart_group_name) ? `<span style="font-size:11px;color:#f59e0b;margin-left:4px;">(${p.chart_group_name})</span>` : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #f3f4f6;cursor:pointer;user-select:none;background:${checked ? '#f5f3ff' : '#fff'};" onmouseenter="if(!${checked})this.style.background='#fafafa'" onmouseleave="this.style.background='${checked ? '#f5f3ff' : '#fff'}'">
+        <input type="checkbox" ${checked ? 'checked' : ''} style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer;flex-shrink:0;" onchange="SizeCharts.toggleProduct(${p.id},this)">
+        <span style="font-size:13px;color:#374151;flex:1;">${p.name}</span>${otherChart}
       </label>`;
     }).join('');
+    _renderSelectedDisplay();
+  }
+
+  function _renderSelectedDisplay() {
+    const countEl = document.getElementById('sc-selected-count');
+    const dispEl  = document.getElementById('sc-selected-display');
+    if (!dispEl) return;
+    const selectedProds = _allProducts.filter(p => _selectedProductIds.has(p.id));
+    if (countEl) countEl.textContent = `เลือกแล้ว ${selectedProds.length} รายการ:`;
+    if (!selectedProds.length) {
+      dispEl.innerHTML = `<span style="font-size:12px;color:#9ca3af;">— ยังไม่ได้เลือกสินค้า</span>`;
+      return;
+    }
+    dispEl.innerHTML = selectedProds.map(p =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 10px;background:#ede9fe;border:1px solid #a78bfa;border-radius:20px;font-size:12px;color:#5b21b6;">
+        ${p.name}
+        <span onclick="SizeCharts.toggleProduct(${p.id},null)" style="cursor:pointer;font-size:14px;line-height:1;color:#7c3aed;margin-left:2px;">&times;</span>
+      </span>`
+    ).join('');
   }
 
   function filterProducts(val) {
@@ -263,16 +282,13 @@ const SizeCharts = (() => {
     }
   }
 
-  function toggleProduct(pid, label) {
+  function toggleProduct(pid, cb) {
     if (_selectedProductIds.has(pid)) {
       _selectedProductIds.delete(pid);
-      label.style.background = '#fff';
-      label.style.borderColor = '#e5e7eb';
     } else {
       _selectedProductIds.add(pid);
-      label.style.background = '#ede9fe';
-      label.style.borderColor = '#a78bfa';
     }
+    _renderProductPicker();
   }
 
   async function save() {
