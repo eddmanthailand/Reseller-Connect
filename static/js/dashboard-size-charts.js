@@ -49,7 +49,7 @@ const SizeCharts = (() => {
           : `<div style="display:flex;align-items:center;gap:4px;">
                <input value="${name}" onchange="SizeCharts.updateColName(${i},this.value)"
                  style="border:none;background:transparent;font-weight:600;font-size:13px;width:80px;outline:none;color:#374151;">
-               ${i > 1 ? `<button onclick="SizeCharts.removeCol(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;" title="ลบคอลัมน์">✕</button>` : ''}
+               ${i > 0 ? `<button onclick="SizeCharts.removeCol(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;" title="ลบคอลัมน์">✕</button>` : ''}
              </div>
              ${_unitSelect(i, unit)}`
         }
