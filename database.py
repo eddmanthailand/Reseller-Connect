@@ -1401,6 +1401,25 @@ def init_db():
             ADD COLUMN IF NOT EXISTS meta_ad_account_id VARCHAR(100)
         """)
 
+        # Create size_chart_groups table (reusable size chart templates)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS size_chart_groups (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                columns JSONB NOT NULL DEFAULT '["ขนาด","รอบอก","รอบเอว","ความยาว"]',
+                rows JSONB NOT NULL DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Migration: Add size_chart_group_id to products table
+        cursor.execute("""
+            ALTER TABLE products
+            ADD COLUMN IF NOT EXISTS size_chart_group_id INTEGER REFERENCES size_chart_groups(id) ON DELETE SET NULL
+        """)
+
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

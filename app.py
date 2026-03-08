@@ -1005,10 +1005,47 @@ def public_chat_message():
             except Exception as _e:
                 print(f'[GuestBot] product search error: {_e}')
 
+        # Load text-based size chart from size_chart_groups (guest bot)
+        _guest_size_chart_section = ''
+        _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
+        if any(kw in user_msg.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
+            try:
+                _prod_ids = [r['id'] for r in prod_rows if r.get('id')]
+                if _prod_ids:
+                    conn.rollback()
+                    _sc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    _sc.execute('''
+                        SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows,
+                               p.name as product_name
+                        FROM size_chart_groups scg
+                        JOIN products p ON p.size_chart_group_id = scg.id
+                        WHERE p.id = ANY(%s)
+                    ''', (_prod_ids,))
+                    _chart_rows = _sc.fetchall()
+                    _sc.close()
+                    _seen_charts = set()
+                    for _cr in _chart_rows:
+                        if _cr['id'] in _seen_charts:
+                            continue
+                        _seen_charts.add(_cr['id'])
+                        _cols = _cr['columns'] if isinstance(_cr['columns'], list) else json.loads(_cr['columns'])
+                        _trows = _cr['rows'] if isinstance(_cr['rows'], list) else json.loads(_cr['rows'])
+                        if not _cols or not _trows:
+                            continue
+                        _chart_lines = [' | '.join(_cols)]
+                        for _tr in _trows:
+                            _vals = _tr.get('values', [])
+                            _line = [_tr.get('size', '')] + _vals
+                            _chart_lines.append(' | '.join(str(v) for v in _line))
+                        _guest_size_chart_section += f"\n[ตารางขนาด: {_cr['name']}]\n" + '\n'.join(_chart_lines) + '\n'
+            except Exception as _sc_err:
+                print(f'[GuestBot] size chart text error: {_sc_err}')
+                try: conn.rollback()
+                except Exception: pass
+
         # Load size chart image for Vision when user asks about sizes (guest bot)
         _guest_chart_bytes = None
         _guest_chart_mime = 'image/jpeg'
-        _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
         if any(kw in user_msg.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
             for _pr2 in prod_rows:
                 _chart_url2 = _pr2.get('size_chart_image_url')
@@ -1191,6 +1228,9 @@ def public_chat_message():
 - ระยะเวลาจัดส่ง: 1-3 วันทำการหลังยืนยันการชำระเงิน
 - ช่องทางจัดส่ง: Kerry / Flash Express / ไปรษณีย์ไทย (ขึ้นอยู่กับพื้นที่)
 - ชำระเงิน: โอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
+
+=== ตารางขนาดสินค้า (ขนาด = ไซส์ คืออันเดียวกัน — ใช้ข้อมูลนี้ตอบคำถามเรื่องขนาด/ไซส์ได้เลยทันที ห้ามบอกว่า "ไม่มีข้อมูล" ถ้ามีตารางด้านล่าง) ===
+{_guest_size_chart_section or '(ยังไม่มีตารางขนาดสำหรับสินค้าที่แสดง)'}
 
 === สินค้าที่เกี่ยวข้องกับคำถาม ===
 {products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
@@ -16207,6 +16247,48 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                 except Exception as _img_err:
                     print(f'[BOT] Cannot load size chart: {_img_err}')
 
+        # 9b. Load text-based size chart from size_chart_groups (member bot)
+        _member_size_chart_section = ''
+        if _user_asks_size:
+            try:
+                _mchart_ids = []
+                if current_product_id:
+                    _mchart_ids = [current_product_id]
+                elif prods:
+                    _mchart_ids = [r['id'] for r in prods if r.get('id')]
+                if _mchart_ids:
+                    conn.rollback()
+                    _msc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    _msc.execute('''
+                        SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows
+                        FROM size_chart_groups scg
+                        JOIN products p ON p.size_chart_group_id = scg.id
+                        WHERE p.id = ANY(%s)
+                    ''', (_mchart_ids,))
+                    _mcharts = _msc.fetchall()
+                    _msc.close()
+                    _mseen = set()
+                    for _mc in _mcharts:
+                        if _mc['id'] in _mseen:
+                            continue
+                        _mseen.add(_mc['id'])
+                        _mcols = _mc['columns'] if isinstance(_mc['columns'], list) else json.loads(_mc['columns'])
+                        _mrows = _mc['rows'] if isinstance(_mc['rows'], list) else json.loads(_mc['rows'])
+                        if not _mcols or not _mrows:
+                            continue
+                        _mlines = [' | '.join(_mcols)]
+                        for _mr in _mrows:
+                            _mvals = _mr.get('values', [])
+                            _mline = [_mr.get('size', '')] + _mvals
+                            _mlines.append(' | '.join(str(v) for v in _mline))
+                        _member_size_chart_section += f"\n[ตารางขนาด: {_mc['name']}]\n" + '\n'.join(_mlines) + '\n'
+                    if _member_size_chart_section and not size_chart_hint:
+                        size_chart_hint = '\n[มีตารางขนาดแนบในส่วน "ตารางขนาดสินค้า" — ใช้ข้อมูลนั้นตอบคำถามเรื่องขนาด/ไซส์ได้เลยค่ะ]'
+            except Exception as _msc_err:
+                print(f'[MemberBot] size chart text error: {_msc_err}')
+                try: conn.rollback()
+                except Exception: pass
+
         # 10. Build prompt for Flash Lite
         # ── Static knowledge base (pre-cached, no extra API call needed) ──────
         _FABRIC_KNOWLEDGE = """
@@ -16387,6 +16469,9 @@ State: {session_data.get('state','IDLE')}
 ตารางเกรดทั้งหมด:
 {tier_info_text}
 ⚠️ ราคาในรายการสินค้าด้านล่างเป็นราคาสำหรับเกรด {reseller_tier_name} แล้ว ใช้ราคานั้นเป็นราคาที่สมาชิกจะได้รับจริง
+
+=== ตารางขนาดสินค้า (ขนาด = ไซส์ คืออันเดียวกัน — ใช้ข้อมูลนี้ตอบคำถามเรื่องขนาด/ไซส์ได้เลยทันที ห้ามบอกว่า "ไม่มีข้อมูล" ถ้ามีตารางด้านล่าง) ===
+{_member_size_chart_section or '(ยังไม่มีตารางขนาดสำหรับสินค้าที่แสดง)'}
 
 === รายการสินค้าที่เกี่ยวข้อง (ข้อมูลจริงจากระบบ — ใช้ข้อมูลนี้เท่านั้น ห้ามอ้างอิงประวัติแชท) ===
 ⚠️ ไซส์และสต็อกของแต่ละสินค้า ให้ใช้ข้อมูลจากสินค้านั้นๆ เท่านั้น ห้ามนำไซส์หรือสต็อกจากสินค้าอื่นมาระบุ และห้ามเพิ่มไซส์ที่ไม่ปรากฏในข้อมูลด้านล่าง
@@ -18591,6 +18676,175 @@ def admin_delete_promotion(promo_id):
         cursor.execute('DELETE FROM promotions WHERE id=%s', (promo_id,))
         conn.commit()
         return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ── Admin: Size Chart Groups ───────────────────────────────
+
+@app.route('/api/admin/size-chart-groups', methods=['GET'])
+@admin_required
+def admin_get_size_chart_groups():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT scg.*,
+                   COUNT(p.id) as product_count
+            FROM size_chart_groups scg
+            LEFT JOIN products p ON p.size_chart_group_id = scg.id AND p.status != 'deleted'
+            GROUP BY scg.id
+            ORDER BY scg.name
+        ''')
+        rows = [dict(r) for r in cursor.fetchall()]
+        return jsonify(rows), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/size-chart-groups', methods=['POST'])
+@admin_required
+def admin_create_size_chart_group():
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        if not data.get('name'):
+            return jsonify({'error': 'กรุณาระบุชื่อตารางขนาด'}), 400
+        columns = data.get('columns', ['ขนาด', 'รอบอก', 'รอบเอว', 'ความยาว'])
+        rows = data.get('rows', [])
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            INSERT INTO size_chart_groups (name, description, columns, rows)
+            VALUES (%s, %s, %s, %s) RETURNING *
+        ''', (data['name'], data.get('description', ''),
+              json.dumps(columns, ensure_ascii=False),
+              json.dumps(rows, ensure_ascii=False)))
+        row = dict(cursor.fetchone())
+        conn.commit()
+        return jsonify(row), 201
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/size-chart-groups/<int:group_id>', methods=['GET'])
+@admin_required
+def admin_get_size_chart_group(group_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT * FROM size_chart_groups WHERE id=%s', (group_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'ไม่พบตารางขนาด'}), 404
+        result = dict(row)
+        cursor.execute('''
+            SELECT id, name FROM products
+            WHERE size_chart_group_id = %s AND status != 'deleted'
+            ORDER BY name
+        ''', (group_id,))
+        result['products'] = [dict(r) for r in cursor.fetchall()]
+        return jsonify(result), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/size-chart-groups/<int:group_id>', methods=['PUT'])
+@admin_required
+def admin_update_size_chart_group(group_id):
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json()
+        if not data.get('name'):
+            return jsonify({'error': 'กรุณาระบุชื่อตารางขนาด'}), 400
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            UPDATE size_chart_groups
+            SET name=%s, description=%s, columns=%s, rows=%s, updated_at=NOW()
+            WHERE id=%s RETURNING *
+        ''', (data['name'], data.get('description', ''),
+              json.dumps(data.get('columns', []), ensure_ascii=False),
+              json.dumps(data.get('rows', []), ensure_ascii=False),
+              group_id))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'ไม่พบตารางขนาด'}), 404
+        if 'product_ids' in data:
+            cursor.execute('UPDATE products SET size_chart_group_id=NULL WHERE size_chart_group_id=%s', (group_id,))
+            if data['product_ids']:
+                cursor.execute(
+                    'UPDATE products SET size_chart_group_id=%s WHERE id = ANY(%s)',
+                    (group_id, data['product_ids'])
+                )
+        conn.commit()
+        return jsonify(dict(row)), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/size-chart-groups/<int:group_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_size_chart_group(group_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE products SET size_chart_group_id=NULL WHERE size_chart_group_id=%s', (group_id,))
+        cursor.execute('DELETE FROM size_chart_groups WHERE id=%s', (group_id,))
+        conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/admin/products-for-size-chart', methods=['GET'])
+@admin_required
+def admin_products_for_size_chart():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT p.id, p.name, p.size_chart_group_id, scg.name as chart_group_name
+            FROM products p
+            LEFT JOIN size_chart_groups scg ON scg.id = p.size_chart_group_id
+            WHERE p.status != 'deleted'
+            ORDER BY p.name
+        ''')
+        return jsonify([dict(r) for r in cursor.fetchall()]), 200
     except Exception as e:
         if conn: conn.rollback()
         return handle_error(e)

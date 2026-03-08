@@ -33,6 +33,7 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **AI Agent:** In-app AI assistant (FAB) with READ tools (e.g., query_sales_today, query_low_stock, search_web, generate_image) and WRITE tools (e.g., adjust_stock, update_order_status, toggle_product, send_chat_message, toggle_facebook_ad) requiring Admin approval. Smart model routing uses `gemini-2.5-flash` for READ/chat and `gemini-3.1-pro-preview` for WRITE tools (2-phase verification). `search_web` uses Gemini Google Search grounding. `generate_image` uses Imagen 4.
 - **Marketing Module:** Admin CRUD for promotions (auto-applied, stackable) and coupons (assign to users, usage limits, `applies_to` scope). Includes dedicated Admin and Reseller UIs for promotions and coupons.
 - **Public Catalog Page:** `/catalog` for public product browsing with brand/category/featured filters.
+- **Size Chart Groups:** Reusable size chart templates (`size_chart_groups` table) with dynamic columns/rows (JSONB). Admin can create templates, assign multiple products to a template, and the bot automatically includes the text-based size chart in prompts for both guest and member bots when size-related keywords are detected. Located at Admin → "ตารางขนาดสินค้า". API: `/api/admin/size-chart-groups` (CRUD) + `/api/admin/products-for-size-chart`. JS: `static/js/dashboard-size-charts.js`.
 
 ### System Design Choices
 - **Backend Framework:** Flask (lightweight, flexible).
