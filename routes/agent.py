@@ -248,10 +248,12 @@ def _agent_build_system_prompt(settings, context=None):
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
 - assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
 - create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, columns=[{"name":"ขนาด","unit":""},{"name":"รอบอก","unit":"ซม."},...], rows=[{"size":"S","values":["88","68","59"]},{"size":"M","values":["92","72","60"]},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
+- create_size_chart_from_image: 🤖 อ่านรูปตารางไซส์จากสินค้าด้วย Vision AI แล้วสร้างกลุ่มตารางขนาดทันที (params: source_product_name="ชื่อสินค้าที่มีรูปตารางไซส์", chart_name="ชื่อกลุ่มตารางที่จะสร้าง", product_keyword="คำในชื่อสินค้าที่จะผูก" optional) — ใช้เมื่อผู้ใช้บอกว่า "อ่านรูปจากสินค้า X" หรือ "ดึงข้อมูลตารางไซส์จากภาพ"
 
 [READ — ตารางขนาด]
 - query_size_chart_groups: ดูรายชื่อกลุ่มตารางขนาดทั้งหมดพร้อมจำนวนสินค้า
 - query_size_chart_group: ดูรายละเอียดกลุ่มตารางขนาดเฉพาะกลุ่ม (params: name="ชื่อกลุ่ม") — แสดงคอลัมน์, ข้อมูลไซส์, รายชื่อสินค้าที่ผูก
+- read_size_chart_from_product: 🔍 อ่านรูปตารางไซส์จากสินค้าด้วย Vision AI แล้วแสดงข้อมูลที่อ่านได้เพื่อตรวจสอบ (params: product_name="ชื่อสินค้าที่มีรูปตารางไซส์") — ใช้เพื่อดูก่อนว่า AI อ่านได้ถูกต้องไหม
 
 === DB Schema สำคัญ (สำหรับ query_db) ===
 - ค้นสินค้า: ใช้ query_products แทน query_db เสมอ (ง่าย ถูกต้อง ไม่ต้อง JOIN เอง)
@@ -1622,7 +1624,75 @@ def _agent_execute_read_tool(tool, params, cursor):
                         f"\n\nสินค้าที่ผูกอยู่ ({len(_prods)} ชิ้น):\n" +
                         ('\n'.join(f"• {n}" for n in _prod_names) or '(ยังไม่มีสินค้าที่ผูก)')}
 
+    elif tool == 'read_size_chart_from_product':
+        _rscv_name = (params.get('product_name') or '').strip()
+        if not _rscv_name:
+            return {'text': 'กรุณาระบุ product_name ของสินค้าที่มีรูปตารางไซส์'}
+        cursor.execute("SELECT id, name, size_chart_image_url FROM products WHERE name ILIKE %s AND status != 'deleted' ORDER BY name LIMIT 5", (f'%{_rscv_name}%',))
+        _rscv_prods = cursor.fetchall()
+        if not _rscv_prods:
+            return {'text': f'ไม่พบสินค้าที่ชื่อมีคำว่า "{_rscv_name}"'}
+        _rscv_prod = next((p for p in _rscv_prods if p['size_chart_image_url']), None)
+        if not _rscv_prod:
+            _names = ', '.join(p['name'] for p in _rscv_prods[:3])
+            return {'text': f'พบสินค้า: {_names}\n⚠️ แต่ยังไม่มีรูปตารางไซส์อัปโหลด — กรุณาอัปโหลดรูปตารางไซส์ในหน้าแก้ไขสินค้าก่อน'}
+        _rscv_url = _rscv_prod['size_chart_image_url']
+        if not _rscv_url.startswith('/storage/'):
+            return {'text': f'รูปตารางไซส์ของ "{_rscv_prod["name"]}" ไม่ได้อยู่ใน Object Storage ({_rscv_url})'}
+        try:
+            _rscv_extracted = _vision_extract_size_chart(_rscv_url)
+        except Exception as _rscv_e:
+            return {'text': f'Vision AI อ่านรูปไม่สำเร็จ: {_rscv_e}'}
+        if 'error' in _rscv_extracted:
+            return {'text': f'Vision AI: {_rscv_extracted["error"]}'}
+        _rscv_cols = _rscv_extracted.get('columns', [])
+        _rscv_rows = _rscv_extracted.get('rows', [])
+        _rscv_col_labels = ' | '.join((c.get('name','') if isinstance(c,dict) else c) + (f"({c.get('unit','')})" if isinstance(c,dict) and c.get('unit') else '') for c in _rscv_cols)
+        _rscv_row_lines = [f"  {r['size']}: {' | '.join(str(v) for v in (r.get('values') or []))}" for r in _rscv_rows]
+        return {'text': f"🔍 Vision AI อ่านรูปตารางไซส์จาก **{_rscv_prod['name']}** ได้ดังนี้:\n\nคอลัมน์: {_rscv_col_labels}\nข้อมูล:\n" + '\n'.join(_rscv_row_lines) +
+                        f"\n\n✅ {len(_rscv_rows)} ไซส์, {len(_rscv_cols)} คอลัมน์ — ถ้าข้อมูลถูกต้อง สามารถสั่ง create_size_chart_from_image เพื่อสร้างตารางได้เลย"}
+
     return {'text': 'ไม่รู้จัก tool นี้'}
+
+
+def _vision_extract_size_chart(image_url):
+    import os as _os, json as _vj
+    from google import genai as _vgenai
+    from google.genai import types as _vtypes
+    from replit.object_storage import Client as _VOSClient
+    _vkey = _os.environ.get('GEMINI_API_KEY')
+    if not _vkey:
+        return {'error': 'ไม่พบ GEMINI_API_KEY'}
+    _storage_key = image_url.replace('/storage/', '')
+    _img_bytes = _VOSClient().download_as_bytes(_storage_key)
+    _mime = 'image/jpeg'
+    if image_url.endswith('.png'):
+        _mime = 'image/png'
+    elif image_url.endswith('.webp'):
+        _mime = 'image/webp'
+    _vclient = _vgenai.Client(api_key=_vkey)
+    _vprompt = (
+        "อ่านตารางขนาด/ตารางไซส์จากภาพนี้ให้ครบถ้วน "
+        "ส่งคืนเป็น JSON เท่านั้น ไม่มีข้อความอื่น รูปแบบ:\n"
+        '{"columns":[{"name":"ขนาด","unit":""},{"name":"รอบอก","unit":"ซม."},...],'
+        '"rows":[{"size":"SS","values":["84","64",...]},{"size":"S","values":["88","68",...]},...]}\n'
+        "กฎ: คอลัมน์แรกต้องเป็น ขนาด (unit ว่าง), หน่วยวัดให้ใส่ใน unit ของแต่ละคอลัมน์ "
+        "ถ้าตัวเลขมีหน่วยในเซลล์ ให้เอาหน่วยออกแล้วใส่ใน unit แทน "
+        "ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น"
+    )
+    _vresp = _vclient.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=[_vtypes.Content(role='user', parts=[
+            _vtypes.Part(text=_vprompt),
+            _vtypes.Part.from_bytes(data=_img_bytes, mime_type=_mime)
+        ])]
+    )
+    _raw = (_vresp.text or '').strip()
+    import re as _vre
+    _m = _vre.search(r'\{.*\}', _raw, _vre.DOTALL)
+    if _m:
+        _raw = _m.group(0)
+    return _vj.loads(_raw)
 
 
 def _agent_find_sku(params, cursor):
@@ -2008,6 +2078,59 @@ def agent_chat():
                 return jsonify({'type': 'plan', 'tool': tool, 'log_id': _csg_log_id, 'plan': _csg_plan,
                                 'params': {'name': _csg_name, 'description': _csg_desc, 'columns': _csg_cols, 'rows': _csg_rows, 'product_keyword': _csg_keyword},
                                 'message': intent.get('message', f"จะสร้างกลุ่มตารางขนาด **{_csg_name}** ({len(_csg_rows)} ไซส์)" + (f" และผูกกับสินค้า {_csg_prod_count} รายการ" if _csg_prods else "")),
+                                'model_used': model_used}), 200
+
+            elif tool == 'create_size_chart_from_image':
+                _csv_src_name   = (params.get('source_product_name') or '').strip()
+                _csv_chart_name = (params.get('chart_name') or '').strip()
+                _csv_keyword    = (params.get('product_keyword') or '').strip()
+                if not _csv_src_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ source_product_name (ชื่อสินค้าที่มีรูปตารางไซส์)'}), 200
+                if not _csv_chart_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ chart_name (ชื่อกลุ่มตารางที่จะสร้าง)'}), 200
+                cursor.execute("SELECT id, name, size_chart_image_url FROM products WHERE name ILIKE %s AND status != 'deleted' ORDER BY name LIMIT 5", (f'%{_csv_src_name}%',))
+                _csv_prods = cursor.fetchall()
+                if not _csv_prods:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าที่ชื่อมีคำว่า "{_csv_src_name}"'}), 200
+                _csv_src = next((p for p in _csv_prods if p['size_chart_image_url']), None)
+                if not _csv_src:
+                    _csv_names = ', '.join(p['name'] for p in _csv_prods[:3])
+                    return jsonify({'type': 'answer', 'message': f'พบสินค้า: {_csv_names}\n⚠️ แต่ยังไม่มีรูปตารางไซส์อัปโหลด — กรุณาอัปโหลดรูปก่อนที่หน้าแก้ไขสินค้า'}), 200
+                _csv_url = _csv_src['size_chart_image_url']
+                if not _csv_url.startswith('/storage/'):
+                    return jsonify({'type': 'answer', 'message': f'รูปตารางไซส์ไม่ได้อยู่ใน Object Storage'}), 200
+                try:
+                    _csv_extracted = _vision_extract_size_chart(_csv_url)
+                except Exception as _csv_e:
+                    return jsonify({'type': 'answer', 'message': f'Vision AI อ่านรูปไม่สำเร็จ: {_csv_e}'}), 200
+                if 'error' in _csv_extracted:
+                    return jsonify({'type': 'answer', 'message': f'Vision AI: {_csv_extracted["error"]}'}), 200
+                _csv_cols = _csv_extracted.get('columns', [])
+                _csv_rows = _csv_extracted.get('rows', [])
+                if not _csv_cols or not _csv_rows:
+                    return jsonify({'type': 'answer', 'message': 'Vision AI อ่านรูปได้แต่ไม่พบข้อมูลตาราง — ลองตรวจสอบรูปว่ามีตารางไซส์ชัดเจนไหม'}), 200
+                _csv_link_prods = []
+                if _csv_keyword:
+                    cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' ORDER BY name", (f'%{_csv_keyword}%',))
+                    _csv_link_prods = cursor.fetchall()
+                _csv_col_labels = ' | '.join((c.get('name','') if isinstance(c,dict) else c) + (f" ({c.get('unit','')})" if isinstance(c,dict) and c.get('unit') else '') for c in _csv_cols)
+                _csv_row_preview = '\n'.join(f"  {r['size']}: {' | '.join(str(v) for v in (r.get('values') or []))}" for r in _csv_rows[:4])
+                if len(_csv_rows) > 4:
+                    _csv_row_preview += f"\n  ...+{len(_csv_rows)-4} ไซส์"
+                _csv_plan = {
+                    'before': {'สถานะ': f'อ่านรูปจาก {_csv_src["name"]} สำเร็จ — {len(_csv_rows)} ไซส์'},
+                    'after':  {
+                        'ชื่อกลุ่ม': _csv_chart_name,
+                        'คอลัมน์': _csv_col_labels,
+                        'ตัวอย่างข้อมูล': _csv_row_preview,
+                        'ผูกสินค้า': f"{len(_csv_link_prods)} รายการ — {', '.join(p['name'] for p in _csv_link_prods[:3])}{'...' if len(_csv_link_prods)>3 else ''}" if _csv_link_prods else 'ไม่ผูกสินค้า'
+                    }
+                }
+                _csv_log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                              params, {'source_product': _csv_src['name'], 'columns_count': len(_csv_cols), 'rows_count': len(_csv_rows)})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': _csv_log_id, 'plan': _csv_plan,
+                                'params': {'chart_name': _csv_chart_name, 'columns': _csv_cols, 'rows': _csv_rows, 'product_keyword': _csv_keyword},
+                                'message': intent.get('message', f"🤖 Vision AI อ่านตารางไซส์จาก **{_csv_src['name']}** ได้ {len(_csv_rows)} ไซส์, {len(_csv_cols)} คอลัมน์\nจะสร้างกลุ่มตาราง **{_csv_chart_name}**" + (f" และผูกกับสินค้า {len(_csv_link_prods)} รายการ" if _csv_link_prods else "")),
                                 'model_used': model_used}), 200
 
             elif tool == 'assign_size_chart_group':
@@ -2440,6 +2563,45 @@ def agent_execute():
             if _cx_linked:
                 msg += f"\n📎 ผูกกับสินค้า {_cx_linked} รายการแล้ว: {', '.join(_cx_prod_names[:5])}{'...' if len(_cx_prod_names)>5 else ''}"
             return jsonify({'message': msg, 'before': _cx_before, 'after': _cx_after}), 200
+
+        elif tool == 'create_size_chart_from_image':
+            import json as _csfi_json
+            _csfi_name    = (params.get('chart_name') or '').strip()
+            _csfi_cols    = params.get('columns', [])
+            _csfi_rows    = params.get('rows', [])
+            _csfi_keyword = (params.get('product_keyword') or '').strip()
+            if not _csfi_name or not _csfi_cols or not _csfi_rows:
+                return jsonify({'error': 'ข้อมูลไม่ครบ ต้องมี chart_name, columns, rows (ควร confirm จาก plan ที่ Vision AI สร้างให้)'}), 400
+            cursor.execute('SELECT id FROM size_chart_groups WHERE name = %s', (_csfi_name,))
+            if cursor.fetchone():
+                return jsonify({'error': f'มีกลุ่มตารางขนาดชื่อ "{_csfi_name}" อยู่แล้ว'}), 400
+            cursor.execute(
+                'INSERT INTO size_chart_groups (name, description, columns, rows) VALUES (%s, %s, %s::jsonb, %s::jsonb) RETURNING id',
+                (_csfi_name, '', _csfi_json.dumps(_csfi_cols, ensure_ascii=False), _csfi_json.dumps(_csfi_rows, ensure_ascii=False))
+            )
+            _csfi_grp_id = cursor.fetchone()['id']
+            _csfi_linked = 0
+            _csfi_prod_names = []
+            if _csfi_keyword:
+                cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' ORDER BY name", (f'%{_csfi_keyword}%',))
+                _csfi_prods = cursor.fetchall()
+                if _csfi_prods:
+                    cursor.execute('UPDATE products SET size_chart_group_id=%s, updated_at=CURRENT_TIMESTAMP WHERE id=ANY(%s)',
+                                   (_csfi_grp_id, [p['id'] for p in _csfi_prods]))
+                    _csfi_linked = cursor.rowcount
+                    _csfi_prod_names = [p['name'] for p in _csfi_prods]
+            _csfi_col_labels = ' | '.join((c.get('name','') if isinstance(c,dict) else c) + (f" ({c.get('unit','')})" if isinstance(c,dict) and c.get('unit') else '') for c in _csfi_cols)
+            _csfi_before = {'สถานะ': 'ยังไม่มี (สร้างจากรูปด้วย Vision AI)'}
+            _csfi_after  = {'ชื่อกลุ่ม': _csfi_name, 'คอลัมน์': _csfi_col_labels, 'จำนวนไซส์': f"{len(_csfi_rows)} แถว",
+                            'ผูกสินค้า': f"{_csfi_linked} รายการ" if _csfi_linked else 'ไม่ได้ผูกสินค้า'}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _csfi_json.dumps(_csfi_before), _csfi_json.dumps(_csfi_after), log_id))
+            conn.commit()
+            msg = f"✅ สร้างกลุ่มตารางขนาด **{_csfi_name}** ({len(_csfi_rows)} ไซส์) จากรูป Vision AI สำเร็จ"
+            if _csfi_linked:
+                msg += f"\n📎 ผูกกับสินค้า {_csfi_linked} รายการ: {', '.join(_csfi_prod_names[:5])}{'...' if len(_csfi_prod_names)>5 else ''}"
+            return jsonify({'message': msg, 'before': _csfi_before, 'after': _csfi_after}), 200
 
         elif tool == 'toggle_facebook_ad':
             import urllib.request as _ur3
