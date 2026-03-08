@@ -1,9 +1,20 @@
 const SizeCharts = (() => {
-  let _columns = ['ขนาด', 'รอบอก', 'รอบเอว', 'ความยาว'];
+  let _columns = [
+    { name: 'ขนาด', unit: '' },
+    { name: 'รอบอก', unit: 'ซม.' },
+    { name: 'รอบเอว', unit: 'ซม.' },
+    { name: 'ความยาว', unit: 'ซม.' }
+  ];
   let _rows = [];
   let _allProducts = [];
   let _selectedProductIds = new Set();
   let _filterText = '';
+
+  const UNITS = ['', 'ซม.', 'นิ้ว', 'กก.', 'ม.', 'มม.'];
+
+  function _colName(c) { return typeof c === 'object' ? (c.name || '') : (c || ''); }
+  function _colUnit(c) { return typeof c === 'object' ? (c.unit || '') : ''; }
+  function _toColObj(c) { return typeof c === 'object' ? c : { name: c || '', unit: '' }; }
 
   function _toast(msg, type = 'success') {
     const t = document.createElement('div');
@@ -13,22 +24,37 @@ const SizeCharts = (() => {
     setTimeout(() => t.remove(), 3000);
   }
 
+  function _unitSelect(colIdx, currentUnit) {
+    const opts = UNITS.map(u =>
+      `<option value="${u}" ${u === currentUnit ? 'selected' : ''}>${u || '— ไม่ระบุหน่วย'}</option>`
+    ).join('');
+    return `<select onchange="SizeCharts.updateColUnit(${colIdx},this.value)"
+      style="margin-top:4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;padding:2px 4px;color:#6b7280;background:#f9fafb;cursor:pointer;width:100%;max-width:90px;"
+      title="หน่วยกำกับ">
+      ${opts}
+    </select>`;
+  }
+
   function _renderTable() {
     const thead = document.getElementById('sc-thead');
     const tbody = document.getElementById('sc-tbody');
     if (!thead || !tbody) return;
 
-    const colCount = _columns.length;
-
-    thead.innerHTML = `<tr>${_columns.map((c, i) => `
-      <th style="padding:8px 10px;text-align:left;font-size:13px;font-weight:600;color:#374151;white-space:nowrap;border-bottom:1px solid #e5e7eb;">
+    thead.innerHTML = `<tr>${_columns.map((c, i) => {
+      const name = _colName(c);
+      const unit = _colUnit(c);
+      return `<th style="padding:8px 10px;text-align:left;font-size:13px;font-weight:600;color:#374151;white-space:nowrap;border-bottom:1px solid #e5e7eb;vertical-align:top;">
         ${i === 0
-          ? `<span style="color:#6b7280;">ขนาด</span>`
-          : `<input value="${c}" onchange="SizeCharts.updateColName(${i},this.value)"
-              style="border:none;background:transparent;font-weight:600;font-size:13px;width:90px;outline:none;color:#374151;">`
+          ? `<span style="color:#6b7280;">ขนาด</span><div style="font-size:11px;color:#9ca3af;margin-top:4px;">เช่น SS, S, M</div>`
+          : `<div style="display:flex;align-items:center;gap:4px;">
+               <input value="${name}" onchange="SizeCharts.updateColName(${i},this.value)"
+                 style="border:none;background:transparent;font-weight:600;font-size:13px;width:80px;outline:none;color:#374151;">
+               ${i > 1 ? `<button onclick="SizeCharts.removeCol(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;" title="ลบคอลัมน์">✕</button>` : ''}
+             </div>
+             ${_unitSelect(i, unit)}`
         }
-        ${i > 1 ? `<button onclick="SizeCharts.removeCol(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0 2px;" title="ลบคอลัมน์">✕</button>` : ''}
-      </th>`).join('')}
+      </th>`;
+    }).join('')}
       <th style="padding:8px;width:40px;"></th>
     </tr>`;
 
@@ -100,6 +126,10 @@ const SizeCharts = (() => {
         const cols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
         const rows = Array.isArray(g.rows) ? g.rows : JSON.parse(g.rows || '[]');
         const sizes = rows.map(r => r.size).join(', ') || '-';
+        const colLabels = cols.map(c => {
+          const n = _colName(c); const u = _colUnit(c);
+          return u ? `${n} (${u})` : n;
+        }).join(' | ');
         return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
             <div>
@@ -112,7 +142,7 @@ const SizeCharts = (() => {
             </div>
           </div>
           <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">
-            คอลัมน์: ${cols.join(' | ')} &nbsp;•&nbsp; ไซส์: ${sizes}
+            คอลัมน์: ${colLabels} &nbsp;•&nbsp; ไซส์: ${sizes}
           </div>
           <div style="font-size:13px;">
             <span style="background:#ede9fe;color:#7c3aed;padding:3px 10px;border-radius:20px;font-weight:600;">${g.product_count} สินค้า</span>
@@ -129,14 +159,19 @@ const SizeCharts = (() => {
     document.getElementById('sc-edit-id').value = '';
     document.getElementById('sc-name').value = '';
     document.getElementById('sc-description').value = '';
-    _columns = ['ขนาด', 'รอบอก', 'รอบเอว', 'ความยาว'];
+    _columns = [
+      { name: 'ขนาด', unit: '' },
+      { name: 'รอบอก', unit: 'ซม.' },
+      { name: 'รอบเอว', unit: 'ซม.' },
+      { name: 'ความยาว', unit: 'ซม.' }
+    ];
     _rows = [
       { size: 'SS', values: ['', '', ''] },
-      { size: 'S', values: ['', '', ''] },
-      { size: 'M', values: ['', '', ''] },
-      { size: 'L', values: ['', '', ''] },
+      { size: 'S',  values: ['', '', ''] },
+      { size: 'M',  values: ['', '', ''] },
+      { size: 'L',  values: ['', '', ''] },
       { size: 'XL', values: ['', '', ''] },
-      { size: '2XL', values: ['', '', ''] },
+      { size: '2XL',values: ['', '', ''] },
     ];
     _selectedProductIds = new Set();
     _filterText = '';
@@ -155,7 +190,8 @@ const SizeCharts = (() => {
       document.getElementById('sc-edit-id').value = g.id;
       document.getElementById('sc-name').value = g.name;
       document.getElementById('sc-description').value = g.description || '';
-      _columns = Array.isArray(g.columns) ? [...g.columns] : JSON.parse(g.columns || '[]');
+      const rawCols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
+      _columns = rawCols.map(_toColObj);
       _rows = (Array.isArray(g.rows) ? g.rows : JSON.parse(g.rows || '[]')).map(r => ({
         size: r.size,
         values: [...(r.values || [])]
@@ -194,7 +230,7 @@ const SizeCharts = (() => {
   function addColumn() {
     const colName = prompt('ชื่อคอลัมน์ใหม่ (เช่น สะโพก, รอบคอ, น้ำหนักผ้า):');
     if (!colName || !colName.trim()) return;
-    _columns.push(colName.trim());
+    _columns.push({ name: colName.trim(), unit: 'ซม.' });
     _rows = _rows.map(r => ({ ...r, values: [...(r.values || []), ''] }));
     _renderTable();
   }
@@ -211,7 +247,11 @@ const SizeCharts = (() => {
   }
 
   function updateColName(ci, val) {
-    _columns[ci] = val;
+    _columns[ci] = { ..._toColObj(_columns[ci]), name: val };
+  }
+
+  function updateColUnit(ci, val) {
+    _columns[ci] = { ..._toColObj(_columns[ci]), unit: val };
   }
 
   function updateCell(ri, key, val) {
@@ -242,7 +282,7 @@ const SizeCharts = (() => {
     const payload = {
       name,
       description: document.getElementById('sc-description').value.trim(),
-      columns: _columns,
+      columns: _columns.map(_toColObj),
       rows: _rows,
       product_ids: [..._selectedProductIds]
     };
@@ -277,5 +317,5 @@ const SizeCharts = (() => {
     });
   });
 
-  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateCell, toggleProduct, filterProducts, save, deleteGroup };
+  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateColUnit, updateCell, toggleProduct, filterProducts, save, deleteGroup };
 })();

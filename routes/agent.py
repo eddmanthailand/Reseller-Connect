@@ -1605,7 +1605,14 @@ def _agent_execute_read_tool(tool, params, cursor):
         _rows_data = _grp['rows'] if isinstance(_grp['rows'], list) else _scj.loads(_grp['rows'] or '[]')
         cursor.execute("SELECT name FROM products WHERE size_chart_group_id = %s AND status != 'deleted' ORDER BY name", (_grp['id'],))
         _prods = cursor.fetchall()
-        _header = ' | '.join(_cols)
+        _col_labels = []
+        for _sc_c in _cols:
+            if isinstance(_sc_c, dict):
+                _sc_u = _sc_c.get('unit', '')
+                _col_labels.append(f"{_sc_c.get('name','')} ({_sc_u})" if _sc_u else _sc_c.get('name',''))
+            else:
+                _col_labels.append(_sc_c)
+        _header = ' | '.join(_col_labels)
         _row_lines = [f"  {r['size']}: {' | '.join(str(v) for v in (r.get('values') or []))}" for r in _rows_data]
         _prod_names = [p['name'] for p in _prods]
         return {'text': f"📐 กลุ่มตารางขนาด: {_grp['name']}\n"

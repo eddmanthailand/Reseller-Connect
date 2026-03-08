@@ -1032,7 +1032,14 @@ def public_chat_message():
                         _trows = _cr['rows'] if isinstance(_cr['rows'], list) else json.loads(_cr['rows'])
                         if not _cols or not _trows:
                             continue
-                        _chart_lines = [' | '.join(_cols)]
+                        _col_labels = []
+                        for _c in _cols:
+                            if isinstance(_c, dict):
+                                _u = _c.get('unit', '')
+                                _col_labels.append(f"{_c.get('name','')} ({_u})" if _u else _c.get('name',''))
+                            else:
+                                _col_labels.append(_c)
+                        _chart_lines = [' | '.join(_col_labels)]
                         for _tr in _trows:
                             _vals = _tr.get('values', [])
                             _line = [_tr.get('size', '')] + _vals
@@ -16277,7 +16284,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                         _mrows = _mc['rows'] if isinstance(_mc['rows'], list) else json.loads(_mc['rows'])
                         if not _mcols or not _mrows:
                             continue
-                        _mlines = [' | '.join(_mcols)]
+                        _mcol_labels = []
+                        for _mc2 in _mcols:
+                            if isinstance(_mc2, dict):
+                                _mu = _mc2.get('unit', '')
+                                _mcol_labels.append(f"{_mc2.get('name','')} ({_mu})" if _mu else _mc2.get('name',''))
+                            else:
+                                _mcol_labels.append(_mc2)
+                        _mlines = [' | '.join(_mcol_labels)]
                         for _mr in _mrows:
                             _mvals = _mr.get('values', [])
                             _mline = [_mr.get('size', '')] + _mvals
