@@ -321,8 +321,10 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         gemini_key = os.environ.get('GEMINI_API_KEY')
         if not gemini_key:
             return {'type': 'chat', 'message': 'ไม่พบ GEMINI_API_KEY'}
+        print(f'[AGENT_DEBUG] model={model} building system prompt...')
         client = google_genai.Client(api_key=gemini_key)
         system_prompt = _agent_build_system_prompt(settings, context=context)
+        print(f'[AGENT_DEBUG] system_prompt built OK len={len(system_prompt)}')
 
         contents = []
         for h in (history or []):
@@ -336,16 +338,18 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
                 txt = '[ผลลัพธ์ query ข้อมูลจาก DB — ข้อมูลนี้อาจไม่ครบ ถ้าต้องการข้อมูลต้อง query_db ใหม่]'
             contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
 
-        current_text = f"=== หน้าปัจจุบัน: {context_page} ===\n\nคำสั่ง: {message}"
+        print(f'[AGENT_DEBUG] building contents history={len(history or [])} items')
+        current_text = "=== หน้าปัจจุบัน: " + str(context_page) + " ===\n\nคำสั่ง: " + str(message)
         if image_data:
             img_bytes = _b64.b64decode(image_data)
             current_parts = [genai_types.Part(text=current_text), genai_types.Part.from_bytes(data=img_bytes, mime_type=image_mime or 'image/jpeg')]
         else:
             current_parts = [genai_types.Part(text=current_text)]
         contents.append(genai_types.Content(role='user', parts=current_parts))
-
+        print(f'[AGENT_DEBUG] calling generate_content model={model}')
         config = genai_types.GenerateContentConfig(system_instruction=system_prompt)
         resp = client.models.generate_content(model=model, contents=contents, config=config)
+        print(f'[AGENT_DEBUG] got response len={len(resp.text or "")}')
         raw = (resp.text or '').strip()
         if not raw:
             return {'type': 'chat', 'message': 'AI ไม่ได้ตอบกลับ (empty response) กรุณาลองใหม่อีกครั้ง'}
