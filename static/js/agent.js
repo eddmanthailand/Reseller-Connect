@@ -452,10 +452,10 @@ async function agentSend() {
                 if (m.role === 'plan') {
                     if (!m.approved) return null;
                     const _pKey = m.params ? (m.params.chart_name || m.params.name || m.params.product_name || m.params.group_name || m.params.new_name || '') : '';
-                    return { role: 'model', text: `{"type":"executed","tool":"${m.tool}","target":"${_pKey}","status":"approved_and_done"}` };
+                    return { role: 'model', text: `[CONTEXT: งาน "${m.tool}" สำหรับ "${_pKey}" ได้รับการอนุมัติและส่งไปดำเนินการแล้ว]` };
                 }
                 if (m.role === 'success') {
-                    return { role: 'model', text: `{"type":"executed","status":"success","summary":${JSON.stringify((m.text||'').substring(0,80))}}` };
+                    return { role: 'model', text: `[CONTEXT: ผลลัพธ์ — ${(m.text||'').substring(0,120)}]` };
                 }
                 let text = m.text || '';
                 if (text.includes('📊')) {
