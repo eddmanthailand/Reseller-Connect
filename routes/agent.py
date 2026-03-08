@@ -247,6 +247,7 @@ def _agent_build_system_prompt(settings, context=None):
 - copy_product_description: คัดลอกคำอธิบาย (bot_description หรือ description) จากสินค้าต้นทาง ไปยังสินค้าปลายทางหลายชิ้น (params: source_product_name="ชื่อสินค้าต้นทาง", target_product_names=["ชื่อสินค้า1","ชื่อสินค้า2",...], field="bot_description"|"description") — ใช้เมื่อผู้ใช้บอกว่า "เอาคำอธิบายของ X ไปใส่ใน Y และ Z"
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
 - assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
+- create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, columns=[{"name":"ขนาด","unit":""},{"name":"รอบอก","unit":"ซม."},...], rows=[{"size":"S","values":["88","68","59"]},{"size":"M","values":["92","72","60"]},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
 
 [READ — ตารางขนาด]
 - query_size_chart_groups: ดูรายชื่อกลุ่มตารางขนาดทั้งหมดพร้อมจำนวนสินค้า
@@ -1974,6 +1975,41 @@ def agent_chat():
                                 'message': intent.get('message', f"จะแก้ไข {field_label} ของ **{prod['name']}** เป็น {new_value}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'create_size_chart_group':
+                import json as _csg_json
+                _csg_name    = (params.get('name') or '').strip()
+                _csg_desc    = (params.get('description') or '').strip()
+                _csg_cols    = params.get('columns', [])
+                _csg_rows    = params.get('rows', [])
+                _csg_keyword = (params.get('product_keyword') or '').strip()
+                if not _csg_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ name (ชื่อกลุ่มตารางขนาด)'}), 200
+                if not _csg_cols or len(_csg_cols) < 2:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ columns อย่างน้อย 2 คอลัมน์ เช่น [{"name":"ขนาด","unit":""},{"name":"รอบอก","unit":"ซม."}]'}), 200
+                if not _csg_rows:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ rows เช่น [{"size":"S","values":["88","68"]}]'}), 200
+                _csg_prods = []
+                if _csg_keyword:
+                    cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' ORDER BY name", (f'%{_csg_keyword}%',))
+                    _csg_prods = cursor.fetchall()
+                _csg_prod_count = len(_csg_prods)
+                _csg_prod_names = [p['name'] for p in _csg_prods]
+                _csg_plan = {
+                    'before': {'สถานะ': 'ยังไม่มีกลุ่มตารางนี้'},
+                    'after':  {
+                        'ชื่อกลุ่ม': _csg_name,
+                        'คอลัมน์': ' | '.join((c.get('name','') if isinstance(c, dict) else c) + (f" ({c.get('unit','')})" if isinstance(c, dict) and c.get('unit') else '') for c in _csg_cols),
+                        'จำนวนไซส์': f"{len(_csg_rows)} แถว",
+                        'ผูกสินค้า': f"{_csg_prod_count} รายการ — {', '.join(_csg_prod_names[:3])}{'...' if _csg_prod_count>3 else ''}" if _csg_prods else 'ไม่ผูกสินค้า (สามารถผูกทีหลังได้)'
+                    }
+                }
+                _csg_log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                              params, {'columns': _csg_cols, 'rows': _csg_rows, 'product_keyword': _csg_keyword})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': _csg_log_id, 'plan': _csg_plan,
+                                'params': {'name': _csg_name, 'description': _csg_desc, 'columns': _csg_cols, 'rows': _csg_rows, 'product_keyword': _csg_keyword},
+                                'message': intent.get('message', f"จะสร้างกลุ่มตารางขนาด **{_csg_name}** ({len(_csg_rows)} ไซส์)" + (f" และผูกกับสินค้า {_csg_prod_count} รายการ" if _csg_prods else "")),
+                                'model_used': model_used}), 200
+
             elif tool == 'assign_size_chart_group':
                 _asg_group_name = (params.get('group_name') or '').strip()
                 _asg_keyword    = (params.get('product_keyword') or '').strip()
@@ -2360,6 +2396,50 @@ def agent_execute():
             conn.commit()
             return jsonify({'message': f"✅ ผูกกลุ่มตารางขนาด **{_exe_grp['name']}** กับ {_exe_updated} สินค้าสำเร็จ",
                             'before': _exe_before, 'after': _exe_after}), 200
+
+        elif tool == 'create_size_chart_group':
+            import json as _csg_json2
+            _cx_name    = (params.get('name') or '').strip()
+            _cx_desc    = (params.get('description') or '').strip()
+            _cx_cols    = params.get('columns', [])
+            _cx_rows    = params.get('rows', [])
+            _cx_keyword = (params.get('product_keyword') or '').strip()
+            if not _cx_name or not _cx_cols or not _cx_rows:
+                return jsonify({'error': 'ข้อมูลไม่ครบ ต้องมี name, columns, rows'}), 400
+            cursor.execute('SELECT id FROM size_chart_groups WHERE name = %s', (_cx_name,))
+            if cursor.fetchone():
+                return jsonify({'error': f'มีกลุ่มตารางขนาดชื่อ "{_cx_name}" อยู่แล้ว'}), 400
+            cursor.execute(
+                'INSERT INTO size_chart_groups (name, description, columns, rows) VALUES (%s, %s, %s::jsonb, %s::jsonb) RETURNING id',
+                (_cx_name, _cx_desc, _csg_json2.dumps(_cx_cols, ensure_ascii=False), _csg_json2.dumps(_cx_rows, ensure_ascii=False))
+            )
+            _cx_grp_id = cursor.fetchone()['id']
+            _cx_linked = 0
+            _cx_prod_names = []
+            if _cx_keyword:
+                cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status='active' ORDER BY name", (f'%{_cx_keyword}%',))
+                _cx_prods = cursor.fetchall()
+                if _cx_prods:
+                    _cx_prod_ids = [p['id'] for p in _cx_prods]
+                    cursor.execute('UPDATE products SET size_chart_group_id=%s, updated_at=CURRENT_TIMESTAMP WHERE id=ANY(%s)', (_cx_grp_id, _cx_prod_ids))
+                    _cx_linked = cursor.rowcount
+                    _cx_prod_names = [p['name'] for p in _cx_prods]
+            _cx_col_labels = ' | '.join((c.get('name','') if isinstance(c, dict) else c) + (f" ({c.get('unit','')})" if isinstance(c, dict) and c.get('unit') else '') for c in _cx_cols)
+            _cx_before = {'สถานะ': 'ยังไม่มี'}
+            _cx_after  = {
+                'ชื่อกลุ่ม': _cx_name,
+                'คอลัมน์': _cx_col_labels,
+                'จำนวนไซส์': f"{len(_cx_rows)} แถว",
+                'ผูกสินค้า': f"{_cx_linked} รายการ — {', '.join(_cx_prod_names[:3])}{'...' if len(_cx_prod_names)>3 else ''}" if _cx_linked else 'ไม่ได้ผูกสินค้า'
+            }
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _csg_json2.dumps(_cx_before), _csg_json2.dumps(_cx_after), log_id))
+            conn.commit()
+            msg = f"✅ สร้างกลุ่มตารางขนาด **{_cx_name}** ({len(_cx_rows)} ไซส์, {len(_cx_cols)} คอลัมน์) สำเร็จ"
+            if _cx_linked:
+                msg += f"\n📎 ผูกกับสินค้า {_cx_linked} รายการแล้ว: {', '.join(_cx_prod_names[:5])}{'...' if len(_cx_prod_names)>5 else ''}"
+            return jsonify({'message': msg, 'before': _cx_before, 'after': _cx_after}), 200
 
         elif tool == 'toggle_facebook_ad':
             import urllib.request as _ur3
