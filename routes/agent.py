@@ -166,7 +166,7 @@ def _agent_build_system_prompt(settings, context=None):
 === ข้อมูลระบบ ===
 - Models ที่ใช้ในระบบ:
   • Agent READ/chat (Phase 1): gemini-2.5-flash-lite (เร็ว ประหยัด)
-  • Agent WRITE tools (Phase 2 verify): gemini-3.1-pro-preview (แม่นยำ ปลอดภัย)
+  • Agent WRITE tools (Phase 2 verify): gemini-2.5-pro (แม่นยำ ปลอดภัย)
   • Agent code explain: gemini-2.5-flash
   • search_web: gemini-2.5-flash (Google Search Grounding)
   • generate_image: Imagen 4
@@ -413,7 +413,9 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         clean = _re.sub(r'```(?:json)?\s*\{.*?\}\s*```', '', raw, flags=_re.DOTALL).strip()
         return {'type': 'chat', 'message': clean or raw, '_model_used': model}
     except Exception as e:
-        return {'type': 'chat', 'message': f'เกิดข้อผิดพลาด: {str(e)}'}
+        import traceback as _tb
+        _tb.print_exc()
+        return {'type': 'chat', 'message': 'เกิดข้อผิดพลาด: ' + str(e)}
 
 
 def _agent_explain_workspace_result(original_question, tool_name, raw_result, settings):
@@ -1768,15 +1770,15 @@ def agent_chat():
 
         # Phase 2: ถ้าเป็น WRITE tool ให้ 3.1 Pro ตรวจสอบ params ให้รอบคอบและปลอดภัย
         if itype == 'plan':
-            pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-3.1-pro-preview', history=history, context=biz_context)
+            pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-pro', history=history, context=biz_context)
             if pro_intent.get('type') in ('plan', 'clarify'):
                 intent = pro_intent
                 itype  = intent.get('type', 'plan')
-                model_used = '3.1 Pro'
+                model_used = '2.5 Pro'
             else:
                 itype  = pro_intent.get('type', 'chat')
                 intent = pro_intent
-                model_used = '3.1 Pro'
+                model_used = '2.5 Pro'
 
         tool   = intent.get('tool', '')
         params = intent.get('params') or {}
