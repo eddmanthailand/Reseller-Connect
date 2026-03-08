@@ -3187,14 +3187,14 @@ def create_product():
         cursor.execute('''
             INSERT INTO products (brand_id, name, parent_sku, description, bot_description,
                                   size_chart_image_url, status, 
-                                  weight, length, width, height, low_stock_threshold)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                  weight, length, width, height, low_stock_threshold, size_chart_group_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''),
               data.get('bot_description', '') or '',
               data.get('size_chart_image_url'), status,
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
-              low_stock))
+              low_stock, data.get('size_chart_group_id') or None))
         
         product_id = cursor.fetchone()['id']
         
@@ -3375,12 +3375,13 @@ def update_product(product_id):
             SET brand_id = %s, name = %s, description = %s, bot_description = %s,
                 size_chart_image_url = %s, status = %s,
                 weight = %s, length = %s, width = %s, height = %s, low_stock_threshold = %s,
+                size_chart_group_id = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (brand_id, data['name'], data.get('description', ''), data.get('bot_description', '') or '',
               data.get('size_chart_image_url'), status,
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
-              low_stock, product_id))
+              low_stock, data.get('size_chart_group_id') or None, product_id))
         
         # Update product category
         cursor.execute('DELETE FROM product_categories WHERE product_id = %s', (product_id,))

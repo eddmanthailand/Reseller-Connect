@@ -3,6 +3,7 @@ const SizeCharts = (() => {
   let _rows = [];
   let _allProducts = [];
   let _selectedProductIds = new Set();
+  let _filterText = '';
 
   function _toast(msg, type = 'success') {
     const t = document.createElement('div');
@@ -51,7 +52,13 @@ const SizeCharts = (() => {
   function _renderProductPicker() {
     const el = document.getElementById('sc-products-list');
     if (!el || !_allProducts.length) return;
-    el.innerHTML = _allProducts.map(p => {
+    const q = _filterText.trim().toLowerCase();
+    const filtered = q ? _allProducts.filter(p => p.name.toLowerCase().includes(q)) : _allProducts;
+    if (!filtered.length) {
+      el.innerHTML = `<span style="color:#9ca3af;font-size:13px;">ไม่พบสินค้าที่ค้นหา "${_filterText}"</span>`;
+      return;
+    }
+    el.innerHTML = filtered.map(p => {
       const checked = _selectedProductIds.has(p.id);
       const otherChart = (!checked && p.chart_group_name) ? ` <span style="font-size:11px;color:#f59e0b;">(${p.chart_group_name})</span>` : '';
       return `<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:${checked ? '#ede9fe' : '#fff'};border:1px solid ${checked ? '#a78bfa' : '#e5e7eb'};border-radius:20px;cursor:pointer;font-size:13px;user-select:none;" onclick="SizeCharts.toggleProduct(${p.id},this)">
@@ -59,6 +66,11 @@ const SizeCharts = (() => {
         ${p.name}${otherChart}
       </label>`;
     }).join('');
+  }
+
+  function filterProducts(val) {
+    _filterText = val || '';
+    _renderProductPicker();
   }
 
   async function _loadProducts() {
@@ -127,6 +139,9 @@ const SizeCharts = (() => {
       { size: '2XL', values: ['', '', ''] },
     ];
     _selectedProductIds = new Set();
+    _filterText = '';
+    const searchEl = document.getElementById('sc-product-search');
+    if (searchEl) searchEl.value = '';
     _renderTable();
     _loadProducts().then(() => _renderProductPicker());
     document.getElementById('size-chart-modal').style.display = 'block';
@@ -146,6 +161,9 @@ const SizeCharts = (() => {
         values: [...(r.values || [])]
       }));
       _selectedProductIds = new Set((g.products || []).map(p => p.id));
+      _filterText = '';
+      const searchEl = document.getElementById('sc-product-search');
+      if (searchEl) searchEl.value = '';
       _renderTable();
       await _loadProducts();
       _renderProductPicker();
@@ -157,6 +175,9 @@ const SizeCharts = (() => {
 
   function closeModal() {
     document.getElementById('size-chart-modal').style.display = 'none';
+    _filterText = '';
+    const searchEl = document.getElementById('sc-product-search');
+    if (searchEl) searchEl.value = '';
   }
 
   function addRow() {
@@ -256,5 +277,5 @@ const SizeCharts = (() => {
     });
   });
 
-  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateCell, toggleProduct, save, deleteGroup };
+  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateCell, toggleProduct, filterProducts, save, deleteGroup };
 })();

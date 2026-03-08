@@ -746,6 +746,15 @@
                                 <img id="size-chart-preview-img" src="" alt="Size Chart Preview">
                             </div>
                         </div>
+
+                        <!-- Size Chart Group -->
+                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.15);">
+                            <label class="form-label">กลุ่มตารางขนาดข้อความ (ไม่บังคับ)</label>
+                            <select id="size_chart_group_id" class="form-input" style="cursor: pointer;">
+                                <option value="">-- ไม่ระบุกลุ่มขนาด --</option>
+                            </select>
+                            <p style="margin-top: 8px; font-size: 13px; opacity: 0.7; color: rgba(255,255,255,0.7);">เชื่อมสินค้านี้กับตารางขนาดข้อความ เพื่อให้บอทแชทสามารถแนะนำไซส์ได้ถูกต้อง</p>
+                        </div>
                     </div>
 
                     <!-- ส่วนที่ 2: ตัวเลือกสินค้า (Options & Values) -->
@@ -925,6 +934,25 @@
             }
         }
         loadBrands();
+
+        async function loadSizeChartGroups() {
+            try {
+                const response = await fetch('/api/admin/size-chart-groups');
+                if (!response.ok) return;
+                const groups = await response.json();
+                const sel = document.getElementById('size_chart_group_id');
+                if (!sel) return;
+                groups.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.textContent = g.name;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.warn('loadSizeChartGroups error', e);
+            }
+        }
+        loadSizeChartGroups();
 
         // Load categories for dropdown
         async function loadCategories() {
@@ -1785,6 +1813,9 @@
                 const options = collectOptionsData();
                 const skus = collectSkusData(options);
 
+                const sizeChartGroupEl = document.getElementById('size_chart_group_id');
+                const sizeChartGroupId = sizeChartGroupEl?.value ? parseInt(sizeChartGroupEl.value) : null;
+
                 const productData = {
                     brand_id: parseInt(brandId),
                     category_id: categoryId ? parseInt(categoryId) : null,
@@ -1794,6 +1825,7 @@
                     bot_description: botDescription,
                     image_urls: imageUrls,
                     size_chart_image_url: sizeChartImageUrl,
+                    size_chart_group_id: sizeChartGroupId,
                     weight: weight ? parseFloat(weight) : null,
                     length: length ? parseFloat(length) : null,
                     width: width ? parseFloat(width) : null,

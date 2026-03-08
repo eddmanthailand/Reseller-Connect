@@ -246,13 +246,19 @@ def _agent_build_system_prompt(settings, context=None):
 - bulk_update_product_description: อัปเดตคำอธิบายสินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", description="คำอธิบาย", field="bot_description"|"description") — default field="bot_description"
 - copy_product_description: คัดลอกคำอธิบาย (bot_description หรือ description) จากสินค้าต้นทาง ไปยังสินค้าปลายทางหลายชิ้น (params: source_product_name="ชื่อสินค้าต้นทาง", target_product_names=["ชื่อสินค้า1","ชื่อสินค้า2",...], field="bot_description"|"description") — ใช้เมื่อผู้ใช้บอกว่า "เอาคำอธิบายของ X ไปใส่ใน Y และ Z"
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
+- assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
+
+[READ — ตารางขนาด]
+- query_size_chart_groups: ดูรายชื่อกลุ่มตารางขนาดทั้งหมดพร้อมจำนวนสินค้า
+- query_size_chart_group: ดูรายละเอียดกลุ่มตารางขนาดเฉพาะกลุ่ม (params: name="ชื่อกลุ่ม") — แสดงคอลัมน์, ข้อมูลไซส์, รายชื่อสินค้าที่ผูก
 
 === DB Schema สำคัญ (สำหรับ query_db) ===
 - ค้นสินค้า: ใช้ query_products แทน query_db เสมอ (ง่าย ถูกต้อง ไม่ต้อง JOIN เอง)
 - products: id, name, parent_sku, description, bot_description, status, product_type, brand_id, size_chart_image_url, weight, length, width, height, low_stock_threshold, is_featured — ไม่มี column "category", "is_active", "image_url", "size_chart" โดยตรง
 - หมวดหมู่สินค้า: ต้อง JOIN product_categories pc ON pc.product_id=p.id JOIN categories c ON c.id=pc.category_id
 - รูปสินค้า: อยู่ในตาราง product_images (product_id, image_url, sort_order) — ต้อง JOIN เช่น LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.sort_order=0 เพื่อดูรูปแรก
-- ตารางไซส์: ใช้ column size_chart_image_url ในตาราง products (ไม่ใช่ size_chart)
+- ตารางไซส์รูปภาพ: ใช้ column size_chart_image_url ในตาราง products (ไม่ใช่ size_chart)
+- กลุ่มตารางขนาดข้อความ: size_chart_groups (id, name, description, columns JSONB, rows JSONB) — JOIN products p ON p.size_chart_group_id = scg.id
 - สถานะสินค้า: ใช้ status='active' ไม่ใช่ is_active=TRUE
 - SQL ที่ส่งให้ query_db: ห้ามมี semicolon (;) ท้าย SQL
 
@@ -1572,6 +1578,42 @@ def _agent_execute_read_tool(tool, params, cursor):
             'model': _used_model
         }
 
+    elif tool == 'query_size_chart_groups':
+        cursor.execute('''
+            SELECT scg.id, scg.name, scg.description, COUNT(p.id) as product_count
+            FROM size_chart_groups scg
+            LEFT JOIN products p ON p.size_chart_group_id = scg.id AND p.status != 'deleted'
+            GROUP BY scg.id, scg.name, scg.description
+            ORDER BY scg.name
+        ''')
+        _groups = cursor.fetchall()
+        if not _groups:
+            return {'text': 'ยังไม่มีกลุ่มตารางขนาดในระบบ'}
+        _lines = [f"• {g['name']} — {g['product_count']} สินค้า" + (f" ({g['description']})" if g['description'] else '') for g in _groups]
+        return {'text': f"📐 กลุ่มตารางขนาดทั้งหมด ({len(_groups)} กลุ่ม):\n" + '\n'.join(_lines)}
+
+    elif tool == 'query_size_chart_group':
+        import json as _scj
+        _gname = (params.get('name') or '').strip()
+        if not _gname:
+            return {'text': 'กรุณาระบุ name เช่น "ชุดพยาบาลทั่วไป"'}
+        cursor.execute('SELECT * FROM size_chart_groups WHERE name ILIKE %s LIMIT 1', (f'%{_gname}%',))
+        _grp = cursor.fetchone()
+        if not _grp:
+            return {'text': f'ไม่พบกลุ่มตารางขนาดชื่อ "{_gname}"'}
+        _cols = _grp['columns'] if isinstance(_grp['columns'], list) else _scj.loads(_grp['columns'] or '[]')
+        _rows_data = _grp['rows'] if isinstance(_grp['rows'], list) else _scj.loads(_grp['rows'] or '[]')
+        cursor.execute("SELECT name FROM products WHERE size_chart_group_id = %s AND status != 'deleted' ORDER BY name", (_grp['id'],))
+        _prods = cursor.fetchall()
+        _header = ' | '.join(_cols)
+        _row_lines = [f"  {r['size']}: {' | '.join(str(v) for v in (r.get('values') or []))}" for r in _rows_data]
+        _prod_names = [p['name'] for p in _prods]
+        return {'text': f"📐 กลุ่มตารางขนาด: {_grp['name']}\n"
+                        f"คอลัมน์: {_header}\n"
+                        f"ข้อมูล:\n" + '\n'.join(_row_lines) +
+                        f"\n\nสินค้าที่ผูกอยู่ ({len(_prods)} ชิ้น):\n" +
+                        ('\n'.join(f"• {n}" for n in _prod_names) or '(ยังไม่มีสินค้าที่ผูก)')}
+
     return {'text': 'ไม่รู้จัก tool นี้'}
 
 
@@ -1925,6 +1967,37 @@ def agent_chat():
                                 'message': intent.get('message', f"จะแก้ไข {field_label} ของ **{prod['name']}** เป็น {new_value}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'assign_size_chart_group':
+                _asg_group_name = (params.get('group_name') or '').strip()
+                _asg_keyword    = (params.get('product_keyword') or '').strip()
+                if not _asg_group_name or not _asg_keyword:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ group_name และ product_keyword'}), 200
+                cursor.execute('SELECT id, name FROM size_chart_groups WHERE name ILIKE %s LIMIT 3', (f'%{_asg_group_name}%',))
+                _asg_groups = cursor.fetchall()
+                if not _asg_groups:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบกลุ่มตารางขนาดชื่อ "{_asg_group_name}"'}), 200
+                if len(_asg_groups) > 1:
+                    _asg_opts = ', '.join([g['name'] for g in _asg_groups])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายกลุ่ม: {_asg_opts} — ระบุชื่อให้ชัดขึ้น'}), 200
+                _asg_grp = _asg_groups[0]
+                cursor.execute("SELECT id, name FROM products WHERE name ILIKE %s AND status = 'active' ORDER BY name", (f'%{_asg_keyword}%',))
+                _asg_prods = cursor.fetchall()
+                if not _asg_prods:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าที่ชื่อมีคำว่า "{_asg_keyword}"'}), 200
+                _asg_prod_ids   = [p['id'] for p in _asg_prods]
+                _asg_prod_names = [p['name'] for p in _asg_prods]
+                _asg_plan = {
+                    'before': {'จำนวนสินค้า': f'{len(_asg_prods)} รายการ'},
+                    'after':  {'กลุ่มตารางขนาด': _asg_grp['name'],
+                               'สินค้า': ', '.join(_asg_prod_names[:5]) + (f' ... +{len(_asg_prods)-5}' if len(_asg_prods) > 5 else '')}
+                }
+                _asg_log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                              params, {'group_id': _asg_grp['id'], 'product_ids': _asg_prod_ids})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': _asg_log_id, 'plan': _asg_plan,
+                                'params': {'group_id': _asg_grp['id'], 'product_ids': _asg_prod_ids, 'group_name': _asg_grp['name']},
+                                'message': intent.get('message', f"จะผูกกลุ่มตารางขนาด **{_asg_grp['name']}** กับสินค้า {len(_asg_prods)} รายการ"),
+                                'model_used': model_used}), 200
+
             elif tool == 'toggle_facebook_ad':
                 import urllib.request as _ur2
                 import urllib.parse as _up2
@@ -2254,6 +2327,32 @@ def agent_execute():
             conn.commit()
             return jsonify({'message': f"✅ อัปเดต{field_label}ของ **{prod['name']}** สำเร็จ",
                             'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'assign_size_chart_group':
+            _exe_group_id   = params.get('group_id')
+            _exe_prod_ids   = params.get('product_ids', [])
+            _exe_group_name = params.get('group_name', '')
+            if not _exe_group_id or not _exe_prod_ids:
+                return jsonify({'error': 'ข้อมูลไม่ครบ กรุณาระบุ group_id และ product_ids'}), 400
+            cursor.execute('SELECT name FROM size_chart_groups WHERE id = %s', (_exe_group_id,))
+            _exe_grp = cursor.fetchone()
+            if not _exe_grp:
+                return jsonify({'error': f'ไม่พบกลุ่มตารางขนาด ID {_exe_group_id}'}), 404
+            cursor.execute('UPDATE products SET size_chart_group_id = %s, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)',
+                           (_exe_group_id, _exe_prod_ids))
+            _exe_updated = cursor.rowcount
+            cursor.execute('SELECT name FROM products WHERE id = ANY(%s)', (_exe_prod_ids,))
+            _exe_prods = cursor.fetchall()
+            _exe_names = [p['name'] for p in _exe_prods]
+            _exe_before = {'จำนวนสินค้า': f'{_exe_updated} รายการ'}
+            _exe_after  = {'กลุ่มตารางขนาด': _exe_grp['name'],
+                           'สินค้า': ', '.join(_exe_names[:5]) + (f' ... +{len(_exe_names)-5}' if len(_exe_names) > 5 else '')}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(_exe_before), _json.dumps(_exe_after), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ ผูกกลุ่มตารางขนาด **{_exe_grp['name']}** กับ {_exe_updated} สินค้าสำเร็จ",
+                            'before': _exe_before, 'after': _exe_after}), 200
 
         elif tool == 'toggle_facebook_ad':
             import urllib.request as _ur3
