@@ -451,7 +451,8 @@ async function agentSend() {
                 if (m.role === 'user') return { role: 'user', text: m.text || '' };
                 if (m.role === 'plan') {
                     if (!m.approved) return null;
-                    return { role: 'model', text: `{"type":"executed","tool":"${m.tool}","status":"approved_and_done"}` };
+                    const _pKey = m.params ? (m.params.chart_name || m.params.name || m.params.product_name || m.params.group_name || m.params.new_name || '') : '';
+                    return { role: 'model', text: `{"type":"executed","tool":"${m.tool}","target":"${_pKey}","status":"approved_and_done"}` };
                 }
                 if (m.role === 'success') {
                     return { role: 'model', text: `{"type":"executed","status":"success","summary":${JSON.stringify((m.text||'').substring(0,80))}}` };
