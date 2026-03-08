@@ -340,7 +340,7 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
                 txt = '[ผลลัพธ์ query ข้อมูลจาก DB — ข้อมูลนี้อาจไม่ครบ ถ้าต้องการข้อมูลต้อง query_db ใหม่]'
             contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
 
-        print(f'[AGENT_DEBUG] building contents history={len(history or [])} items')
+        print(f'[AGENT_DEBUG] building contents history={len(history or [])} items dump={repr([(h.get("role","?"),h.get("text","")[:80]) for h in (history or [])])}')
         current_text = "=== หน้าปัจจุบัน: " + str(context_page) + " ===\n\nคำสั่ง: " + str(message)
         if image_data:
             img_bytes = _b64.b64decode(image_data)
@@ -351,7 +351,7 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
         print(f'[AGENT_DEBUG] calling generate_content model={model}')
         config = genai_types.GenerateContentConfig(system_instruction=system_prompt)
         resp = client.models.generate_content(model=model, contents=contents, config=config)
-        print(f'[AGENT_DEBUG] got response len={len(resp.text or "")}')
+        print(f'[AGENT_DEBUG] got response len={len(resp.text or "")} raw={repr((resp.text or "")[:300])}')
         raw = (resp.text or '').strip()
         if not raw:
             return {'type': 'chat', 'message': 'AI ไม่ได้ตอบกลับ (empty response) กรุณาลองใหม่อีกครั้ง'}
