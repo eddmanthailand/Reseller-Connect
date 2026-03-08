@@ -1774,6 +1774,13 @@ def agent_chat():
         itype  = intent.get('type', 'chat')
         model_used = 'Flash Lite'
 
+        # Guard: ถ้า AI hallucinate ด้วย type="executed"/"approved_and_done" ให้ retry โดยไม่ส่ง history
+        if itype in ('executed', 'approved_and_done') or intent.get('status') == 'approved_and_done':
+            print(f'[AGENT_DEBUG] hallucination detected (type={itype}), retrying without history')
+            intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-pro', history=[], context=biz_context)
+            itype  = intent.get('type', 'chat')
+            model_used = '2.5 Pro (retry)'
+
         # Phase 2: ถ้าเป็น WRITE tool ให้ 3.1 Pro ตรวจสอบ params ให้รอบคอบและปลอดภัย
         if itype == 'plan':
             pro_intent = _agent_call_gemini(message, context_page, settings, image_data, image_mime, model='gemini-2.5-pro', history=history, context=biz_context)
