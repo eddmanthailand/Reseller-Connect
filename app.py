@@ -614,6 +614,24 @@ def public_product_skus(product_id):
 
         p = dict(product)
         p['tier1_discount'] = float(p['tier1_discount']) if p.get('tier1_discount') is not None else 0
+
+        cursor.execute('''
+            SELECT scg.id, scg.name, scg.columns, scg.rows
+            FROM size_chart_groups scg
+            JOIN products pr ON pr.size_chart_group_id = scg.id
+            WHERE pr.id = %s
+        ''', (product_id,))
+        sc_row = cursor.fetchone()
+        if sc_row:
+            p['size_chart_group'] = {
+                'id': sc_row['id'],
+                'name': sc_row['name'],
+                'columns': sc_row['columns'] if isinstance(sc_row['columns'], list) else json.loads(sc_row['columns'] or '[]'),
+                'rows': sc_row['rows'] if isinstance(sc_row['rows'], list) else json.loads(sc_row['rows'] or '[]')
+            }
+        else:
+            p['size_chart_group'] = None
+
         return jsonify({'product': p, 'skus': skus}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

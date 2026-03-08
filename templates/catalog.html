@@ -349,6 +349,22 @@
             color: var(--primary); font-family: inherit; transition: all 0.15s; margin-bottom: 16px;
         }
         .size-chart-btn:hover { background: linear-gradient(135deg, #ede9fe, #fae8ff); border-color: var(--primary); }
+        .sc-text-wrap { margin-bottom: 16px; }
+        .sc-text-toggle {
+            display: flex; align-items: center; gap: 8px; width: 100%;
+            background: linear-gradient(135deg, #f0fdf4, #f7fee7);
+            border: 1.5px solid #bbf7d0; border-radius: 10px;
+            padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+            color: #15803d; font-family: inherit; transition: all 0.15s;
+        }
+        .sc-text-toggle:hover { background: linear-gradient(135deg, #dcfce7, #ecfccb); border-color: #86efac; }
+        .sc-text-table-box { overflow-x: auto; margin-top: 10px; border-radius: 8px; border: 1px solid #bbf7d0; }
+        .sc-text-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .sc-text-table th { background: #f0fdf4; color: #15803d; font-weight: 700; padding: 8px 10px; text-align: center; border-bottom: 1px solid #bbf7d0; white-space: nowrap; }
+        .sc-text-table td { padding: 6px 10px; text-align: center; border-bottom: 1px solid #f0fdf4; color: #374151; }
+        .sc-text-table tr:last-child td { border-bottom: none; }
+        .sc-text-table tr:nth-child(even) td { background: #f9fffe; }
+        .sc-text-table td:first-child { font-weight: 700; color: #7c3aed; background: #faf5ff; }
         .size-chart-lightbox {
             display: none; position: fixed; inset: 0; z-index: 700;
             background: rgba(0,0,0,0.88); backdrop-filter: blur(6px);
@@ -704,6 +720,32 @@
         }
     }
 
+    /* ── SIZE CHART TEXT TABLE ── */
+    function _renderScTextTable(scg) {
+        if (!scg || !scg.columns || !scg.rows || !scg.rows.length) return '';
+        const cols = scg.columns;
+        const theads = cols.map(c => {
+            const n = typeof c === 'object' ? (c.name || '') : (c || '');
+            const u = typeof c === 'object' ? (c.unit || '') : '';
+            return `<th>${escHtml(n)}${u ? `<br><span style="font-size:10px;font-weight:400;opacity:0.7;">${escHtml(u)}</span>` : ''}</th>`;
+        }).join('');
+        const tbody = scg.rows.map(r => {
+            const cells = [r.size || '', ...(r.values || [])].map((v, i) =>
+                `<td>${escHtml(String(v || ''))}</td>`
+            ).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+        return `<div class="sc-text-table-box"><table class="sc-text-table"><thead><tr>${theads}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+    }
+
+    function toggleScTextTable(btn) {
+        const box = btn.nextElementSibling;
+        const isOpen = box.style.display !== 'none';
+        box.style.display = isOpen ? 'none' : 'block';
+        const chevron = btn.querySelector('.sc-chevron');
+        if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+
     /* ── SIZE CHART LIGHTBOX ── */
     function openSizeChart(url) {
         document.getElementById('sizeChartImg').src = url;
@@ -862,14 +904,25 @@
 
         const needSelection = allOptionKeys.filter(k => !autoSelectedKeys.includes(k));
         const sizeChartUrl = product.size_chart_image_url;
+        const scGroup = product.size_chart_group;
+        const scTableHtml = scGroup ? _renderScTextTable(scGroup) : '';
 
         body.innerHTML = `
             ${sizeChartUrl ? `
             <button class="size-chart-btn" onclick="openSizeChart('${escHtml(sizeChartUrl)}')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M2 4h20M8 4v16M16 4v16"/></svg>
-                ดูตารางไซส์
+                ดูตารางไซส์ (รูป)
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:auto"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </button>` : ''}
+            ${scTableHtml ? `
+            <div class="sc-text-wrap">
+                <button class="sc-text-toggle" onclick="toggleScTextTable(this)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20M2 4h20M8 4v16M16 4v16"/></svg>
+                    ตารางขนาด${scGroup.name ? ` — ${escHtml(scGroup.name)}` : ''}
+                    <svg class="sc-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:auto;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div style="display:none;">${scTableHtml}</div>
+            </div>` : ''}
             ${optionsHtml}
             <div class="sku-qty-row">
                 <span class="sku-qty-label">จำนวน</span>
