@@ -186,29 +186,28 @@ def create_card_payment_intent(order_id):
 
         client = _get_stripe_client()
 
+        cur.execute('SELECT stripe_customer_id, full_name, email FROM users WHERE id = %s', (user_id,))
+        urow = cur.fetchone()
+        customer_id = urow['stripe_customer_id'] if urow else None
+        if not customer_id:
+            customer = client.Customer.create(
+                name=(urow['full_name'] or '') if urow else '',
+                email=(urow['email'] or '') if urow else '',
+                metadata={'user_id': str(user_id)}
+            )
+            customer_id = customer.id
+            cur.execute('UPDATE users SET stripe_customer_id = %s WHERE id = %s', (customer_id, user_id))
+
         pi_params = {
             'amount': amount_satangs,
             'currency': 'thb',
             'payment_method_types': ['card'],
+            'customer': customer_id,
             'metadata': {'order_id': str(order_id), 'order_number': order['order_number']},
             'description': f'EKG Shops - {order["order_number"]}',
         }
 
         if save_card:
-            cur.execute('SELECT stripe_customer_id FROM users WHERE id = %s', (user_id,))
-            urow = cur.fetchone()
-            customer_id = urow['stripe_customer_id'] if urow else None
-            if not customer_id:
-                cur.execute('SELECT full_name, email FROM users WHERE id = %s', (user_id,))
-                udata = cur.fetchone()
-                customer = client.Customer.create(
-                    name=udata['full_name'] or '',
-                    email=udata['email'] or '',
-                    metadata={'user_id': str(user_id)}
-                )
-                customer_id = customer.id
-                cur.execute('UPDATE users SET stripe_customer_id = %s WHERE id = %s', (customer_id, user_id))
-            pi_params['customer'] = customer_id
             pi_params['setup_future_usage'] = 'off_session'
 
         pi = client.PaymentIntent.create(**pi_params)

@@ -3041,12 +3041,12 @@ async function showCardPaymentModal(orderId) {
                             <div id="modal-card-cvc" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 14px;min-height:44px;"></div>
                         </div>
                     </div>
-                    <div id="modal-card-errors" style="color:#f87171;font-size:12px;min-height:18px;"></div>
                     <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:rgba(255,255,255,0.7);cursor:pointer;">
                         <input type="checkbox" id="modalSaveCard" style="width:16px;height:16px;accent-color:#6366f1;">
                         บันทึกบัตรนี้สำหรับครั้งต่อไป
                     </label>
                 </div>
+                <div id="modal-card-errors" style="color:#f87171;font-size:12px;min-height:18px;margin-top:8px;"></div>
 
                 <div id="cardModalLoading" style="display:none;text-align:center;padding:30px;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px;height:32px;animation:spin 1s linear infinite;color:#6366f1;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
