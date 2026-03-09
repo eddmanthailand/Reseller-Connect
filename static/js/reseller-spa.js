@@ -2453,19 +2453,19 @@ async function placeOrderAndPayCard() {
             throw new Error(confirmResult.error.message);
         }
 
-        btnText.textContent = 'กำลังยืนยันการชำระ...';
+        showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะออเดอร์...', 'success');
+        loadCartBadge();
+        selectedPaymentSlip = null;
+
         const piId = confirmResult.paymentIntent?.id;
-        const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
+        fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pi_id: piId })
-        });
-        const confirmData = await confirmRes.json();
-        if (!confirmRes.ok) throw new Error(confirmData.error || 'ยืนยันการชำระไม่สำเร็จ');
+        }).then(r => r.json()).then(d => {
+            if (d.success) showAlert(`ออเดอร์ ${d.order_number || ''} กำลังดำเนินการแล้ว`, 'success');
+        }).catch(() => {});
 
-        showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number} กำลังดำเนินการ`, 'success');
-        loadCartBadge();
-        selectedPaymentSlip = null;
         window.location.hash = 'orders';
 
     } catch (err) {
@@ -3182,19 +3182,20 @@ async function submitCardPaymentModal(orderId) {
             return;
         }
 
-        if (btn) btn.textContent = 'กำลังยืนยันการชำระ...';
+        closeCardPaymentModal();
+        showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะออเดอร์...', 'success');
+
         const piId = confirmResult.paymentIntent?.id;
-        const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-card-confirm`, {
+        fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-card-confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pi_id: piId })
-        });
-        const confirmData = await confirmRes.json();
-        if (!confirmRes.ok) throw new Error(confirmData.error || 'ยืนยันการชำระไม่สำเร็จ');
-
-        closeCardPaymentModal();
-        showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number} กำลังดำเนินการ`, 'success');
-        loadOrders();
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                showAlert(`ออเดอร์ ${d.order_number || ''} กำลังดำเนินการแล้ว`, 'success');
+            }
+            loadOrders();
+        }).catch(() => loadOrders());
 
     } catch (err) {
         console.error('Modal card payment error:', err);
