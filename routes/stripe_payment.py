@@ -305,6 +305,77 @@ def create_promptpay_intent(order_id):
         if conn: conn.close()
 
 
+# ── Confirm card payment from frontend (no-webhook fallback) ─────────────────
+@stripe_bp.route('/api/orders/<int:order_id>/stripe-card-confirm', methods=['POST'])
+def confirm_card_payment(order_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    body  = request.get_json() or {}
+    pi_id = body.get('pi_id')
+    if not pi_id:
+        return jsonify({'error': 'pi_id required'}), 400
+
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute('SELECT id, order_number, status, user_id FROM orders WHERE id = %s', (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+
+        if order['status'] == 'preparing':
+            return jsonify({'success': True, 'already_confirmed': True, 'order_number': order['order_number']})
+
+        if order['status'] != 'pending_payment':
+            return jsonify({'error': f'สถานะ {order["status"]} ไม่สามารถยืนยันได้'}), 400
+
+        client = _get_stripe_client()
+        pi = client.PaymentIntent.retrieve(pi_id)
+
+        if pi.status != 'succeeded':
+            return jsonify({'error': f'การชำระเงินยังไม่สำเร็จ (status: {pi.status})'}), 400
+
+        cur.execute('''
+            UPDATE orders
+            SET status = 'preparing',
+                stripe_payment_intent_id = %s,
+                payment_method = 'stripe',
+                paid_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (pi_id, order_id))
+
+        cur.execute('''
+            INSERT INTO payment_slips (order_id, slip_image_url, amount, status, verified_at)
+            SELECT %s, 'stripe_payment', final_amount, 'approved', CURRENT_TIMESTAMP
+            FROM orders WHERE id = %s
+        ''', (order_id, order_id))
+
+        conn.commit()
+        print(f'[STRIPE] order {order_id} confirmed via frontend → preparing')
+        return jsonify({'success': True, 'order_number': order['order_number']})
+
+    except stripe.error.StripeError as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        return jsonify({'error': f'Stripe: {str(e)}'}), 400
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
 # ── Poll PaymentIntent status ─────────────────────────────────────────────────
 @stripe_bp.route('/api/stripe/payment-intent/<pi_id>/status', methods=['GET'])
 def get_payment_intent_status(pi_id):

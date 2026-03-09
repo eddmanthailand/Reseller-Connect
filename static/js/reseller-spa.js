@@ -2453,7 +2453,17 @@ async function placeOrderAndPayCard() {
             throw new Error(confirmResult.error.message);
         }
 
-        showAlert('ชำระเงินสำเร็จ! กำลังดำเนินการออเดอร์', 'success');
+        btnText.textContent = 'กำลังยืนยันการชำระ...';
+        const piId = confirmResult.paymentIntent?.id;
+        const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pi_id: piId })
+        });
+        const confirmData = await confirmRes.json();
+        if (!confirmRes.ok) throw new Error(confirmData.error || 'ยืนยันการชำระไม่สำเร็จ');
+
+        showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number} กำลังดำเนินการ`, 'success');
         loadCartBadge();
         selectedPaymentSlip = null;
         window.location.hash = 'orders';
