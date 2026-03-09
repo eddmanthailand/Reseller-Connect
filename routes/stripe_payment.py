@@ -45,8 +45,8 @@ def _get_stripe_client():
 
 
 def _get_db():
-    from database import get_db_connection
-    return get_db_connection()
+    from database import get_db
+    return get_db()
 
 
 # ── สร้าง Checkout Session ────────────────────────────────────────────────────
