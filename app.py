@@ -88,6 +88,9 @@ init_db()
 from routes.agent import agent_bp
 app.register_blueprint(agent_bp)
 
+from routes.stripe_payment import stripe_bp
+app.register_blueprint(stripe_bp)
+
 def handle_error(e, user_msg='เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง'):
     """Log full error for admin, return safe generic message to user."""
     logging.error(e, exc_info=True)

@@ -1420,6 +1420,15 @@ def init_db():
             ADD COLUMN IF NOT EXISTS size_chart_group_id INTEGER REFERENCES size_chart_groups(id) ON DELETE SET NULL
         """)
 
+        # Migration: Add Stripe payment columns to orders table
+        cursor.execute("""
+            ALTER TABLE orders
+            ADD COLUMN IF NOT EXISTS stripe_session_id VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL")
+
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

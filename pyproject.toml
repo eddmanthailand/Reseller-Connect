@@ -19,5 +19,6 @@ dependencies = [
     "qrcode[pil]>=8.2",
     "replit-object-storage>=1.0.2",
     "requests>=2.32.5",
+    "stripe>=14.4.1",
     "werkzeug>=3.1.3",
 ]
