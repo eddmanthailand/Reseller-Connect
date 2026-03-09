@@ -2075,6 +2075,103 @@ async function placeOrder() {
     }
 }
 
+async function placeOrderAndPayWithStripe() {
+    const shippingType = document.querySelector('input[name="shippingType"]:checked').value;
+    const notes = document.getElementById('orderNotes').value;
+    const btn = document.getElementById('btnStripeCheckout');
+
+    const missingFields = [];
+    let shippingData = {};
+    if (shippingType === 'customer') {
+        const customerId = document.getElementById('checkoutCustomer').value;
+        if (!customerId) {
+            missingFields.push('เลือกลูกค้าที่จะจัดส่ง');
+        } else {
+            const customer = checkoutData.customers.find(c => c.id == customerId);
+            if (customer) {
+                shippingData = {
+                    customer_id: customer.id,
+                    shipping_name: customer.full_name,
+                    shipping_phone: customer.phone,
+                    shipping_address: customer.address,
+                    shipping_province: customer.province,
+                    shipping_district: customer.district,
+                    shipping_subdistrict: customer.subdistrict,
+                    shipping_postal_code: customer.postal_code
+                };
+            }
+        }
+    } else {
+        const addr = checkoutData.selfAddress;
+        if (!addr || (!addr.address && !addr.province)) {
+            missingFields.push('กรุณาตั้งค่าที่อยู่ร้านค้าของคุณในหน้าโปรไฟล์ก่อน');
+        } else {
+            shippingData = {
+                shipping_name: addr.brand_name || addr.full_name,
+                shipping_phone: addr.phone,
+                shipping_address: addr.address,
+                shipping_province: addr.province,
+                shipping_district: addr.district,
+                shipping_subdistrict: addr.subdistrict,
+                shipping_postal_code: addr.postal_code
+            };
+        }
+    }
+
+    if (missingFields.length > 0) {
+        showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังสร้างคำสั่งซื้อ...'; }
+
+    try {
+        const orderPayload = {
+            payment_method: 'stripe',
+            notes: notes,
+            shipping_fee: checkoutData.shippingCost || 0,
+            ...shippingData
+        };
+        if (_appliedCoupon) orderPayload.coupon_code = _appliedCoupon.code;
+
+        const res = await fetch(`${RESELLER_API_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload)
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showAlert(result.error || 'ไม่สามารถสร้างคำสั่งซื้อได้', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระเงินด้วยบัตร'; }
+            return;
+        }
+
+        const orderId = result.order?.id;
+        if (!orderId) {
+            showAlert('ไม่พบเลขคำสั่งซื้อ', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระเงินด้วยบัตร'; }
+            return;
+        }
+
+        if (btn) btn.textContent = 'กำลังเชื่อมต่อ Stripe...';
+        const stripeRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-checkout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const stripeData = await stripeRes.json();
+        if (stripeRes.ok && stripeData.checkout_url) {
+            window.location.href = stripeData.checkout_url;
+        } else {
+            showAlert(stripeData.error || 'ไม่สามารถสร้าง Stripe session ได้', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระเงินด้วยบัตร'; }
+        }
+    } catch (err) {
+        console.error('Stripe checkout error:', err);
+        showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระเงินด้วยบัตร'; }
+    }
+}
+
 async function loadCartBadge() {
     try {
         const response = await fetch(`${RESELLER_API_URL}/reseller/cart`);
