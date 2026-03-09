@@ -2212,10 +2212,16 @@ function renderOrders(orders) {
                 <span class="order-card-amount">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
             </div>
             ${order.status === 'pending_payment' ? `
-                <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    ส่งสลิปชำระเงิน
-                </button>
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                    <button class="order-card-btn" onclick="event.stopPropagation(); payOrderWithStripe(${order.id})" style="flex:1; background: linear-gradient(135deg,#6366f1,#8b5cf6);">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        จ่ายด้วยบัตร
+                    </button>
+                    <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="flex:1; background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        ส่งสลิป
+                    </button>
+                </div>
             ` : ''}
         </div>
     `).join('');
@@ -2428,10 +2434,18 @@ async function viewResellerOrderDetails(orderId) {
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
-                <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; margin-top: 16px; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #f59e0b, #ef4444);">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:8px;vertical-align:middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    ส่งสลิปชำระเงิน
-                </button>
+                <div style="margin-top: 16px; border: 1px solid rgba(99,102,241,0.4); border-radius: 12px; padding: 16px;">
+                    <div style="font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px; text-align: center;">เลือกวิธีชำระเงิน</div>
+                    <button class="btn" id="stripePayBtnModal_${orderId}" onclick="payOrderWithStripe(${orderId})" style="width: 100%; margin-bottom: 10px; padding: 13px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        ชำระด้วยบัตรเครดิต/เดบิต (Stripe)
+                    </button>
+                    <div style="text-align:center; font-size:11px; color:rgba(255,255,255,0.3); margin-bottom:10px;">─── หรือ ───</div>
+                    <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #f59e0b, #ef4444); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        ส่งสลิป PromptPay
+                    </button>
+                </div>
             `;
         }
         
@@ -2508,6 +2522,28 @@ async function viewResellerOrderDetails(orderId) {
 function closeOrderModal() {
     const modal = document.getElementById('orderDetailModal');
     if (modal) modal.remove();
+}
+
+async function payOrderWithStripe(orderId) {
+    const btn = document.getElementById(`stripePayBtnModal_${orderId}`) ||
+                document.querySelector(`[onclick*="payOrderWithStripe(${orderId})"]`);
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังเชื่อมต่อ Stripe...'; }
+    try {
+        const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-checkout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (res.ok && data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            showAlert(data.error || 'ไม่สามารถสร้าง Stripe session ได้', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระด้วยบัตรเครดิต/เดบิต (Stripe)'; }
+        }
+    } catch (err) {
+        showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระด้วยบัตรเครดิต/เดบิต (Stripe)'; }
+    }
 }
 
 function openPaymentSlipModal(orderId) {
