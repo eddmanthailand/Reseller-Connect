@@ -2998,24 +2998,208 @@ function closeOrderModal() {
 }
 
 async function payOrderWithStripe(orderId) {
-    const btn = document.getElementById(`stripePayBtnModal_${orderId}`) ||
-                document.querySelector(`[onclick*="payOrderWithStripe(${orderId})"]`);
-    if (btn) { btn.disabled = true; btn.textContent = 'กำลังเชื่อมต่อ Stripe...'; }
+    await showCardPaymentModal(orderId);
+}
+
+let _modalStripe = null;
+let _modalCardEl = null;
+let _modalExpiryEl = null;
+let _modalCvcEl = null;
+
+async function showCardPaymentModal(orderId) {
+    const existing = document.getElementById('stripeCardModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'stripeCardModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10010;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = `
+        <div style="background:linear-gradient(135deg,rgba(20,15,40,0.99),rgba(10,8,25,0.99));border:1px solid rgba(99,102,241,0.35);border-radius:16px;width:100%;max-width:420px;position:relative;">
+            <button onclick="closeCardPaymentModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:26px;cursor:pointer;line-height:1;padding:4px;">&times;</button>
+            <div style="padding:24px;">
+                <h3 style="font-size:17px;font-weight:700;margin-bottom:4px;">ชำระด้วยบัตร</h3>
+                <p id="cardModalOrderNum" style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:20px;"></p>
+
+                <div id="cardModalSavedSection" style="display:none;margin-bottom:16px;">
+                    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px;font-weight:500;">บัตรที่บันทึกไว้</p>
+                    <div id="cardModalSavedList" style="display:flex;flex-direction:column;gap:8px;"></div>
+                    <button type="button" onclick="cardModalUseNew()" style="width:100%;margin-top:8px;padding:8px;border:1px dashed rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.7);border-radius:8px;font-size:13px;cursor:pointer;">+ ใช้บัตรใหม่</button>
+                </div>
+
+                <div id="cardModalNewForm">
+                    <div style="margin-bottom:10px;">
+                        <label style="font-size:12px;color:rgba(255,255,255,0.45);display:block;margin-bottom:5px;">หมายเลขบัตร</label>
+                        <div id="modal-card-number" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 14px;min-height:44px;"></div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-bottom:10px;">
+                        <div style="flex:1;">
+                            <label style="font-size:12px;color:rgba(255,255,255,0.45);display:block;margin-bottom:5px;">วันหมดอายุ</label>
+                            <div id="modal-card-expiry" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 14px;min-height:44px;"></div>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:12px;color:rgba(255,255,255,0.45);display:block;margin-bottom:5px;">CVC</label>
+                            <div id="modal-card-cvc" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 14px;min-height:44px;"></div>
+                        </div>
+                    </div>
+                    <div id="modal-card-errors" style="color:#f87171;font-size:12px;min-height:18px;"></div>
+                    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:rgba(255,255,255,0.7);cursor:pointer;">
+                        <input type="checkbox" id="modalSaveCard" style="width:16px;height:16px;accent-color:#6366f1;">
+                        บันทึกบัตรนี้สำหรับครั้งต่อไป
+                    </label>
+                </div>
+
+                <div id="cardModalLoading" style="display:none;text-align:center;padding:30px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px;height:32px;animation:spin 1s linear infinite;color:#6366f1;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                    <p id="cardModalLoadingText" style="margin-top:10px;font-size:13px;color:rgba(255,255,255,0.55);">กำลังโหลด...</p>
+                </div>
+
+                <button id="btnModalPay" onclick="submitCardPaymentModal(${orderId})" style="width:100%;margin-top:16px;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+                    ชำระเงิน
+                </button>
+                <p style="text-align:center;color:rgba(255,255,255,0.25);font-size:11px;margin-top:10px;">🔒 ปลอดภัยด้วย Stripe</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
     try {
-        const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-checkout`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (res.ok && data.checkout_url) {
-            window.location.href = data.checkout_url;
-        } else {
-            showAlert(data.error || 'ไม่สามารถสร้าง Stripe session ได้', 'error');
-            if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระด้วยบัตรเครดิต/เดบิต (Stripe)'; }
+        if (!_modalStripe) {
+            const cfgRes = await fetch(`${RESELLER_API_URL}/stripe/config`);
+            const cfgData = await cfgRes.json();
+            _modalStripe = Stripe(cfgData.publishable_key);
         }
+
+        const modalElements = _modalStripe.elements({
+            appearance: { theme: 'night', variables: { colorPrimary: '#6366f1', fontFamily: 'Prompt, sans-serif', borderRadius: '8px' } },
+            locale: 'th'
+        });
+        const style = {
+            base: { color: '#ffffff', fontSize: '15px', fontFamily: 'Prompt, sans-serif', '::placeholder': { color: 'rgba(255,255,255,0.35)' } },
+            invalid: { color: '#f87171' }
+        };
+        _modalCardEl   = modalElements.create('cardNumber', { style });
+        _modalExpiryEl = modalElements.create('cardExpiry', { style });
+        _modalCvcEl    = modalElements.create('cardCvc',    { style });
+        _modalCardEl.mount('#modal-card-number');
+        _modalExpiryEl.mount('#modal-card-expiry');
+        _modalCvcEl.mount('#modal-card-cvc');
+        _modalCardEl.on('change', e => {
+            document.getElementById('modal-card-errors').textContent = e.error ? e.error.message : '';
+        });
+
+        const savedRes = await fetch(`${RESELLER_API_URL}/stripe/saved-cards`);
+        const savedData = await savedRes.json();
+        const cards = savedData.cards || [];
+        if (cards.length > 0) {
+            const list = document.getElementById('cardModalSavedList');
+            list.innerHTML = cards.map(c => `
+                <div id="modalSavedCard_${c.id}" onclick="modalSelectSavedCard('${c.id}', this)"
+                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.03);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span>💳</span>
+                        <div>
+                            <div style="font-size:13px;font-weight:600;text-transform:capitalize;">${c.brand} •••• ${c.last4}</div>
+                            <div style="font-size:11px;color:rgba(255,255,255,0.4);">หมดอายุ ${c.exp_month}/${c.exp_year}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('cardModalSavedSection').style.display = 'block';
+            document.getElementById('cardModalNewForm').style.display = 'none';
+            window._modalSelectedPm = cards[0].id;
+            const firstEl = document.getElementById(`modalSavedCard_${cards[0].id}`);
+            if (firstEl) firstEl.style.background = 'rgba(99,102,241,0.15)';
+        } else {
+            window._modalSelectedPm = null;
+        }
+
+        const orderRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}`);
+        if (orderRes.ok) {
+            const oData = await orderRes.json();
+            const o = oData.order || oData;
+            const num = o.order_number || `#${orderId}`;
+            const amt = o.final_amount ? `฿${Number(o.final_amount).toLocaleString('th-TH', {minimumFractionDigits:2})}` : '';
+            document.getElementById('cardModalOrderNum').textContent = `${num}${amt ? ' — ' + amt : ''}`;
+            if (amt) document.getElementById('btnModalPay').textContent = `ชำระ ${amt}`;
+        }
+
     } catch (err) {
-        showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> ชำระด้วยบัตรเครดิต/เดบิต (Stripe)'; }
+        console.error('Modal init error:', err);
+        showAlert('ไม่สามารถโหลด Stripe ได้ กรุณาลองใหม่', 'error');
+        modal.remove();
+    }
+}
+
+function closeCardPaymentModal() {
+    const modal = document.getElementById('stripeCardModal');
+    if (modal) modal.remove();
+    _modalCardEl = _modalExpiryEl = _modalCvcEl = null;
+}
+
+function modalSelectSavedCard(pmId, el) {
+    document.querySelectorAll('#cardModalSavedList > div').forEach(d => d.style.background = 'rgba(255,255,255,0.03)');
+    el.style.background = 'rgba(99,102,241,0.15)';
+    window._modalSelectedPm = pmId;
+}
+
+function cardModalUseNew() {
+    window._modalSelectedPm = null;
+    document.getElementById('cardModalSavedSection').style.display = 'none';
+    document.getElementById('cardModalNewForm').style.display = 'block';
+}
+
+async function submitCardPaymentModal(orderId) {
+    if (!_modalStripe) { showAlert('Stripe ยังโหลดไม่เสร็จ', 'error'); return; }
+    const btn  = document.getElementById('btnModalPay');
+    const saveCard = document.getElementById('modalSaveCard')?.checked || false;
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังสร้าง PaymentIntent...'; }
+
+    try {
+        const piRes  = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-card-intent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ save_card: saveCard })
+        });
+        const piData = await piRes.json();
+        if (!piRes.ok) throw new Error(piData.error || 'ไม่สามารถสร้าง payment intent');
+
+        if (btn) btn.textContent = 'กำลังประมวลผลบัตร...';
+
+        let confirmResult;
+        if (window._modalSelectedPm) {
+            confirmResult = await _modalStripe.confirmCardPayment(piData.client_secret, {
+                payment_method: window._modalSelectedPm
+            });
+        } else {
+            confirmResult = await _modalStripe.confirmCardPayment(piData.client_secret, {
+                payment_method: { card: _modalCardEl }
+            });
+        }
+
+        if (confirmResult.error) {
+            document.getElementById('modal-card-errors').textContent = confirmResult.error.message;
+            if (btn) { btn.disabled = false; btn.textContent = 'ชำระเงิน'; }
+            return;
+        }
+
+        if (btn) btn.textContent = 'กำลังยืนยันการชำระ...';
+        const piId = confirmResult.paymentIntent?.id;
+        const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-card-confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pi_id: piId })
+        });
+        const confirmData = await confirmRes.json();
+        if (!confirmRes.ok) throw new Error(confirmData.error || 'ยืนยันการชำระไม่สำเร็จ');
+
+        closeCardPaymentModal();
+        showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number} กำลังดำเนินการ`, 'success');
+        loadOrders();
+
+    } catch (err) {
+        console.error('Modal card payment error:', err);
+        showAlert(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'ชำระเงิน'; }
     }
 }
 
