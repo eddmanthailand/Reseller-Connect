@@ -3246,40 +3246,39 @@ def create_product():
         
         # Insert options and values
         options_data = data.get('options', [])
-        option_value_ids_map = {}  # Map to store option_value_ids for SKU generation
-        
+        options_order = []  # ordered list of option_ids as inserted
+        option_value_text_map = {}  # {option_id: {value_text: value_id}}
+
         for option in options_data:
             if not option.get('name') or not option.get('values'):
                 continue
-            
-            # Insert option
+
             cursor.execute('''
                 INSERT INTO options (product_id, name)
                 VALUES (%s, %s)
                 RETURNING id
             ''', (product_id, option['name']))
-            
+
             option_id = cursor.fetchone()['id']
-            option_value_ids_map[option_id] = []
-            
-            # Insert option values with sort_order
+            options_order.append(option_id)
+            option_value_text_map[option_id] = {}
+
             for idx, value_data in enumerate(option['values']):
                 cursor.execute('''
                     INSERT INTO option_values (option_id, value, sort_order)
                     VALUES (%s, %s, %s)
                     RETURNING id
                 ''', (option_id, value_data['value'], value_data.get('sort_order', idx)))
-                
+
                 value_id = cursor.fetchone()['id']
-                option_value_ids_map[option_id].append(value_id)
-        
+                option_value_text_map[option_id][value_data['value']] = value_id
+
         # Insert SKUs if provided
         skus_data = data.get('skus', [])
         for sku_data in skus_data:
             if not sku_data.get('sku_code'):
                 continue
-            
-            # Insert SKU with cost_price (stock always starts at 0, use Stock Adjustment to add inventory)
+
             cursor.execute('''
                 INSERT INTO skus (product_id, sku_code, price, stock, cost_price)
                 VALUES (%s, %s, %s, 0, %s)
@@ -3290,11 +3289,20 @@ def create_product():
                 sku_data.get('price', 0),
                 sku_data.get('cost_price')
             ))
-            
+
             sku_id = cursor.fetchone()['id']
-            
-            # Map SKU to option values
-            for value_id in sku_data.get('option_value_ids', []):
+
+            value_ids_to_map = sku_data.get('option_value_ids') or []
+            if not value_ids_to_map:
+                variant_values = sku_data.get('variant_values', [])
+                for j, val_text in enumerate(variant_values):
+                    if j < len(options_order):
+                        opt_id = options_order[j]
+                        vid = option_value_text_map.get(opt_id, {}).get(val_text)
+                        if vid:
+                            value_ids_to_map.append(vid)
+
+            for value_id in value_ids_to_map:
                 cursor.execute('''
                     INSERT INTO sku_values_map (sku_id, option_value_id)
                     VALUES (%s, %s)
