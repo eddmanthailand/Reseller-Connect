@@ -3,16 +3,15 @@ import stripe
 import requests
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, jsonify, redirect, url_for, render_template_string
+from flask import Blueprint, request, jsonify, redirect, url_for, render_template_string, session as flask_session
 
 stripe_bp = Blueprint('stripe_payment', __name__)
 
-# ── ดึง Stripe credentials จาก Replit Connectors ──────────────────────────────
-def _get_stripe_secret_key():
+
+def _get_stripe_keys():
     hostname = os.environ.get('REPLIT_CONNECTORS_HOSTNAME')
     if not hostname:
         raise Exception('REPLIT_CONNECTORS_HOSTNAME not set')
-
     repl_identity    = os.environ.get('REPL_IDENTITY')
     web_repl_renewal = os.environ.get('WEB_REPL_RENEWAL')
     if repl_identity:
@@ -21,10 +20,8 @@ def _get_stripe_secret_key():
         token = 'depl ' + web_repl_renewal
     else:
         raise Exception('No Replit identity token found')
-
     is_prod    = os.environ.get('REPLIT_DEPLOYMENT') == '1'
     target_env = 'production' if is_prod else 'development'
-
     resp = requests.get(
         f'https://{hostname}/api/v2/connection',
         params={'include_secrets': 'true', 'connector_names': 'stripe', 'environment': target_env},
@@ -35,12 +32,13 @@ def _get_stripe_secret_key():
     item = (data.get('items') or [None])[0]
     if not item:
         raise Exception(f'Stripe {target_env} connection not found')
-    return item['settings']['secret']
+    settings = item['settings']
+    return settings['secret'], settings.get('publishable', '')
 
 
 def _get_stripe_client():
-    key = _get_stripe_secret_key()
-    stripe.api_key = key
+    secret, _ = _get_stripe_keys()
+    stripe.api_key = secret
     return stripe
 
 
@@ -49,10 +47,281 @@ def _get_db():
     return get_db()
 
 
-# ── สร้าง Checkout Session ────────────────────────────────────────────────────
+def _require_user():
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return None, jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
+    return user_id, None, None
+
+
+# ── Config (publishable key) ──────────────────────────────────────────────────
+@stripe_bp.route('/api/stripe/config', methods=['GET'])
+def stripe_config():
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        _, publishable = _get_stripe_keys()
+        return jsonify({'publishable_key': publishable})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Ensure Stripe Customer for user ──────────────────────────────────────────
+@stripe_bp.route('/api/stripe/ensure-customer', methods=['POST'])
+def ensure_stripe_customer():
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT id, full_name, email, stripe_customer_id FROM users WHERE id = %s', (user_id,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        if user['stripe_customer_id']:
+            return jsonify({'customer_id': user['stripe_customer_id']})
+
+        client = _get_stripe_client()
+        customer = client.Customer.create(
+            name=user['full_name'] or '',
+            email=user['email'] or '',
+            metadata={'user_id': str(user_id)}
+        )
+        cur.execute('UPDATE users SET stripe_customer_id = %s WHERE id = %s',
+                    (customer.id, user_id))
+        conn.commit()
+        return jsonify({'customer_id': customer.id})
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ── List saved cards ──────────────────────────────────────────────────────────
+@stripe_bp.route('/api/stripe/saved-cards', methods=['GET'])
+def list_saved_cards():
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT stripe_customer_id FROM users WHERE id = %s', (user_id,))
+        row = cur.fetchone()
+        if not row or not row['stripe_customer_id']:
+            return jsonify({'cards': []})
+
+        client = _get_stripe_client()
+        pms = client.PaymentMethod.list(
+            customer=row['stripe_customer_id'],
+            type='card'
+        )
+        cards = []
+        for pm in pms.data:
+            card = pm.card
+            cards.append({
+                'id': pm.id,
+                'brand': card.brand,
+                'last4': card.last4,
+                'exp_month': card.exp_month,
+                'exp_year': card.exp_year,
+            })
+        return jsonify({'cards': cards})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ── Delete saved card ─────────────────────────────────────────────────────────
+@stripe_bp.route('/api/stripe/saved-cards/<pm_id>', methods=['DELETE'])
+def delete_saved_card(pm_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        client = _get_stripe_client()
+        client.PaymentMethod.detach(pm_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Create PaymentIntent for card payment ─────────────────────────────────────
+@stripe_bp.route('/api/orders/<int:order_id>/stripe-card-intent', methods=['POST'])
+def create_card_payment_intent(order_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    body = request.get_json() or {}
+    save_card = body.get('save_card', False)
+
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute('SELECT id, order_number, final_amount, status, user_id FROM orders WHERE id = %s', (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+        if order['status'] != 'pending_payment':
+            return jsonify({'error': f'คำสั่งซื้อสถานะ {order["status"]} ชำระไม่ได้'}), 400
+
+        amount_satangs = int(float(order['final_amount']) * 100)
+        if amount_satangs <= 0:
+            return jsonify({'error': 'ยอดชำระต้องมากกว่า 0'}), 400
+
+        client = _get_stripe_client()
+
+        pi_params = {
+            'amount': amount_satangs,
+            'currency': 'thb',
+            'payment_method_types': ['card'],
+            'metadata': {'order_id': str(order_id), 'order_number': order['order_number']},
+            'description': f'EKG Shops - {order["order_number"]}',
+        }
+
+        if save_card:
+            cur.execute('SELECT stripe_customer_id FROM users WHERE id = %s', (user_id,))
+            urow = cur.fetchone()
+            customer_id = urow['stripe_customer_id'] if urow else None
+            if not customer_id:
+                cur.execute('SELECT full_name, email FROM users WHERE id = %s', (user_id,))
+                udata = cur.fetchone()
+                customer = client.Customer.create(
+                    name=udata['full_name'] or '',
+                    email=udata['email'] or '',
+                    metadata={'user_id': str(user_id)}
+                )
+                customer_id = customer.id
+                cur.execute('UPDATE users SET stripe_customer_id = %s WHERE id = %s', (customer_id, user_id))
+            pi_params['customer'] = customer_id
+            pi_params['setup_future_usage'] = 'off_session'
+
+        pi = client.PaymentIntent.create(**pi_params)
+
+        cur.execute('''
+            UPDATE orders
+            SET stripe_payment_intent_id = %s, payment_method = 'stripe', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (pi.id, order_id))
+        conn.commit()
+
+        _, publishable = _get_stripe_keys()
+        return jsonify({'client_secret': pi.client_secret, 'publishable_key': publishable, 'pi_id': pi.id})
+
+    except stripe.error.StripeError as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        return jsonify({'error': f'Stripe: {str(e)}'}), 400
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ── Create PaymentIntent for PromptPay ───────────────────────────────────────
+@stripe_bp.route('/api/orders/<int:order_id>/stripe-promptpay-intent', methods=['POST'])
+def create_promptpay_intent(order_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute('SELECT id, order_number, final_amount, status, user_id FROM orders WHERE id = %s', (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+        if order['status'] != 'pending_payment':
+            return jsonify({'error': f'คำสั่งซื้อสถานะ {order["status"]} ชำระไม่ได้'}), 400
+
+        amount_satangs = int(float(order['final_amount']) * 100)
+        if amount_satangs <= 0:
+            return jsonify({'error': 'ยอดชำระต้องมากกว่า 0'}), 400
+
+        client = _get_stripe_client()
+        pi = client.PaymentIntent.create(
+            amount=amount_satangs,
+            currency='thb',
+            payment_method_types=['promptpay'],
+            metadata={'order_id': str(order_id), 'order_number': order['order_number']},
+            description=f'EKG Shops - {order["order_number"]}',
+        )
+
+        qr_url = ''
+        if pi.next_action and pi.next_action.get('type') == 'promptpay_display_qr_code':
+            qr_url = pi.next_action['promptpay_display_qr_code'].get('image_url_png', '')
+
+        cur.execute('''
+            UPDATE orders
+            SET stripe_payment_intent_id = %s, payment_method = 'stripe_promptpay', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (pi.id, order_id))
+        conn.commit()
+
+        return jsonify({
+            'pi_id': pi.id,
+            'qr_url': qr_url,
+            'amount': float(order['final_amount']),
+            'order_number': order['order_number'],
+        })
+
+    except stripe.error.StripeError as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        return jsonify({'error': f'Stripe: {str(e)}'}), 400
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ── Poll PaymentIntent status ─────────────────────────────────────────────────
+@stripe_bp.route('/api/stripe/payment-intent/<pi_id>/status', methods=['GET'])
+def get_payment_intent_status(pi_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        client = _get_stripe_client()
+        pi = client.PaymentIntent.retrieve(pi_id)
+        return jsonify({'status': pi.status})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Legacy: Stripe Checkout Session (redirect) ────────────────────────────────
 @stripe_bp.route('/api/orders/<int:order_id>/stripe-checkout', methods=['POST'])
 def create_stripe_checkout(order_id):
-    from flask import session as flask_session
     user_id = flask_session.get('user_id')
     if not user_id:
         return jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
@@ -61,13 +330,8 @@ def create_stripe_checkout(order_id):
     try:
         conn = _get_db()
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-        cur.execute('''
-            SELECT o.id, o.order_number, o.final_amount, o.status, o.user_id
-            FROM orders o WHERE o.id = %s
-        ''', (order_id,))
+        cur.execute('SELECT id, order_number, final_amount, status, user_id FROM orders WHERE id = %s', (order_id,))
         order = cur.fetchone()
-
         if not order:
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
         if order['user_id'] != user_id:
@@ -76,9 +340,6 @@ def create_stripe_checkout(order_id):
             return jsonify({'error': f'คำสั่งซื้อสถานะ {order["status"]} ไม่สามารถชำระได้'}), 400
 
         amount_satangs = int(float(order['final_amount']) * 100)
-        if amount_satangs <= 0:
-            return jsonify({'error': 'ยอดชำระต้องมากกว่า 0'}), 400
-
         domain = request.host_url.rstrip('/')
         client = _get_stripe_client()
 
@@ -88,10 +349,7 @@ def create_stripe_checkout(order_id):
                 'price_data': {
                     'currency': 'thb',
                     'unit_amount': amount_satangs,
-                    'product_data': {
-                        'name': f'คำสั่งซื้อ {order["order_number"]}',
-                        'description': 'EKG Shops',
-                    },
+                    'product_data': {'name': f'คำสั่งซื้อ {order["order_number"]}', 'description': 'EKG Shops'},
                 },
                 'quantity': 1,
             }],
@@ -102,12 +360,10 @@ def create_stripe_checkout(order_id):
         )
 
         cur.execute('''
-            UPDATE orders
-            SET stripe_session_id = %s, payment_method = 'stripe', updated_at = CURRENT_TIMESTAMP
+            UPDATE orders SET stripe_session_id = %s, payment_method = 'stripe', updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (checkout_session.id, order_id))
         conn.commit()
-
         return jsonify({'checkout_url': checkout_session.url})
 
     except stripe.error.StripeError as e:
@@ -116,22 +372,19 @@ def create_stripe_checkout(order_id):
         import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 
 # ── Stripe Webhook ─────────────────────────────────────────────────────────────
 @stripe_bp.route('/api/stripe/webhook', methods=['POST'])
 def stripe_webhook():
-    payload   = request.get_data()
+    payload    = request.get_data()
     sig_header = request.headers.get('Stripe-Signature', '')
 
-    conn = None
     try:
-        secret_key = _get_stripe_secret_key()
+        secret_key, _ = _get_stripe_keys()
         stripe.api_key = secret_key
 
-        # ดึง webhook secret จาก env (ถ้ามี) หรือตรวจสอบแบบ raw
         webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
         if webhook_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
@@ -142,7 +395,11 @@ def stripe_webhook():
         if event['type'] == 'checkout.session.completed':
             session_obj = event['data']['object']
             if session_obj.get('payment_status') == 'paid':
-                _handle_payment_success(session_obj)
+                _handle_checkout_success(session_obj)
+
+        elif event['type'] == 'payment_intent.succeeded':
+            pi = event['data']['object']
+            _handle_payment_intent_success(pi)
 
         elif event['type'] == 'payment_intent.payment_failed':
             pi = event['data']['object']
@@ -153,63 +410,82 @@ def stripe_webhook():
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 400
-    finally:
-        if conn:
-            conn.close()
 
 
-def _handle_payment_success(session_obj):
+def _handle_checkout_success(session_obj):
     session_id = session_obj.get('id')
     order_id   = session_obj.get('metadata', {}).get('order_id')
     pi_id      = session_obj.get('payment_intent')
-
     conn = None
     try:
         conn = _get_db()
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
         if order_id:
-            cur.execute('SELECT id, status, user_id FROM orders WHERE id = %s', (int(order_id),))
+            cur.execute('SELECT id, status FROM orders WHERE id = %s', (int(order_id),))
         else:
-            cur.execute('SELECT id, status, user_id FROM orders WHERE stripe_session_id = %s', (session_id,))
-
+            cur.execute('SELECT id, status FROM orders WHERE stripe_session_id = %s', (session_id,))
         order = cur.fetchone()
-        if not order:
-            print(f'[STRIPE] webhook: order not found session={session_id}')
+        if not order or order['status'] not in ('pending_payment', 'under_review'):
             return
-        if order['status'] not in ('pending_payment', 'under_review'):
-            print(f'[STRIPE] webhook: order {order["id"]} already {order["status"]}')
-            return
-
         cur.execute('''
-            UPDATE orders
-            SET status = 'preparing',
-                payment_method = 'stripe',
-                stripe_session_id = %s,
-                stripe_payment_intent_id = %s,
-                paid_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            UPDATE orders SET status='preparing', payment_method='stripe',
+            stripe_session_id=%s, stripe_payment_intent_id=%s,
+            paid_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=%s
         ''', (session_id, pi_id, order['id']))
-
-        # บันทึก payment slip อัตโนมัติ (Stripe)
         cur.execute('''
             INSERT INTO payment_slips (order_id, slip_image_url, amount, status, verified_at)
             SELECT %s, 'stripe_payment', final_amount, 'approved', CURRENT_TIMESTAMP
             FROM orders WHERE id = %s
         ''', (order['id'], order['id']))
-
         conn.commit()
-        print(f'[STRIPE] order {order["id"]} paid and set to preparing')
-
+        print(f'[STRIPE] checkout success order {order["id"]} → preparing')
     except Exception as e:
         if conn:
             try: conn.rollback()
             except Exception: pass
         import traceback; traceback.print_exc()
     finally:
+        if conn: conn.close()
+
+
+def _handle_payment_intent_success(pi):
+    pi_id    = pi.get('id')
+    order_id = pi.get('metadata', {}).get('order_id')
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if order_id:
+            cur.execute('SELECT id, status FROM orders WHERE id = %s', (int(order_id),))
+        else:
+            cur.execute('SELECT id, status FROM orders WHERE stripe_payment_intent_id = %s', (pi_id,))
+        order = cur.fetchone()
+        if not order or order['status'] not in ('pending_payment', 'under_review'):
+            return
+        payment_method = 'stripe_promptpay' if pi.get('payment_method_types') == ['promptpay'] else 'stripe'
+        cur.execute('''
+            UPDATE orders SET status='preparing', payment_method=%s,
+            stripe_payment_intent_id=%s, paid_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+            WHERE id=%s
+        ''', (payment_method, pi_id, order['id']))
+        cur.execute('''
+            INSERT INTO payment_slips (order_id, slip_image_url, amount, status, verified_at)
+            SELECT %s, 'stripe_payment', final_amount, 'approved', CURRENT_TIMESTAMP
+            FROM orders WHERE id = %s
+        ''', (order['id'], order['id']))
+        conn.commit()
+        print(f'[STRIPE] payment_intent success order {order["id"]} → preparing')
+    except Exception as e:
         if conn:
-            conn.close()
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+    finally:
+        if conn: conn.close()
+
+
+# Keep old _handle_payment_success name for backwards compat
+_handle_payment_success = _handle_checkout_success
 
 
 # ── Success / Cancel redirect pages ───────────────────────────────────────────
@@ -281,7 +557,6 @@ CANCEL_HTML = '''
 def stripe_success():
     session_id = request.args.get('session_id', '')
     order_id   = request.args.get('order_id')
-
     order_number = ''
     conn = None
     try:
@@ -292,14 +567,11 @@ def stripe_success():
         else:
             cur.execute('SELECT order_number FROM orders WHERE stripe_session_id = %s', (session_id,))
         row = cur.fetchone()
-        if row:
-            order_number = row['order_number']
+        if row: order_number = row['order_number']
     except Exception:
         pass
     finally:
-        if conn:
-            conn.close()
-
+        if conn: conn.close()
     return render_template_string(SUCCESS_HTML, order_number=order_number)
 
 

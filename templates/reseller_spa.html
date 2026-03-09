@@ -2706,58 +2706,88 @@
                                 </div>
                             </div>
 
-                            <div class="checkout-section" style="border: 1px solid rgba(99,102,241,0.4); border-radius: 12px; padding: 20px;">
-                                <h3 class="section-title" style="color:#a5b4fc;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                                    จ่ายด้วยบัตรออนไลน์ (Stripe)
-                                </h3>
-                                <p style="color:rgba(255,255,255,0.55); font-size:13px; margin-bottom:16px;">อนุมัติออเดอร์ทันที ไม่ต้องส่งสลิป — รองรับบัตรเครดิต/เดบิตทุกธนาคาร</p>
-                                <button id="btnStripeCheckout" onclick="placeOrderAndPayWithStripe()" style="width:100%; padding:14px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                                    ชำระเงินด้วยบัตร
-                                </button>
-                                <p style="text-align:center; color:rgba(255,255,255,0.3); font-size:11px; margin-top:8px;">🔒 ปลอดภัยด้วย Stripe — ไม่เก็บข้อมูลบัตรในระบบ</p>
-                            </div>
-
-                            <div style="text-align:center; color:rgba(255,255,255,0.35); font-size:13px; margin: 4px 0;">─── หรือชำระผ่าน PromptPay ───</div>
-
-                            <div class="checkout-section" id="promptpayQRSection">
-                                <h3 class="section-title">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg>
-                                    สแกนชำระเงินผ่าน PromptPay
-                                </h3>
-                                <div id="promptpayQRContainer" style="text-align: center; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 12px; margin-top: 12px;">
-                                    <div id="promptpayQRLoading" style="padding: 40px;">
-                                        <p style="opacity: 0.6;">กำลังสร้าง QR Code...</p>
+                            <!-- ช่องทางการชำระเงิน Accordion -->
+                            <div class="checkout-section" style="padding:0; overflow:hidden;">
+                                <div id="payAccordionHeader" onclick="togglePaymentAccordion()" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; cursor:pointer; user-select:none;">
+                                    <div style="display:flex; align-items:center; gap:10px; font-size:15px; font-weight:600;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                                        ช่องทางการชำระเงิน
                                     </div>
-                                    <div id="promptpayQRContent" style="display: none;">
-                                        <img id="promptpayQRImage" src="" alt="PromptPay QR Code" style="max-width: 200px; border-radius: 8px; background: white; padding: 8px;">
-                                        <p id="promptpayAccountName" style="margin-top: 12px; font-weight: 500;"></p>
-                                        <p id="promptpayAmount" style="font-size: 20px; font-weight: 700; color: #22c55e; margin-top: 8px;"></p>
-                                        <p style="font-size: 11px; opacity: 0.5; margin-top: 8px;">สแกน QR Code ด้วยแอปธนาคารเพื่อชำระเงิน</p>
-                                        <button type="button" onclick="downloadQRCode()" style="margin-top: 14px; padding: 10px 22px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); color: white; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; backdrop-filter: blur(5px);">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                            บันทึก QR Code
-                                        </button>
-                                    </div>
-                                    <div id="promptpayQRError" style="display: none; color: #f87171; padding: 20px;">
-                                        <p>ไม่สามารถสร้าง QR Code ได้</p>
-                                        <p style="font-size: 12px; opacity: 0.7; margin-top: 4px;">กรุณาติดต่อผู้ดูแลระบบ</p>
-                                    </div>
+                                    <span id="payAccordionArrow" style="font-size:22px; color:rgba(255,255,255,0.5); transition:transform 0.25s; line-height:1;">›</span>
                                 </div>
-                            </div>
-                            
-                            <div class="checkout-section">
-                                <h3 class="section-title">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;margin-right:8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                    แนบสลิปการชำระเงิน <span style="color:#f87171;font-size:13px;font-weight:400;">* จำเป็น</span>
-                                </h3>
-                                <div class="slip-upload-wrapper" style="margin-top: 12px;">
-                                    <input type="file" id="paymentSlipInput" accept="image/*" onchange="previewPaymentSlip(this)" style="display: none;">
-                                    <div id="slipPreviewArea" onclick="document.getElementById('paymentSlipInput').click()" style="border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px; opacity: 0.5; margin-bottom: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                        <p style="opacity: 0.6; font-size: 13px;">คลิกเพื่ออัปโหลดสลิป หรือลากไฟล์มาวาง</p>
+
+                                <div id="payMethodsContainer" style="display:none; border-top:1px solid rgba(255,255,255,0.08);">
+
+                                    <!-- Option 1: บัตรเครดิต -->
+                                    <div style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                        <div id="cardMethodHeader" onclick="selectPaymentMethod('card')" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; background:rgba(255,255,255,0.02); user-select:none;">
+                                            <div style="display:flex; align-items:center; gap:10px; font-size:14px;">
+                                                <span style="font-size:20px;">💳</span>
+                                                <div>
+                                                    <div style="font-weight:600;">ชำระด้วยบัตรเครดิต/เดบิต</div>
+                                                    <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:2px;">Visa, Mastercard, JCB</div>
+                                                </div>
+                                            </div>
+                                            <span id="cardMethodArrow" style="font-size:20px; color:rgba(255,255,255,0.4); transition:transform 0.25s;">›</span>
+                                        </div>
+                                        <div id="cardMethodContent" style="display:none; padding:16px 20px; background:rgba(0,0,0,0.15);">
+                                            <div id="savedCardsSection" style="display:none; margin-bottom:16px;">
+                                                <p style="font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:10px; font-weight:500;">บัตรที่บันทึกไว้</p>
+                                                <div id="savedCardsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+                                                <button type="button" onclick="useNewCard()" style="width:100%; margin-top:10px; padding:9px; border:1px dashed rgba(255,255,255,0.2); background:transparent; color:rgba(255,255,255,0.7); border-radius:8px; font-size:13px; cursor:pointer;">+ ใช้บัตรใหม่</button>
+                                            </div>
+                                            <div id="newCardForm">
+                                                <p style="font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:10px; font-weight:500;">ข้อมูลบัตร</p>
+                                                <div style="margin-bottom:10px;">
+                                                    <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">หมายเลขบัตร</label>
+                                                    <div id="stripe-card-number" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
+                                                </div>
+                                                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                                    <div style="flex:1;">
+                                                        <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">วันหมดอายุ</label>
+                                                        <div id="stripe-card-expiry" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
+                                                    </div>
+                                                    <div style="flex:1;">
+                                                        <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">CVC</label>
+                                                        <div id="stripe-card-cvc" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
+                                                    </div>
+                                                </div>
+                                                <div id="stripe-card-errors" style="color:#f87171; font-size:12px; min-height:18px;"></div>
+                                                <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:rgba(255,255,255,0.7); cursor:pointer;">
+                                                    <input type="checkbox" id="saveCardCheckbox" style="width:16px;height:16px;accent-color:#6366f1;">
+                                                    บันทึกบัตรนี้สำหรับครั้งต่อไป
+                                                </label>
+                                            </div>
+                                            <p style="text-align:center; color:rgba(255,255,255,0.25); font-size:11px; margin-top:12px;">🔒 ปลอดภัยด้วย Stripe — ข้อมูลบัตรไม่ผ่านระบบของเรา</p>
+                                        </div>
                                     </div>
+
+                                    <!-- Option 2: PromptPay via Stripe -->
+                                    <div>
+                                        <div id="promptpayMethodHeader" onclick="selectPaymentMethod('promptpay')" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; background:rgba(255,255,255,0.02); user-select:none;">
+                                            <div style="display:flex; align-items:center; gap:10px; font-size:14px;">
+                                                <span style="font-size:20px;">📱</span>
+                                                <div>
+                                                    <div style="font-weight:600;">ชำระผ่าน PromptPay</div>
+                                                    <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:2px;">สแกน QR — ยืนยันอัตโนมัติ ไม่ต้องส่งสลิป</div>
+                                                </div>
+                                            </div>
+                                            <span id="promptpayMethodArrow" style="font-size:20px; color:rgba(255,255,255,0.4); transition:transform 0.25s;">›</span>
+                                        </div>
+                                        <div id="promptpayMethodContent" style="display:none; padding:16px 20px; background:rgba(0,0,0,0.15);">
+                                            <p style="font-size:13px; color:rgba(255,255,255,0.55); margin-bottom:0; line-height:1.6;">กดยืนยันเพื่อสร้าง QR Code จากนั้นสแกนชำระผ่านแอปธนาคาร ระบบยืนยันการชำระอัตโนมัติ</p>
+                                            <div id="stripePromptpayQR" style="display:none; text-align:center; margin-top:16px;">
+                                                <img id="stripePromptpayQRImage" src="" alt="PromptPay QR" style="max-width:200px; background:white; padding:10px; border-radius:10px; display:block; margin:0 auto;">
+                                                <p id="stripePromptpayAmount" style="font-size:22px; font-weight:700; color:#22c55e; margin-top:12px;"></p>
+                                                <p style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:4px;">QR Code หมดอายุใน 10 นาที</p>
+                                                <div id="stripePromptpayStatus" style="margin-top:14px; font-size:13px; color:rgba(255,255,255,0.6); display:flex; align-items:center; justify-content:center; gap:8px;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px; animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                                                    กำลังรอการชำระเงิน...
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                             
@@ -2772,11 +2802,11 @@
                         
                         <div class="checkout-right">
                             <div class="order-summary-card">
-                                <button class="btn-checkout" id="btnPlaceOrder" onclick="placeOrder()" disabled>
+                                <button class="btn-checkout" id="btnPlaceOrder" onclick="handleCheckoutAction()" disabled>
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                                    ยืนยันคำสั่งซื้อ
+                                    <span id="btnPlaceOrderText">เลือกช่องทางชำระเงิน</span>
                                 </button>
-                                <p class="checkout-note">หลังยืนยันคำสั่งซื้อ กรุณาชำระเงินผ่าน PromptPay และแนบสลิป</p>
+                                <p class="checkout-note" id="checkoutNote">กรุณาเลือกช่องทางการชำระเงินด้านบน</p>
                             </div>
                         </div>
                     </div>
@@ -3477,7 +3507,8 @@
         // Set current user ID for chat functionality
         const currentUserId = {{ session.get('user_id', 0) }};
     </script>
-    <script src="/static/js/reseller-spa.js?v=20260309b"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="/static/js/reseller-spa.js?v=20260309c"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
     <script>
