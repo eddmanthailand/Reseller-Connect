@@ -3055,16 +3055,28 @@ async function _loadStripePromptPayQR(orderId) {
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
 
         const ppStripe = Stripe(data.publishable_key);
-        const { paymentIntent, error } = await ppStripe.confirmPromptPayPayment(
-            data.client_secret,
-            { payment_method: {} },
-            { handleActions: false }
-        );
 
+        const returnUrl = window.location.origin + window.location.pathname + '?pp_return=1';
+        const confirmResult = await Promise.race([
+            ppStripe.confirmPromptPayPayment(
+                data.client_secret,
+                { payment_method: {}, return_url: returnUrl },
+                { handleActions: false }
+            ),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('Stripe ไม่ตอบสนอง (timeout 20s)')), 20000))
+        ]);
+
+        console.log('[PP] confirmResult:', JSON.stringify(confirmResult));
+
+        const { paymentIntent, error } = confirmResult;
         if (error) throw new Error(error.message);
+        if (!paymentIntent) throw new Error('ไม่ได้รับข้อมูล payment intent');
 
-        const qrUrl = paymentIntent.next_action?.promptpay_display_qr_code?.image_url_png || '';
-        if (!qrUrl) throw new Error('ไม่สามารถสร้าง QR Code ได้');
+        console.log('[PP] status:', paymentIntent.status, 'next_action:', JSON.stringify(paymentIntent.next_action));
+
+        const ppAction = paymentIntent.next_action?.promptpay_display_qr_code;
+        const qrUrl = ppAction?.image_url_png || ppAction?.image_url_svg || '';
+        if (!qrUrl) throw new Error(`ไม่สามารถสร้าง QR Code ได้ (status: ${paymentIntent.status})`);
 
         loadEl.style.display = 'none';
         contEl.style.display = 'block';
