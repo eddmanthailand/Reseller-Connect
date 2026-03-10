@@ -279,7 +279,7 @@ def create_unified_payment_intent(order_id):
         pi = client.PaymentIntent.create(
             amount=amount_satangs,
             currency='thb',
-            payment_method_types=['card', 'promptpay'],
+            automatic_payment_methods={'enabled': True},
             customer=customer_id,
             metadata={'order_id': str(order_id), 'order_number': order['order_number']},
             description=f'EKG Shops - {order["order_number"]}',
@@ -405,6 +405,8 @@ def create_promptpay_intent(order_id):
             metadata={'order_id': str(order_id), 'order_number': order['order_number']},
             description=f'EKG Shops - {order["order_number"]}',
         )
+        pm = client.PaymentMethod.create(type='promptpay')
+        pi = client.PaymentIntent.confirm(pi.id, payment_method=pm.id)
 
         qr_url = ''
         if pi.next_action and pi.next_action.get('type') == 'promptpay_display_qr_code':
