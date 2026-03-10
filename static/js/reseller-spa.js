@@ -1169,10 +1169,6 @@ function renderCheckout() {
     renderCheckoutItems();
     updateCheckoutSummary();
     validateCheckout();
-    _stripeElements = null;
-    _paymentEl = null;
-    _stripeInstance = null;
-    setTimeout(_initCheckoutPaymentEl, 100);
 }
 
 
@@ -1961,11 +1957,9 @@ function validateCheckout() {
     } else {
         helper.textContent = '';
         helper.style.display = 'none';
-        if (_stripeElements) {
-            btn.disabled = false;
-            const btnText = document.getElementById('btnPlaceOrderText');
-            if (btnText) btnText.textContent = 'ยืนยันและชำระเงิน';
-        }
+        btn.disabled = false;
+        const btnText = document.getElementById('btnPlaceOrderText');
+        if (btnText) btnText.textContent = 'ยืนยันและชำระเงิน';
     }
 }
 
@@ -2352,75 +2346,21 @@ async function placeOrderWithStripe() {
         showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
         return;
     }
-    if (!_stripeInstance || !_stripeElements) {
-        showAlert('ระบบชำระเงินยังโหลดไม่เสร็จ กรุณารอสักครู่', 'error');
-        return;
-    }
 
     const btn     = document.getElementById('btnPlaceOrder');
     const btnText = document.getElementById('btnPlaceOrderText');
     btn.disabled  = true;
-    btnText.textContent = 'กำลังตรวจสอบข้อมูล...';
+    btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
 
     try {
-        const { error: submitError } = await _stripeElements.submit();
-        if (submitError) {
-            const errEl = document.getElementById('stripe-card-errors');
-            if (errEl) errEl.textContent = submitError.message;
-            btn.disabled = false;
-            btnText.textContent = 'ยืนยันและชำระเงิน';
-            return;
-        }
-
-        btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
         const order = await _createOrder('stripe', shippingData);
-
-        btnText.textContent = 'กำลังเชื่อมต่อ Stripe...';
-        const piRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-payment-intent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const piData = await piRes.json();
-        if (!piRes.ok) throw new Error(piData.error || 'ไม่สามารถสร้าง payment intent ได้');
-
-        btnText.textContent = 'กำลังดำเนินการชำระเงิน...';
-        const returnUrl = window.location.origin + window.location.pathname;
-        const { error, paymentIntent } = await _stripeInstance.confirmPayment({
-            elements: _stripeElements,
-            clientSecret: piData.client_secret,
-            confirmParams: { return_url: returnUrl },
-            redirect: 'if_required'
-        });
-
-        if (error) {
-            const errEl = document.getElementById('stripe-card-errors');
-            if (errEl) errEl.textContent = error.message;
-            throw new Error(error.message);
-        }
-
-        if (paymentIntent && paymentIntent.status === 'succeeded') {
-            btnText.textContent = 'กำลังยืนยันการชำระ...';
-            loadCartBadge();
-            try {
-                const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pi_id: paymentIntent.id })
-                });
-                const confirmData = await confirmRes.json();
-                showAlert(confirmData.success
-                    ? `ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number || ''} กำลังดำเนินการ`
-                    : 'ชำระเงินสำเร็จ!', 'success');
-            } catch (_) {
-                showAlert('ชำระเงินสำเร็จ!', 'success');
-            }
-            window.location.hash = 'orders';
-        }
-
+        btn.disabled  = false;
+        btnText.textContent = 'ยืนยันและชำระเงิน';
+        showCardPaymentModal(order.id);
     } catch (err) {
-        console.error('Stripe payment error:', err);
-        showAlert(err.message || 'เกิดข้อผิดพลาดในการชำระเงิน', 'error');
-        btn.disabled = false;
+        console.error('Create order error:', err);
+        showAlert(err.message || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
+        btn.disabled  = false;
         btnText.textContent = 'ยืนยันและชำระเงิน';
     }
 }
@@ -2924,7 +2864,7 @@ async function showCardPaymentModal(orderId) {
         <div style="background:linear-gradient(135deg,rgba(20,15,40,0.99),rgba(10,8,25,0.99));border:1px solid rgba(99,102,241,0.35);border-radius:16px;width:100%;max-width:420px;position:relative;">
             <button onclick="closeCardPaymentModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:26px;cursor:pointer;line-height:1;padding:4px;">&times;</button>
             <div style="padding:24px;">
-                <h3 style="font-size:17px;font-weight:700;margin-bottom:4px;">ชำระด้วยบัตร</h3>
+                <h3 style="font-size:17px;font-weight:700;margin-bottom:4px;">ชำระเงิน</h3>
                 <p id="cardModalOrderNum" style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:20px;"></p>
 
                 <div id="cardModalLoading" style="text-align:center;padding:30px 0;">
