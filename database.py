@@ -117,6 +117,17 @@ def init_db():
     cursor = conn.cursor()
     
     try:
+        # Fast-path: skip full init if core tables already exist
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN ('users', 'orders', 'products', 'roles')
+        """)
+        existing = cursor.fetchone()[0]
+        if existing >= 4:
+            print("✅ Database already initialized, skipping init.")
+            return
+
         # Use advisory lock to prevent race conditions with multiple workers
         cursor.execute("SELECT pg_advisory_lock(12345)")
         
