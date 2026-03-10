@@ -2324,25 +2324,28 @@ function selectCheckoutPayment(method) {
     _checkoutPayMethod = method;
     const stripeBtn = document.getElementById('pmBtnStripe');
     const codBtn    = document.getElementById('pmBtnCOD');
+    const ppBtn     = document.getElementById('pmBtnPromptPay');
     const note      = document.getElementById('checkoutNote');
     const btnText   = document.getElementById('btnPlaceOrderText');
-    if (!stripeBtn || !codBtn) return;
+
+    const _reset = (btn) => {
+        if (!btn) return;
+        btn.style.border = '2px solid rgba(255,255,255,0.12)';
+        btn.style.background = 'rgba(255,255,255,0.05)';
+        btn.style.color = 'rgba(255,255,255,0.5)';
+    };
+    _reset(stripeBtn); _reset(codBtn); _reset(ppBtn);
+
     if (method === 'cod') {
-        codBtn.style.border    = '2px solid #22c55e';
-        codBtn.style.background = 'rgba(34,197,94,0.18)';
-        codBtn.style.color     = '#4ade80';
-        stripeBtn.style.border    = '2px solid rgba(255,255,255,0.12)';
-        stripeBtn.style.background = 'rgba(255,255,255,0.05)';
-        stripeBtn.style.color     = 'rgba(255,255,255,0.5)';
+        if (codBtn) { codBtn.style.border = '2px solid #22c55e'; codBtn.style.background = 'rgba(34,197,94,0.18)'; codBtn.style.color = '#4ade80'; }
         if (btnText) btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
         if (note) note.textContent = 'ชำระเงินปลายทางผ่าน iShip — ร้านจะบันทึก Tracking หลังจัดส่ง';
+    } else if (method === 'promptpay') {
+        if (ppBtn) { ppBtn.style.border = '2px solid rgba(26,86,219,0.8)'; ppBtn.style.background = 'rgba(26,86,219,0.2)'; ppBtn.style.color = '#93c5fd'; }
+        if (btnText) btnText.textContent = 'ยืนยันและชำระผ่าน PromptPay';
+        if (note) note.textContent = 'QR Code จะแสดงหลังยืนยัน — สแกนด้วยแอปธนาคาร';
     } else {
-        stripeBtn.style.border    = '2px solid rgba(168,85,247,0.6)';
-        stripeBtn.style.background = 'rgba(168,85,247,0.15)';
-        stripeBtn.style.color     = 'white';
-        codBtn.style.border    = '2px solid rgba(255,255,255,0.12)';
-        codBtn.style.background = 'rgba(255,255,255,0.05)';
-        codBtn.style.color     = 'rgba(255,255,255,0.5)';
+        if (stripeBtn) { stripeBtn.style.border = '2px solid rgba(168,85,247,0.6)'; stripeBtn.style.background = 'rgba(168,85,247,0.15)'; stripeBtn.style.color = 'white'; }
         if (btnText) btnText.textContent = 'ยืนยันและชำระเงิน';
         if (note) note.textContent = 'ข้อมูลชำระเงินถูกเข้ารหัสโดย Stripe — ไม่ผ่านระบบของเรา';
     }
@@ -2351,8 +2354,64 @@ function selectCheckoutPayment(method) {
 function placeOrderDispatch() {
     if (_checkoutPayMethod === 'cod') {
         placeOrderCOD();
+    } else if (_checkoutPayMethod === 'promptpay') {
+        placeOrderWithPromptPay();
     } else {
         placeOrderWithStripe();
+    }
+}
+
+async function placeOrderWithPromptPay() {
+    const { missingFields, shippingData } = _getShippingData();
+    if (missingFields.length > 0) {
+        showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
+        return;
+    }
+    const btn     = document.getElementById('btnPlaceOrder');
+    const btnText = document.getElementById('btnPlaceOrderText');
+    if (btn) { btn.disabled = true; }
+    if (btnText) btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
+
+    try {
+        const notes = document.getElementById('orderNotes')?.value || '';
+        const orderPayload = {
+            payment_method: 'stripe_promptpay',
+            notes,
+            shipping_fee: checkoutData.shippingCost || 0,
+            ...shippingData
+        };
+        if (_appliedCoupon) orderPayload.coupon_code = _appliedCoupon.code;
+
+        const res = await fetch(`${RESELLER_API_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload)
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            showAlert(result.error || 'ไม่สามารถสร้างคำสั่งซื้อได้', 'error');
+            if (btn) { btn.disabled = false; }
+            if (btnText) btnText.textContent = 'ยืนยันและชำระผ่าน PromptPay';
+            return;
+        }
+
+        const orderId = result.order?.id;
+        if (!orderId) {
+            showAlert('ไม่พบเลขคำสั่งซื้อ', 'error');
+            if (btn) { btn.disabled = false; }
+            if (btnText) btnText.textContent = 'ยืนยันและชำระผ่าน PromptPay';
+            return;
+        }
+
+        clearCart && clearCart();
+        loadCartBadge && loadCartBadge();
+        window.location.hash = 'orders';
+        setTimeout(() => { loadOrders && loadOrders(); showPromptPayModal(orderId); }, 300);
+
+    } catch (err) {
+        showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+        if (btn) { btn.disabled = false; }
+        if (btnText) btnText.textContent = 'ยืนยันและชำระผ่าน PromptPay';
     }
 }
 
