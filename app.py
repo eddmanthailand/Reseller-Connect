@@ -8497,7 +8497,7 @@ def create_order():
         user_tier_rank = int(tier_row['level_rank']) if tier_row and tier_row['level_rank'] else 1
 
         # "Best discount wins": compare promo on RETAIL price vs tier savings — pick higher, no stacking
-        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, total_amount, cart_brand_ids, cart_category_ids, user_tier_rank, cart_total_qty)
+        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, total_amount, cart_brand_ids, cart_category_ids, user_tier_rank, cart_total_qty, user_id=user_id)
         use_tier = (total_discount >= promo_on_retail) or (promo_on_retail == 0)
         if use_tier:
             applied_promo = None
@@ -18481,7 +18481,7 @@ def iship_webhook():
 
 # ==================== MARKETING MODULE ====================
 
-def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, user_tier_rank, cart_qty=0):
+def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, user_tier_rank, cart_qty=0, user_id=None):
     """
     Layer 2: Find the single best auto-promotion eligible for this cart.
     Returns: (promotion_row, discount_amount) or (None, 0)
@@ -18516,6 +18516,16 @@ def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, 
             continue
         if promo['target_category_id'] and promo['target_category_id'] not in cart_category_ids:
             continue
+        # Once-per-user check
+        if promo.get('once_per_user') and user_id:
+            cursor.execute('''
+                SELECT 1 FROM orders
+                WHERE user_id = %s AND promotion_id = %s
+                  AND status NOT IN ('cancelled', 'rejected', 'pending_payment', 'failed_delivery')
+                LIMIT 1
+            ''', (user_id, promo['id']))
+            if cursor.fetchone():
+                continue
 
         # Calculate discount value
         reward_type = promo['reward_type']
@@ -18696,8 +18706,8 @@ def admin_create_promotion():
             INSERT INTO promotions (name, promo_type, condition_min_spend, condition_min_qty,
                 reward_type, reward_value, reward_sku_id, reward_qty,
                 target_brand_id, target_category_id, min_tier_id,
-                is_stackable, priority, start_date, end_date, is_active)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                is_stackable, once_per_user, priority, start_date, end_date, is_active)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING *
         ''', (
             data.get('name'), data.get('promo_type', 'discount_percent'),
@@ -18705,7 +18715,8 @@ def admin_create_promotion():
             data.get('reward_type', 'discount_percent'), data.get('reward_value', 0),
             data.get('reward_sku_id'), data.get('reward_qty', 1),
             data.get('target_brand_id'), data.get('target_category_id'), data.get('min_tier_id'),
-            data.get('is_stackable', False), data.get('priority', 0),
+            data.get('is_stackable', False), data.get('once_per_user', False),
+            data.get('priority', 0),
             data.get('start_date'), data.get('end_date'), data.get('is_active', True)
         ))
         promo = dict(cursor.fetchone())
@@ -18733,7 +18744,7 @@ def admin_update_promotion(promo_id):
                 name=%s, promo_type=%s, condition_min_spend=%s, condition_min_qty=%s,
                 reward_type=%s, reward_value=%s, reward_sku_id=%s, reward_qty=%s,
                 target_brand_id=%s, target_category_id=%s, min_tier_id=%s,
-                is_stackable=%s, priority=%s, start_date=%s, end_date=%s, is_active=%s
+                is_stackable=%s, once_per_user=%s, priority=%s, start_date=%s, end_date=%s, is_active=%s
             WHERE id=%s RETURNING *
         ''', (
             data.get('name'), data.get('promo_type'),
@@ -18741,7 +18752,8 @@ def admin_update_promotion(promo_id):
             data.get('reward_type'), data.get('reward_value', 0),
             data.get('reward_sku_id'), data.get('reward_qty', 1),
             data.get('target_brand_id'), data.get('target_category_id'), data.get('min_tier_id'),
-            data.get('is_stackable', False), data.get('priority', 0),
+            data.get('is_stackable', False), data.get('once_per_user', False),
+            data.get('priority', 0),
             data.get('start_date'), data.get('end_date'), data.get('is_active', True),
             promo_id
         ))
@@ -19414,7 +19426,7 @@ def reseller_preview_discount():
         user_tier_rank = int(u['level_rank']) if u and u['level_rank'] else 1
 
         # "Best discount wins": compare promo on RETAIL price vs tier savings — pick higher, no stacking
-        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, retail_total, brand_ids, category_ids, user_tier_rank, cart_qty)
+        promo_candidate, promo_on_retail = _calc_best_promotion(cursor, retail_total, brand_ids, category_ids, user_tier_rank, cart_qty, user_id=user_id)
         use_tier = (tier_savings >= promo_on_retail) or (promo_on_retail == 0)
         if use_tier:
             promo = None

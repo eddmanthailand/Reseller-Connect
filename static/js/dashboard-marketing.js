@@ -71,6 +71,7 @@ async function loadPromotions() {
             if (p.condition_min_qty > 0) chips.push(`<span class="promo-chip chip-condition">${p.condition_min_qty} ชิ้นขึ้นไป</span>`);
             chips.push(`<span class="promo-chip chip-reward">${_fmtDiscount(p)}</span>`);
             if (p.is_stackable) chips.push(`<span class="promo-chip chip-stackable">+คูปองได้</span>`);
+            if (p.once_per_user) chips.push(`<span class="promo-chip" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);">1 ครั้ง/คน</span>`);
             if (p.target_brand_name) chips.push(`<span class="promo-chip chip-brand">${p.target_brand_name}</span>`);
             if (p.min_tier_name) chips.push(`<span class="promo-chip chip-tier">${p.min_tier_name}+</span>`);
             const dateStr = p.end_date ? `หมดอายุ ${new Date(p.end_date).toLocaleDateString('th-TH')}` : 'ไม่มีกำหนดหมดอายุ';
@@ -205,6 +206,13 @@ async function openPromoModal(id = null) {
                     </div>
                     <div class="apple-toggle-row">
                         <div>
+                            <div class="apple-toggle-label" style="color:#fbbf24;">1 ครั้ง/คน (Once per user)</div>
+                            <div class="apple-toggle-desc">แต่ละ reseller ใช้โปรโมชันนี้ได้เพียง 1 ครั้ง เช่น "ซื้อครั้งแรก"</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="pOncePerUser" ${promo.once_per_user ? 'checked' : ''}><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="apple-toggle-row">
+                        <div>
                             <div class="apple-toggle-label">เปิดใช้งาน</div>
                             <div class="apple-toggle-desc">โปรโมชันจะแสดงและใช้งานได้ทันที</div>
                         </div>
@@ -259,6 +267,7 @@ async function savePromotion() {
         end_date: document.getElementById('pEnd').value || null,
         priority: parseInt(document.getElementById('pPriority').value) || 0,
         is_stackable: document.getElementById('pStackable').checked,
+        once_per_user: document.getElementById('pOncePerUser').checked,
         is_active: document.getElementById('pActive').checked
     };
     if (!body.name) { showGlobalAlert('กรุณาระบุชื่อโปรโมชัน', 'error'); return; }
