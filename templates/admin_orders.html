@@ -497,7 +497,6 @@
             <div class="orders-header">
                 <div class="status-tabs">
                     <button class="status-tab active" data-status="">ทั้งหมด</button>
-                    <button class="status-tab" data-status="under_review">รอตรวจสอบ <span class="count" id="reviewCount">0</span></button>
                     <button class="status-tab" data-status="pending_payment">รอชำระเงิน <span class="count" id="pendingPaymentCount">0</span></button>
                     <button class="status-tab" data-status="preparing">เตรียมสินค้า <span class="count" id="preparingCount">0</span></button>
                     <button class="status-tab" data-status="shipped">จัดส่งแล้ว <span class="count" id="shippedCount">0</span></button>
@@ -585,18 +584,11 @@
                     }
                 };
 
-                setCount('reviewCount', 'under_review');
                 setCount('pendingPaymentCount', 'pending_payment');
                 setCount('preparingCount', 'preparing');
                 setCount('shippedCount', 'shipped');
                 setCount('deliveredCount', 'delivered');
 
-                const reviewCount = counts['under_review'] || 0;
-                const pendingBadge = document.getElementById('pendingCount');
-                if (pendingBadge) {
-                    pendingBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
-                    pendingBadge.textContent = reviewCount;
-                }
             } catch (e) {
                 console.error('Error fetching counts:', e);
             }
@@ -669,7 +661,6 @@
                                 <td>${order.channel_name || '-'}</td>
                                 <td>
                                     <span class="order-status ${order.status}">${getStatusText(order.status)}</span>
-                                    ${order.pending_slips > 0 ? `<span class="pending-badge">${order.pending_slips} สลิปรอ</span>` : ''}
                                 </td>
                                 <td style="font-weight: 600;">${formatPrice(order.final_amount)}</td>
                                 <td style="font-size: 12px; color: rgba(255,255,255,0.6);">${formatDate(order.created_at)}</td>
@@ -677,10 +668,6 @@
                                     <button class="action-btn btn-review" onclick="viewOrder(${order.id})">
                                         ดู
                                     </button>
-                                    ${order.status === 'under_review' ? `
-                                        <button class="action-btn btn-approve" onclick="approveOrder(${order.id})">อนุมัติ</button>
-                                        <button class="action-btn btn-reject" onclick="showRejectModal(${order.id})">ปฏิเสธ</button>
-                                    ` : ''}
                                 </td>
                             </tr>
                         `).join('')}
@@ -764,33 +751,19 @@
                     </div>
                 </div>
                 
-                ${currentOrder.payment_slips && currentOrder.payment_slips.length > 0 ? `
+                ${currentOrder.stripe_payment_intent_id ? `
                     <div class="detail-section">
-                        <h4>สลิปการชำระเงิน</h4>
-                        ${currentOrder.payment_slips.map(slip => `
-                            <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                                <span class="order-status ${slip.status}">${getStatusText(slip.status)}</span>
-                                ${slip.admin_notes ? `<p style="color: #ef4444; font-size: 12px; margin: 8px 0;">${slip.admin_notes}</p>` : ''}
-                                <img src="${slip.slip_image_url}" class="slip-image" alt="Slip" onclick="window.open('${slip.slip_image_url}', '_blank')">
+                        <h4>ข้อมูลการชำระเงิน Stripe</h4>
+                        <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 13px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <span style="color:rgba(255,255,255,0.55);">วิธีชำระ</span>
+                                <span>${currentOrder.payment_method === 'stripe_promptpay' ? '📱 PromptPay' : '💳 บัตรเครดิต/เดบิต'}</span>
                             </div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-                
-                ${currentOrder.status === 'under_review' ? `
-                    <div class="action-buttons">
-                        <button class="btn-approve-lg" onclick="approveOrder(${currentOrder.id})">
-                            อนุมัติการชำระเงิน
-                        </button>
-                        <button class="btn-reject-lg" onclick="showRejectForm()">
-                            ปฏิเสธ
-                        </button>
-                    </div>
-                    <div class="reject-reason" id="rejectForm" style="display: none;">
-                        <textarea id="rejectReason" placeholder="ระบุเหตุผลในการปฏิเสธ..."></textarea>
-                        <button class="btn-reject-lg" onclick="rejectOrder(${currentOrder.id})" style="width: 100%; margin-top: 8px;">
-                            ยืนยันปฏิเสธ
-                        </button>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:rgba(255,255,255,0.55);">Stripe PI</span>
+                                <span style="font-family:monospace; font-size:11px; color:rgba(255,255,255,0.7);">${currentOrder.stripe_payment_intent_id}</span>
+                            </div>
+                        </div>
                     </div>
                 ` : ''}
             `;
