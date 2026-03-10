@@ -3049,12 +3049,22 @@ async function _loadStripePromptPayQR(orderId) {
     contEl.style.display  = 'none';
     errEl.style.display   = 'none';
 
+    const _step = (msg) => {
+        const p = loadEl.querySelector('p');
+        if (p) p.textContent = msg;
+        console.log('[PP step]', msg);
+    };
+
     try {
+        _step('กำลังติดต่อ server...');
         const res  = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-promptpay-intent`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        _step(`Server ตอบกลับ: ${res.status}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
+        _step('กำลังโหลด Stripe JS...');
 
         const ppStripe = Stripe(data.publishable_key);
+        _step('กำลังสร้าง QR Code ผ่าน Stripe...');
 
         const returnUrl = window.location.origin + window.location.pathname + '?pp_return=1';
         const confirmResult = await Promise.race([
@@ -3065,7 +3075,7 @@ async function _loadStripePromptPayQR(orderId) {
             ),
             new Promise((_, rej) => setTimeout(() => rej(new Error('Stripe ไม่ตอบสนอง (timeout 20s)')), 20000))
         ]);
-
+        _step('ได้รับผลจาก Stripe แล้ว...');
         console.log('[PP] confirmResult:', JSON.stringify(confirmResult));
 
         const { paymentIntent, error } = confirmResult;
