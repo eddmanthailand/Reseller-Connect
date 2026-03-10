@@ -2909,6 +2909,15 @@ async function showCardPaymentModal(orderId) {
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                         <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังสร้าง QR Code...</p>
                     </div>
+                    <div id="ppQRContent" style="display:none;padding:8px 0 16px;">
+                        <p style="font-size:13px;color:#6e6e73;margin:0 0 10px;">สแกน QR Code ด้วยแอปธนาคาร</p>
+                        <img id="ppQRImage" src="" alt="PromptPay QR" style="width:220px;height:220px;border-radius:12px;border:1px solid #e5e5ea;"/>
+                        <div style="background:#f5f5f7;border-radius:10px;padding:10px;margin:12px 0 4px;">
+                            <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
+                            <p id="ppQRAmount" style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0;"></p>
+                        </div>
+                        <p id="ppPollingStatus" style="font-size:12px;color:#86868b;margin:8px 0 0;">⏳ รอการชำระเงิน...</p>
+                    </div>
                     <div id="ppQRError" style="display:none;padding:24px 0;">
                         <p style="color:#ff3b30;font-size:13px;margin:0;"></p>
                     </div>
@@ -3033,49 +3042,60 @@ function switchPaymentTab(tab, orderId) {
 
 async function _loadStripePromptPayQR(orderId) {
     const loadEl  = document.getElementById('ppQRLoading');
+    const contEl  = document.getElementById('ppQRContent');
     const errEl   = document.getElementById('ppQRError');
-    const ourModal = document.getElementById('stripeCardModal');
     if (!loadEl) return;
     loadEl.style.display = 'block';
+    contEl.style.display = 'none';
     errEl.style.display  = 'none';
-    const _msg = (t) => { const p = loadEl.querySelector('p'); if (p) p.textContent = t; };
+
+    const _showErr = (msg) => {
+        loadEl.style.display = 'none';
+        contEl.style.display = 'none';
+        errEl.style.display  = 'block';
+        const p = errEl.querySelector('p');
+        if (p) p.textContent = msg;
+    };
 
     try {
-        _msg('กำลังติดต่อ server...');
         const res  = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-promptpay-intent`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
 
-        _msg('กำลังเปิด QR Code...');
         const ppStripe = Stripe(data.publishable_key);
-
-        if (ourModal) ourModal.style.display = 'none';
 
         const { paymentIntent, error } = await ppStripe.confirmPromptPayPayment(
             data.client_secret,
-            { payment_method: { type: 'promptpay' } }
+            { payment_method: { type: 'promptpay' } },
+            { handleActions: false }
         );
+        if (error) throw new Error(error.message);
+        if (!paymentIntent) throw new Error('ไม่ได้รับข้อมูลจาก Stripe');
 
-        if (error) {
-            if (ourModal) ourModal.style.display = 'flex';
-            throw new Error(error.message);
-        }
+        const ppAction = paymentIntent.next_action?.promptpay_display_qr_code;
+        const qrUrl = ppAction?.image_url_png || ppAction?.image_url_svg || '';
+        if (!qrUrl) throw new Error(`ไม่สามารถสร้าง QR Code ได้ (status: ${paymentIntent.status})`);
 
-        if (paymentIntent && paymentIntent.status === 'succeeded') {
-            closeCardPaymentModal();
-            showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success');
-            loadOrders && loadOrders();
-            window.location.hash = 'orders';
-        } else {
-            if (ourModal) ourModal.style.display = 'flex';
-            _msg('⚠️ ยกเลิกหรือหมดเวลา — ลองใหม่อีกครั้ง');
-        }
-    } catch (e) {
-        if (ourModal) ourModal.style.display = 'flex';
         loadEl.style.display = 'none';
-        errEl.style.display  = 'block';
-        const p = errEl.querySelector('p');
-        if (p) p.textContent = e.message;
+        contEl.style.display = 'block';
+        document.getElementById('ppQRImage').src = qrUrl;
+        document.getElementById('ppQRAmount').textContent = `฿${Number(data.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+
+        if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
+        _ppPollingTimer = setInterval(async () => {
+            try {
+                const result = await ppStripe.retrievePaymentIntent(data.client_secret);
+                if (result.paymentIntent && result.paymentIntent.status === 'succeeded') {
+                    clearInterval(_ppPollingTimer); _ppPollingTimer = null;
+                    const ps = document.getElementById('ppPollingStatus');
+                    if (ps) ps.textContent = '✅ ชำระเงินสำเร็จ!';
+                    setTimeout(() => { closeCardPaymentModal(); loadOrders && loadOrders(); window.location.hash = 'orders'; showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
+                }
+            } catch (e) {}
+        }, 3000);
+
+    } catch (e) {
+        _showErr(e.message);
     }
 }
 
