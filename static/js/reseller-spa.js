@@ -3032,8 +3032,9 @@ function switchPaymentTab(tab, orderId) {
 }
 
 async function _loadStripePromptPayQR(orderId) {
-    const loadEl = document.getElementById('ppQRLoading');
-    const errEl  = document.getElementById('ppQRError');
+    const loadEl  = document.getElementById('ppQRLoading');
+    const errEl   = document.getElementById('ppQRError');
+    const ourModal = document.getElementById('stripeCardModal');
     if (!loadEl) return;
     loadEl.style.display = 'block';
     errEl.style.display  = 'none';
@@ -3045,26 +3046,32 @@ async function _loadStripePromptPayQR(orderId) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
 
-        _msg('Stripe กำลังเปิด QR Code...');
+        _msg('กำลังเปิด QR Code...');
         const ppStripe = Stripe(data.publishable_key);
+
+        if (ourModal) ourModal.style.display = 'none';
 
         const { paymentIntent, error } = await ppStripe.confirmPromptPayPayment(
             data.client_secret,
             { payment_method: { type: 'promptpay' } }
         );
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            if (ourModal) ourModal.style.display = 'flex';
+            throw new Error(error.message);
+        }
 
         if (paymentIntent && paymentIntent.status === 'succeeded') {
-            loadEl.style.display = 'none';
             closeCardPaymentModal();
             showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success');
             loadOrders && loadOrders();
             window.location.hash = 'orders';
         } else {
+            if (ourModal) ourModal.style.display = 'flex';
             _msg('⚠️ ยกเลิกหรือหมดเวลา — ลองใหม่อีกครั้ง');
         }
     } catch (e) {
+        if (ourModal) ourModal.style.display = 'flex';
         loadEl.style.display = 'none';
         errEl.style.display  = 'block';
         const p = errEl.querySelector('p');
