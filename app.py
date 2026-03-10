@@ -8710,6 +8710,7 @@ def get_user_orders():
         query = '''
             SELECT o.id, o.order_number, o.status, o.total_amount, o.discount_amount, 
                    o.final_amount, o.notes, o.created_at, o.updated_at,
+                   o.payment_method, o.stripe_payment_intent_id,
                    sc.name as channel_name,
                    (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count
             FROM orders o

@@ -2453,18 +2453,26 @@ async function placeOrderAndPayCard() {
             throw new Error(confirmResult.error.message);
         }
 
-        showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะออเดอร์...', 'success');
+        btnText.textContent = 'กำลังยืนยันการชำระ...';
         loadCartBadge();
         selectedPaymentSlip = null;
 
         const piId = confirmResult.paymentIntent?.id;
-        fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pi_id: piId })
-        }).then(r => r.json()).then(d => {
-            if (d.success) showAlert(`ออเดอร์ ${d.order_number || ''} กำลังดำเนินการแล้ว`, 'success');
-        }).catch(() => {});
+        try {
+            const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pi_id: piId })
+            });
+            const confirmData = await confirmRes.json();
+            if (confirmData.success) {
+                showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number || ''} กำลังดำเนินการ`, 'success');
+            } else {
+                showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะ...', 'success');
+            }
+        } catch (_) {
+            showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะ...', 'success');
+        }
 
         window.location.hash = 'orders';
 
@@ -2654,16 +2662,22 @@ function renderOrders(orders) {
         return;
     }
     
-    const statusLabels = {
-        'pending_payment': 'รอส่งสลิป',
-        'under_review': 'รอตรวจสอบสลิป',
-        'preparing': 'เตรียมสินค้า',
-        'shipped': 'กำลังจัดส่ง',
-        'delivered': 'ได้รับสินค้าแล้ว',
-        'failed_delivery': 'จัดส่งไม่สำเร็จ',
-        'cancelled': 'ยกเลิก'
+    const isStripeOrder = (o) => o.payment_method === 'stripe' || o.payment_method === 'stripe_promptpay';
+
+    const getStatusLabel = (o) => {
+        if (o.status === 'pending_payment' && isStripeOrder(o)) return 'รอชำระเงิน';
+        const labels = {
+            'pending_payment': 'รอส่งสลิป',
+            'under_review': 'รอตรวจสอบสลิป',
+            'preparing': 'เตรียมสินค้า',
+            'shipped': 'กำลังจัดส่ง',
+            'delivered': 'ได้รับสินค้าแล้ว',
+            'failed_delivery': 'จัดส่งไม่สำเร็จ',
+            'cancelled': 'ยกเลิก'
+        };
+        return labels[o.status] || o.status;
     };
-    
+
     const statusColors = {
         'pending_payment': '#f59e0b',
         'under_review': '#3b82f6',
@@ -2673,29 +2687,38 @@ function renderOrders(orders) {
         'failed_delivery': '#ef4444',
         'cancelled': '#6b7280'
     };
+
+    const getPendingButtons = (order) => {
+        if (!['pending_payment'].includes(order.status)) return '';
+        if (isStripeOrder(order)) {
+            return `
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                    <button class="order-card-btn" onclick="event.stopPropagation(); payOrderWithStripe(${order.id})" style="flex:1; background: linear-gradient(135deg,#6366f1,#8b5cf6);">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        ชำระเงิน
+                    </button>
+                </div>`;
+        }
+        return `
+            <div style="display:flex; gap:8px; margin-top:4px;">
+                <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="flex:1; background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    ส่งสลิป
+                </button>
+            </div>`;
+    };
     
     container.innerHTML = orders.map(order => `
         <div class="order-card-mobile" onclick="viewResellerOrderDetails(${order.id})">
             <div class="order-card-header">
                 <span class="order-card-number">${order.order_number || '#' + order.id}</span>
-                <span class="order-card-status" style="background: ${statusColors[order.status] || '#6b7280'};">${statusLabels[order.status] || order.status}</span>
+                <span class="order-card-status" style="background: ${statusColors[order.status] || '#6b7280'};">${getStatusLabel(order)}</span>
             </div>
             <div class="order-card-details">
                 <span class="order-card-date">${new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 <span class="order-card-amount">฿${(order.final_amount || order.total_amount || 0).toLocaleString('th-TH')}</span>
             </div>
-            ${order.status === 'pending_payment' ? `
-                <div style="display:flex; gap:8px; margin-top:4px;">
-                    <button class="order-card-btn" onclick="event.stopPropagation(); payOrderWithStripe(${order.id})" style="flex:1; background: linear-gradient(135deg,#6366f1,#8b5cf6);">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                        จ่ายด้วยบัตร
-                    </button>
-                    <button class="order-card-btn" onclick="event.stopPropagation(); openPaymentSlipModal(${order.id})" style="flex:1; background: linear-gradient(135deg, #f59e0b, #ef4444);">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        ส่งสลิป
-                    </button>
-                </div>
-            ` : ''}
+            ${getPendingButtons(order)}
         </div>
     `).join('');
 }
@@ -2707,8 +2730,9 @@ async function viewResellerOrderDetails(orderId) {
         
         const order = await response.json();
         
+        const isStripe = order.payment_method === 'stripe' || order.payment_method === 'stripe_promptpay';
         const statusLabels = {
-            'pending_payment': 'รอส่งสลิป',
+            'pending_payment': isStripe ? 'รอชำระเงิน' : 'รอส่งสลิป',
             'under_review': 'รอตรวจสอบสลิป',
             'preparing': 'เตรียมสินค้า',
             'shipped': 'กำลังจัดส่ง',
@@ -2846,9 +2870,17 @@ async function viewResellerOrderDetails(orderId) {
         
         let rejectionNoticeHtml = '';
         if (order.status === 'pending_payment') {
+            const isStripeOrd = order.payment_method === 'stripe' || order.payment_method === 'stripe_promptpay';
             const hasSlips = order.payment_slips && order.payment_slips.length > 0;
             const rejectedSlip = hasSlips ? order.payment_slips.find(s => s.status === 'rejected') : null;
-            if (rejectedSlip && rejectedSlip.notes) {
+            if (isStripeOrd) {
+                rejectionNoticeHtml = `
+                    <div style="background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="color: #a5b4fc; font-weight: 500; margin-bottom: 4px; font-size: 13px;">💳 รอชำระเงินผ่านบัตร</div>
+                        <div style="color: rgba(255,255,255,0.7); font-size: 12px;">กรุณากดปุ่ม "ชำระเงิน" ด้านล่างเพื่อชำระด้วยบัตรเครดิต/เดบิต</div>
+                    </div>
+                `;
+            } else if (rejectedSlip && rejectedSlip.notes) {
                 rejectionNoticeHtml = `
                     <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
                         <div style="color: #ef4444; font-weight: 500; margin-bottom: 4px; font-size: 13px;">⚠️ สลิปถูกปฏิเสธ กรุณาส่งสลิปใหม่</div>
@@ -2906,20 +2938,26 @@ async function viewResellerOrderDetails(orderId) {
 
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
-            actionsHtml = `
-                <div style="margin-top: 16px; border: 1px solid rgba(99,102,241,0.4); border-radius: 12px; padding: 16px;">
-                    <div style="font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px; text-align: center;">เลือกวิธีชำระเงิน</div>
-                    <button class="btn" id="stripePayBtnModal_${orderId}" onclick="payOrderWithStripe(${orderId})" style="width: 100%; margin-bottom: 10px; padding: 13px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                        ชำระด้วยบัตรเครดิต/เดบิต (Stripe)
-                    </button>
-                    <div style="text-align:center; font-size:11px; color:rgba(255,255,255,0.3); margin-bottom:10px;">─── หรือ ───</div>
-                    <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #f59e0b, #ef4444); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        ส่งสลิป PromptPay
-                    </button>
-                </div>
-            `;
+            const isStripeOrd2 = order.payment_method === 'stripe' || order.payment_method === 'stripe_promptpay';
+            if (isStripeOrd2) {
+                actionsHtml = `
+                    <div style="margin-top: 16px; border: 1px solid rgba(99,102,241,0.4); border-radius: 12px; padding: 16px;">
+                        <button class="btn" onclick="closeOrderModal(); payOrderWithStripe(${orderId})" style="width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#8b5cf6); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                            ชำระด้วยบัตรเครดิต/เดบิต
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionsHtml = `
+                    <div style="margin-top: 16px; border: 1px solid rgba(245,158,11,0.4); border-radius: 12px; padding: 16px;">
+                        <button class="btn" onclick="closeOrderModal(); openPaymentSlipModal(${orderId})" style="width: 100%; padding: 12px; font-size: 14px; background: linear-gradient(135deg, #f59e0b, #ef4444); border: none; border-radius: 10px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            ส่งสลิปการชำระเงิน
+                        </button>
+                    </div>
+                `;
+            }
         }
         
         const itemTotal = (order.final_amount || 0) - (order.shipping_fee || 0);
