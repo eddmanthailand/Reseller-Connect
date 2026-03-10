@@ -2731,33 +2731,8 @@
                                             <span id="cardMethodArrow" style="font-size:20px; color:rgba(255,255,255,0.4); transition:transform 0.25s;">›</span>
                                         </div>
                                         <div id="cardMethodContent" style="display:none; padding:16px 20px; background:rgba(0,0,0,0.15);">
-                                            <div id="savedCardsSection" style="display:none; margin-bottom:16px;">
-                                                <p style="font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:10px; font-weight:500;">บัตรที่บันทึกไว้</p>
-                                                <div id="savedCardsList" style="display:flex; flex-direction:column; gap:8px;"></div>
-                                                <button type="button" onclick="useNewCard()" style="width:100%; margin-top:10px; padding:9px; border:1px dashed rgba(255,255,255,0.2); background:transparent; color:rgba(255,255,255,0.7); border-radius:8px; font-size:13px; cursor:pointer;">+ ใช้บัตรใหม่</button>
-                                            </div>
-                                            <div id="newCardForm">
-                                                <p style="font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:10px; font-weight:500;">ข้อมูลบัตร</p>
-                                                <div style="margin-bottom:10px;">
-                                                    <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">หมายเลขบัตร</label>
-                                                    <div id="stripe-card-number" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
-                                                </div>
-                                                <div style="display:flex; gap:10px; margin-bottom:10px;">
-                                                    <div style="flex:1;">
-                                                        <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">วันหมดอายุ</label>
-                                                        <div id="stripe-card-expiry" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
-                                                    </div>
-                                                    <div style="flex:1;">
-                                                        <label style="font-size:12px; color:rgba(255,255,255,0.5); display:block; margin-bottom:5px;">CVC</label>
-                                                        <div id="stripe-card-cvc" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:12px 14px; min-height:44px;"></div>
-                                                    </div>
-                                                </div>
-                                                <div id="stripe-card-errors" style="color:#f87171; font-size:12px; min-height:18px;"></div>
-                                                <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:rgba(255,255,255,0.7); cursor:pointer;">
-                                                    <input type="checkbox" id="saveCardCheckbox" style="width:16px;height:16px;accent-color:#6366f1;">
-                                                    บันทึกบัตรนี้สำหรับครั้งต่อไป
-                                                </label>
-                                            </div>
+                                            <div id="stripe-payment-element" style="min-height:60px;"></div>
+                                            <div id="stripe-card-errors" style="color:#f87171; font-size:12px; min-height:18px; margin-top:6px;"></div>
                                             <p style="text-align:center; color:rgba(255,255,255,0.25); font-size:11px; margin-top:12px;">🔒 ปลอดภัยด้วย Stripe — ข้อมูลบัตรไม่ผ่านระบบของเรา</p>
                                         </div>
                                     </div>
@@ -3508,7 +3483,7 @@
         const currentUserId = {{ session.get('user_id', 0) }};
     </script>
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="/static/js/reseller-spa.js?v=20260310a"></script>
+    <script src="/static/js/reseller-spa.js?v=20260310b"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
     <script>
