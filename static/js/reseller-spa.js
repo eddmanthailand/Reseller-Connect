@@ -3179,17 +3179,23 @@ async function _loadStaticPromptPayQR(orderId) {
     };
 
     try {
-        // Load order info and promptpay settings in parallel
-        const [orderRes, ppRes] = await Promise.all([
-            fetch(`${RESELLER_API_URL}/orders/${orderId}`),
-            fetch(`${RESELLER_API_URL}/promptpay-settings`)
-        ]);
-
+        // Load order info first to get the amount
+        const orderRes = await fetch(`${RESELLER_API_URL}/orders/${orderId}`);
         const orderData = orderRes.ok ? await orderRes.json() : null;
-        const ppData = ppRes.ok ? await ppRes.json() : null;
+        const o = orderData ? (orderData.order || orderData) : null;
+        const amount = o && o.final_amount ? Number(o.final_amount) : null;
 
-        if (!ppData || !ppData.qr_image_url) {
-            showErr('ยังไม่ได้ตั้งค่า QR Code พร้อมเพย์ กรุณาติดต่อร้านค้า');
+        if (!amount) {
+            showErr('ไม่สามารถดึงยอดชำระได้ กรุณาลองใหม่');
+            return;
+        }
+
+        // Generate dynamic PromptPay QR with exact amount
+        const qrRes = await fetch(`${RESELLER_API_URL}/promptpay-qr?amount=${amount}`);
+        const qrData = qrRes.ok ? await qrRes.json() : null;
+
+        if (!qrData || !qrData.qr_image) {
+            showErr(qrData?.error || 'ยังไม่ได้ตั้งค่าเลขพร้อมเพย์ กรุณาติดต่อร้านค้า');
             return;
         }
 
@@ -3197,47 +3203,31 @@ async function _loadStaticPromptPayQR(orderId) {
         if (contEl) contEl.style.display = 'block';
 
         const img = document.getElementById('ppQRImage');
-        if (img) img.src = ppData.qr_image_url;
+        if (img) img.src = qrData.qr_image;
 
         const accEl = document.getElementById('ppAccountInfo');
-        if (accEl) {
-            const parts = [];
-            if (ppData.account_name) parts.push(ppData.account_name);
-            if (ppData.account_number) parts.push(ppData.account_number);
-            accEl.textContent = parts.join(' · ');
-        }
+        if (accEl && qrData.account_name) accEl.textContent = qrData.account_name;
 
-        const o = orderData ? (orderData.order || orderData) : null;
-        const amtEl = document.getElementById('ppQRAmount');
         const numEl = document.getElementById('ppModalOrderNum');
-        if (o) {
-            const num = o.order_number || `#${orderId}`;
-            const amt = o.final_amount ? Number(o.final_amount) : null;
-            if (numEl) numEl.textContent = `${num}${amt ? ' — ฿' + amt.toLocaleString('th-TH', {minimumFractionDigits:2}) : ''}`;
-            if (amtEl && amt) amtEl.textContent = `฿${amt.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
-            // Pre-fill slip amount
-            const slipAmtInput = document.getElementById('ppSlipAmount');
-            if (slipAmtInput && amt) slipAmtInput.value = amt.toFixed(2);
-        }
+        const amtEl = document.getElementById('ppQRAmount');
+        const num = o.order_number || `#${orderId}`;
+        if (numEl) numEl.textContent = `${num} — ฿${amount.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
+        if (amtEl) amtEl.textContent = `฿${amount.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
 
-        // Save QR button
+        // Pre-fill slip amount
+        const slipAmtInput = document.getElementById('ppSlipAmount');
+        if (slipAmtInput) slipAmtInput.value = amount.toFixed(2);
+
+        // Save QR button — download base64 image
         const saveBtn = document.getElementById('ppSaveQRBtn');
         if (saveBtn) {
-            saveBtn.onclick = async () => {
-                try {
-                    const response = await fetch(ppData.qr_image_url);
-                    const blob = await response.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `promptpay-qr.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                } catch {
-                    window.open(ppData.qr_image_url, '_blank');
-                }
+            saveBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.href = qrData.qr_image;
+                a.download = `promptpay-qr-${num}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
             };
         }
     } catch (e) {
