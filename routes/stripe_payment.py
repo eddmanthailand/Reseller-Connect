@@ -384,7 +384,7 @@ def create_promptpay_intent(order_id):
         conn = _get_db()
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        cur.execute('SELECT id, order_number, final_amount, status, user_id FROM orders WHERE id = %s', (order_id,))
+        cur.execute('SELECT id, order_number, final_amount, status, user_id, stripe_payment_intent_id FROM orders WHERE id = %s', (order_id,))
         order = cur.fetchone()
         if not order:
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
@@ -398,15 +398,46 @@ def create_promptpay_intent(order_id):
             return jsonify({'error': 'ยอดชำระต้องมากกว่า 0'}), 400
 
         client = _get_stripe_client()
-        pi = client.PaymentIntent.create(
-            amount=amount_satangs,
-            currency='thb',
-            payment_method_types=['promptpay'],
-            metadata={'order_id': str(order_id), 'order_number': order['order_number']},
-            description=f'EKG Shops - {order["order_number"]}',
-        )
 
+        # Reuse existing intent if it's still in requires_action state
+        existing_pi_id = order.get('stripe_payment_intent_id')
+        pi = None
+        if existing_pi_id:
+            try:
+                existing = client.PaymentIntent.retrieve(existing_pi_id)
+                if existing.status in ('requires_action', 'requires_payment_method'):
+                    pi = existing
+            except Exception:
+                pi = None
+
+        if pi is None:
+            # Create new PaymentIntent for PromptPay
+            pi = client.PaymentIntent.create(
+                amount=amount_satangs,
+                currency='thb',
+                payment_method_types=['promptpay'],
+                metadata={'order_id': str(order_id), 'order_number': order['order_number']},
+                description=f'EKG Shops - {order["order_number"]}',
+            )
+
+        # Confirm if not yet in requires_action (no QR yet)
+        if pi.status == 'requires_payment_method':
+            pi = client.PaymentIntent.confirm(
+                pi.id,
+                payment_method_data={'type': 'promptpay'},
+                return_url=f'https://{request.host}/reseller#orders',
+            )
+
+        # Extract QR URL from next_action
         qr_url = ''
+        hosted_url = ''
+        try:
+            pp_action = pi.next_action.promptpay_display_qr_code if pi.next_action else None
+            if pp_action:
+                qr_url = pp_action.get('image_url_png') or pp_action.get('image_url_svg') or ''
+                hosted_url = pp_action.get('hosted_instructions_url') or ''
+        except Exception:
+            pass
 
         cur.execute('''
             UPDATE orders
@@ -421,6 +452,7 @@ def create_promptpay_intent(order_id):
             'client_secret': pi.client_secret,
             'publishable_key': publishable,
             'qr_url': qr_url,
+            'hosted_url': hosted_url,
             'amount': float(order['final_amount']),
             'order_number': order['order_number'],
         })

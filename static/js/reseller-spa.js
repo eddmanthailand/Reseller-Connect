@@ -3083,16 +3083,18 @@ function showPromptPayModal(orderId) {
                 <div id="ppQRContent" style="display:none;text-align:center;padding:4px 0 16px;">
                     <p style="font-size:13px;color:#6e6e73;margin:0 0 12px;">สแกน QR Code ด้วยแอปธนาคาร</p>
                     <img id="ppQRImage" src="" alt="PromptPay QR" style="width:230px;height:230px;border-radius:12px;border:1px solid #e5e5ea;display:block;margin:0 auto;"/>
+                    <iframe id="ppQRIframe" src="" style="display:none;width:100%;height:320px;border:none;border-radius:12px;margin:0 auto;" scrolling="no"></iframe>
                     <div style="background:#f5f5f7;border-radius:12px;padding:12px;margin:14px 0 6px;">
                         <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
                         <p id="ppQRAmount" style="font-size:22px;font-weight:700;color:#1d1d1f;margin:0;"></p>
                     </div>
+                    <button id="ppSaveQRBtn" style="display:none;margin:10px auto 4px;padding:10px 24px;background:#007aff;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">💾 บันทึก QR Code</button>
                     <p id="ppPollingStatus" style="font-size:12px;color:#86868b;margin:8px 0 0;">⏳ รอการชำระเงิน...</p>
                 </div>
 
                 <div id="ppQRError" style="display:none;text-align:center;padding:24px 0;">
                     <p style="font-size:28px;margin:0 0 8px;">⚠️</p>
-                    <p style="color:#ff3b30;font-size:13px;margin:0 0 16px;"></p>
+                    <p id="ppQRErrorMsg" style="color:#ff3b30;font-size:13px;margin:0 0 16px;"></p>
                     <button onclick="closePromptPayModal()" style="padding:10px 24px;background:#f2f2f7;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">ปิด</button>
                 </div>
 
@@ -3136,8 +3138,8 @@ async function _loadStripePromptPayQR(orderId) {
         loadEl.style.display = 'none';
         contEl.style.display = 'none';
         errEl.style.display  = 'block';
-        const p = errEl.querySelector('p');
-        if (p) p.textContent = msg;
+        const errMsgEl = document.getElementById('ppQRErrorMsg');
+        if (errMsgEl) errMsgEl.textContent = msg || 'เกิดข้อผิดพลาด กรุณาลองใหม่';
     };
 
     try {
@@ -3145,25 +3147,45 @@ async function _loadStripePromptPayQR(orderId) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
 
-        const ppStripe = Stripe(data.publishable_key);
+        const qrUrl = data.qr_url || '';
+        const hostedUrl = data.hosted_url || '';
 
-        const { paymentIntent, error } = await ppStripe.confirmPromptPayPayment(
-            data.client_secret,
-            { payment_method: { type: 'promptpay' } },
-            { handleActions: false }
-        );
-        if (error) throw new Error(error.message);
-        if (!paymentIntent) throw new Error('ไม่ได้รับข้อมูลจาก Stripe');
-
-        const ppAction = paymentIntent.next_action?.promptpay_display_qr_code;
-        const qrUrl = ppAction?.image_url_png || ppAction?.image_url_svg || '';
-        if (!qrUrl) throw new Error(`ไม่สามารถสร้าง QR Code ได้ (status: ${paymentIntent.status})`);
+        if (!qrUrl && !hostedUrl) throw new Error('ไม่สามารถสร้าง QR Code ได้ กรุณาลองใหม่');
 
         loadEl.style.display = 'none';
         contEl.style.display = 'block';
-        document.getElementById('ppQRImage').src = qrUrl;
-        document.getElementById('ppQRAmount').textContent = `฿${Number(data.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
 
+        const amountEl = document.getElementById('ppQRAmount');
+        if (amountEl) amountEl.textContent = `฿${Number(data.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+
+        if (qrUrl) {
+            const imgEl = document.getElementById('ppQRImage');
+            if (imgEl) { imgEl.src = qrUrl; imgEl.style.display = 'block'; }
+
+            // Save QR button
+            const saveBtn = document.getElementById('ppSaveQRBtn');
+            if (saveBtn) {
+                saveBtn.style.display = 'inline-block';
+                saveBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = qrUrl;
+                    a.download = `promptpay-qr-${data.order_number || orderId}.png`;
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+            }
+        } else if (hostedUrl) {
+            // Fallback: show iframe with hosted QR page
+            const imgEl = document.getElementById('ppQRImage');
+            if (imgEl) imgEl.style.display = 'none';
+            const iframeEl = document.getElementById('ppQRIframe');
+            if (iframeEl) { iframeEl.src = hostedUrl; iframeEl.style.display = 'block'; }
+        }
+
+        // Poll for payment status using Stripe.js
+        const ppStripe = Stripe(data.publishable_key);
         if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
         _ppPollingTimer = setInterval(async () => {
             try {
@@ -3172,13 +3194,13 @@ async function _loadStripePromptPayQR(orderId) {
                     clearInterval(_ppPollingTimer); _ppPollingTimer = null;
                     const ps = document.getElementById('ppPollingStatus');
                     if (ps) ps.textContent = '✅ ชำระเงินสำเร็จ!';
-                    setTimeout(() => { closePromptPayModal(); loadOrders && loadOrders(); window.location.hash = 'orders'; showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
+                    setTimeout(() => { closePromptPayModal(); loadOrders && loadOrders(); showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
                 }
             } catch (e) {}
         }, 3000);
 
     } catch (e) {
-        _showErr(e.message);
+        _showErr(e.message || String(e));
     }
 }
 
