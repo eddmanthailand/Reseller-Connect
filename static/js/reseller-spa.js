@@ -2372,7 +2372,7 @@ async function placeOrderCOD() {
         btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
         await loadCartBadge();
         showAlert(`สั่งซื้อสำเร็จ! เลขที่ ${order.order_number}\nทีมงานจะเตรียมสินค้าและแจ้งเลข Tracking ให้ทราบ`, 'success');
-        navigateTo('orders');
+        window.location.hash = 'orders';
         loadOrders();
     } catch (err) {
         console.error('COD order error:', err);
