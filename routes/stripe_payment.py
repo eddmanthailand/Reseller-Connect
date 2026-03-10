@@ -279,7 +279,7 @@ def create_unified_payment_intent(order_id):
         pi = client.PaymentIntent.create(
             amount=amount_satangs,
             currency='thb',
-            automatic_payment_methods={'enabled': True},
+            payment_method_types=['card', 'promptpay'],
             customer=customer_id,
             metadata={'order_id': str(order_id), 'order_number': order['order_number']},
             description=f'EKG Shops - {order["order_number"]}',

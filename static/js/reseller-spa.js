@@ -2213,6 +2213,7 @@ async function _initCheckoutPaymentEl() {
             mode: 'payment',
             amount,
             currency: 'thb',
+            paymentMethodTypes: ['card', 'promptpay'],
             appearance,
             locale: 'th'
         });
