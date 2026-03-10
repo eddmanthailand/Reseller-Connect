@@ -2876,6 +2876,11 @@ async function showCardPaymentModal(orderId) {
                     <button onclick="closeCardPaymentModal()" style="background:rgba(0,0,0,0.06);border:none;color:#3c3c43;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">&times;</button>
                 </div>
 
+                <div style="display:flex;gap:8px;margin-bottom:18px;">
+                    <button id="tabBtnCard" onclick="switchPaymentTab('card',${orderId})" style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #000;background:#000;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💳 บัตรเครดิต</button>
+                    <button id="tabBtnPP" onclick="switchPaymentTab('promptpay',${orderId})" style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #e5e5ea;background:#fff;color:#3c3c43;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">📱 PromptPay</button>
+                </div>
+
                 <div id="cardModalLoading" style="text-align:center;padding:40px 0;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                     <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังโหลด...</p>
@@ -2889,7 +2894,7 @@ async function showCardPaymentModal(orderId) {
                     <button id="btnModalPay" onclick="submitCardPaymentModal(${orderId})" style="width:100%;margin-top:12px;padding:16px;background:#000;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;letter-spacing:-0.2px;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
                         ชำระเงิน
                     </button>
-                    <div id="cardModalFooter" style="border-top:1px solid #f2f2f7;margin:16px 0 0;padding-top:14px;">
+                    <div style="border-top:1px solid #f2f2f7;margin:16px 0 0;padding-top:14px;">
                         <button onclick="payLaterFromModal(${orderId})" style="width:100%;padding:12px;background:transparent;border:none;color:#6e6e73;font-size:14px;font-weight:500;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
                             ชำระเงินภายหลัง
                         </button>
@@ -2898,6 +2903,26 @@ async function showCardPaymentModal(orderId) {
                         </p>
                     </div>
                 </div>
+
+                <div id="promptpayTabContent" style="display:none;text-align:center;">
+                    <div id="ppQRLoading" style="padding:40px 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังสร้าง QR Code...</p>
+                    </div>
+                    <div id="ppQRContent" style="display:none;">
+                        <p style="font-size:13px;color:#6e6e73;margin:0 0 12px;">สแกน QR Code ด้วยแอปธนาคาร</p>
+                        <img id="ppQRImage" src="" alt="PromptPay QR" style="width:220px;height:220px;border-radius:12px;border:1px solid #e5e5ea;margin-bottom:12px;"/>
+                        <div style="background:#f9f9f9;border-radius:10px;padding:12px;margin-bottom:16px;">
+                            <p style="font-size:13px;color:#6e6e73;margin:0 0 4px;">ยอดที่ต้องชำระ</p>
+                            <p id="ppQRAmount" style="font-size:22px;font-weight:700;color:#1d1d1f;margin:0;"></p>
+                        </div>
+                        <div id="ppPollingStatus" style="font-size:13px;color:#86868b;margin-bottom:8px;">⏳ รอการชำระเงิน...</div>
+                    </div>
+                    <div id="ppQRError" style="display:none;padding:24px 0;">
+                        <p style="color:#ff3b30;font-size:13px;margin:0;"></p>
+                    </div>
+                </div>
+
                 <p style="text-align:center;color:#aeaeb2;font-size:11px;margin-top:12px;">🔒 ชำระเงินผ่าน Stripe — ข้อมูลไม่ผ่านระบบของเรา</p>
             </div>
         </div>
@@ -3029,18 +3054,28 @@ async function _loadStripePromptPayQR(orderId) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
 
+        const ppStripe = Stripe(data.publishable_key);
+        const { paymentIntent, error } = await ppStripe.confirmPromptPayPayment(
+            data.client_secret,
+            { payment_method: {} },
+            { handleActions: false }
+        );
+
+        if (error) throw new Error(error.message);
+
+        const qrUrl = paymentIntent.next_action?.promptpay_display_qr_code?.image_url_png || '';
+        if (!qrUrl) throw new Error('ไม่สามารถสร้าง QR Code ได้');
+
         loadEl.style.display = 'none';
         contEl.style.display = 'block';
-        document.getElementById('ppQRImage').src     = data.qr_url;
+        document.getElementById('ppQRImage').src = qrUrl;
         document.getElementById('ppQRAmount').textContent = `฿${Number(data.amount).toLocaleString('th-TH', {minimumFractionDigits:2})}`;
 
         _ppPollingTimer = setInterval(async () => {
             try {
-                const statusRes  = await fetch(`${RESELLER_API_URL}/orders/${orderId}`);
-                const statusData = await statusRes.json();
-                const order      = statusData.order || statusData;
-                const pollingEl  = document.getElementById('ppPollingStatus');
-                if (order.status === 'under_review' || order.status === 'preparing' || order.status === 'shipped' || order.status === 'delivered') {
+                const pi = await ppStripe.retrievePaymentIntent(data.client_secret);
+                const pollingEl = document.getElementById('ppPollingStatus');
+                if (pi.paymentIntent && pi.paymentIntent.status === 'succeeded') {
                     if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
                     if (pollingEl) pollingEl.innerHTML = '✅ ชำระเงินสำเร็จ! กำลังอัปเดต...';
                     setTimeout(() => { closeCardPaymentModal(); loadOrders && loadOrders(); window.location.hash = 'orders'; }, 1500);

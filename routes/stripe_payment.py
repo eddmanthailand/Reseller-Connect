@@ -405,12 +405,8 @@ def create_promptpay_intent(order_id):
             metadata={'order_id': str(order_id), 'order_number': order['order_number']},
             description=f'EKG Shops - {order["order_number"]}',
         )
-        pm = client.PaymentMethod.create(type='promptpay')
-        pi = client.PaymentIntent.confirm(pi.id, payment_method=pm.id)
 
         qr_url = ''
-        if pi.next_action and pi.next_action.get('type') == 'promptpay_display_qr_code':
-            qr_url = pi.next_action['promptpay_display_qr_code'].get('image_url_png', '')
 
         cur.execute('''
             UPDATE orders
@@ -419,8 +415,11 @@ def create_promptpay_intent(order_id):
         ''', (pi.id, order_id))
         conn.commit()
 
+        _, publishable = _get_stripe_keys()
         return jsonify({
             'pi_id': pi.id,
+            'client_secret': pi.client_secret,
+            'publishable_key': publishable,
             'qr_url': qr_url,
             'amount': float(order['final_amount']),
             'order_number': order['order_number'],
