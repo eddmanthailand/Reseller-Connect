@@ -237,6 +237,141 @@ def create_card_payment_intent(order_id):
         if conn: conn.close()
 
 
+# ── Unified PaymentIntent (card + PromptPay via Payment Element) ─────────────
+@stripe_bp.route('/api/orders/<int:order_id>/stripe-payment-intent', methods=['POST'])
+def create_unified_payment_intent(order_id):
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute('SELECT id, order_number, final_amount, status, user_id, stripe_payment_intent_id FROM orders WHERE id = %s', (order_id,))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์เข้าถึง'}), 403
+        if order['status'] != 'pending_payment':
+            return jsonify({'error': f'คำสั่งซื้อสถานะ {order["status"]} ชำระไม่ได้'}), 400
+
+        amount_satangs = int(float(order['final_amount']) * 100)
+        if amount_satangs <= 0:
+            return jsonify({'error': 'ยอดชำระต้องมากกว่า 0'}), 400
+
+        client = _get_stripe_client()
+
+        cur.execute('SELECT stripe_customer_id, full_name, email FROM users WHERE id = %s', (user_id,))
+        urow = cur.fetchone()
+        customer_id = urow['stripe_customer_id'] if urow else None
+        if not customer_id:
+            customer = client.Customer.create(
+                name=(urow['full_name'] or '') if urow else '',
+                email=(urow['email'] or '') if urow else '',
+                metadata={'user_id': str(user_id)}
+            )
+            customer_id = customer.id
+            cur.execute('UPDATE users SET stripe_customer_id = %s WHERE id = %s', (customer_id, user_id))
+
+        pi = client.PaymentIntent.create(
+            amount=amount_satangs,
+            currency='thb',
+            automatic_payment_methods={'enabled': True},
+            customer=customer_id,
+            metadata={'order_id': str(order_id), 'order_number': order['order_number']},
+            description=f'EKG Shops - {order["order_number"]}',
+        )
+
+        cur.execute('''
+            UPDATE orders
+            SET stripe_payment_intent_id = %s, payment_method = 'stripe', updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (pi.id, order_id))
+        conn.commit()
+
+        _, publishable = _get_stripe_keys()
+        return jsonify({'client_secret': pi.client_secret, 'publishable_key': publishable, 'pi_id': pi.id})
+
+    except stripe.error.StripeError as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        return jsonify({'error': f'Stripe: {str(e)}'}), 400
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ── Verify Stripe return after redirect (PromptPay) ──────────────────────────
+@stripe_bp.route('/api/stripe/verify-return', methods=['POST'])
+def verify_stripe_return():
+    user_id = flask_session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    body = request.get_json() or {}
+    pi_id = body.get('pi_id', '').strip()
+    if not pi_id:
+        return jsonify({'error': 'pi_id required'}), 400
+
+    conn = None
+    try:
+        conn = _get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        client = _get_stripe_client()
+        pi = client.PaymentIntent.retrieve(pi_id)
+
+        if pi.status != 'succeeded':
+            return jsonify({'success': False, 'status': pi.status, 'message': f'การชำระเงินยังไม่สำเร็จ (สถานะ: {pi.status})'}), 200
+
+        order_id_meta = pi.metadata.get('order_id')
+        if not order_id_meta:
+            return jsonify({'error': 'ไม่พบ order_id ใน payment intent'}), 400
+
+        cur.execute('''
+            SELECT id, order_number, status, user_id FROM orders
+            WHERE id = %s AND stripe_payment_intent_id = %s
+        ''', (int(order_id_meta), pi_id))
+        order = cur.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['user_id'] != user_id:
+            return jsonify({'error': 'ไม่มีสิทธิ์'}), 403
+
+        if order['status'] == 'pending_payment':
+            cur.execute('''
+                UPDATE orders
+                SET status = 'preparing', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (order['id'],))
+            conn.commit()
+
+        return jsonify({'success': True, 'order_id': order['id'], 'order_number': order['order_number']})
+
+    except stripe.error.StripeError as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        return jsonify({'error': f'Stripe: {str(e)}'}), 400
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except Exception: pass
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
 # ── Create PaymentIntent for PromptPay ───────────────────────────────────────
 @stripe_bp.route('/api/orders/<int:order_id>/stripe-promptpay-intent', methods=['POST'])
 def create_promptpay_intent(order_id):

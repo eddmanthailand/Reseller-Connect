@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
 async function init() {
     try {
         await loadCurrentUser();
+        handleStripeReturn();
         await loadThailandProvinces();
         setupNavigation();
         handleHashNavigation();
@@ -1168,6 +1169,10 @@ function renderCheckout() {
     renderCheckoutItems();
     updateCheckoutSummary();
     validateCheckout();
+    _stripeElements = null;
+    _paymentEl = null;
+    _stripeInstance = null;
+    setTimeout(_initCheckoutPaymentEl, 100);
 }
 
 
@@ -1950,13 +1955,17 @@ function validateCheckout() {
     if (!isValid) {
         btn.disabled = true;
         const btnText = document.getElementById('btnPlaceOrderText');
-        if (btnText) btnText.textContent = 'เลือกช่องทางชำระเงิน';
+        if (btnText) btnText.textContent = 'กรุณากรอกข้อมูลให้ครบ';
         helper.textContent = reason;
         helper.style.display = 'block';
     } else {
         helper.textContent = '';
         helper.style.display = 'none';
-        _updateCheckoutBtn(typeof _selectedPayMethod !== 'undefined' ? _selectedPayMethod : null);
+        if (_stripeElements) {
+            btn.disabled = false;
+            const btnText = document.getElementById('btnPlaceOrderText');
+            if (btnText) btnText.textContent = 'ยืนยันและชำระเงิน';
+        }
     }
 }
 
@@ -2174,82 +2183,17 @@ async function placeOrderAndPayWithStripe() {
     }
 }
 
-// ── Stripe Accordion Payment ──────────────────────────────────────────────────
+// ── Stripe Unified Payment ────────────────────────────────────────────────────
 let _stripeInstance = null;
-let _stripeElements    = null;
-let _paymentEl         = null;
-let _selectedPayMethod = null;
-let _promptpayPollTimer = null;
+let _stripeElements = null;
+let _paymentEl      = null;
 
-function togglePaymentAccordion() {
-    const container = document.getElementById('payMethodsContainer');
-    const arrow     = document.getElementById('payAccordionArrow');
-    if (!container) return;
-    const isOpen = container.style.display !== 'none';
-    container.style.display = isOpen ? 'none' : 'block';
-    arrow.style.transform   = isOpen ? '' : 'rotate(90deg)';
-}
-
-async function selectPaymentMethod(type) {
-    const methods = ['card', 'promptpay'];
-    methods.forEach(m => {
-        const content = document.getElementById(`${m}MethodContent`);
-        const arrow   = document.getElementById(`${m}MethodArrow`);
-        if (m === type) {
-            const isOpen = content.style.display !== 'none';
-            if (isOpen) {
-                content.style.display = 'none';
-                arrow.style.transform = '';
-                if (_selectedPayMethod === type) {
-                    _selectedPayMethod = null;
-                    _updateCheckoutBtn(null);
-                }
-            } else {
-                content.style.display = 'block';
-                arrow.style.transform = 'rotate(90deg)';
-                _selectedPayMethod = type;
-                _updateCheckoutBtn(type);
-                if (type === 'card') _initCardPanel();
-            }
-        } else {
-            content.style.display = 'none';
-            arrow.style.transform = '';
-        }
-    });
-}
-
-function _updateCheckoutBtn(type) {
-    const btn      = document.getElementById('btnPlaceOrder');
-    const btnText  = document.getElementById('btnPlaceOrderText');
-    const note     = document.getElementById('checkoutNote');
-    if (!btn) return;
-    if (!type) {
-        btn.disabled  = true;
-        btnText.textContent = 'เลือกช่องทางชำระเงิน';
-        if (note) note.textContent = 'กรุณาเลือกช่องทางการชำระเงินด้านบน';
-        return;
-    }
-    btn.disabled = false;
-    if (type === 'card') {
-        btnText.textContent = '💳 ชำระเงินด้วยบัตร';
-        if (note) note.textContent = 'ข้อมูลบัตรถูกเข้ารหัสโดย Stripe — ไม่ผ่านระบบของเรา';
-    } else {
-        btnText.textContent = '📱 สร้าง QR PromptPay';
-        if (note) note.textContent = 'QR Code จาก Stripe — ยืนยันอัตโนมัติเมื่อชำระสำเร็จ';
-    }
-}
-
-function handleCheckoutAction() {
-    if (_selectedPayMethod === 'card')      placeOrderAndPayCard();
-    else if (_selectedPayMethod === 'promptpay') placeOrderAndGetPromptpayQR();
-}
-
-async function _initCardPanel() {
+async function _initCheckoutPaymentEl() {
     if (_stripeElements) return;
     try {
         const res  = await fetch(`${RESELLER_API_URL}/stripe/config`);
         const data = await res.json();
-        if (!data.publishable_key) { console.error('No publishable key'); return; }
+        if (!data.publishable_key) throw new Error('ไม่พบ Stripe publishable key');
 
         _stripeInstance = Stripe(data.publishable_key);
 
@@ -2277,7 +2221,6 @@ async function _initCardPanel() {
             mode: 'payment',
             amount,
             currency: 'thb',
-            paymentMethodTypes: ['card'],
             appearance,
             locale: 'th'
         });
@@ -2285,24 +2228,55 @@ async function _initCardPanel() {
         _paymentEl = _stripeElements.create('payment', {
             layout: { type: 'tabs', defaultCollapsed: false }
         });
-        _paymentEl.mount('#stripe-payment-element');
 
         _paymentEl.on('change', e => {
             const errEl = document.getElementById('stripe-card-errors');
             if (errEl) errEl.textContent = e.error ? e.error.message : '';
         });
 
+        const loadingEl = document.getElementById('stripePaymentLoading');
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        _paymentEl.mount('#stripe-payment-element');
+
+        validateCheckout();
+
     } catch (err) {
         console.error('Stripe Payment Element init error:', err);
+        const loadingEl = document.getElementById('stripePaymentLoading');
+        if (loadingEl) loadingEl.textContent = 'โหลดระบบชำระเงินไม่สำเร็จ กรุณา refresh หน้า';
     }
 }
 
-async function deleteSavedCard(pmId) {
-    if (!confirm('ลบบัตรนี้ออกจากระบบ?')) return;
-    try {
-        await fetch(`${RESELLER_API_URL}/stripe/saved-cards/${pmId}`, { method: 'DELETE' });
-    } catch (err) {
-        showAlert('ไม่สามารถลบบัตรได้', 'error');
+async function handleStripeReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const piId   = params.get('payment_intent');
+    const status = params.get('redirect_status');
+    if (!piId) return;
+
+    window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+
+    if (status === 'succeeded') {
+        try {
+            const res  = await fetch(`${RESELLER_API_URL}/stripe/verify-return`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pi_id: piId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                loadCartBadge();
+                showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${data.order_number || ''} กำลังดำเนินการ`, 'success');
+                window.location.hash = 'orders';
+            } else {
+                showAlert(data.message || 'กำลังตรวจสอบการชำระเงิน...', 'success');
+                window.location.hash = 'orders';
+            }
+        } catch (e) {
+            console.error('Stripe return verify error:', e);
+        }
+    } else if (status === 'failed') {
+        showAlert('การชำระเงินไม่สำเร็จ กรุณาลองใหม่', 'error');
     }
 }
 
@@ -2372,21 +2346,21 @@ async function _createOrder(paymentMethod, shippingData) {
     return result.order;
 }
 
-async function placeOrderAndPayCard() {
+async function placeOrderWithStripe() {
     const { missingFields, shippingData } = _getShippingData();
     if (missingFields.length > 0) {
         showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
         return;
     }
     if (!_stripeInstance || !_stripeElements) {
-        showAlert('Stripe ยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่', 'error');
+        showAlert('ระบบชำระเงินยังโหลดไม่เสร็จ กรุณารอสักครู่', 'error');
         return;
     }
 
     const btn     = document.getElementById('btnPlaceOrder');
     const btnText = document.getElementById('btnPlaceOrderText');
     btn.disabled  = true;
-    btnText.textContent = 'กำลังตรวจสอบข้อมูลบัตร...';
+    btnText.textContent = 'กำลังตรวจสอบข้อมูล...';
 
     try {
         const { error: submitError } = await _stripeElements.submit();
@@ -2394,7 +2368,7 @@ async function placeOrderAndPayCard() {
             const errEl = document.getElementById('stripe-card-errors');
             if (errEl) errEl.textContent = submitError.message;
             btn.disabled = false;
-            btnText.textContent = '💳 ชำระเงินด้วยบัตร';
+            btnText.textContent = 'ยืนยันและชำระเงิน';
             return;
         }
 
@@ -2402,15 +2376,14 @@ async function placeOrderAndPayCard() {
         const order = await _createOrder('stripe', shippingData);
 
         btnText.textContent = 'กำลังเชื่อมต่อ Stripe...';
-        const piRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-intent`, {
+        const piRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-payment-intent`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ save_card: false })
+            headers: { 'Content-Type': 'application/json' }
         });
         const piData = await piRes.json();
         if (!piRes.ok) throw new Error(piData.error || 'ไม่สามารถสร้าง payment intent ได้');
 
-        btnText.textContent = 'กำลังประมวลผลบัตร...';
+        btnText.textContent = 'กำลังดำเนินการชำระเงิน...';
         const returnUrl = window.location.origin + window.location.pathname;
         const { error, paymentIntent } = await _stripeInstance.confirmPayment({
             elements: _stripeElements,
@@ -2425,102 +2398,30 @@ async function placeOrderAndPayCard() {
             throw new Error(error.message);
         }
 
-        btnText.textContent = 'กำลังยืนยันการชำระ...';
-        loadCartBadge();
-        selectedPaymentSlip = null;
-
-        try {
-            const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pi_id: paymentIntent?.id })
-            });
-            const confirmData = await confirmRes.json();
-            showAlert(confirmData.success
-                ? `ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number || ''} กำลังดำเนินการ`
-                : 'ชำระเงินสำเร็จ! กำลังอัพเดทสถานะ...', 'success');
-        } catch (_) {
-            showAlert('ชำระเงินสำเร็จ! กำลังอัพเดทสถานะ...', 'success');
+        if (paymentIntent && paymentIntent.status === 'succeeded') {
+            btnText.textContent = 'กำลังยืนยันการชำระ...';
+            loadCartBadge();
+            try {
+                const confirmRes = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-card-confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pi_id: paymentIntent.id })
+                });
+                const confirmData = await confirmRes.json();
+                showAlert(confirmData.success
+                    ? `ชำระเงินสำเร็จ! ออเดอร์ ${confirmData.order_number || ''} กำลังดำเนินการ`
+                    : 'ชำระเงินสำเร็จ!', 'success');
+            } catch (_) {
+                showAlert('ชำระเงินสำเร็จ!', 'success');
+            }
+            window.location.hash = 'orders';
         }
 
-        window.location.hash = 'orders';
-
     } catch (err) {
-        console.error('Card payment error:', err);
+        console.error('Stripe payment error:', err);
         showAlert(err.message || 'เกิดข้อผิดพลาดในการชำระเงิน', 'error');
         btn.disabled = false;
-        btnText.textContent = '💳 ชำระเงินด้วยบัตร';
-    }
-}
-
-async function placeOrderAndGetPromptpayQR() {
-    const { missingFields, shippingData } = _getShippingData();
-    if (missingFields.length > 0) {
-        showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
-        return;
-    }
-
-    const btn     = document.getElementById('btnPlaceOrder');
-    const btnText = document.getElementById('btnPlaceOrderText');
-
-    btn.disabled = true;
-    btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
-
-    try {
-        const order = await _createOrder('stripe_promptpay', shippingData);
-        btnText.textContent = 'กำลังสร้าง QR...';
-
-        const res  = await fetch(`${RESELLER_API_URL}/orders/${order.id}/stripe-promptpay-intent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'ไม่สามารถสร้าง PromptPay QR ได้');
-
-        document.getElementById('stripePromptpayQRImage').src = data.qr_url;
-        document.getElementById('stripePromptpayAmount').textContent = `฿${Number(data.amount).toLocaleString('th-TH', {minimumFractionDigits:2})}`;
-        document.getElementById('stripePromptpayQR').style.display = 'block';
-        document.getElementById('stripePromptpayStatus').innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;animation:spin 1s linear infinite;flex-shrink:0;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-            กำลังรอการชำระเงิน...
-        `;
-
-        btn.disabled  = false;
-        btnText.textContent = '📱 QR พร้อมแล้ว — รอชำระ';
-        btn.disabled = true;
-
-        if (_promptpayPollTimer) clearInterval(_promptpayPollTimer);
-        let pollCount = 0;
-        const maxPolls = 120;
-        _promptpayPollTimer = setInterval(async () => {
-            pollCount++;
-            if (pollCount > maxPolls) {
-                clearInterval(_promptpayPollTimer);
-                document.getElementById('stripePromptpayStatus').textContent = 'QR Code หมดอายุแล้ว กรุณาลองใหม่';
-                btn.disabled = false;
-                btnText.textContent = '📱 สร้าง QR ใหม่';
-                return;
-            }
-            try {
-                const sRes = await fetch(`${RESELLER_API_URL}/stripe/payment-intent/${data.pi_id}/status`);
-                const sData = await sRes.json();
-                if (sData.status === 'succeeded') {
-                    clearInterval(_promptpayPollTimer);
-                    document.getElementById('stripePromptpayStatus').innerHTML = '✅ ชำระเงินสำเร็จ! กำลังนำไปหน้าออเดอร์...';
-                    document.getElementById('stripePromptpayStatus').style.color = '#22c55e';
-                    setTimeout(() => { loadCartBadge(); window.location.hash = 'orders'; }, 1500);
-                } else if (sData.status === 'canceled') {
-                    clearInterval(_promptpayPollTimer);
-                    document.getElementById('stripePromptpayStatus').textContent = 'การชำระเงินถูกยกเลิก';
-                }
-            } catch(e) { /* silently retry */ }
-        }, 5000);
-
-    } catch (err) {
-        console.error('PromptPay error:', err);
-        showAlert(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
-        btn.disabled = false;
-        btnText.textContent = '📱 สร้าง QR PromptPay';
+        btnText.textContent = 'ยืนยันและชำระเงิน';
     }
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3054,10 +2955,9 @@ async function showCardPaymentModal(orderId) {
 
         const [orderRes, piRes] = await Promise.all([
             fetch(`${RESELLER_API_URL}/orders/${orderId}`),
-            fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-card-intent`, {
+            fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-payment-intent`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ save_card: false })
+                headers: { 'Content-Type': 'application/json' }
             })
         ]);
 
