@@ -2563,10 +2563,12 @@ function renderOrders(orders) {
     const getPendingButtons = (order) => {
         if (!['pending_payment'].includes(order.status)) return '';
         return `
-            <div style="display:flex; gap:8px; margin-top:4px;">
-                <button class="order-card-btn" onclick="event.stopPropagation(); showCardPaymentModal(${order.id})" style="flex:1; background:#000; border-radius:10px; color:#fff; font-weight:600;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                    ชำระเงิน
+            <div style="display:flex; gap:6px; margin-top:4px;">
+                <button class="order-card-btn" onclick="event.stopPropagation(); showCardPaymentModal(${order.id})" style="flex:1; background:#000; border-radius:10px; color:#fff; font-weight:600; font-size:12px; padding:8px 4px;">
+                    💳 บัตรเครดิต
+                </button>
+                <button class="order-card-btn" onclick="event.stopPropagation(); showPromptPayModal(${order.id})" style="flex:1; background:#1a56db; border-radius:10px; color:#fff; font-weight:600; font-size:12px; padding:8px 4px;">
+                    📱 PromptPay
                 </button>
             </div>`;
     };
@@ -2763,13 +2765,15 @@ async function viewResellerOrderDetails(orderId) {
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
-                <div style="margin-top: 16px;">
-                    <button class="btn" onclick="closeOrderModal(); showCardPaymentModal(${orderId})" style="width: 100%; padding: 15px; font-size: 15px; font-weight: 700; background: #000; border: none; border-radius: 12px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                        ชำระเงิน
+                <div style="margin-top: 16px; display:flex; gap:8px;">
+                    <button class="btn" onclick="closeOrderModal(); showCardPaymentModal(${orderId})" style="flex:1; padding: 14px 8px; font-size: 14px; font-weight: 700; background: #000; border: none; border-radius: 12px; color: white; cursor: pointer; font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
+                        💳 บัตรเครดิต
                     </button>
-                    <p style="text-align:center; font-size:11px; color:rgba(255,255,255,0.35); margin-top:8px;">สินค้าจองไว้ไม่เกิน 24 ชม.</p>
+                    <button class="btn" onclick="closeOrderModal(); showPromptPayModal(${orderId})" style="flex:1; padding: 14px 8px; font-size: 14px; font-weight: 700; background: #1a56db; border: none; border-radius: 12px; color: white; cursor: pointer; font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
+                        📱 PromptPay
+                    </button>
                 </div>
+                <p style="text-align:center; font-size:11px; color:rgba(255,255,255,0.35); margin-top:8px;">สินค้าจองไว้ไม่เกิน 24 ชม.</p>
             `;
         }
         
@@ -2868,17 +2872,12 @@ async function showCardPaymentModal(orderId) {
         <div id="stripeCardModalSheet" style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:480px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,0.18);font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
             <div style="width:36px;height:4px;background:#d1d1d6;border-radius:2px;margin:12px auto 0;"></div>
             <div style="padding:20px 24px 32px;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
                     <div>
-                        <h3 style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0 0 2px;">ชำระเงิน</h3>
+                        <h3 style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0 0 2px;">💳 ชำระด้วยบัตรเครดิต</h3>
                         <p id="cardModalOrderNum" style="font-size:13px;color:#6e6e73;margin:0;"></p>
                     </div>
                     <button onclick="closeCardPaymentModal()" style="background:rgba(0,0,0,0.06);border:none;color:#3c3c43;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">&times;</button>
-                </div>
-
-                <div style="display:flex;gap:8px;margin-bottom:18px;">
-                    <button id="tabBtnCard" onclick="switchPaymentTab('card',${orderId})" style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #000;background:#000;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">💳 บัตรเครดิต</button>
-                    <button id="tabBtnPP" onclick="switchPaymentTab('promptpay',${orderId})" style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #e5e5ea;background:#fff;color:#3c3c43;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">📱 PromptPay</button>
                 </div>
 
                 <div id="cardModalLoading" style="text-align:center;padding:40px 0;">
@@ -2901,25 +2900,6 @@ async function showCardPaymentModal(orderId) {
                         <p style="text-align:center;color:#aeaeb2;font-size:11px;margin:6px 0 0;line-height:1.5;padding:0 8px;">
                             สินค้าจองไว้ให้ไม่เกิน 24 ชม. — หากยังไม่ชำระระบบจะยกเลิกอัตโนมัติ
                         </p>
-                    </div>
-                </div>
-
-                <div id="promptpayTabContent" style="display:none;text-align:center;">
-                    <div id="ppQRLoading" style="padding:40px 0;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                        <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังสร้าง QR Code...</p>
-                    </div>
-                    <div id="ppQRContent" style="display:none;padding:8px 0 16px;">
-                        <p style="font-size:13px;color:#6e6e73;margin:0 0 10px;">สแกน QR Code ด้วยแอปธนาคาร</p>
-                        <img id="ppQRImage" src="" alt="PromptPay QR" style="width:220px;height:220px;border-radius:12px;border:1px solid #e5e5ea;"/>
-                        <div style="background:#f5f5f7;border-radius:10px;padding:10px;margin:12px 0 4px;">
-                            <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
-                            <p id="ppQRAmount" style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0;"></p>
-                        </div>
-                        <p id="ppPollingStatus" style="font-size:12px;color:#86868b;margin:8px 0 0;">⏳ รอการชำระเงิน...</p>
-                    </div>
-                    <div id="ppQRError" style="display:none;padding:24px 0;">
-                        <p style="color:#ff3b30;font-size:13px;margin:0;"></p>
                     </div>
                 </div>
 
@@ -3016,28 +2996,72 @@ function payLaterFromModal(orderId) {
     setTimeout(() => loadOrders && loadOrders(), 300);
 }
 
-function switchPaymentTab(tab, orderId) {
-    const btnCard = document.getElementById('tabBtnCard');
-    const btnPP   = document.getElementById('tabBtnPP');
-    const cardTab = document.getElementById('cardTabContent');
-    const ppTab   = document.getElementById('promptpayTabContent');
-    const footer  = document.getElementById('cardModalFooter');
+function showPromptPayModal(orderId) {
+    const existing = document.getElementById('stripePromptPayModal');
+    if (existing) existing.remove();
+    if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
 
-    if (tab === 'card') {
-        btnCard.style.background = '#000'; btnCard.style.color = '#fff'; btnCard.style.borderColor = '#000';
-        btnPP.style.background   = '#fff'; btnPP.style.color   = '#3c3c43'; btnPP.style.borderColor = '#e5e5ea';
-        cardTab.style.display = 'block';
-        ppTab.style.display   = 'none';
-        footer.style.display  = 'block';
-        if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
-    } else {
-        btnPP.style.background   = '#000'; btnPP.style.color   = '#fff'; btnPP.style.borderColor = '#000';
-        btnCard.style.background = '#fff'; btnCard.style.color = '#3c3c43'; btnCard.style.borderColor = '#e5e5ea';
-        cardTab.style.display = 'none';
-        ppTab.style.display   = 'block';
-        footer.style.display  = 'none';
-        _loadStripePromptPayQR(orderId);
-    }
+    const modal = document.createElement('div');
+    modal.id = 'stripePromptPayModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);z-index:10010;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:480px;position:relative;max-height:92vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,0.18);font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
+            <div style="width:36px;height:4px;background:#d1d1d6;border-radius:2px;margin:12px auto 0;"></div>
+            <div style="padding:20px 24px 36px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+                    <div>
+                        <h3 style="font-size:20px;font-weight:700;color:#1d1d1f;margin:0 0 2px;">📱 PromptPay</h3>
+                        <p id="ppModalOrderNum" style="font-size:13px;color:#6e6e73;margin:0;"></p>
+                    </div>
+                    <button onclick="closePromptPayModal()" style="background:rgba(0,0,0,0.06);border:none;color:#3c3c43;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">&times;</button>
+                </div>
+
+                <div id="ppQRLoading" style="text-align:center;padding:40px 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                    <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังสร้าง QR Code...</p>
+                </div>
+
+                <div id="ppQRContent" style="display:none;text-align:center;padding:4px 0 16px;">
+                    <p style="font-size:13px;color:#6e6e73;margin:0 0 12px;">สแกน QR Code ด้วยแอปธนาคาร</p>
+                    <img id="ppQRImage" src="" alt="PromptPay QR" style="width:230px;height:230px;border-radius:12px;border:1px solid #e5e5ea;display:block;margin:0 auto;"/>
+                    <div style="background:#f5f5f7;border-radius:12px;padding:12px;margin:14px 0 6px;">
+                        <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
+                        <p id="ppQRAmount" style="font-size:22px;font-weight:700;color:#1d1d1f;margin:0;"></p>
+                    </div>
+                    <p id="ppPollingStatus" style="font-size:12px;color:#86868b;margin:8px 0 0;">⏳ รอการชำระเงิน...</p>
+                </div>
+
+                <div id="ppQRError" style="display:none;text-align:center;padding:24px 0;">
+                    <p style="font-size:28px;margin:0 0 8px;">⚠️</p>
+                    <p style="color:#ff3b30;font-size:13px;margin:0 0 16px;"></p>
+                    <button onclick="closePromptPayModal()" style="padding:10px 24px;background:#f2f2f7;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">ปิด</button>
+                </div>
+
+                <p style="text-align:center;color:#aeaeb2;font-size:11px;margin-top:10px;">🔒 ชำระเงินผ่าน Stripe — ข้อมูลไม่ผ่านระบบของเรา</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) closePromptPayModal(); });
+
+    fetch(`${RESELLER_API_URL}/orders/${orderId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(oData => {
+            if (!oData) return;
+            const o = oData.order || oData;
+            const num = o.order_number || `#${orderId}`;
+            const amt = o.final_amount ? `฿${Number(o.final_amount).toLocaleString('th-TH', {minimumFractionDigits:2})}` : '';
+            const el = document.getElementById('ppModalOrderNum');
+            if (el) el.textContent = `${num}${amt ? ' — ' + amt : ''}`;
+        }).catch(() => {});
+
+    _loadStripePromptPayQR(orderId);
+}
+
+function closePromptPayModal() {
+    const modal = document.getElementById('stripePromptPayModal');
+    if (modal) modal.remove();
+    if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
 }
 
 async function _loadStripePromptPayQR(orderId) {
@@ -3089,7 +3113,7 @@ async function _loadStripePromptPayQR(orderId) {
                     clearInterval(_ppPollingTimer); _ppPollingTimer = null;
                     const ps = document.getElementById('ppPollingStatus');
                     if (ps) ps.textContent = '✅ ชำระเงินสำเร็จ!';
-                    setTimeout(() => { closeCardPaymentModal(); loadOrders && loadOrders(); window.location.hash = 'orders'; showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
+                    setTimeout(() => { closePromptPayModal(); loadOrders && loadOrders(); window.location.hash = 'orders'; showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
                 }
             } catch (e) {}
         }, 3000);
