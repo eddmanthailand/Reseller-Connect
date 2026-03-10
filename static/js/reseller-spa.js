@@ -2395,7 +2395,7 @@ async function placeOrderWithPromptPay() {
             return;
         }
 
-        const orderId = result.order?.id;
+        const orderId = result.order?.id || result.id;
         if (!orderId) {
             showAlert('ไม่พบเลขคำสั่งซื้อ', 'error');
             if (btn) { btn.disabled = false; }
@@ -2403,10 +2403,10 @@ async function placeOrderWithPromptPay() {
             return;
         }
 
-        clearCart && clearCart();
         loadCartBadge && loadCartBadge();
+        showPromptPayModal(orderId);
         window.location.hash = 'orders';
-        setTimeout(() => { loadOrders && loadOrders(); showPromptPayModal(orderId); }, 300);
+        setTimeout(() => { loadOrders && loadOrders(); }, 500);
 
     } catch (err) {
         showAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
