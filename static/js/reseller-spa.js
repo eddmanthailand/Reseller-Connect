@@ -3077,19 +3077,37 @@ function showPromptPayModal(orderId) {
 
                 <div id="ppQRLoading" style="text-align:center;padding:40px 0;">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:28px;height:28px;animation:spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                    <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังสร้าง QR Code...</p>
+                    <p style="margin-top:10px;font-size:13px;color:#86868b;">กำลังโหลดข้อมูล...</p>
                 </div>
 
-                <div id="ppQRContent" style="display:none;text-align:center;padding:4px 0 16px;">
-                    <p style="font-size:13px;color:#6e6e73;margin:0 0 12px;">สแกน QR Code ด้วยแอปธนาคาร</p>
-                    <img id="ppQRImage" src="" alt="PromptPay QR" style="width:230px;height:230px;border-radius:12px;border:1px solid #e5e5ea;display:block;margin:0 auto;"/>
-                    <iframe id="ppQRIframe" src="" style="display:none;width:100%;height:320px;border:none;border-radius:12px;margin:0 auto;" scrolling="no"></iframe>
-                    <div style="background:#f5f5f7;border-radius:12px;padding:12px;margin:14px 0 6px;">
-                        <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
-                        <p id="ppQRAmount" style="font-size:22px;font-weight:700;color:#1d1d1f;margin:0;"></p>
+                <div id="ppQRContent" style="display:none;">
+                    <div style="text-align:center;padding:4px 0 12px;">
+                        <p style="font-size:13px;color:#6e6e73;margin:0 0 12px;">สแกน QR Code ด้วยแอปธนาคาร</p>
+                        <img id="ppQRImage" src="" alt="PromptPay QR" style="width:230px;height:230px;border-radius:12px;border:1px solid #e5e5ea;display:block;margin:0 auto;object-fit:contain;"/>
+                        <div id="ppAccountInfo" style="font-size:13px;color:#6e6e73;margin:10px 0 4px;"></div>
+                        <div style="background:#f5f5f7;border-radius:12px;padding:12px;margin:10px 0 6px;">
+                            <p style="font-size:12px;color:#6e6e73;margin:0 0 2px;">ยอดที่ต้องชำระ</p>
+                            <p id="ppQRAmount" style="font-size:22px;font-weight:700;color:#1d1d1f;margin:0;"></p>
+                        </div>
+                        <button id="ppSaveQRBtn" style="margin:8px auto 0;padding:10px 0;background:#f2f2f7;color:#1d1d1f;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">💾 บันทึก QR Code</button>
                     </div>
-                    <button id="ppSaveQRBtn" style="display:none;margin:10px auto 4px;padding:10px 24px;background:#007aff;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">💾 บันทึก QR Code</button>
-                    <p id="ppPollingStatus" style="font-size:12px;color:#86868b;margin:8px 0 0;">⏳ รอการชำระเงิน...</p>
+
+                    <div style="margin-top:16px;border-top:1px solid #e5e5ea;padding-top:16px;">
+                        <p style="font-size:14px;font-weight:600;color:#1d1d1f;margin:0 0 10px;">แนบสลิปหลังโอนเงิน</p>
+                        <div id="ppSlipUploadArea" style="text-align:center;padding:20px;border:2px dashed #d1d1d6;border-radius:12px;cursor:pointer;margin-bottom:10px;" onclick="document.getElementById('ppSlipFileInput').click()">
+                            <input type="file" id="ppSlipFileInput" accept="image/*" style="display:none;" onchange="ppPreviewSlip(this)">
+                            <div id="ppSlipPreview" style="display:none;"><img id="ppSlipPreviewImg" style="max-width:100%;max-height:160px;border-radius:8px;"></div>
+                            <div id="ppSlipPlaceholder">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#86868b" stroke-width="2" style="width:36px;height:36px;margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <p style="color:#86868b;font-size:13px;margin:0;">คลิกเพื่อเลือกรูปสลิป</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <label style="font-size:13px;color:#6e6e73;display:block;margin-bottom:6px;">ยอดที่โอน (บาท)</label>
+                            <input type="number" id="ppSlipAmount" placeholder="ระบุยอดที่โอน" style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;">
+                        </div>
+                        <button id="ppUploadSlipBtn" onclick="ppUploadSlip(${orderId})" style="width:100%;padding:13px;background:#34c759;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">ส่งสลิป</button>
+                    </div>
                 </div>
 
                 <div id="ppQRError" style="display:none;text-align:center;padding:24px 0;">
@@ -3098,25 +3116,133 @@ function showPromptPayModal(orderId) {
                     <button onclick="closePromptPayModal()" style="padding:10px 24px;background:#f2f2f7;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">ปิด</button>
                 </div>
 
-                <p style="text-align:center;color:#aeaeb2;font-size:11px;margin-top:10px;">🔒 ชำระเงินผ่าน Stripe — ข้อมูลไม่ผ่านระบบของเรา</p>
+                <button onclick="closePromptPayModal()" style="width:100%;margin-top:16px;padding:12px;background:#f2f2f7;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;color:#1d1d1f;">ปิด</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) closePromptPayModal(); });
 
-    fetch(`${RESELLER_API_URL}/orders/${orderId}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(oData => {
-            if (!oData) return;
-            const o = oData.order || oData;
-            const num = o.order_number || `#${orderId}`;
-            const amt = o.final_amount ? `฿${Number(o.final_amount).toLocaleString('th-TH', {minimumFractionDigits:2})}` : '';
-            const el = document.getElementById('ppModalOrderNum');
-            if (el) el.textContent = `${num}${amt ? ' — ' + amt : ''}`;
-        }).catch(() => {});
+    _loadStaticPromptPayQR(orderId);
+}
 
-    _loadStripePromptPayQR(orderId);
+function ppPreviewSlip(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('ppSlipPreviewImg').src = e.target.result;
+            document.getElementById('ppSlipPreview').style.display = 'block';
+            document.getElementById('ppSlipPlaceholder').style.display = 'none';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+async function ppUploadSlip(orderId) {
+    const fileInput = document.getElementById('ppSlipFileInput');
+    const amount = document.getElementById('ppSlipAmount').value;
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlert('กรุณาเลือกรูปสลิป', 'error');
+        return;
+    }
+    const btn = document.getElementById('ppUploadSlipBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังส่ง...'; }
+    try {
+        const formData = new FormData();
+        formData.append('slip_image', fileInput.files[0]);
+        if (amount) formData.append('amount', amount);
+        const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+        showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+        closePromptPayModal();
+        loadOrders && loadOrders();
+    } catch (e) {
+        showAlert(e.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'ส่งสลิป'; }
+    }
+}
+
+async function _loadStaticPromptPayQR(orderId) {
+    const loadEl = document.getElementById('ppQRLoading');
+    const contEl = document.getElementById('ppQRContent');
+    const errEl  = document.getElementById('ppQRError');
+
+    const showErr = (msg) => {
+        if (loadEl) loadEl.style.display = 'none';
+        if (contEl) contEl.style.display = 'none';
+        if (errEl) {
+            errEl.style.display = 'block';
+            const msgEl = document.getElementById('ppQRErrorMsg');
+            if (msgEl) msgEl.textContent = msg;
+        }
+    };
+
+    try {
+        // Load order info and promptpay settings in parallel
+        const [orderRes, ppRes] = await Promise.all([
+            fetch(`${RESELLER_API_URL}/orders/${orderId}`),
+            fetch(`${RESELLER_API_URL}/promptpay-settings`)
+        ]);
+
+        const orderData = orderRes.ok ? await orderRes.json() : null;
+        const ppData = ppRes.ok ? await ppRes.json() : null;
+
+        if (!ppData || !ppData.qr_image_url) {
+            showErr('ยังไม่ได้ตั้งค่า QR Code พร้อมเพย์ กรุณาติดต่อร้านค้า');
+            return;
+        }
+
+        if (loadEl) loadEl.style.display = 'none';
+        if (contEl) contEl.style.display = 'block';
+
+        const img = document.getElementById('ppQRImage');
+        if (img) img.src = ppData.qr_image_url;
+
+        const accEl = document.getElementById('ppAccountInfo');
+        if (accEl) {
+            const parts = [];
+            if (ppData.account_name) parts.push(ppData.account_name);
+            if (ppData.account_number) parts.push(ppData.account_number);
+            accEl.textContent = parts.join(' · ');
+        }
+
+        const o = orderData ? (orderData.order || orderData) : null;
+        const amtEl = document.getElementById('ppQRAmount');
+        const numEl = document.getElementById('ppModalOrderNum');
+        if (o) {
+            const num = o.order_number || `#${orderId}`;
+            const amt = o.final_amount ? Number(o.final_amount) : null;
+            if (numEl) numEl.textContent = `${num}${amt ? ' — ฿' + amt.toLocaleString('th-TH', {minimumFractionDigits:2}) : ''}`;
+            if (amtEl && amt) amtEl.textContent = `฿${amt.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
+            // Pre-fill slip amount
+            const slipAmtInput = document.getElementById('ppSlipAmount');
+            if (slipAmtInput && amt) slipAmtInput.value = amt.toFixed(2);
+        }
+
+        // Save QR button
+        const saveBtn = document.getElementById('ppSaveQRBtn');
+        if (saveBtn) {
+            saveBtn.onclick = async () => {
+                try {
+                    const response = await fetch(ppData.qr_image_url);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `promptpay-qr.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch {
+                    window.open(ppData.qr_image_url, '_blank');
+                }
+            };
+        }
+    } catch (e) {
+        showErr('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่');
+    }
 }
 
 function closePromptPayModal() {
@@ -3125,84 +3251,6 @@ function closePromptPayModal() {
     if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
 }
 
-async function _loadStripePromptPayQR(orderId) {
-    const loadEl  = document.getElementById('ppQRLoading');
-    const contEl  = document.getElementById('ppQRContent');
-    const errEl   = document.getElementById('ppQRError');
-    if (!loadEl) return;
-    loadEl.style.display = 'block';
-    contEl.style.display = 'none';
-    errEl.style.display  = 'none';
-
-    const _showErr = (msg) => {
-        loadEl.style.display = 'none';
-        contEl.style.display = 'none';
-        errEl.style.display  = 'block';
-        const errMsgEl = document.getElementById('ppQRErrorMsg');
-        if (errMsgEl) errMsgEl.textContent = msg || 'เกิดข้อผิดพลาด กรุณาลองใหม่';
-    };
-
-    try {
-        const res  = await fetch(`${RESELLER_API_URL}/orders/${orderId}/stripe-promptpay-intent`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'สร้าง QR ไม่สำเร็จ');
-
-        const qrUrl = data.qr_url || '';
-        const hostedUrl = data.hosted_url || '';
-
-        if (!qrUrl && !hostedUrl) throw new Error('ไม่สามารถสร้าง QR Code ได้ กรุณาลองใหม่');
-
-        loadEl.style.display = 'none';
-        contEl.style.display = 'block';
-
-        const amountEl = document.getElementById('ppQRAmount');
-        if (amountEl) amountEl.textContent = `฿${Number(data.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
-
-        if (qrUrl) {
-            const imgEl = document.getElementById('ppQRImage');
-            if (imgEl) { imgEl.src = qrUrl; imgEl.style.display = 'block'; }
-
-            // Save QR button
-            const saveBtn = document.getElementById('ppSaveQRBtn');
-            if (saveBtn) {
-                saveBtn.style.display = 'inline-block';
-                saveBtn.onclick = () => {
-                    const a = document.createElement('a');
-                    a.href = qrUrl;
-                    a.download = `promptpay-qr-${data.order_number || orderId}.png`;
-                    a.target = '_blank';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                };
-            }
-        } else if (hostedUrl) {
-            // Fallback: show iframe with hosted QR page
-            const imgEl = document.getElementById('ppQRImage');
-            if (imgEl) imgEl.style.display = 'none';
-            const iframeEl = document.getElementById('ppQRIframe');
-            if (iframeEl) { iframeEl.src = hostedUrl; iframeEl.style.display = 'block'; }
-        }
-
-        // Poll for payment status using Stripe.js
-        const ppStripe = Stripe(data.publishable_key);
-        if (_ppPollingTimer) { clearInterval(_ppPollingTimer); _ppPollingTimer = null; }
-        _ppPollingTimer = setInterval(async () => {
-            try {
-                const result = await ppStripe.retrievePaymentIntent(data.client_secret);
-                if (result.paymentIntent && result.paymentIntent.status === 'succeeded') {
-                    clearInterval(_ppPollingTimer); _ppPollingTimer = null;
-                    const ps = document.getElementById('ppPollingStatus');
-                    if (ps) ps.textContent = '✅ ชำระเงินสำเร็จ!';
-                    setTimeout(() => { closePromptPayModal(); loadOrders && loadOrders(); showAlert('ชำระเงิน PromptPay สำเร็จ!', 'success'); }, 1200);
-                }
-            } catch (e) {}
-        }, 3000);
-
-    } catch (e) {
-        _showErr(e.message || String(e));
-    }
-}
 
 function closeCardPaymentModal() {
     const modal = document.getElementById('stripeCardModal');
