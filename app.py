@@ -8403,6 +8403,7 @@ def create_order():
         user_id = session.get('user_id')
         data = request.get_json()
         notes = data.get('notes', '')
+        payment_method = data.get('payment_method', 'stripe')
         
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -8533,11 +8534,14 @@ def create_order():
         # Create order with new order number format (ORD-YYMM-XXXX)
         order_number = generate_order_number(cursor)
         cursor.execute('''
-            INSERT INTO orders (order_number, user_id, channel_id, status, total_amount, discount_amount, shipping_fee, final_amount, notes, customer_id,
+            INSERT INTO orders (order_number, user_id, channel_id, status, payment_method, total_amount, discount_amount, shipping_fee, final_amount, notes, customer_id,
                                 coupon_id, coupon_discount, promotion_id, promotion_discount)
-            VALUES (%s, %s, %s, 'pending_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, order_number, status, final_amount, created_at
-        ''', (order_number, user_id, channel_id, total_amount, effective_discount, effective_shipping, final_amount, notes, customer_id,
+        ''', (order_number, user_id, channel_id,
+              'preparing' if payment_method == 'cod' else 'pending_payment',
+              payment_method,
+              total_amount, effective_discount, effective_shipping, final_amount, notes, customer_id,
               applied_coupon['id'] if applied_coupon else None, coupon_discount,
               applied_promo['id'] if applied_promo else None, promo_discount))
         order = dict(cursor.fetchone())
@@ -11149,6 +11153,50 @@ def cancel_order(order_id):
             cursor.close()
         if conn:
             conn.close()
+
+@app.route('/api/admin/orders/<int:order_id>/ship', methods=['POST'])
+@admin_required
+def admin_ship_order(order_id):
+    """Save tracking number and mark order as shipped"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json() or {}
+        tracking_number = (data.get('tracking_number') or '').strip()
+        if not tracking_number:
+            return jsonify({'error': 'กรุณากรอกเลข Tracking'}), 400
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        order = cursor.fetchone()
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+        if order['status'] != 'preparing':
+            return jsonify({'error': 'สถานะออเดอร์ต้องเป็น "เตรียมสินค้า" ก่อนจัดส่ง'}), 400
+        cursor.execute('''
+            UPDATE orders SET status = 'shipped', tracking_number = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        ''', (tracking_number, order_id))
+        cursor.execute('''
+            UPDATE order_shipments
+            SET tracking_number = %s, status = 'shipped', shipped_at = CURRENT_TIMESTAMP
+            WHERE order_id = %s
+        ''', (tracking_number, order_id))
+        conn.commit()
+        try:
+            send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'shipped', f'เลข Tracking: {tracking_number}', order_id=order_id)
+        except Exception as chat_err:
+            print(f"[SHIP] Chat error: {chat_err}")
+        return jsonify({'message': 'อัปเดตสถานะจัดส่งสำเร็จ', 'tracking_number': tracking_number}), 200
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @app.route('/api/admin/orders/<int:order_id>/refund-info', methods=['GET'])
 @admin_required

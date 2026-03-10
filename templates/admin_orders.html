@@ -766,7 +766,62 @@
                         </div>
                     </div>
                 ` : ''}
+
+                ${currentOrder.payment_method === 'cod' ? `
+                    <div class="detail-section">
+                        <h4>💵 COD เก็บเงินปลายทาง</h4>
+                        <div style="padding: 12px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); border-radius: 8px; font-size: 13px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <span style="color:rgba(255,255,255,0.55);">วิธีชำระ</span>
+                                <span style="color:#4ade80; font-weight:600;">COD (iShip)</span>
+                            </div>
+                            ${currentOrder.tracking_number ? `
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:rgba(255,255,255,0.55);">Tracking</span>
+                                <span style="font-family:monospace; font-weight:600; color:#4ade80;">${currentOrder.tracking_number}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ${currentOrder.status === 'preparing' ? `
+                        <div style="margin-top:12px;">
+                            <label style="font-size:12px; color:rgba(255,255,255,0.6); display:block; margin-bottom:6px;">บันทึกเลข Tracking เพื่อเปลี่ยนสถานะเป็น "กำลังจัดส่ง"</label>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" id="trackingNumberInput" placeholder="เลข Tracking iShip..." style="flex:1; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px 12px; color:white; font-size:14px; font-family:monospace; outline:none;">
+                                <button onclick="saveTrackingAndShip(${currentOrder.id})" style="background:linear-gradient(135deg,#22c55e,#16a34a); border:none; color:white; padding:10px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">
+                                    จัดส่งแล้ว
+                                </button>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
             `;
+        }
+
+        async function saveTrackingAndShip(orderId) {
+            const input = document.getElementById('trackingNumberInput');
+            const tracking = (input ? input.value : '').trim();
+            if (!tracking) {
+                showAlert('กรุณากรอกเลข Tracking', 'warning');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/admin/orders/${orderId}/ship`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tracking_number: tracking })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showAlert('บันทึกเลข Tracking และเปลี่ยนสถานะจัดส่งสำเร็จ', 'success');
+                    closeModal();
+                    loadOrders();
+                } else {
+                    showAlert(data.error || 'ไม่สามารถบันทึกได้', 'error');
+                }
+            } catch (err) {
+                showAlert('เกิดข้อผิดพลาด', 'error');
+            }
         }
         
         function showRejectForm() {

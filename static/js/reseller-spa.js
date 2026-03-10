@@ -1079,6 +1079,8 @@ function proceedToCheckout() {
 let checkoutData = { items: [], total: 0, retailTotal: 0, tierSavings: 0, customers: [], selfAddress: null };
 
 async function loadCheckout() {
+    _checkoutPayMethod = 'stripe';
+    selectCheckoutPayment('stripe');
     try {
         const [cartRes, customersRes, profileRes] = await Promise.all([
             fetch(`${RESELLER_API_URL}/reseller/cart`),
@@ -2314,6 +2316,70 @@ function _getShippingData() {
     }
 
     return { missingFields, shippingData };
+}
+
+let _checkoutPayMethod = 'stripe';
+
+function selectCheckoutPayment(method) {
+    _checkoutPayMethod = method;
+    const stripeBtn = document.getElementById('pmBtnStripe');
+    const codBtn    = document.getElementById('pmBtnCOD');
+    const note      = document.getElementById('checkoutNote');
+    const btnText   = document.getElementById('btnPlaceOrderText');
+    if (!stripeBtn || !codBtn) return;
+    if (method === 'cod') {
+        codBtn.style.border    = '2px solid #22c55e';
+        codBtn.style.background = 'rgba(34,197,94,0.18)';
+        codBtn.style.color     = '#4ade80';
+        stripeBtn.style.border    = '2px solid rgba(255,255,255,0.12)';
+        stripeBtn.style.background = 'rgba(255,255,255,0.05)';
+        stripeBtn.style.color     = 'rgba(255,255,255,0.5)';
+        if (btnText) btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
+        if (note) note.textContent = 'ชำระเงินปลายทางผ่าน iShip — ร้านจะบันทึก Tracking หลังจัดส่ง';
+    } else {
+        stripeBtn.style.border    = '2px solid rgba(168,85,247,0.6)';
+        stripeBtn.style.background = 'rgba(168,85,247,0.15)';
+        stripeBtn.style.color     = 'white';
+        codBtn.style.border    = '2px solid rgba(255,255,255,0.12)';
+        codBtn.style.background = 'rgba(255,255,255,0.05)';
+        codBtn.style.color     = 'rgba(255,255,255,0.5)';
+        if (btnText) btnText.textContent = 'ยืนยันและชำระเงิน';
+        if (note) note.textContent = 'ข้อมูลชำระเงินถูกเข้ารหัสโดย Stripe — ไม่ผ่านระบบของเรา';
+    }
+}
+
+function placeOrderDispatch() {
+    if (_checkoutPayMethod === 'cod') {
+        placeOrderCOD();
+    } else {
+        placeOrderWithStripe();
+    }
+}
+
+async function placeOrderCOD() {
+    const { missingFields, shippingData } = _getShippingData();
+    if (missingFields.length > 0) {
+        showAlert('กรุณากรอกข้อมูลให้ครบ:\n• ' + missingFields.join('\n• '), 'error');
+        return;
+    }
+    const btn     = document.getElementById('btnPlaceOrder');
+    const btnText = document.getElementById('btnPlaceOrderText');
+    btn.disabled  = true;
+    btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
+    try {
+        const order = await _createOrder('cod', shippingData);
+        btn.disabled  = false;
+        btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
+        await loadCartBadge();
+        showAlert(`สั่งซื้อสำเร็จ! เลขที่ ${order.order_number}\nทีมงานจะเตรียมสินค้าและแจ้งเลข Tracking ให้ทราบ`, 'success');
+        navigateTo('orders');
+        loadOrders();
+    } catch (err) {
+        console.error('COD order error:', err);
+        showAlert(err.message || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
+        btn.disabled  = false;
+        btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
+    }
 }
 
 async function _createOrder(paymentMethod, shippingData) {
