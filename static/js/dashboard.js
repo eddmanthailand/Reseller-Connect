@@ -1855,9 +1855,28 @@ async function updateOrderCounts() {
             pendingBadge.textContent = reviewCount;
             pendingBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
         }
+        const slipBadge = document.getElementById('slipReviewBadge');
+        if (slipBadge) {
+            slipBadge.textContent = reviewCount;
+            slipBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
+        }
     } catch (error) {
         console.error('Error updating order counts:', error);
     }
+}
+
+function navigateToSlipReview() {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    const navItem = document.getElementById('slipReviewNavItem');
+    if (navItem) navItem.classList.add('active');
+    document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+    const ordersPage = document.getElementById('page-orders');
+    if (ordersPage) ordersPage.classList.add('active');
+    if (typeof loadOrders === 'function') loadOrders();
+    setTimeout(() => {
+        const tab = document.querySelector('#orderStatusTabs .status-tab[data-status="under_review"]');
+        if (tab) tab.click();
+    }, 400);
 }
 
 let shippingProvidersCache = [];

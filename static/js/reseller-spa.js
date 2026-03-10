@@ -3102,10 +3102,6 @@ function showPromptPayModal(orderId) {
                                 <p style="color:#86868b;font-size:13px;margin:0;">คลิกเพื่อเลือกรูปสลิป</p>
                             </div>
                         </div>
-                        <div style="margin-bottom:12px;">
-                            <label style="font-size:13px;color:#6e6e73;display:block;margin-bottom:6px;">ยอดที่โอน (บาท)</label>
-                            <input type="number" id="ppSlipAmount" placeholder="ระบุยอดที่โอน" style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;">
-                        </div>
                         <button id="ppUploadSlipBtn" onclick="ppUploadSlip(${orderId})" style="width:100%;padding:13px;background:#34c759;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">ส่งสลิป</button>
                     </div>
                 </div>
@@ -3140,7 +3136,6 @@ function ppPreviewSlip(input) {
 
 async function ppUploadSlip(orderId) {
     const fileInput = document.getElementById('ppSlipFileInput');
-    const amount = document.getElementById('ppSlipAmount').value;
     if (!fileInput.files || !fileInput.files[0]) {
         showAlert('กรุณาเลือกรูปสลิป', 'error');
         return;
@@ -3150,7 +3145,6 @@ async function ppUploadSlip(orderId) {
     try {
         const formData = new FormData();
         formData.append('slip_image', fileInput.files[0]);
-        if (amount) formData.append('amount', amount);
         const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, { method: 'POST', body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
@@ -3214,9 +3208,6 @@ async function _loadStaticPromptPayQR(orderId) {
         if (numEl) numEl.textContent = `${num} — ฿${amount.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
         if (amtEl) amtEl.textContent = `฿${amount.toLocaleString('th-TH', {minimumFractionDigits:2})}`;
 
-        // Pre-fill slip amount
-        const slipAmtInput = document.getElementById('ppSlipAmount');
-        if (slipAmtInput) slipAmtInput.value = amount.toFixed(2);
 
         // Save QR button — download base64 image
         const saveBtn = document.getElementById('ppSaveQRBtn');

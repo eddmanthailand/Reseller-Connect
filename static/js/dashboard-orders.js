@@ -140,6 +140,11 @@ async function updateOrderCounts() {
             pendingBadge.textContent = reviewCount;
             pendingBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
         }
+        const slipBadge = document.getElementById('slipReviewBadge');
+        if (slipBadge) {
+            slipBadge.textContent = reviewCount;
+            slipBadge.style.display = reviewCount > 0 ? 'inline' : 'none';
+        }
     } catch (error) {
         console.error('Error updating order counts:', error);
     }
