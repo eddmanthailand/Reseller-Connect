@@ -2675,226 +2675,204 @@ async function viewResellerOrderDetails(orderId) {
             'cancelled': '#6b7280'
         };
         
-        let itemsHtml = '';
+        const C = { bg:'#f2f2f7', card:'#ffffff', primary:'#1d1d1f', secondary:'#6e6e73', tertiary:'#aeaeb2', sep:'#e5e5ea', blue:'#007aff', green:'#34c759', red:'#ff3b30', orange:'#ff9500' };
+        const fmtThb = n => Number(n||0).toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+        const statusBg = { pending_payment:'#ff9500', under_review:'#007aff', preparing:'#8b5cf6', shipped:'#0ea5e9', delivered:'#34c759', failed_delivery:'#ff3b30', cancelled:'#aeaeb2', rejected:'#ff3b30' };
+        const statusTh = { pending_payment:'รอชำระเงิน', under_review:'รอตรวจสอบ', preparing:'เตรียมสินค้า', shipped:'กำลังจัดส่ง', delivered:'ได้รับสินค้าแล้ว', failed_delivery:'จัดส่งไม่สำเร็จ', cancelled:'ยกเลิก', rejected:'ปฏิเสธ' };
+
+        const row = (label, value, valueStyle='') => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid ${C.sep};">
+                <span style="font-size:14px;color:${C.secondary};">${label}</span>
+                <span style="font-size:14px;color:${C.primary};font-weight:500;${valueStyle}">${value}</span>
+            </div>`;
+
+        const sectionHeader = label => `<div style="font-size:12px;font-weight:600;color:${C.secondary};text-transform:uppercase;letter-spacing:0.5px;padding:18px 4px 6px;">${label}</div>`;
+
+        const card = (inner, extraStyle='') => `<div style="background:${C.card};border-radius:12px;overflow:hidden;${extraStyle}">${inner}</div>`;
+
+        // Items
+        let itemsInner = '';
         if (order.items && order.items.length > 0) {
-            itemsHtml = order.items.map(item => {
-                let variantText = '';
-                if (item.variant_values) {
-                    variantText = item.variant_values;
-                }
-                
-                let customizationHtml = '';
-                if (item.customization_data) {
-                    try {
-                        const customizations = typeof item.customization_data === 'string' 
-                            ? JSON.parse(item.customization_data) 
-                            : item.customization_data;
-                        if (Array.isArray(customizations) && customizations.length > 0) {
-                            customizationHtml = customizations.map(c => 
-                                `<span style="background: rgba(168,85,247,0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px;">${escapeHtml(c.name)}: ${escapeHtml(c.choice)}</span>`
-                            ).join('');
-                        }
-                    } catch(e) {}
-                }
-                
+            itemsInner = order.items.map((item, idx) => {
+                const variantText = item.variant_name || item.variant_values || '';
+                const labels = item.customization_labels || [];
+                const custHtml = labels.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">${labels.map(l=>`<span style="background:#f2f2f7;color:${C.secondary};padding:2px 8px;border-radius:20px;font-size:11px;">${escapeHtml(l)}</span>`).join('')}</div>` : '';
+                const isLast = idx === order.items.length - 1;
                 return `
-                    <div style="padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 500;">${escapeHtml(item.product_name || 'Product')}</div>
-                                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px;">
-                                    ${escapeHtml(item.sku_code || '')} ${variantText ? `| ${escapeHtml(variantText)}` : ''} x${item.quantity}
-                                </div>
-                                ${customizationHtml ? `<div style="margin-top: 4px;">${customizationHtml}</div>` : ''}
-                            </div>
-                            <span style="font-weight: 600; white-space: nowrap;">฿${(item.subtotal || item.unit_price * item.quantity || 0).toLocaleString('th-TH')}</span>
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;${isLast?'':'border-bottom:1px solid '+C.sep};">
+                        <div style="flex:1;padding-right:12px;">
+                            <div style="font-size:14px;font-weight:500;color:${C.primary};line-height:1.4;">${escapeHtml(item.product_name||'')}</div>
+                            <div style="font-size:12px;color:${C.secondary};margin-top:2px;">${[item.sku_code, variantText].filter(Boolean).join(' · ')} × ${item.quantity}</div>
+                            ${custHtml}
                         </div>
-                    </div>
-                `;
+                        <div style="font-size:14px;font-weight:600;color:${C.primary};white-space:nowrap;">฿${fmtThb(item.subtotal||item.unit_price*item.quantity)}</div>
+                    </div>`;
             }).join('');
-        }
-        
-        let shipmentsHtml = '';
-        if (order.shipments && order.shipments.length > 0) {
-            shipmentsHtml = `
-                <div style="margin-top: 16px;">
-                    <h4 style="margin-bottom: 10px; font-size: 14px;">การจัดส่ง</h4>
-                    ${order.shipments.map(s => {
-                        const shipmentStatus = s.status === 'pending' ? 'รอจัดส่ง' : s.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
-                        const shipmentColor = s.status === 'pending' ? '#f59e0b' : s.status === 'shipped' ? '#8b5cf6' : '#10b981';
-                        const trackingUrl = getTrackingUrl(s.shipping_provider, s.tracking_number);
-                        return `
-                            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span style="font-size: 13px; font-weight: 500;">${escapeHtml(s.warehouse_name)}</span>
-                                    <span style="background: ${shipmentColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${shipmentStatus}</span>
-                                </div>
-                                ${s.tracking_number ? `
-                                    <div style="font-size: 12px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                            <span><strong>${escapeHtml(s.shipping_provider || 'ขนส่ง')}:</strong> ${escapeHtml(s.tracking_number)}</span>
-                                            <button onclick="navigator.clipboard.writeText('${escapeHtml(s.tracking_number)}').then(()=>{this.textContent='✓ คัดลอกแล้ว';this.style.color='#34d399';setTimeout(()=>{this.textContent='คัดลอก';this.style.color='rgba(255,255,255,0.5)';},1500)})" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);padding:1px 7px;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;transition:all 0.15s;">คัดลอก</button>
-                                        </div>
-                                        ${trackingUrl ? `<a href="${trackingUrl}" target="_blank" style="color: #a855f7; text-decoration: none; font-size: 11px; white-space: nowrap; flex-shrink: 0;">ติดตามพัสดุ →</a>` : ''}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
-        }
-        
-        let slipsHtml = '';
-        
-        let recipientHtml = '';
-        const recipient = order.customer || order.reseller;
-        if (recipient) {
-            const addressParts = [
-                recipient.address,
-                recipient.subdistrict,
-                recipient.district,
-                recipient.province,
-                recipient.postal_code
-            ].filter(Boolean);
-            recipientHtml = `
-                <div style="margin-top: 16px;">
-                    <h4 style="margin-bottom: 10px; font-size: 14px;">ข้อมูลผู้รับ</h4>
-                    <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; font-size: 13px;">
-                        <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(recipient.full_name || recipient.name || '')}</div>
-                        <div style="color: rgba(255,255,255,0.7);">${escapeHtml(recipient.phone || '')}</div>
-                        ${addressParts.length > 0 ? `<div style="color: rgba(255,255,255,0.6); margin-top: 4px; line-height: 1.4;">${escapeHtml(addressParts.join(' '))}</div>` : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        let rejectionNoticeHtml = '';
-        if (order.status === 'pending_payment') {
-            rejectionNoticeHtml = `
-                <div style="background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display:flex; align-items:flex-start; gap:10px;">
-                    <span style="font-size:18px; flex-shrink:0;">⏳</span>
-                    <div>
-                        <div style="color: #fbbf24; font-weight: 600; margin-bottom: 4px; font-size: 13px;">รอชำระเงิน</div>
-                        <div style="color: rgba(255,255,255,0.65); font-size: 12px; line-height: 1.5;">กรุณาชำระเงินภายใน 24 ชม. มิฉะนั้นระบบจะยกเลิกคำสั่งซื้ออัตโนมัติ</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        let refundHtml = '';
-        if (order.refund) {
-            const rf = order.refund;
-            const rfAmount = (rf.refund_amount || 0).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            const rfDate = rf.completed_at
-                ? new Date(rf.completed_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'})
-                : (rf.created_at ? new Date(rf.created_at).toLocaleString('th-TH', {day:'numeric', month:'short', year:'numeric'}) : '');
-            const isDone = rf.status === 'completed';
-            refundHtml = `
-                <div style="margin-top: 16px;">
-                    <h4 style="margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5);">การคืนเงิน</h4>
-                    <div style="background: ${isDone ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.1)'}; border: 1px solid ${isDone ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}; border-radius: 12px; padding: 14px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${rf.slip_url ? '12px' : '0'};">
-                            <div>
-                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 2px;">ยอดคืนเงิน</div>
-                                <div style="font-size: 20px; font-weight: 700; color: ${isDone ? '#34d399' : '#ffffff'};">฿${rfAmount}</div>
-                            </div>
-                            <span style="background: ${isDone ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}; color: ${isDone ? '#34d399' : '#ffffff'}; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
-                                ${isDone ? '✅ คืนเงินสำเร็จ' : '⏳ รอดำเนินการ'}
-                            </span>
-                        </div>
-                        ${rf.slip_url ? `
-                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
-                                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">สลิปคืนเงินจาก Admin</div>
-                                <img src="${rf.slip_url}" alt="สลิปคืนเงิน"
-                                    onclick="window.open('${rf.slip_url}', '_blank')"
-                                    style="width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: rgba(0,0,0,0.3); cursor: pointer; border: 1px solid rgba(255,255,255,0.1);">
-                                ${rfDate ? `<div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 6px; text-align: right;">${rfDate}</div>` : ''}
-                            </div>
-                        ` : `
-                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; font-size: 12px; color: rgba(255,255,255,0.5);">
-                                Admin จะดำเนินการโอนเงินและส่งสลิปในเร็ว ๆ นี้
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
+        } else {
+            itemsInner = `<div style="padding:20px;text-align:center;font-size:14px;color:${C.secondary};">ไม่มีรายการ</div>`;
         }
 
+        // Price summary rows (appended to items card)
+        const shippingFee = order.shipping_fee || 0;
+        const grandTotal = order.final_amount || 0;
+        let priceRows = `<div style="background:${C.sep};height:1px;margin:0 16px;"></div>`;
+        if (order.discount_amount > 0) priceRows += row('ส่วนลดสมาชิก', `-฿${fmtThb(order.discount_amount)}`, `color:${C.green};`);
+        if (order.promotion_discount > 0) priceRows += row('⚡ โปรโมชัน', `-฿${fmtThb(order.promotion_discount)}`, `color:${C.green};`);
+        if (order.coupon_discount > 0) priceRows += row('🎟 คูปอง', `-฿${fmtThb(order.coupon_discount)}`, `color:${C.green};`);
+        priceRows += row('ค่าจัดส่ง', shippingFee > 0 ? `฿${fmtThb(shippingFee)}` : `<span style="color:${C.green};">ฟรี</span>`);
+        priceRows += `<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 16px;">
+            <span style="font-size:15px;font-weight:700;color:${C.primary};">ยอดรวมทั้งหมด</span>
+            <span style="font-size:17px;font-weight:700;color:${C.primary};">฿${fmtThb(grandTotal)}</span>
+        </div>`;
+
+        // Recipient
+        let recipientInner = '';
+        const recipient = order.customer || order.reseller;
+        if (recipient) {
+            const addrParts = [recipient.address, recipient.subdistrict, recipient.district, recipient.province, recipient.postal_code].filter(Boolean);
+            recipientInner = `
+                <div style="padding:14px 16px;">
+                    <div style="font-size:15px;font-weight:600;color:${C.primary};margin-bottom:2px;">${escapeHtml(recipient.full_name||recipient.name||'')}</div>
+                    ${recipient.phone ? `<div style="font-size:13px;color:${C.secondary};margin-bottom:4px;">${escapeHtml(recipient.phone)}</div>` : ''}
+                    ${addrParts.length ? `<div style="font-size:13px;color:${C.secondary};line-height:1.5;">${escapeHtml(addrParts.join(' '))}</div>` : ''}
+                </div>`;
+        }
+
+        // Slip
+        let slipInner = '';
+        if (order.payment_slips && order.payment_slips.length > 0) {
+            const slip = order.payment_slips[0];
+            const slipStatusMap = { pending:'รอตรวจสอบ', approved:'อนุมัติแล้ว', rejected:'ถูกปฏิเสธ' };
+            const slipStatusColor = { pending:C.orange, approved:C.green, rejected:C.red };
+            const slipDate = slip.created_at ? new Date(slip.created_at).toLocaleString('th-TH', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+            slipInner = `
+                <div style="padding:14px 16px 8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:13px;color:${C.secondary};">${slipDate}</span>
+                        <span style="background:${slipStatusColor[slip.status]||C.secondary}22;color:${slipStatusColor[slip.status]||C.secondary};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">${slipStatusMap[slip.status]||slip.status}</span>
+                    </div>
+                    <img src="${slip.slip_image_url}" alt="สลิป"
+                        onclick="window.open('${slip.slip_image_url}','_blank')"
+                        style="width:100%;max-height:280px;object-fit:contain;border-radius:10px;border:1px solid ${C.sep};cursor:zoom-in;background:#f9f9f9;">
+                    ${slip.admin_notes ? `<div style="margin-top:10px;padding:10px 12px;background:#fff3cd;border-radius:8px;font-size:13px;color:#856404;">📝 ${escapeHtml(slip.admin_notes)}</div>` : ''}
+                </div>`;
+        }
+
+        // Shipments
+        let shipmentsInner = '';
+        if (order.shipments && order.shipments.length > 0) {
+            shipmentsInner = order.shipments.map((s, idx) => {
+                const stTh = s.status === 'pending' ? 'รอจัดส่ง' : s.status === 'shipped' ? 'จัดส่งแล้ว' : 'ลูกค้ารับแล้ว';
+                const stColor = s.status === 'pending' ? C.orange : s.status === 'shipped' ? '#8b5cf6' : C.green;
+                const trackingUrl = getTrackingUrl(s.shipping_provider, s.tracking_number);
+                const isLast = idx === order.shipments.length - 1;
+                return `
+                    <div style="padding:12px 16px;${isLast?'':'border-bottom:1px solid '+C.sep};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${s.tracking_number?'8px':'0'};">
+                            <span style="font-size:14px;font-weight:500;color:${C.primary};">${escapeHtml(s.warehouse_name||'')}</span>
+                            <span style="background:${stColor}22;color:${stColor};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">${stTh}</span>
+                        </div>
+                        ${s.tracking_number ? `
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                                <div style="font-size:13px;color:${C.secondary};min-width:0;">
+                                    <span style="font-weight:500;">${escapeHtml(s.shipping_provider||'ขนส่ง')}</span> ${escapeHtml(s.tracking_number)}
+                                    <button onclick="navigator.clipboard.writeText('${escapeHtml(s.tracking_number)}').then(()=>{this.textContent='✓';setTimeout(()=>{this.textContent='คัดลอก';},1500)})" style="margin-left:6px;background:none;border:1px solid ${C.sep};color:${C.blue};padding:1px 8px;border-radius:5px;font-size:11px;cursor:pointer;">คัดลอก</button>
+                                </div>
+                                ${trackingUrl ? `<a href="${trackingUrl}" target="_blank" style="color:${C.blue};font-size:12px;white-space:nowrap;text-decoration:none;flex-shrink:0;">ติดตาม →</a>` : ''}
+                            </div>` : ''}
+                    </div>`;
+            }).join('');
+        }
+
+        // Refund
+        let refundInner = '';
+        if (order.refund) {
+            const rf = order.refund;
+            const isDone = rf.status === 'completed';
+            const rfDate = rf.completed_at ? new Date(rf.completed_at).toLocaleString('th-TH',{day:'numeric',month:'short',year:'numeric'}) : '';
+            refundInner = `
+                <div style="padding:14px 16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${rf.slip_url?'12px':'0'};">
+                        <div>
+                            <div style="font-size:12px;color:${C.secondary};margin-bottom:2px;">ยอดคืนเงิน</div>
+                            <div style="font-size:20px;font-weight:700;color:${isDone?C.green:C.primary};">฿${fmtThb(rf.refund_amount)}</div>
+                        </div>
+                        <span style="background:${isDone?C.green+'22':'#ff950022'};color:${isDone?C.green:C.orange};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;">${isDone?'✅ คืนเงินสำเร็จ':'⏳ รอดำเนินการ'}</span>
+                    </div>
+                    ${rf.slip_url ? `
+                        <div style="border-top:1px solid ${C.sep};padding-top:12px;">
+                            <div style="font-size:12px;color:${C.secondary};margin-bottom:8px;">สลิปคืนเงินจาก Admin</div>
+                            <img src="${rf.slip_url}" onclick="window.open('${rf.slip_url}','_blank')" style="width:100%;max-height:260px;object-fit:contain;border-radius:10px;border:1px solid ${C.sep};cursor:zoom-in;background:#f9f9f9;">
+                            ${rfDate?`<div style="font-size:11px;color:${C.tertiary};margin-top:6px;text-align:right;">${rfDate}</div>`:''}
+                        </div>` : `<div style="border-top:1px solid ${C.sep};padding-top:10px;font-size:13px;color:${C.secondary};">Admin จะดำเนินการโอนเงินและส่งสลิปในเร็ว ๆ นี้</div>`}
+                </div>`;
+        }
+
+        // Notice banner
+        let noticeBanner = '';
+        if (order.status === 'pending_payment') {
+            noticeBanner = `<div style="background:#fff3cd;border-radius:12px;padding:12px 16px;margin-bottom:4px;display:flex;align-items:flex-start;gap:10px;">
+                <span style="font-size:18px;flex-shrink:0;">⏳</span>
+                <div><div style="font-size:14px;font-weight:600;color:#856404;margin-bottom:2px;">รอชำระเงิน</div>
+                <div style="font-size:13px;color:#856404;opacity:.8;line-height:1.5;">กรุณาชำระเงินภายใน 24 ชม. มิฉะนั้นระบบจะยกเลิกอัตโนมัติ</div></div>
+            </div>`;
+        } else if (order.status === 'under_review') {
+            noticeBanner = `<div style="background:#e8f4fd;border-radius:12px;padding:12px 16px;margin-bottom:4px;display:flex;align-items:flex-start;gap:10px;">
+                <span style="font-size:18px;flex-shrink:0;">🔍</span>
+                <div><div style="font-size:14px;font-weight:600;color:#0055a5;margin-bottom:2px;">รอตรวจสอบสลิป</div>
+                <div style="font-size:13px;color:#0055a5;opacity:.8;line-height:1.5;">ทีมงานกำลังตรวจสอบสลิปการชำระเงิน</div></div>
+            </div>`;
+        }
+
+        // Action buttons
         let actionsHtml = '';
         if (order.status === 'pending_payment') {
             actionsHtml = `
-                <div style="margin-top: 16px; display:flex; gap:8px;">
-                    <button class="btn" onclick="closeOrderModal(); showCardPaymentModal(${orderId})" style="flex:1; padding: 14px 8px; font-size: 14px; font-weight: 700; background: #000; border: none; border-radius: 12px; color: white; cursor: pointer; font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
-                        💳 บัตรเครดิต
-                    </button>
-                    <button class="btn" onclick="closeOrderModal(); showPromptPayModal(${orderId})" style="flex:1; padding: 14px 8px; font-size: 14px; font-weight: 700; background: #1a56db; border: none; border-radius: 12px; color: white; cursor: pointer; font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">
-                        📱 PromptPay
-                    </button>
+                <div style="display:flex;gap:10px;margin-top:4px;">
+                    <button onclick="closeOrderModal();showCardPaymentModal(${orderId})" style="flex:1;padding:15px 8px;font-size:14px;font-weight:700;background:#1d1d1f;border:none;border-radius:13px;color:white;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">💳 บัตรเครดิต</button>
+                    <button onclick="closeOrderModal();showPromptPayModal(${orderId})" style="flex:1;padding:15px 8px;font-size:14px;font-weight:700;background:${C.blue};border:none;border-radius:13px;color:white;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;">📱 PromptPay</button>
                 </div>
-                <p style="text-align:center; font-size:11px; color:rgba(255,255,255,0.35); margin-top:8px;">สินค้าจองไว้ไม่เกิน 24 ชม.</p>
-            `;
+                <p style="text-align:center;font-size:11px;color:${C.tertiary};margin-top:8px;">สินค้าจองไว้ไม่เกิน 24 ชม.</p>`;
+        } else if (order.status === 'rejected') {
+            actionsHtml = `
+                <button onclick="closeOrderModal();showPromptPayModal(${orderId})" style="width:100%;padding:15px;font-size:15px;font-weight:700;background:${C.blue};border:none;border-radius:13px;color:white;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;margin-top:4px;">📱 ส่งสลิปใหม่</button>`;
         }
-        
-        const itemTotal = (order.final_amount || 0) - (order.shipping_fee || 0);
-        const shippingFee = order.shipping_fee || 0;
-        const grandTotal = order.final_amount || 0;
 
-        const summaryHtml = `
-            <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 14px; margin-bottom: 4px;">
-                ${itemsHtml || '<p style="opacity: 0.6; text-align: center; font-size: 13px;">ไม่มีรายการ</p>'}
-                <div style="border-top: 1px solid rgba(255,255,255,0.15); margin-top: 10px; padding-top: 10px;">
-                    ${order.discount_amount > 0 ? `
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
-                        <span>ส่วนลดสมาชิก</span>
-                        <span style="color: #34d399;">-฿${order.discount_amount.toLocaleString('th-TH')}</span>
-                    </div>` : ''}
-                    ${order.promotion_discount > 0 ? `
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
-                        <span>⚡ โปรโมชัน</span>
-                        <span style="color: #4ade80;">-฿${order.promotion_discount.toLocaleString('th-TH')}</span>
-                    </div>` : ''}
-                    ${order.coupon_discount > 0 ? `
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
-                        <span>🎟 คูปองส่วนลด</span>
-                        <span style="color: #4ade80;">-฿${order.coupon_discount.toLocaleString('th-TH')}</span>
-                    </div>` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
-                        <span>ค่าจัดส่ง</span>
-                        <span>${shippingFee > 0 ? `฿${shippingFee.toLocaleString('th-TH')}` : '<span style="color: #34d399;">ฟรี</span>'}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <span>ยอดรวมทั้งหมด</span>
-                        <span style="color: #ffffff;">฿${grandTotal.toLocaleString('th-TH')}</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        const orderDate = new Date(order.created_at).toLocaleString('th-TH', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
         const modalHtml = `
-            <div id="orderDetailModal" style="position: fixed; inset: 0; background: linear-gradient(160deg, #1a0a2e 0%, #0d0a1e 100%); z-index: 10002; display: flex; flex-direction: column; animation: slideUpFull 0.28s cubic-bezier(.4,0,.2,1);">
-                <style>@keyframes slideUpFull { from { transform: translateY(100%); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }</style>
-                <div style="flex-shrink: 0; padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px);">
-                    <button onclick="closeOrderModal()" style="background: rgba(255,255,255,0.1); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <div id="orderDetailModal" style="position:fixed;inset:0;background:${C.bg};z-index:10002;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Prompt',sans-serif;animation:slideUpFull 0.28s cubic-bezier(.4,0,.2,1);">
+                <style>@keyframes slideUpFull{from{transform:translateY(100%);opacity:.7}to{transform:translateY(0);opacity:1}}</style>
+                <!-- Nav bar -->
+                <div style="flex-shrink:0;background:${C.card};padding:14px 16px 12px;border-bottom:1px solid ${C.sep};display:flex;align-items:center;gap:12px;">
+                    <button onclick="closeOrderModal()" style="background:none;border:none;color:${C.blue};cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 0;flex-shrink:0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        <span style="font-size:16px;">กลับ</span>
                     </button>
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${order.order_number || '#' + order.id}</div>
-                        <div style="font-size: 11px; color: rgba(255,255,255,0.5);">${new Date(order.created_at).toLocaleString('th-TH', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+                    <div style="flex:1;text-align:center;min-width:0;">
+                        <div style="font-size:15px;font-weight:700;color:${C.primary};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${order.order_number||'#'+order.id}</div>
+                        <div style="font-size:11px;color:${C.secondary};">${orderDate}</div>
                     </div>
-                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">${statusLabels[order.status] || order.status}</span>
+                    <span style="background:${statusBg[order.status]||'#aeaeb2'};color:#fff;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;">${statusTh[order.status]||order.status}</span>
                 </div>
-                <div style="flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch;">
-                    ${rejectionNoticeHtml}
-                    ${order.notes ? `<div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 13px; color: rgba(255,255,255,0.7);">📝 ${escapeHtml(order.notes)}</div>` : ''}
-                    <h4 style="margin-bottom: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5);">รายการสินค้า</h4>
-                    ${summaryHtml}
-                    ${recipientHtml}
-                    ${shipmentsHtml}
-                    ${slipsHtml}
-                    ${refundHtml}
-                    ${actionsHtml}
-                    <div style="height: 24px;"></div>
+                <!-- Scrollable content -->
+                <div style="flex:1;overflow-y:auto;padding:12px 16px 32px;-webkit-overflow-scrolling:touch;">
+                    ${noticeBanner}
+                    ${order.notes ? `<div style="background:#fff;border-radius:12px;padding:12px 16px;margin-bottom:4px;font-size:13px;color:${C.secondary};">📝 ${escapeHtml(order.notes)}</div>` : ''}
+
+                    ${sectionHeader('รายการสินค้า')}
+                    ${card(itemsInner + priceRows)}
+
+                    ${recipientInner ? sectionHeader('ข้อมูลผู้รับ') + card(recipientInner) : ''}
+
+                    ${slipInner ? sectionHeader('สลิปการชำระเงิน') + card(slipInner) : ''}
+
+                    ${shipmentsInner ? sectionHeader('การจัดส่ง') + card(shipmentsInner) : ''}
+
+                    ${refundInner ? sectionHeader('การคืนเงิน') + card(refundInner) : ''}
+
+                    ${actionsHtml ? '<div style="height:12px;"></div>' + actionsHtml : ''}
                 </div>
             </div>
         `;
