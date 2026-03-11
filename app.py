@@ -1026,6 +1026,74 @@ def public_chat_message():
             except Exception as _e:
                 print(f'[GuestBot] product search error: {_e}')
 
+        # Fallback: load all products when query is generic ("ขายอะไร","มีอะไร","ประเภทไหน"...)
+        # or when keyword search returned nothing but user seems to be asking about products
+        _GENERIC_PRODUCT_KW = ('ขายอะไร', 'มีอะไร', 'ประเภทไหน', 'สินค้าทั้งหมด', 'สินค้าอะไร',
+                               'แบบไหนบ้าง', 'มีอะไรบ้าง', 'มีรุ่นไหน', 'ขายอะไรบ้าง',
+                               'สินค้าประเภท', 'ผลิตอะไร', 'จำหน่ายอะไร', 'ดูสินค้าทั้งหมด')
+        _PRODUCT_INTEREST_KW = ('สินค้า', 'ชุด', 'เสื้อ', 'กระโปรง', 'กางเกง', 'กาวน์', 'เดรส')
+        _is_generic_query = any(kw in user_msg for kw in _GENERIC_PRODUCT_KW)
+        _is_product_interest = any(kw in user_msg for kw in _PRODUCT_INTEREST_KW)
+        if not prod_rows and (_is_generic_query or _is_product_interest):
+            try:
+                cursor.execute(f"""
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                           b.name as brand_name,
+                           (SELECT c2.name FROM categories c2
+                            JOIN product_categories pc2 ON pc2.category_id = c2.id
+                            WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
+                           (SELECT pi.image_url FROM product_images pi
+                            WHERE pi.product_id = p.id
+                            ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
+                           MIN(s.price) as min_price,
+                           ROUND(MIN(s.price) * (1 - COALESCE(
+                               (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                                WHERE ptp.product_id = p.id AND ptp.tier_id = %s), 0
+                           ) / 100), 0) as member_price,
+                           COALESCE(
+                               (SELECT ptp2.discount_percent FROM product_tier_pricing ptp2
+                                WHERE ptp2.product_id = p.id AND ptp2.tier_id = %s), 0
+                           ) as discount_pct,
+                           STRING_AGG(DISTINCT s.sku_code, ' | ' ORDER BY s.sku_code) as sku_list
+                    FROM products p
+                    LEFT JOIN brands b ON b.id = p.brand_id
+                    JOIN skus s ON s.product_id = p.id
+                    WHERE p.status = 'active'
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    ORDER BY p.name
+                    LIMIT 12
+                """, [BRONZE_TIER_ID, BRONZE_TIER_ID])
+                prod_rows = cursor.fetchall()
+                for pr in prod_rows:
+                    brand = pr.get('brand_name') or ''
+                    price = float(pr.get('min_price') or 0)
+                    member_price = float(pr.get('member_price') or 0)
+                    disc = float(pr.get('discount_pct') or 0)
+                    bot_desc = pr.get('bot_description') or ''
+                    cat = pr.get('cat_name') or ''
+                    skus = pr.get('sku_list') or ''
+                    img = pr.get('image_url') or ''
+                    prod_list.append({
+                        'id': pr['id'],
+                        'name': pr['name'],
+                        'image_url': img,
+                        'price': f'฿{price:.0f}',
+                        'member_price': f'฿{member_price:.0f}' if member_price > 0 else '',
+                    })
+                    if disc > 0 and member_price > 0:
+                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
+                    else:
+                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคา฿{price:.0f}"
+                    if cat:
+                        products_text += f" หมวด:{cat}"
+                    if skus:
+                        products_text += f" ไซส์:{skus}"
+                    if pr.get('size_chart_image_url'):
+                        products_text += " [มีตารางไซส์]"
+                    products_text += '\n'
+            except Exception as _fe:
+                print(f'[GuestBot] fallback product search error: {_fe}')
+
         # Load text-based size chart from size_chart_groups (guest bot)
         _guest_size_chart_section = ''
         _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
@@ -1205,10 +1273,13 @@ def public_chat_message():
 - 💳 รับชำระผ่านโอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
 - 🚚 รองรับ Dropship — ไม่ต้องสต็อกสินค้าเอง
 - 🏭 รับผลิตตามสั่ง: ถ้าสนใจ ถามทีละข้อ: 1)รูปแบบ 2)รูปตัวอย่าง 3)จำนวน 4)วันที่ 5)เบอร์โทร
-- 🖼️ show_product_ids: ใส่ product ID เฉพาะเมื่อลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ" ชัดเจน เท่านั้น
+- 🖼️ show_product_ids: ใส่ product ID ใน 2 กรณีนี้:
+  1) ลูกค้าถามสินค้าประเภทใดประเภทหนึ่งชัดเจน เช่น "กระโปรงมีไหม" "มีเสื้ออะไรบ้าง" "กาวน์มีไหม" → ใส่ ID ทุกรายการที่ตรงประเภทนั้น
+  2) ลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ/อยากเห็น" ชัดเจน
   * product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42
   * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" ในข้อความตอบเด็ดขาด
-- 📋 เมื่อถามว่ามีแบบไหนบ้าง: แสดงรายชื่อสินค้าทั้งหมดก่อน ห้ามใส่ show_product_ids ตอนนี้ รอให้ลูกค้าเลือกชิ้นที่สนใจก่อน
+- 📋 เมื่อถามว่ามีแบบไหนบ้าง/มีอะไรบ้าง: แสดงรายชื่อสินค้าทั้งหมดจากรายการด้านล่าง พร้อมใส่ show_product_ids ด้วยเพื่อให้ลูกค้าเห็นภาพ แล้วถามว่าสนใจชิ้นไหนเป็นพิเศษ
+- 🎨 คำค้นเชิงสไตล์/สไตลิช (sexy, เซ็กซี่, เข้ารูป, ดูดี, สวย, เท่, น่ารัก, 2 piece, two piece, เซ็ต): ห้ามบอกว่า "ไม่มีข้อมูล" — ให้แนะนำสินค้าที่ใกล้เคียงที่สุดจากรายการ เช่น เดรสเข้ารูป ชุดพิธีการ และบอกจุดเด่นของสินค้าที่มี
 - ❓ ถ้าถามไซส์แต่ยังไม่ได้ระบุว่าสนใจสินค้าชิ้นไหนหรือประเภทไหน → ให้ถามกลับก่อนเสมอ เช่น "สนใจสินค้าประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ — ห้ามตอบตัวเลขไซส์โดยไม่รู้ก่อนว่าเป็นสินค้าอะไร
 - ถ้าไม่มีข้อมูลสินค้า → แนะนำให้แจ้งความต้องการในแชทนี้ได้เลยค่ะ
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
