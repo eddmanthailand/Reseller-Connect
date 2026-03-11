@@ -101,7 +101,8 @@ async function loadAdLandingUrls() {
                 </div>
             </div>`;
 
-        let html = urlRow('ทุกสินค้า (หน้าหลัก)', `${base}/catalog`, 'แสดงสินค้าทั้งหมด เหมาะกับโฆษณา Awareness');
+        let html = urlRow('🎯 หน้าสมัครสมาชิก (Landing Page)', `${base}/join`, 'หน้าหลักสำหรับโฆษณา — สมัครด้วย Google, ข้อมูลสิทธิประโยชน์ครบ เหมาะกับ Campaign สมัครสมาชิก');
+        html += urlRow('ทุกสินค้า (หน้าหลัก)', `${base}/catalog`, 'แสดงสินค้าทั้งหมด เหมาะกับโฆษณา Awareness');
         html += urlRow('เฉพาะสินค้าโปรโมท', `${base}/catalog?featured=1`, 'แสดงเฉพาะสินค้าที่ติด ★ ไว้ เหมาะกับ Campaign เฉพาะกิจ');
 
         (brandsRes.brands || []).forEach(b => {
