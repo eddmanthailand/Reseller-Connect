@@ -1284,7 +1284,7 @@ def public_chat_message():
 - ถ้าไม่มีข้อมูลสินค้า → แนะนำให้แจ้งความต้องการในแชทนี้ได้เลยค่ะ
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
   * ✅ ถ้ารายการมีสินค้า → ต้องตอบตามนั้น ห้ามบอกว่า "ไม่มี" หรือ "มีเฉพาะ..." อื่น ถึงแม้ประวัติแชทก่อนหน้าจะพูดถึงสินค้าอื่น
-  * ❌ ห้ามใช้ประวัติแชทเดิมเป็นข้อมูลสินค้า ต้องอ้างอิงจากรายการสินค้าด้านล่างเท่านั้น
+  * ✅ ให้ใช้ประวัติแชทเพื่อทำความเข้าใจบริบทว่าลูกค้ากำลังถามถึงสินค้าใดอยู่ แต่ข้อมูลสต็อก/ราคา/รายละเอียดสินค้า ต้องดึงมาจากรายการสินค้าด้านล่างเท่านั้น ห้ามสร้างข้อมูลขึ้นมาเอง
   * ✅ ถ้ารายการสินค้าว่าง → ถามลูกค้าด้วยชื่อหมวดหมู่จริงจาก "หมวดหมู่สินค้าในร้าน" พร้อม quick_replies
 - 🖼️ เมื่อลูกค้าถามดูตารางไซส์หรือรูปสินค้า: ให้ตอบพร้อมบอกว่า "กดดูในรายละเอียดสินค้าที่ส่งให้ได้เลยนะคะ ถ้าไม่แน่ใจการเลือกไซส์ น้องนุ่นช่วยได้ค่ะ" เสมอ
 - 📏 ตารางไซส์ (เด็ดขาด): ห้ามเดาหรือแต่งตัวเลขขนาดไซส์ (เช่น อก/เอว/สะโพกของแต่ละไซส์) ห้ามใช้ความรู้ทั่วไปหรือประมาณเอาเอง
@@ -16141,41 +16141,62 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         # ── Context-switch detection ───────────────────────────────────────
         # If user's message doesn't reference the current product at all but
         # DOES match a different product → clear context so keyword search runs.
+        # _ngram_cleared_context: tracked for Fix 3 (backend AI state validation)
+        _ngram_cleared_context = False
         if current_product_id:
             cursor.execute('SELECT name FROM products WHERE id = %s', (current_product_id,))
             _cp_row = cursor.fetchone()
             _cp_name = (_cp_row['name'] if _cp_row else '') or ''
-            _msg_c = ''.join(user_message_text.split())
-            if len(_msg_c) >= 3:
-                _msg_ngs = set()
-                for _nl in (5, 4):
-                    for _i in range(len(_msg_c) - _nl + 1):
-                        _msg_ngs.add(_msg_c[_i:_i + _nl])
-                _hits_current = sum(1 for ng in _msg_ngs if ng in _cp_name)
-                # Generic-hit guard: if every N-gram that hit the current product also
-                # matches many other products (>3), it's too generic → treat as no specific hit
-                if _hits_current > 0:
-                    _has_specific = False
-                    for _hng in [ng for ng in _msg_ngs if ng in _cp_name]:
-                        cursor.execute(
-                            "SELECT COUNT(*) as cnt FROM products WHERE status='active' AND name ILIKE %s",
-                            (f'%{_hng}%',)
-                        )
-                        if (_safe_int((cursor.fetchone() or {}).get('cnt')) or 0) <= 3:
-                            _has_specific = True
-                            break
-                    if not _has_specific:
-                        _hits_current = 0
-                if _hits_current == 0 and _msg_ngs:
-                    for _ng in sorted(_msg_ngs, key=len, reverse=True)[:8]:
-                        cursor.execute(
-                            "SELECT id FROM products WHERE status='active' AND id != %s AND name ILIKE %s LIMIT 1",
-                            (current_product_id, f'%{_ng}%')
-                        )
-                        if cursor.fetchone():
-                            current_product_id = None
-                            current_cat_id = None
-                            break
+
+            # Stop words: generic domain words common to most products — remove before N-gram
+            # so they don't accidentally match other product names and trigger false context switch
+            _NGRAM_STOP = {'พยาบาล', 'ekg', 'ekgshops', 'ekgshop', 'ขาว', 'สีขาว', 'ชุด',
+                           'เสื้อ', 'ผ้า', 'ใส่', 'ราคา', 'ไซส์', 'size', 'แบบ', 'สี', 'รุ่น'}
+            # Also skip context switch if message looks like a follow-up/property question
+            _FOLLOWUP_KW = ('ยาว', 'แน่น', 'หลวม', 'กว้าง', 'ใส่ได้', 'เนื้อผ้า', 'ผ้ายืด',
+                            'ผ้าไม่ยืด', 'ซิป', 'ซับใน', 'ราคา', 'ส่วนลด', 'สต็อก', 'เหลือ',
+                            'ตารางไซส์', 'วัดตัว', 'อก', 'เอว', 'สะโพก', 'ส่วนสูง',
+                            'ส่งได้ไหม', 'ค่าส่ง', 'นัด', 'ยืนยัน', 'สั่ง', 'โอน')
+            _is_followup = any(kw in user_message_text for kw in _FOLLOWUP_KW)
+
+            if not _is_followup:
+                _msg_words_raw = user_message_text.split()
+                _msg_words_filtered = [w for w in _msg_words_raw if w.lower() not in _NGRAM_STOP]
+                _msg_c = ''.join(_msg_words_filtered) if _msg_words_filtered else ''.join(_msg_words_raw)
+                if len(_msg_c) >= 4:
+                    _msg_ngs = set()
+                    for _nl in (6, 5, 4):
+                        for _i in range(len(_msg_c) - _nl + 1):
+                            _msg_ngs.add(_msg_c[_i:_i + _nl])
+                    _hits_current = sum(1 for ng in _msg_ngs if ng in _cp_name)
+                    # Generic-hit guard: N-gram hits that match many products are too generic
+                    if _hits_current > 0:
+                        _has_specific = False
+                        for _hng in [ng for ng in _msg_ngs if ng in _cp_name]:
+                            cursor.execute(
+                                "SELECT COUNT(*) as cnt FROM products WHERE status='active' AND name ILIKE %s",
+                                (f'%{_hng}%',)
+                            )
+                            if (_safe_int((cursor.fetchone() or {}).get('cnt')) or 0) <= 3:
+                                _has_specific = True
+                                break
+                        if not _has_specific:
+                            _hits_current = 0
+                    if _hits_current == 0 and _msg_ngs:
+                        # Only clear context if a SIGNIFICANT N-gram (>=5 chars) matches another product
+                        # This prevents short/generic N-grams from causing false context switches
+                        _significant_ngs = [ng for ng in sorted(_msg_ngs, key=len, reverse=True)
+                                            if len(ng) >= 5][:6]
+                        for _ng in _significant_ngs:
+                            cursor.execute(
+                                "SELECT id FROM products WHERE status='active' AND id != %s AND name ILIKE %s LIMIT 1",
+                                (current_product_id, f'%{_ng}%')
+                            )
+                            if cursor.fetchone():
+                                current_product_id = None
+                                current_cat_id = None
+                                _ngram_cleared_context = True
+                                break
 
         def _fmt_product_row(pr, detailed=False):
             brand = pr.get('brand_name') or ''
@@ -16514,7 +16535,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
   * ❌ ห้ามเขียนในข้อความว่า "ระบบไม่สามารถแสดงรูปภาพได้" หรือ "ขออภัยที่ไม่สามารถแสดงรูป" เด็ดขาด
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
   * ✅ ถ้ารายการมีสินค้า → ต้องตอบตามนั้น ห้ามบอกว่า "ไม่มี" หรือ "มีเฉพาะ..." อื่น ถึงแม้ประวัติแชทก่อนหน้าจะพูดถึงสินค้าอื่น
-  * ❌ ห้ามใช้ประวัติแชทเดิมเป็นข้อมูลสินค้า ต้องอ้างอิงจากรายการสินค้าด้านล่างเท่านั้น
+  * ✅ ให้ใช้ประวัติแชทเพื่อทำความเข้าใจบริบทว่าสมาชิกกำลังถามถึงสินค้าใดอยู่ แต่ข้อมูลสต็อก/ราคา/รายละเอียดสินค้า ต้องดึงมาจากรายการสินค้าด้านล่างเท่านั้น ห้ามสร้างข้อมูลขึ้นมาเอง
   * ✅ ถ้ารายการสินค้าว่าง → ถามสมาชิกด้วยชื่อหมวดหมู่จริงจาก "หมวดหมู่สินค้าในร้าน" แล้วใส่ quick_replies
 - 🔍 เมื่อค้นหาสินค้าไม่เจอ (รายการสินค้าด้านล่างว่างเปล่า): ห้ามบอกว่า "ไม่พบสินค้า" แล้วหยุด และห้ามพูดคำว่า "Product ID" เด็ดขาด — ให้ถามสมาชิกด้วยชื่อหมวดหมู่จริงจาก "หมวดหมู่สินค้าในร้าน" ด้านบน เช่น "ขอทราบว่าสนใจประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ
 - 🖼️ เมื่อลูกค้าถามดูตารางไซส์หรือรูปสินค้า: ให้ตอบพร้อมบอกว่า "กดดูในรายละเอียดสินค้าที่ส่งให้ได้เลยนะคะ ถ้าไม่แน่ใจการเลือกไซส์ น้องนุ่นช่วยได้ค่ะ" เสมอ
@@ -16671,7 +16692,7 @@ State: {session_data.get('state','IDLE')}
 - "needs_admin": true ถ้าต้องการให้ Admin มาช่วย
 - "restock_alert": ใส่เฉพาะเมื่อสมาชิกกด "ยืนยัน แจ้งเตือนฉัน 🔔" แล้ว → confirmed=true, product_id, product_name, size (phone ไม่บังคับ เพราะระบบแจ้งผ่านแชทได้เลย) ห้ามใส่ก่อนยืนยัน
 - "new_state.ordering_for": "self" (ซื้อให้ตัวเอง) หรือ ชื่อเพื่อน เช่น "น้อง" (ซื้อให้เพื่อน) — ใส่ทุกครั้งที่ส่ง new_state
-- "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่
+- "new_state.current_product_id": ⚠️ ถ้าตอบเกี่ยวกับสินค้าใดสินค้าหนึ่ง → ต้องใส่ ID ของสินค้านั้นเสมอ (ตัวเลขหลัง "ID:" ในรายการสินค้า) ห้ามปล่อยเป็น null ถ้ากำลังพูดถึงสินค้าอยู่ — ตั้ง null ได้เฉพาะเมื่อสมาชิกพูดถึงสินค้าหรือหมวดหมู่อื่นอย่างชัดเจนเท่านั้น (เช่น "ขอดูกระโปรงแทน" "เปลี่ยนเป็นเสื้อกาวน์") การถามต่อเนื่อง เช่น ไซส์/ราคา/ผ้า/ความยาว ห้าม null
 - "new_state.measurements": ⚠️ ถ้าสมาชิกบอกขนาดร่างกาย (รอบอก/เอว/สะโพก) ในข้อความนี้ → ต้องอัปเดตทันที **ห้ามลืมใส่** รูปแบบ: {{"chest": 32, "waist": 28, "hips": 35}} ใส่เฉพาะค่าที่บอกมา ถ้าไม่มีการบอกขนาดให้ละ field นี้ทิ้งไป
 - "new_state.self_name": ถ้าสมาชิกบอกชื่อตัวเอง (เช่น "ฉันชื่ออรนภา") → ใส่ชื่อนั้น ใช้แทนชื่อ Account ในการทักทาย ถ้าไม่มีการบอกชื่อให้ละ field นี้ทิ้งไป"""
 
@@ -16914,6 +16935,15 @@ State: {session_data.get('state','IDLE')}
             if _k in new_state:
                 try: new_state[_k] = int(new_state[_k]) if new_state[_k] not in (None, 'null', '') else None
                 except (ValueError, TypeError): new_state[_k] = None
+        # Fix 3: Protect current_product_id from AI nullification when context was NOT switched
+        # If N-gram did NOT detect a context switch (_ngram_cleared_context=False) AND Gemini
+        # returned current_product_id=None, but the session had a valid product → restore it.
+        _session_product_id = _safe_int(session_data.get('current_product_id'))
+        if (_session_product_id
+                and not _ngram_cleared_context
+                and 'current_product_id' in new_state
+                and new_state.get('current_product_id') is None):
+            new_state['current_product_id'] = _session_product_id
         # Auto-fill current_product_id from show_product_ids if Gemini forgot to set it
         if show_product_ids and not new_state.get('current_product_id'):
             new_state['current_product_id'] = show_product_ids[0]
