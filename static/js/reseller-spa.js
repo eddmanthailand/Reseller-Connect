@@ -131,12 +131,6 @@ function switchPage(pageName) {
             document.body.classList.remove('chat-fullscreen-mode');
         }
 
-        // Orders page light background mode
-        if (pageName === 'orders') {
-            document.body.classList.add('orders-page-mode');
-        } else {
-            document.body.classList.remove('orders-page-mode');
-        }
     }
 
     switch (pageName) {

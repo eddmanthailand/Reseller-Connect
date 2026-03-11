@@ -1999,37 +1999,9 @@
         }
 
         /* ===== ORDERS PAGE – Apple Style ===== */
-        body.orders-page-mode {
-            background: #f2f2f7 !important;
-        }
-        body.orders-page-mode::before,
-        body.orders-page-mode::after {
-            display: none !important;
-        }
-        body.orders-page-mode .main-content {
-            background: #f2f2f7 !important;
-        }
-
-        #page-orders {
-            background: #f2f2f7;
-            min-height: 100vh;
-        }
-
         #page-orders .page-header {
             background: transparent;
             padding-bottom: 4px;
-        }
-
-        #page-orders .page-title {
-            color: #1d1d1f;
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        #page-orders .page-subtitle {
-            color: #6e6e73;
-            font-size: 14px;
-            margin-top: 2px;
         }
 
         .order-status-tabs {
@@ -2176,12 +2148,12 @@
 
             #page-orders .page-title {
                 font-size: 22px;
-                color: #1d1d1f;
+                color: #ffffff;
             }
 
             #page-orders .page-subtitle {
                 font-size: 12px;
-                color: #6e6e73;
+                color: rgba(255, 255, 255, 0.7);
             }
 
             .order-status-tabs {
@@ -3426,7 +3398,7 @@
         const currentUserId = {{ session.get('user_id', 0) }};
     </script>
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="/static/js/reseller-spa.js?v=20260311d"></script>
+    <script src="/static/js/reseller-spa.js?v=20260311e"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
     <script>
