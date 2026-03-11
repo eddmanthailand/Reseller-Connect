@@ -518,6 +518,22 @@ function navigateTo(pageName) {
 function switchPage(pageName) {
     if (pageName !== 'quick-order') _labelPasteContext = null;
 
+    // slip-review: show orders page content with under_review tab active
+    if (pageName === 'slip-review') {
+        navItems.forEach(item => item.classList.remove('active'));
+        const slipNav = document.getElementById('slipReviewNavItem');
+        if (slipNav) slipNav.classList.add('active');
+        pages.forEach(page => {
+            page.classList.toggle('active', page.id === 'page-orders');
+        });
+        if (typeof loadOrders === 'function') loadOrders();
+        setTimeout(() => {
+            const tab = document.querySelector('#orderStatusTabs .status-tab[data-status="under_review"]');
+            if (tab) tab.click();
+        }, 400);
+        return;
+    }
+
     // Update navigation
     navItems.forEach(item => {
         if (item.dataset.page === pageName) {
