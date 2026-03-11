@@ -9214,40 +9214,45 @@ def upload_payment_slip(order_id):
         ''', (order_id,))
         
         conn.commit()
-        
+
         cursor.execute("SELECT id FROM users WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Super Admin', 'Assistant Admin'))")
-        admins = cursor.fetchall()
+        admins = [dict(a) for a in cursor.fetchall()]
         order_num = order.get('order_number') or f'#{order_id}'
-        
+
         cursor.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
         reseller = cursor.fetchone()
         reseller_name = reseller['full_name'] if reseller else 'Reseller'
-        
-        for admin in admins:
-            create_notification(
-                admin['id'],
-                'สลิปการชำระเงินใหม่',
-                f'{reseller_name} อัปโหลดสลิป คำสั่งซื้อ {order_num}',
-                'payment',
-                'order',
-                order_id
-            )
+
+        def _notify():
             try:
-                send_push_notification(
-                    admin['id'],
-                    '🧾 สลิปใหม่รอตรวจสอบ',
-                    f'{reseller_name} อัปโหลดสลิป {order_num}',
-                    url='/admin#orders',
-                    tag=f'slip-{order_id}'
-                )
-            except Exception as push_err:
-                print(f"[PUSH] Admin push error: {push_err}")
-        
-        try:
-            send_order_status_chat(user_id, order_num, 'slip_uploaded', order_id=order_id)
-        except Exception as chat_err:
-            print(f"[CHAT] Slip upload chat notification error: {chat_err}")
-        
+                for admin in admins:
+                    create_notification(
+                        admin['id'],
+                        'สลิปการชำระเงินใหม่',
+                        f'{reseller_name} อัปโหลดสลิป คำสั่งซื้อ {order_num}',
+                        'payment',
+                        'order',
+                        order_id
+                    )
+                    try:
+                        send_push_notification(
+                            admin['id'],
+                            '🧾 สลิปใหม่รอตรวจสอบ',
+                            f'{reseller_name} อัปโหลดสลิป {order_num}',
+                            url='/admin#orders',
+                            tag=f'slip-{order_id}'
+                        )
+                    except Exception as push_err:
+                        print(f"[PUSH] Admin push error: {push_err}")
+                try:
+                    send_order_status_chat(user_id, order_num, 'slip_uploaded', order_id=order_id)
+                except Exception as chat_err:
+                    print(f"[CHAT] Slip upload chat notification error: {chat_err}")
+            except Exception as e:
+                print(f"[SLIP] Background notify error: {e}")
+
+        threading.Thread(target=_notify, daemon=True).start()
+
         return jsonify({'message': 'อัปโหลดสลิปสำเร็จ'}), 200
         
     except Exception as e:

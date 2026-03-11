@@ -3140,19 +3140,33 @@ async function ppUploadSlip(orderId) {
         showAlert('กรุณาเลือกรูปสลิป', 'error');
         return;
     }
+    const file = fileInput.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+        showAlert('ไฟล์ใหญ่เกิน 5MB กรุณาลดขนาดรูป', 'error');
+        return;
+    }
     const btn = document.getElementById('ppUploadSlipBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'กำลังส่ง...'; }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
     try {
         const formData = new FormData();
-        formData.append('slip_image', fileInput.files[0]);
-        const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, { method: 'POST', body: formData });
+        formData.append('slip_image', file);
+        const res = await fetch(`${RESELLER_API_URL}/orders/${orderId}/payment-slips`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
         showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
         closePromptPayModal();
         loadOrders && loadOrders();
     } catch (e) {
-        showAlert(e.message, 'error');
+        clearTimeout(timeoutId);
+        const msg = e.name === 'AbortError' ? 'หมดเวลาการส่ง กรุณาลองใหม่' : e.message;
+        showAlert(msg, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'ส่งสลิป'; }
     }
 }
