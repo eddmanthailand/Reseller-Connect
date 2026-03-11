@@ -243,19 +243,15 @@ function navigateTo(pageName) {
 function switchPage(pageName) {
     if (pageName !== 'quick-order') _labelPasteContext = null;
 
-    // slip-review: reuse orders page with under_review tab
+    // slip-review: dedicated slip review page
     if (pageName === 'slip-review') {
         navItems.forEach(item => item.classList.remove('active'));
         const slipNav = document.getElementById('slipReviewNavItem');
         if (slipNav) slipNav.classList.add('active');
         pages.forEach(page => {
-            page.classList.toggle('active', page.id === 'page-orders');
+            page.classList.toggle('active', page.id === 'page-slip-review');
         });
-        if (typeof loadOrders === 'function') loadOrders();
-        setTimeout(() => {
-            const tab = document.querySelector('#orderStatusTabs .status-tab[data-status="under_review"]');
-            if (tab) tab.click();
-        }, 500);
+        loadSlipReview();
         return;
     }
 
@@ -582,6 +578,133 @@ async function handleEditUser(event) {
     } catch (error) {
         console.error('Error updating user:', error);
         showAlert('เกิดข้อผิดพลาดในการแก้ไขผู้ใช้', 'error');
+    }
+}
+
+// ===== Slip Review Functions =====
+
+let _rejectTargetOrderId = null;
+
+async function loadSlipReview() {
+    const container = document.getElementById('slipReviewGrid');
+    if (!container) return;
+    container.innerHTML = '<div class="slip-empty-state"><p>กำลังโหลด...</p></div>';
+    try {
+        const res = await fetch('/api/admin/orders?status=under_review');
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const orders = data.orders || (Array.isArray(data) ? data : []);
+        renderSlipCards(orders);
+        const badge = document.getElementById('slipReviewBadge');
+        if (badge) {
+            badge.textContent = orders.length;
+            badge.style.display = orders.length > 0 ? 'inline-flex' : 'none';
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="slip-empty-state"><p>โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่</p></div>';
+    }
+}
+
+function renderSlipCards(orders) {
+    const container = document.getElementById('slipReviewGrid');
+    if (!container) return;
+
+    if (!orders.length) {
+        container.innerHTML = `
+            <div class="slip-empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+                <p style="font-size:16px;font-weight:600;margin:0 0 4px;">ไม่มีสลิปรอตรวจสอบ</p>
+                <p style="font-size:13px;opacity:0.6;margin:0;">สลิปใหม่จะปรากฏที่นี่เมื่อ reseller อัปโหลด</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = orders.map(o => {
+        const dateStr = o.slip_created_at
+            ? new Date(o.slip_created_at).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '-';
+        const amount = (o.slip_amount || o.final_amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        const imgHtml = o.slip_image_url
+            ? `<img src="${o.slip_image_url}" class="slip-card-img" onclick="window.open('${o.slip_image_url}','_blank')" alt="สลิป" loading="lazy">`
+            : `<div class="slip-card-no-img">ไม่มีรูปสลิป</div>`;
+
+        return `
+            <div class="slip-card">
+                <div class="slip-card-header">
+                    <div class="slip-card-top">
+                        <div>
+                            <div class="slip-card-order-num">${o.order_number || '#' + o.id}</div>
+                            <div class="slip-card-reseller">${o.reseller_name || o.username || '-'}</div>
+                        </div>
+                        <div class="slip-card-amount">฿${amount}</div>
+                    </div>
+                    <div class="slip-card-date">ส่งสลิปเมื่อ ${dateStr}</div>
+                </div>
+                <div class="slip-card-img-wrap">${imgHtml}</div>
+                <div class="slip-card-actions">
+                    <button class="slip-btn-approve" onclick="approveSlip(${o.id})">✓ อนุมัติ</button>
+                    <button class="slip-btn-reject" onclick="openRejectModal(${o.id})">✗ ปฏิเสธ</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+async function approveSlip(orderId) {
+    if (!confirm('ยืนยันการอนุมัติสลิปนี้?\nสถานะจะเปลี่ยนเป็น "เตรียมสินค้า" และแจ้ง reseller ทันที')) return;
+    try {
+        const res = await fetch(`/api/admin/orders/${orderId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showGlobalAlert('อนุมัติสลิปสำเร็จ — สถานะเปลี่ยนเป็นเตรียมสินค้า', 'success');
+            loadSlipReview();
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (e) {
+        showGlobalAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+    }
+}
+
+function openRejectModal(orderId) {
+    _rejectTargetOrderId = orderId;
+    const modal = document.getElementById('rejectSlipModal');
+    const input = document.getElementById('rejectReasonInput');
+    if (input) input.value = '';
+    if (modal) { modal.style.display = 'flex'; setTimeout(() => input && input.focus(), 100); }
+}
+
+function closeRejectModal() {
+    _rejectTargetOrderId = null;
+    const modal = document.getElementById('rejectSlipModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function confirmRejectSlip() {
+    if (!_rejectTargetOrderId) return;
+    const reason = (document.getElementById('rejectReasonInput')?.value || '').trim();
+    const orderId = _rejectTargetOrderId;
+    closeRejectModal();
+    try {
+        const res = await fetch(`/api/admin/orders/${orderId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showGlobalAlert('ปฏิเสธสลิปแล้ว — reseller จะได้รับการแจ้งเตือน', 'success');
+            loadSlipReview();
+        } else {
+            showGlobalAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (e) {
+        showGlobalAlert('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
     }
 }
 
