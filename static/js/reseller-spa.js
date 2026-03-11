@@ -130,6 +130,13 @@ function switchPage(pageName) {
         } else {
             document.body.classList.remove('chat-fullscreen-mode');
         }
+
+        // Orders page light background mode
+        if (pageName === 'orders') {
+            document.body.classList.add('orders-page-mode');
+        } else {
+            document.body.classList.remove('orders-page-mode');
+        }
     }
 
     switch (pageName) {
@@ -2609,34 +2616,34 @@ function renderOrders(orders) {
         return labels[o.status] || o.status;
     };
 
-    const statusColors = {
-        'pending_payment': '#f59e0b',
-        'under_review': '#3b82f6',
-        'preparing': '#8b5cf6',
-        'shipped': '#0ea5e9',
-        'delivered': '#10b981',
-        'failed_delivery': '#ef4444',
-        'cancelled': '#6b7280'
+    const statusStyle = {
+        'pending_payment': 'background:rgba(255,149,0,0.12);color:#c97000;',
+        'under_review':    'background:rgba(0,122,255,0.10);color:#007aff;',
+        'preparing':       'background:rgba(175,82,222,0.12);color:#8944ab;',
+        'shipped':         'background:rgba(0,149,246,0.10);color:#0077cc;',
+        'delivered':       'background:rgba(52,199,89,0.12);color:#248a3d;',
+        'failed_delivery': 'background:rgba(255,59,48,0.10);color:#d70015;',
+        'cancelled':       'background:rgba(142,142,147,0.12);color:#6c6c70;'
     };
 
     const getPendingButtons = (order) => {
         if (!['pending_payment'].includes(order.status)) return '';
         return `
-            <div style="display:flex; gap:6px; margin-top:4px;">
-                <button class="order-card-btn" onclick="event.stopPropagation(); showCardPaymentModal(${order.id})" style="flex:1; background:#000; border-radius:10px; color:#fff; font-weight:600; font-size:12px; padding:8px 4px;">
+            <div class="order-pay-btns">
+                <button class="order-card-btn btn-card" onclick="event.stopPropagation(); showCardPaymentModal(${order.id})">
                     💳 บัตรเครดิต
                 </button>
-                <button class="order-card-btn" onclick="event.stopPropagation(); showPromptPayModal(${order.id})" style="flex:1; background:#1a56db; border-radius:10px; color:#fff; font-weight:600; font-size:12px; padding:8px 4px;">
+                <button class="order-card-btn btn-qr" onclick="event.stopPropagation(); showPromptPayModal(${order.id})">
                     📱 PromptPay
                 </button>
             </div>`;
     };
-    
+
     container.innerHTML = orders.map(order => `
         <div class="order-card-mobile" onclick="viewResellerOrderDetails(${order.id})">
             <div class="order-card-header">
                 <span class="order-card-number">${order.order_number || '#' + order.id}</span>
-                <span class="order-card-status" style="background: ${statusColors[order.status] || '#6b7280'};">${getStatusLabel(order)}</span>
+                <span class="order-card-status" style="${statusStyle[order.status] || statusStyle.cancelled}">${getStatusLabel(order)}</span>
             </div>
             <div class="order-card-details">
                 <span class="order-card-date">${new Date(order.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
