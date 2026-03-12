@@ -991,7 +991,7 @@ def public_chat_message():
                     WHERE p.status = 'active' AND ({kw_conditions})
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                     ORDER BY p.name
-                    LIMIT 8
+                    LIMIT 15
                 """, kw_params)
                 prod_rows = cursor.fetchall()
                 for pr in prod_rows:
@@ -1094,10 +1094,29 @@ def public_chat_message():
             except Exception as _fe:
                 print(f'[GuestBot] fallback product search error: {_fe}')
 
+        # If prod_rows empty but history mentions product IDs → load those products for size chart
+        if not prod_rows and history:
+            _hist_text = ' '.join(str(h.get('text', '')) for h in history[-8:])
+            _hist_pids = [int(x) for x in _re.findall(r'\bID:(\d+)\b', _hist_text)]
+            if _hist_pids:
+                try:
+                    conn.rollback()
+                    _hcur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    _hcur.execute('''
+                        SELECT p.id, p.name, p.bot_description, p.size_chart_image_url, b.name as brand_name
+                        FROM products p LEFT JOIN brands b ON b.id = p.brand_id
+                        WHERE p.id = ANY(%s) AND p.status = \'active\'
+                    ''', (_hist_pids[:5],))
+                    prod_rows = _hcur.fetchall()
+                    _hcur.close()
+                except Exception as _hpe:
+                    print(f'[GuestBot] history prod load error: {_hpe}')
+
         # Load text-based size chart from size_chart_groups (guest bot)
         _guest_size_chart_section = ''
-        _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
-        if any(kw in user_msg.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
+        _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก', 'ช่วย')
+        _recent_msgs = ' '.join(str(h.get('text', '')) for h in history[-4:]) + ' ' + user_msg
+        if any(kw in _recent_msgs.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
             try:
                 _prod_ids = [r['id'] for r in prod_rows if r.get('id')]
                 if _prod_ids:
@@ -1142,7 +1161,7 @@ def public_chat_message():
         # Load size chart image for Vision when user asks about sizes (guest bot)
         _guest_chart_bytes = None
         _guest_chart_mime = 'image/jpeg'
-        if any(kw in user_msg.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
+        if any(kw in _recent_msgs.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
             for _pr2 in prod_rows:
                 _chart_url2 = _pr2.get('size_chart_image_url')
                 if _chart_url2 and _chart_url2.startswith('/storage/'):
@@ -1268,18 +1287,21 @@ def public_chat_message():
 - 📦 ราคาส่ง/Wholesale: ตอบจากข้อมูลในระบบที่มีให้เสมอ หากต้องการข้อมูลเพิ่มเติมแนะนำให้แจ้งในแชทนี้
 
 กฎสำคัญ:
-- ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่ม
+- ตอบเฉพาะข้อมูลที่มีในระบบ ห้ามแต่งข้อมูลเพิ่มเด็ดขาด
 - ราคาที่แสดง: ราคาปกติ / ราคาสมาชิก (ได้รับเมื่อสมัครสมาชิก)
 - 💳 รับชำระผ่านโอนเงินเท่านั้น ไม่มีเก็บเงินปลายทาง
 - 🚚 รองรับ Dropship — ไม่ต้องสต็อกสินค้าเอง
 - 🏭 รับผลิตตามสั่ง: ถ้าสนใจ ถามทีละข้อ: 1)รูปแบบ 2)รูปตัวอย่าง 3)จำนวน 4)วันที่ 5)เบอร์โทร
+- 🚫 ห้ามสร้างโปรโมชั่น ส่วนลด หรือข้อเสนอพิเศษที่ไม่มีอยู่ในหัวข้อ "โปรโมชั่นปัจจุบัน" ด้านล่างเด็ดขาด — ถ้าไม่มีโปรโมชั่นในระบบ ให้บอกตรงๆ ว่า "ขณะนี้ไม่มีโปรโมชั่นพิเศษค่ะ"
+- ✅ การยืนยันสินค้า: ถ้าลูกค้าพิมพ์ชื่อสินค้าที่ตรงกับรายการด้านล่างอย่างชัดเจน (เช่น พิมพ์ชื่อเต็มหรือชื่อใกล้เคียง ≥70%) → ข้ามการถามยืนยัน "ใช่ไหมคะ" แสดงรายละเอียดสินค้านั้นได้เลยทันที เฉพาะเมื่อไม่แน่ใจ (คำกำกวมหรือตรงกับหลายสินค้า) จึงถามยืนยัน
 - 🖼️ show_product_ids: ใส่ product ID ใน 2 กรณีนี้:
   1) ลูกค้าถามสินค้าประเภทใดประเภทหนึ่งชัดเจน เช่น "กระโปรงมีไหม" "มีเสื้ออะไรบ้าง" "กาวน์มีไหม" → ใส่ ID ทุกรายการที่ตรงประเภทนั้น
   2) ลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ/อยากเห็น" ชัดเจน
   * product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42
-  * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" ในข้อความตอบเด็ดขาด
-- 📋 เมื่อถามว่ามีแบบไหนบ้าง/มีอะไรบ้าง: แสดงรายชื่อสินค้าทั้งหมดจากรายการด้านล่าง พร้อมใส่ show_product_ids ด้วยเพื่อให้ลูกค้าเห็นภาพ แล้วถามว่าสนใจชิ้นไหนเป็นพิเศษ
+  * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" หรือ "(ID:XX)" ในข้อความตอบเด็ดขาด — ลูกค้าไม่ควรเห็นตัวเลข ID
+- 📋 เมื่อถามว่ามีแบบไหนบ้าง/มีอะไรบ้าง: แสดงรายชื่อสินค้า**ทุกรายการ**จากรายการด้านล่าง ห้ามตัดหรือย่อ พร้อมใส่ show_product_ids ด้วยเพื่อให้ลูกค้าเห็นภาพ แล้วถามว่าสนใจชิ้นไหนเป็นพิเศษ
 - 🎨 คำค้นเชิงสไตล์/สไตลิช (sexy, เซ็กซี่, เข้ารูป, ดูดี, สวย, เท่, น่ารัก, 2 piece, two piece, เซ็ต): ห้ามบอกว่า "ไม่มีข้อมูล" — ให้แนะนำสินค้าที่ใกล้เคียงที่สุดจากรายการ เช่น เดรสเข้ารูป ชุดพิธีการ และบอกจุดเด่นของสินค้าที่มี
+- 📐 การเลือกไซส์ (ถามขนาดร่างกาย): เมื่อต้องถามขนาดร่างกายลูกค้าเพื่อแนะนำไซส์ ต้องถามครบทั้ง 3 จุดในครั้งเดียวเสมอ: **"รบกวนบอกขนาดรอบอก รอบเอว และรอบสะโพก (เป็นนิ้วหรือเซนติเมตร) ด้วยนะคะ"** ห้ามถามแค่ 1-2 จุด
 - ❓ ถ้าถามไซส์แต่ยังไม่ได้ระบุว่าสนใจสินค้าชิ้นไหนหรือประเภทไหน → ให้ถามกลับก่อนเสมอ เช่น "สนใจสินค้าประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ — ห้ามตอบตัวเลขไซส์โดยไม่รู้ก่อนว่าเป็นสินค้าอะไร
 - ถ้าไม่มีข้อมูลสินค้า → แนะนำให้แจ้งความต้องการในแชทนี้ได้เลยค่ะ
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
@@ -1410,8 +1432,13 @@ def public_chat_message():
             _restock_raw = {}
             pass
         if not bot_text:
-            bot_text = _re.sub(r'\{.*?\}', '', raw_text, flags=_re.DOTALL).strip()
+            # Try to extract message field with regex when json.loads failed (truncated JSON)
+            _msg_re = _re.search(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)', raw_text, _re.DOTALL)
+            if _msg_re:
+                bot_text = _msg_re.group(1).replace('\\"', '"').replace('\\n', '\n').strip()
         if not bot_text:
+            bot_text = _re.sub(r'\{.*\}', '', raw_text, flags=_re.DOTALL).strip()
+        if not bot_text or bot_text.lstrip().startswith('{'):
             bot_text = 'ขออภัยค่ะ ไม่สามารถตอบได้ในขณะนี้ กรุณาติดต่อ 083-668-2211 ได้เลยค่ะ'
 
         # Filter prod_list to only the IDs requested for image display
