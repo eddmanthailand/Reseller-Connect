@@ -16011,6 +16011,15 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
         history_rows = list(reversed(cursor.fetchall()))
         # ถือว่า "ข้อความแรก" ถ้าบอทยังไม่เคยตอบในประวัติล่าสุด (8 ข้อความ)
         is_first_message = not any(h.get('is_bot') for h in history_rows)
+        # Extract product IDs already shown in reseller chat history (for "show more" pagination)
+        _shown_hist_ids = set()
+        for _sh in history_rows:
+            for _sid in _re.findall(r'\bID:(\d+)\b', str(_sh.get('content', ''))):
+                _shown_hist_ids.add(int(_sid))
+        _SHOW_MORE_KW = ('ดูเพิ่ม', 'แสดงเพิ่ม', 'เพิ่มเติม', 'ดูทั้งหมด', 'อีกบ้าง', 'แสดงอีก',
+                         'ต้องการดูเพิ่ม', 'มีอีกไหม', 'ดูเพิ่มเติม', 'อยากดูเพิ่ม', 'ดูสินค้าเพิ่ม')
+        _is_show_more_r = any(kw in user_message_text for kw in _SHOW_MORE_KW)
+        _remaining_count_r = 0
         history_text = ''
         for h in history_rows:
             who = f'🤖 {bot_name}' if h.get('is_bot') else ('👤 สมาชิก' if h['sender_type'] == 'reseller' else '👩‍💼 Admin')
@@ -16480,7 +16489,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                             WHERE p.status = 'active'
                             GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                             ORDER BY p.name
-                            LIMIT 12
+                            LIMIT 15
                         ''')
                         for _pr in cursor.fetchall():
                             if _pr['id'] not in seen_ids:
@@ -16488,6 +16497,42 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                                 prods.append(_pr)
                     except Exception as _fb_err:
                         print(f'[ResellerBot] fallback search error: {_fb_err}')
+
+            # "Show more" products: load next batch excluding already shown IDs
+            if _is_show_more_r and _shown_hist_ids and not prods:
+                try:
+                    conn.rollback()
+                    _excl_r = list(_shown_hist_ids)[:60]
+                    cursor.execute(_product_base_select + '''
+                        WHERE p.status = 'active' AND p.id != ALL(%s)
+                        GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                        ORDER BY p.name LIMIT 15
+                    ''', (_excl_r,))
+                    for _spr in cursor.fetchall():
+                        if _spr['id'] not in seen_ids:
+                            seen_ids.add(_spr['id'])
+                            prods.append(_spr)
+                except Exception as _sme_r:
+                    print(f'[ResellerBot] show-more error: {_sme_r}')
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+
+            # Count remaining products not yet shown (only when hit limit)
+            if prods and len(prods) >= 15:
+                try:
+                    conn.rollback()
+                    _all_shown_r = {p['id'] for p in prods} | _shown_hist_ids
+                    cursor.execute("SELECT COUNT(DISTINCT p.id) FROM products p JOIN skus s ON s.product_id = p.id WHERE p.status = 'active'")
+                    _total_cnt_r = int((cursor.fetchone() or [0])[0])
+                    _remaining_count_r = max(0, _total_cnt_r - len(_all_shown_r))
+                except Exception as _ce_r:
+                    print(f'[ResellerBot] count error: {_ce_r}')
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
 
             for pr in prods:
                 products_text += _fmt_product_row(pr)
@@ -16723,6 +16768,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - 📵 กฎเบอร์โทร 083-668-2211 (เด็ดขาด): ห้ามให้เบอร์โทรในกรณีทั่วไป ให้เบอร์โทรได้เฉพาะ 3 กรณีนี้เท่านั้น: 1) สมาชิกขอเบอร์ติดต่อโดยตรง 2) สมาชิกแสดงความกังวลหรือลังเลเรื่องการชำระเงิน 3) สมาชิกต้องการสั่งผลิตสินค้าและขอเบอร์เอง — ห้ามให้เบอร์เมื่อถามเรื่องค่าส่ง ไซส์ ราคา สินค้า เวลาทำการ หรือคำถามทั่วไปอื่นๆ
 - 🚚 ระบบ Dropship & การสต็อกสินค้า: ร้านของเรารองรับระบบ Dropship อย่างเต็มรูปแบบ — สมาชิกไม่จำเป็นต้องสต็อกสินค้าเองเลยค่ะ เพราะบริษัทฯ ผลิตสินค้าเองทั้งหมด จึงสามารถเติมสต็อกได้ตลอดเวลา ถ้าสมาชิกต้องการเปิดหน้าร้านก็ไม่จำเป็นต้องสั่งสต็อกจำนวนมาก สั่งตามออเดอร์ลูกค้าได้เลย — ห้ามบอกว่า "สินค้ามีจำนวนจำกัด" หรือกดดันให้สต็อกของ เพราะเราเติมได้เสมอ
 - 🎁 โปรโมชั่น (เด็ดขาด): ถ้าส่วน "=== โปรโมชั่นที่มีอยู่ ===" มีข้อมูล → ต้องแจ้งทุกรายการเสมอเมื่อลูกค้าถามถึงโปรโมชั่น ห้ามบอกว่า "ไม่มีโปรโมชั่น" ถ้าส่วนนั้นมีข้อมูลอยู่ นอกจากนี้ให้แจ้งโปรโมชั่นเชิงรุกก่อนลูกค้าถาม
+- 🚫 ห้ามสร้างโปรโมชั่น ส่วนลด หรือข้อเสนอพิเศษที่ไม่มีอยู่ในหัวข้อ "โปรโมชั่นที่มีอยู่" เด็ดขาด — ถ้าไม่มีโปรโมชั่น ให้บอกตรงๆ ว่า "ขณะนี้ไม่มีโปรโมชั่นพิเศษค่ะ"
+- ✅ การยืนยันสินค้า: ถ้าสมาชิกพิมพ์ชื่อสินค้าที่ตรงกับรายการสินค้าด้านล่างอย่างชัดเจน (≥70%) → ข้ามการถามยืนยัน "ใช่ไหมคะ" แสดงรายละเอียดสินค้านั้นได้เลยทันที เฉพาะเมื่อชื่อกำกวมหรือตรงกับหลายสินค้าจึงถามยืนยัน
+- 🗂️ ถ้าสมาชิกถามกว้างๆ ไม่ระบุสินค้าหรือประเภท (เช่น "มีอะไรบ้าง" "ขายอะไร" "อยากดูสินค้า") → แจ้งหมวดหมู่จาก "✅ หมวดหมู่สินค้าในร้าน" ด้านบน พร้อมใส่ quick_replies เป็นชื่อหมวดหมู่เพื่อให้เลือก
+- 📄 สินค้าที่เหลือ: ถ้า prompt แสดง "[ℹ️ มีสินค้าที่เกี่ยวข้องอีก X รายการที่ยังไม่ได้แสดง]" → ให้แจ้งสมาชิกว่ามีสินค้าอีก X รายการ พร้อมถามว่าต้องการดูเพิ่มไหม และใส่ quick_replies ["ดูสินค้าเพิ่มเติม", "ไม่ต้องค่ะ"] ด้วย
+- 📐 การขอขนาดร่างกาย: ถ้ายังไม่มีขนาดร่างกายใดๆ เลยในหัวข้อ "ขนาดร่างกายของสมาชิก" → ต้องถามครบทั้ง 3 จุดในครั้งเดียว: "รบกวนบอกขนาดรอบอก รอบเอว และรอบสะโพก (เป็นนิ้วหรือเซนติเมตร) ด้วยนะคะ" ห้ามถามแค่ 1-2 จุด (ถ้ามีบางจุดแล้ว ให้ถามเฉพาะที่ขาดตามกฎด้านบน)
+- 📏 เมื่อทราบขนาดตัวครบทั้ง 3 จุด (รอบอก+รอบเอว+รอบสะโพก) → ตอบทันทีด้วย: 1) สรุปขนาดที่ทราบ 2) เทียบตารางไซส์จากหัวข้อ "ตารางขนาดสินค้า" แล้วแนะนำไซส์ที่เหมาะสมพร้อมเหตุผล — ถ้าไม่มีตารางไซส์ให้บอกตรงๆ ว่า "ยังไม่มีตารางไซส์ค่ะ"
 - 💳 วิธีชำระเงิน: ร้านรับชำระเงินผ่านการโอนเงินเท่านั้น ไม่มีบัตรเครดิต ไม่มีเก็บเงินปลายทาง ไม่มีช่องทางอื่น — ถ้าลูกค้าถามเรื่องการชำระเงินหรือวิธีจ่ายให้ตอบว่า "ชำระผ่านการโอนเงินเข้าบัญชีธนาคารค่ะ หลังจากยืนยันออเดอร์แล้วทางร้านจะแจ้งเลขบัญชีให้ค่ะ"
 - 🕐 เวลาทำการ: ระบบรับออเดอร์และแชทตลอด 24 ชั่วโมงค่ะ — ถ้าลูกค้าถามเรื่องเวลาทำการหรือเวลาเปิด-ปิดให้ตอบว่า "ระบบของเราทำงานตลอด 24 ชั่วโมงค่ะ สั่งได้ทุกเวลาเลย พนักงานจะจัดส่งสินค้าให้ในวันรุ่งขึ้นค่ะ 😊" ห้ามระบุเวลาเปิด-ปิดที่เฉพาะเจาะจงเด็ดขาด
 - 🚚 ข้อมูลการจัดส่ง (ใช้ข้อมูลนี้เมื่อลูกค้าถามค่าส่ง): {_member_ship_text}
@@ -16820,6 +16871,7 @@ State: {session_data.get('state','IDLE')}
 === รายการสินค้าที่เกี่ยวข้อง (ข้อมูลจริงจากระบบ — ใช้ข้อมูลนี้เท่านั้น ห้ามอ้างอิงประวัติแชท) ===
 ⚠️ ไซส์และสต็อกของแต่ละสินค้า ให้ใช้ข้อมูลจากสินค้านั้นๆ เท่านั้น ห้ามนำไซส์หรือสต็อกจากสินค้าอื่นมาระบุ และห้ามเพิ่มไซส์ที่ไม่ปรากฏในข้อมูลด้านล่าง
 {products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
+{'[ℹ️ มีสินค้าที่เกี่ยวข้องอีก ' + str(_remaining_count_r) + ' รายการที่ยังไม่ได้แสดง]' if _remaining_count_r > 0 else ''}
 
 === สินค้าทดแทน ===
 {alt_products_text or '(ไม่มี หรือยังไม่ได้ระบุไซส์)'}
