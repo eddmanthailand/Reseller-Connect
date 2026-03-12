@@ -1451,7 +1451,7 @@
     transition: border-color .15s;
 }
 #gc-input:focus { border-color: #a855f7; }
-#gc-input:disabled { background: #f9f5ff; color: #aaa; cursor: not-allowed; border-color: #e0d0ff; }
+#gc-input.gc-busy { background: #f9f5ff; color: #888; pointer-events: none; border-color: #e0d0ff; }
 #gc-send {
     width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
     background: linear-gradient(135deg,#a855f7,#ec4899); flex-shrink: 0;
@@ -1752,12 +1752,12 @@
     let _gcSafetyTimer = null;
     function _gcResetState() {
         gcTyping = false;
-        sendBtn.disabled = false;
-        sendBtn.style.opacity = '';
-        input.disabled = false;
-        input.placeholder = 'พิมพ์ข้อความ...';
-        setTimeout(() => input.focus(), 150);
+        const btn = document.getElementById('gc-send');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+        const inp = document.getElementById('gc-input');
+        if (inp) { inp.classList.remove('gc-busy'); inp.placeholder = 'พิมพ์ข้อความ...'; }
         if (_gcSafetyTimer) { clearTimeout(_gcSafetyTimer); _gcSafetyTimer = null; }
+        setTimeout(() => { const i = document.getElementById('gc-input'); if (i) i.focus(); }, 150);
     }
 
     async function sendMessage() {
@@ -1765,22 +1765,22 @@
         if (gcTyping) return;
         if (!text) {
             input.style.borderColor = '#ef4444';
-            input.style.animation = 'none';
             setTimeout(() => { input.style.borderColor = ''; }, 800);
             input.focus();
             return;
         }
         input.value = ''; input.style.height = '';
         appendMsg('user', text);
-        gcTyping = true; sendBtn.disabled = true;
+        gcTyping = true;
+        sendBtn.disabled = true;
         sendBtn.style.opacity = '0.6';
-        input.disabled = true;
+        input.classList.add('gc-busy');
         input.placeholder = 'กำลังประมวลผล...';
         _gcSafetyTimer = setTimeout(() => {
             hideTyping();
             appendBotMsg('ขออภัยค่ะ ใช้เวลานานเกินไป กรุณาลองใหม่ค่ะ');
             _gcResetState();
-        }, 60000);
+        }, 45000);
         showTyping();
         try {
             const resp = await fetch('/api/public/chat/message', {
@@ -1813,8 +1813,8 @@
         gcOpen = true; panel.classList.add('open');
         gcUnread = 0; badge.style.display = 'none';
         bubble.classList.remove('show');
+        _gcResetState();
         renderHistory();
-        setTimeout(() => input.focus(), 300);
     }
     function closePanel() { gcOpen = false; panel.classList.remove('open'); }
 
