@@ -980,7 +980,7 @@ def public_chat_message():
                 kw_count_params += [f'%{k}%', f'%{k}%']
             try:
                 cursor.execute(f"""
-                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_group_id,
                            b.name as brand_name,
                            (SELECT c2.name FROM categories c2
                             JOIN product_categories pc2 ON pc2.category_id = c2.id
@@ -1002,7 +1002,7 @@ def public_chat_message():
                     LEFT JOIN brands b ON b.id = p.brand_id
                     JOIN skus s ON s.product_id = p.id
                     WHERE p.status = 'active' AND ({kw_conditions})
-                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
                     ORDER BY p.name
                     LIMIT 15
                 """, kw_params)
@@ -1033,7 +1033,7 @@ def public_chat_message():
                         products_text += f" ไซส์:{skus}"
                     if bot_desc:
                         products_text += f" ({bot_desc})"
-                    if pr.get('size_chart_image_url'):
+                    if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
                     products_text += '\n'
             except Exception as _e:
@@ -1050,7 +1050,7 @@ def public_chat_message():
         if not prod_rows and (_is_generic_query or _is_product_interest):
             try:
                 cursor.execute(f"""
-                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_group_id,
                            b.name as brand_name,
                            (SELECT c2.name FROM categories c2
                             JOIN product_categories pc2 ON pc2.category_id = c2.id
@@ -1072,7 +1072,7 @@ def public_chat_message():
                     LEFT JOIN brands b ON b.id = p.brand_id
                     JOIN skus s ON s.product_id = p.id
                     WHERE p.status = 'active'
-                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
                     ORDER BY p.name
                     LIMIT 12
                 """, [BRONZE_TIER_ID, BRONZE_TIER_ID])
@@ -1101,7 +1101,7 @@ def public_chat_message():
                         products_text += f" หมวด:{cat}"
                     if skus:
                         products_text += f" ไซส์:{skus}"
-                    if pr.get('size_chart_image_url'):
+                    if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
                     products_text += '\n'
             except Exception as _fe:
@@ -1113,7 +1113,7 @@ def public_chat_message():
                 conn.rollback()
                 _excl_list = list(_shown_hist_ids)[:60]
                 cursor.execute(f"""
-                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_group_id,
                            b.name as brand_name,
                            (SELECT c2.name FROM categories c2
                             JOIN product_categories pc2 ON pc2.category_id = c2.id
@@ -1134,7 +1134,7 @@ def public_chat_message():
                     FROM products p LEFT JOIN brands b ON b.id = p.brand_id
                     JOIN skus s ON s.product_id = p.id
                     WHERE p.status = 'active' AND p.id != ALL(%s)
-                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
                     ORDER BY p.name LIMIT 15
                 """, [BRONZE_TIER_ID, BRONZE_TIER_ID, _excl_list])
                 _sm_rows = cursor.fetchall()
@@ -1157,7 +1157,7 @@ def public_chat_message():
                         products_text += f" หมวด:{_sm_cat}"
                     if _sm_skus:
                         products_text += f" ไซส์:{_sm_skus}"
-                    if pr.get('size_chart_image_url'):
+                    if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
                     products_text += '\n'
                 prod_rows = _sm_rows
@@ -1199,7 +1199,7 @@ def public_chat_message():
                     conn.rollback()
                     _hcur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                     _hcur.execute('''
-                        SELECT p.id, p.name, p.bot_description, p.size_chart_image_url, b.name as brand_name
+                        SELECT p.id, p.name, p.bot_description, p.size_chart_group_id, b.name as brand_name
                         FROM products p LEFT JOIN brands b ON b.id = p.brand_id
                         WHERE p.id = ANY(%s) AND p.status = \'active\'
                     ''', (_hist_pids[:5],))
@@ -1254,25 +1254,7 @@ def public_chat_message():
                 try: conn.rollback()
                 except Exception: pass
 
-        # Load size chart image for Vision when user asks about sizes (guest bot)
-        _guest_chart_bytes = None
-        _guest_chart_mime = 'image/jpeg'
-        if any(kw in _recent_msgs.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
-            for _pr2 in prod_rows:
-                _chart_url2 = _pr2.get('size_chart_image_url')
-                if _chart_url2 and _chart_url2.startswith('/storage/'):
-                    try:
-                        from replit.object_storage import Client as _OSClient2
-                        _storage_key2 = _chart_url2.replace('/storage/', '')
-                        _raw = _OSClient2().download_as_bytes(_storage_key2)
-                        if _raw:
-                            _guest_chart_bytes = _raw
-                            if _chart_url2.lower().endswith('.png'):
-                                _guest_chart_mime = 'image/png'
-                            products_text = products_text.replace('[มีตารางไซส์]', '[ตารางไซส์แนบเป็นรูปภาพ — อ่านตัวเลขจากรูปได้เลย]')
-                            break
-                    except Exception as _img_e:
-                        print(f'[GuestBot] size chart load error: {_img_e}')
+        # (size chart image loading removed — using text-based size chart from DB only)
 
         # Save guest lead if phone number detected in message
         _phone_pat = r'0[689]\d{8}|0\d{8,9}'
@@ -1395,7 +1377,7 @@ def public_chat_message():
   2) ลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ/อยากเห็น" ชัดเจน
   * product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42
   * ❌ ห้ามพูดคำว่า "Product ID" หรือ "รหัสสินค้า" หรือ "(ID:XX)" หรือ "(ID:ตัวเลข)" ในข้อความตอบเด็ดขาด — ลูกค้าไม่ควรเห็นตัวเลข ID ไม่ว่ากรณีใด
-- 🖼️ รูปภาพตารางไซส์ในการสนทนา: รูปภาพทั้งหมดที่ปรากฏในการสนทนานี้ **ระบบโหลดและส่งให้บอทอัตโนมัติ** ลูกค้าไม่ได้เป็นผู้ส่งรูปมา ห้ามพูดว่า "รูปภาพที่คุณพี่ส่งมา" หรือ "รูปที่ส่งมา" หรือ "รูปของคุณ" เด็ดขาด — ให้พูดแทนว่า "จากตารางไซส์ของสินค้า" หรือ "ตามข้อมูลไซส์ที่มีในระบบ"
+- 🚫 ห้ามพูดถึงรูปภาพในการตอบทุกกรณี: ในบทสนทนานี้ไม่มีรูปภาพตารางไซส์ส่งมาเลย ข้อมูลตารางไซส์มาจากหัวข้อ "ตารางขนาดสินค้า" ในข้อความ — ห้ามพูดว่า "รูปภาพ" "รูปตาราง" "จากรูปที่ส่ง" หรือ "รูปของคุณ" ในทุกกรณี ให้พูดแทนว่า "ตามตารางขนาดสินค้า" หรือ "ตามข้อมูลในระบบ" เท่านั้น
 - 📋 เมื่อถามว่ามีแบบไหนบ้าง/มีอะไรบ้าง: แสดงรายชื่อสินค้า**ทุกรายการ**จากรายการด้านล่าง ห้ามตัดหรือย่อ พร้อมใส่ show_product_ids ด้วยเพื่อให้ลูกค้าเห็นภาพ แล้วถามว่าสนใจชิ้นไหนเป็นพิเศษ
 - 🎨 คำค้นเชิงสไตล์/สไตลิช (sexy, เซ็กซี่, เข้ารูป, ดูดี, สวย, เท่, น่ารัก, 2 piece, two piece, เซ็ต): ห้ามบอกว่า "ไม่มีข้อมูล" — ให้แนะนำสินค้าที่ใกล้เคียงที่สุดจากรายการ เช่น เดรสเข้ารูป ชุดพิธีการ และบอกจุดเด่นของสินค้าที่มี
 - 📐 การเลือกไซส์ (ถามขนาดร่างกาย): เมื่อต้องถามขนาดร่างกายลูกค้าเพื่อแนะนำไซส์ ต้องถามครบทั้ง 3 จุดในครั้งเดียวเสมอ: **"รบกวนบอกขนาดรอบอก รอบเอว และรอบสะโพก (เป็นนิ้วหรือเซนติเมตร) ด้วยนะคะ"** ห้ามถามแค่ 1-2 จุด
@@ -1408,10 +1390,9 @@ def public_chat_message():
   * ✅ ถ้ารายการมีสินค้า → ต้องตอบตามนั้น ห้ามบอกว่า "ไม่มี" หรือ "มีเฉพาะ..." อื่น ถึงแม้ประวัติแชทก่อนหน้าจะพูดถึงสินค้าอื่น
   * ✅ ให้ใช้ประวัติแชทเพื่อทำความเข้าใจบริบทว่าลูกค้ากำลังถามถึงสินค้าใดอยู่ แต่ข้อมูลสต็อก/ราคา/รายละเอียดสินค้า ต้องดึงมาจากรายการสินค้าด้านล่างเท่านั้น ห้ามสร้างข้อมูลขึ้นมาเอง
   * ✅ ถ้ารายการสินค้าว่าง → ถามลูกค้าด้วยชื่อหมวดหมู่จริงจาก "หมวดหมู่สินค้าในร้าน" พร้อม quick_replies
-- 🖼️ เมื่อลูกค้าถามดูตารางไซส์หรือรูปสินค้า: ให้ตอบพร้อมบอกว่า "กดดูในรายละเอียดสินค้าที่ส่งให้ได้เลยนะคะ ถ้าไม่แน่ใจการเลือกไซส์ น้องนุ่นช่วยได้ค่ะ" เสมอ
-- 📏 ตารางไซส์ (เด็ดขาด): ห้ามเดาหรือแต่งตัวเลขขนาดไซส์ (เช่น อก/เอว/สะโพกของแต่ละไซส์) ห้ามใช้ความรู้ทั่วไปหรือประมาณเอาเอง
-  * ถ้าสินค้ามี [มีตารางไซส์] → แนะนำลูกค้าให้กดดูตารางไซส์ในรายละเอียดสินค้า
-  * ถ้าสินค้าไม่มีตารางไซส์ → บอกว่า "ไม่มีตารางไซส์สำหรับสินค้านี้ค่ะ ลองสอบถามไซส์โดยบอกขนาดร่างกายของคุณพี่ได้เลยนะคะ น้องนุ่นช่วยได้ค่ะ"
+- 📏 ตารางขนาดสินค้า (เด็ดขาด): ข้อมูลตารางไซส์มาจากหัวข้อ "ตารางขนาดสินค้า" ในข้อความด้านล่าง ห้ามเดาหรือแต่งตัวเลขขนาดไซส์เอง ห้ามใช้ความรู้ทั่วไปหรือประมาณเอาเอง
+  * ถ้าสินค้ามี [มีตารางไซส์] → หมายความว่ามีตารางขนาดในส่วน "ตารางขนาดสินค้า" ด้านล่าง ให้อ่านตัวเลขจากตารางนั้นและตอบลูกค้าได้เลยโดยตรง ห้ามบอกให้ลูกค้า "กดดูในหน้าสินค้า" ถ้ามีข้อมูลในตาราง
+  * ถ้าสินค้าไม่มีตารางไซส์ (ไม่มีข้อมูลในส่วน "ตารางขนาดสินค้า") → บอกว่า "ขออภัยค่ะ ยังไม่มีตารางขนาดสำหรับสินค้านี้ในระบบ ลองบอกขนาดรอบอก รอบเอว รอบสะโพก น้องนุ่นจะช่วยแนะนำตามประสบการณ์ได้ค่ะ"
 - ⚠️ กฎการเลือกไซส์จาก bot_description (ใช้ทุกกรณีที่แนะนำไซส์ ไม่ว่าจะมีหรือไม่มีตารางไซส์):
   * ถ้า bot_description มีข้อความ "เผื่อที่ X"-Y"" หรือ "ผ้าไม่ยืด" → ต้องบวกเพิ่มเข้าไปในการคำนวณเสมอ
   * ตัวอย่าง: สะโพกลูกค้า 44", bot_description บอก "เผื่อ 1"-2"" → ต้องการไซส์ที่สะโพกในตาราง ≥ 45" (44+1) ไม่ใช่ 44" พอดี
@@ -1478,17 +1459,15 @@ def public_chat_message():
             role = 'user' if h.get('role') == 'user' else 'model'
             _contents.append(_genai_types.Content(role=role, parts=[_genai_types.Part.from_text(text=str(h.get('text',''))[:300])]))
         _last_parts = [_genai_types.Part.from_text(text=user_msg)]
-        if _guest_chart_bytes:
-            _last_parts.append(_genai_types.Part.from_bytes(data=_guest_chart_bytes, mime_type=_guest_chart_mime))
         _contents.append(_genai_types.Content(role='user', parts=_last_parts))
 
         _client = _genai.Client(api_key=_api_key)
         _cfg = _genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
             max_output_tokens=2500,
-            temperature=0.3 if _guest_chart_bytes else 0.7,
+            temperature=0.5,
         )
-        _all_models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'] if _guest_chart_bytes else ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
+        _all_models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
         _response = None
         _retryable = ('503', '429', 'overloaded', 'quota', 'resource_exhausted', 'rate limit')
         import time as _time
