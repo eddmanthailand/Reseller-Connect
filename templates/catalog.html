@@ -1398,6 +1398,13 @@
     transition: background .15s;
 }
 #gc-header .gc-close:hover { background: rgba(255,255,255,.35); }
+#gc-header .gc-clear-btn {
+    background: rgba(255,255,255,.15); border: none; border-radius: 50%;
+    width: 30px; height: 30px; cursor: pointer; color: rgba(255,255,255,.85); font-size: 14px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background .15s, color .15s; margin-right: 6px;
+}
+#gc-header .gc-clear-btn:hover { background: rgba(255,80,80,.4); color: #fff; }
 #gc-messages {
     flex: 1; overflow-y: auto; padding: 16px 12px;
     display: flex; flex-direction: column; gap: 10px;
@@ -1521,6 +1528,9 @@
             <div class="gc-name" id="gc-bot-name">น้องนุ่น</div>
             <div class="gc-status">ผู้ช่วยร้านค้า • ตอบอัตโนมัติ</div>
         </div>
+        <button type="button" class="gc-clear-btn" id="gc-clear-btn" title="ล้างแชท">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        </button>
         <button type="button" class="gc-close" id="gc-close-btn">✕</button>
     </div>
     <div id="gc-messages"></div>
@@ -1548,6 +1558,7 @@
     const sendBtn = document.getElementById('gc-send');
     const badge = document.getElementById('gc-badge');
     const closeBtn = document.getElementById('gc-close-btn');
+    const clearBtn = document.getElementById('gc-clear-btn');
     const bubble = document.getElementById('gc-bubble');
 
     const BUBBLE_MSGS = [
@@ -1629,6 +1640,18 @@
     function saveHistory() {
         try { localStorage.setItem(LS_KEY, JSON.stringify(gcHistory.slice(-MAX_HISTORY))); } catch(e) {}
     }
+
+    function clearChat() {
+        if (!confirm('ล้างประวัติแชทใช่ไหมคะ?')) return;
+        gcHistory = [];
+        try { localStorage.removeItem(LS_KEY); } catch(e) {}
+        msgs.innerHTML = '';
+        gcUnread = 0;
+        badge.style.display = 'none';
+        appendBotMsg('สวัสดีค่ะ 😊 น้องนุ่นผู้ช่วยร้านค้า ยินดีช่วยตอบคำถามเรื่องสินค้า ราคา หรือสั่งผลิตได้เลยนะคะ');
+    }
+
+    clearBtn.addEventListener('click', clearChat);
 
     function renderHistory() {
         msgs.innerHTML = '';
