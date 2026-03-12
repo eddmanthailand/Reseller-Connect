@@ -960,11 +960,24 @@ def public_chat_message():
         products_text = ''
         prod_list = []
         prod_rows = []
+        kw_conditions = ''
+        kw_count_params = []
+        # Extract product IDs already shown in history (for "show more" pagination)
+        _shown_hist_ids = set()
+        for _sh in history:
+            for _sid in _re.findall(r'\bID:(\d+)\b', str(_sh.get('text', ''))):
+                _shown_hist_ids.add(int(_sid))
+        _SHOW_MORE_KW = ('ดูเพิ่ม', 'แสดงเพิ่ม', 'เพิ่มเติม', 'ดูทั้งหมด', 'อีกบ้าง', 'แสดงอีก',
+                         'ต้องการดูเพิ่ม', 'มีอีกไหม', 'ดูเพิ่มเติม', 'อยากดูเพิ่ม', 'ดูสินค้าเพิ่ม')
+        _is_show_more = any(kw in user_msg for kw in _SHOW_MORE_KW)
+        _remaining_count = 0
         if keywords:
             kw_conditions = ' OR '.join(['p.name ILIKE %s OR p.bot_description ILIKE %s' for _ in keywords])
             kw_params = [BRONZE_TIER_ID, BRONZE_TIER_ID]
+            kw_count_params = []
             for k in keywords:
                 kw_params += [f'%{k}%', f'%{k}%']
+                kw_count_params += [f'%{k}%', f'%{k}%']
             try:
                 cursor.execute(f"""
                     SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
@@ -1093,6 +1106,89 @@ def public_chat_message():
                     products_text += '\n'
             except Exception as _fe:
                 print(f'[GuestBot] fallback product search error: {_fe}')
+
+        # "Show more" products: user explicitly asks to see more, load next batch excluding shown IDs
+        if _is_show_more and _shown_hist_ids and not prod_rows:
+            try:
+                conn.rollback()
+                _excl_list = list(_shown_hist_ids)[:60]
+                cursor.execute(f"""
+                    SELECT p.id, p.name, p.bot_description, p.size_chart_image_url,
+                           b.name as brand_name,
+                           (SELECT c2.name FROM categories c2
+                            JOIN product_categories pc2 ON pc2.category_id = c2.id
+                            WHERE pc2.product_id = p.id LIMIT 1) as cat_name,
+                           (SELECT pi.image_url FROM product_images pi
+                            WHERE pi.product_id = p.id
+                            ORDER BY pi.sort_order ASC LIMIT 1) as image_url,
+                           MIN(s.price) as min_price,
+                           ROUND(MIN(s.price) * (1 - COALESCE(
+                               (SELECT ptp.discount_percent FROM product_tier_pricing ptp
+                                WHERE ptp.product_id = p.id AND ptp.tier_id = %s), 0
+                           ) / 100), 0) as member_price,
+                           COALESCE(
+                               (SELECT ptp2.discount_percent FROM product_tier_pricing ptp2
+                                WHERE ptp2.product_id = p.id AND ptp2.tier_id = %s), 0
+                           ) as discount_pct,
+                           STRING_AGG(DISTINCT s.sku_code, ' | ' ORDER BY s.sku_code) as sku_list
+                    FROM products p LEFT JOIN brands b ON b.id = p.brand_id
+                    JOIN skus s ON s.product_id = p.id
+                    WHERE p.status = 'active' AND p.id != ALL(%s)
+                    GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
+                    ORDER BY p.name LIMIT 15
+                """, [BRONZE_TIER_ID, BRONZE_TIER_ID, _excl_list])
+                _sm_rows = cursor.fetchall()
+                for pr in _sm_rows:
+                    _sm_brand = pr.get('brand_name') or ''
+                    _sm_price = float(pr.get('min_price') or 0)
+                    _sm_mprice = float(pr.get('member_price') or 0)
+                    _sm_disc = float(pr.get('discount_pct') or 0)
+                    _sm_cat = pr.get('cat_name') or ''
+                    _sm_skus = pr.get('sku_list') or ''
+                    _sm_img = pr.get('image_url') or ''
+                    prod_list.append({'id': pr['id'], 'name': pr['name'], 'image_url': _sm_img,
+                                      'price': f'฿{_sm_price:.0f}',
+                                      'member_price': f'฿{_sm_mprice:.0f}' if _sm_mprice > 0 else ''})
+                    if _sm_disc > 0 and _sm_mprice > 0:
+                        products_text += f"  - ID:{pr['id']} [{_sm_brand}] {pr['name']} ราคาปกติ฿{_sm_price:.0f} → ราคาสมาชิก฿{_sm_mprice:.0f} (ลด{_sm_disc:.0f}%)"
+                    else:
+                        products_text += f"  - ID:{pr['id']} [{_sm_brand}] {pr['name']} ราคา฿{_sm_price:.0f}"
+                    if _sm_cat:
+                        products_text += f" หมวด:{_sm_cat}"
+                    if _sm_skus:
+                        products_text += f" ไซส์:{_sm_skus}"
+                    if pr.get('size_chart_image_url'):
+                        products_text += " [มีตารางไซส์]"
+                    products_text += '\n'
+                prod_rows = _sm_rows
+            except Exception as _sme:
+                print(f'[GuestBot] show-more error: {_sme}')
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
+        # Count total matching products to notify user of remaining not shown
+        if prod_rows and len(prod_rows) >= 15:
+            try:
+                conn.rollback()
+                _all_shown_ids = {r['id'] for r in prod_rows} | _shown_hist_ids
+                if kw_conditions and kw_count_params:
+                    cursor.execute(
+                        f"SELECT COUNT(DISTINCT p.id) FROM products p JOIN skus s ON s.product_id = p.id WHERE p.status = 'active' AND ({kw_conditions})",
+                        kw_count_params
+                    )
+                else:
+                    cursor.execute("SELECT COUNT(DISTINCT p.id) FROM products p JOIN skus s ON s.product_id = p.id WHERE p.status = 'active'")
+                _total_cnt_row = cursor.fetchone()
+                _total_cnt = int((_total_cnt_row or [0])[0])
+                _remaining_count = max(0, _total_cnt - len(_all_shown_ids))
+            except Exception as _ce:
+                print(f'[GuestBot] count error: {_ce}')
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
         # If prod_rows empty but history mentions product IDs → load those products for size chart
         if not prod_rows and history:
@@ -1303,6 +1399,9 @@ def public_chat_message():
 - 🎨 คำค้นเชิงสไตล์/สไตลิช (sexy, เซ็กซี่, เข้ารูป, ดูดี, สวย, เท่, น่ารัก, 2 piece, two piece, เซ็ต): ห้ามบอกว่า "ไม่มีข้อมูล" — ให้แนะนำสินค้าที่ใกล้เคียงที่สุดจากรายการ เช่น เดรสเข้ารูป ชุดพิธีการ และบอกจุดเด่นของสินค้าที่มี
 - 📐 การเลือกไซส์ (ถามขนาดร่างกาย): เมื่อต้องถามขนาดร่างกายลูกค้าเพื่อแนะนำไซส์ ต้องถามครบทั้ง 3 จุดในครั้งเดียวเสมอ: **"รบกวนบอกขนาดรอบอก รอบเอว และรอบสะโพก (เป็นนิ้วหรือเซนติเมตร) ด้วยนะคะ"** ห้ามถามแค่ 1-2 จุด
 - ❓ ถ้าถามไซส์แต่ยังไม่ได้ระบุว่าสนใจสินค้าชิ้นไหนหรือประเภทไหน → ให้ถามกลับก่อนเสมอ เช่น "สนใจสินค้าประเภทไหนคะ?" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ — ห้ามตอบตัวเลขไซส์โดยไม่รู้ก่อนว่าเป็นสินค้าอะไร
+- 🗂️ ถ้าลูกค้าถามเกี่ยวกับสินค้าแบบกว้างๆ โดยไม่ระบุประเภทหรือชื่อสินค้าเลย (เช่น "มีอะไรบ้าง" "ขายอะไร" "อยากดูสินค้า") → แจ้งหมวดหมู่ที่มีในร้านจาก "หมวดหมู่สินค้าในร้าน" ด้านบน พร้อมใส่ quick_replies เป็นชื่อหมวดหมู่นั้น เพื่อให้ลูกค้าเลือก
+- 📄 สินค้าที่เหลือ: ถ้า prompt แสดงข้อความ "[ℹ️ มีสินค้าที่เกี่ยวข้องอีก X รายการที่ยังไม่ได้แสดง]" → ให้บอกลูกค้าว่ามีสินค้าอีก X รายการที่ยังไม่แสดง พร้อมถามว่าต้องการดูเพิ่มไหม และใส่ quick_replies ["ดูสินค้าเพิ่มเติม", "ไม่ต้องแล้วค่ะ"] ด้วย
+- 📏 เมื่อลูกค้าบอกขนาดตัวครบทั้ง 3 จุด (รอบอก+รอบเอว+รอบสะโพก) แล้ว → ตอบทันทีด้วย 2 ส่วน: 1) สรุปขนาดที่ลูกค้าบอก 2) เปรียบเทียบกับตารางไซส์จากหัวข้อ "ตารางขนาดสินค้า" แล้วแนะนำไซส์ที่เหมาะสม (เช่น "ขนาดของคุณ: อก 34" เอว 28" สะโพก 36" → แนะนำไซส์ L ค่ะ") — ถ้าไม่มีตารางไซส์ให้บอกตรงๆ ว่า "ขออภัย ยังไม่มีตารางไซส์ของสินค้านี้ค่ะ"
 - ถ้าไม่มีข้อมูลสินค้า → แนะนำให้แจ้งความต้องการในแชทนี้ได้เลยค่ะ
 - 📦 กฎสินค้า (เด็ดขาด): รายการ "สินค้าที่เกี่ยวข้อง" ด้านล่างคือข้อมูลจริงจากระบบ ณ ขณะนี้
   * ✅ ถ้ารายการมีสินค้า → ต้องตอบตามนั้น ห้ามบอกว่า "ไม่มี" หรือ "มีเฉพาะ..." อื่น ถึงแม้ประวัติแชทก่อนหน้าจะพูดถึงสินค้าอื่น
@@ -1355,6 +1454,7 @@ def public_chat_message():
 
 === สินค้าที่เกี่ยวข้องกับคำถาม ===
 {products_text or '(ไม่พบสินค้าที่ตรงกับคำค้นหา)'}
+{'[ℹ️ มีสินค้าที่เกี่ยวข้องอีก ' + str(_remaining_count) + ' รายการที่ยังไม่ได้แสดง]' if _remaining_count > 0 else ''}
 
 ⚠️ ตอบกลับเป็น JSON เท่านั้น ห้ามตอบเป็นข้อความธรรมดาเด็ดขาด:
 {{
