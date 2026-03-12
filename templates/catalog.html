@@ -1451,6 +1451,7 @@
     transition: border-color .15s;
 }
 #gc-input:focus { border-color: #a855f7; }
+#gc-input:disabled { background: #f9f5ff; color: #aaa; cursor: not-allowed; border-color: #e0d0ff; }
 #gc-send {
     width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
     background: linear-gradient(135deg,#a855f7,#ec4899); flex-shrink: 0;
@@ -1748,6 +1749,17 @@
         return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
     }
 
+    let _gcSafetyTimer = null;
+    function _gcResetState() {
+        gcTyping = false;
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '';
+        input.disabled = false;
+        input.placeholder = 'พิมพ์ข้อความ...';
+        setTimeout(() => input.focus(), 150);
+        if (_gcSafetyTimer) { clearTimeout(_gcSafetyTimer); _gcSafetyTimer = null; }
+    }
+
     async function sendMessage() {
         const text = input.value.trim();
         if (gcTyping) return;
@@ -1762,6 +1774,13 @@
         appendMsg('user', text);
         gcTyping = true; sendBtn.disabled = true;
         sendBtn.style.opacity = '0.6';
+        input.disabled = true;
+        input.placeholder = 'กำลังประมวลผล...';
+        _gcSafetyTimer = setTimeout(() => {
+            hideTyping();
+            appendBotMsg('ขออภัยค่ะ ใช้เวลานานเกินไป กรุณาลองใหม่ค่ะ');
+            _gcResetState();
+        }, 60000);
         showTyping();
         try {
             const resp = await fetch('/api/public/chat/message', {
@@ -1786,10 +1805,7 @@
             hideTyping();
             appendBotMsg('ขออภัยค่ะ เชื่อมต่อไม่ได้ชั่วคราว กรุณาลองใหม่ค่ะ');
         } finally {
-            gcTyping = false;
-            sendBtn.disabled = false;
-            sendBtn.style.opacity = '';
-            input.focus();
+            _gcResetState();
         }
     }
 
