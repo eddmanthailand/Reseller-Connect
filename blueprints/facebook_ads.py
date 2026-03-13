@@ -266,13 +266,15 @@ def track_page_visit():
             visitor_ip = visitor_ip.split(',')[0].strip()
         user_agent = request.headers.get('User-Agent', '')[:500]
 
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium, referrer, traffic_type)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium, referrer, traffic_type, pixel_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium,
-              referrer or None, traffic_type))
+              referrer or None, traffic_type, active_pixel))
         conn.commit()
 
         # Server-side PageView → Meta CAPI
@@ -319,12 +321,14 @@ def track_conversion_event():
 
         source, traffic_type = _classify_traffic(utm_source, utm_medium, fbclid, referrer)
 
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO conversion_events (session_id, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ''', (session_id or None, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent))
+            INSERT INTO conversion_events (session_id, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent, pixel_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (session_id or None, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent, active_pixel))
         conn.commit()
 
         # Map internal event → Meta standard event name then send via CAPI
@@ -362,6 +366,11 @@ def get_facebook_ads_stats():
     conn = None
     cursor = None
     try:
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+        # pixel filter: match current pixel OR legacy rows (pixel_id IS NULL)
+        pixel_clause = "(pv.pixel_id = %s OR pv.pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_params = [active_pixel] if active_pixel else []
+
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -453,7 +462,7 @@ def get_facebook_ads_stats():
             chart_visits.append(daily_visits.get(date, 0))
             chart_registrations.append(daily_registrations.get(date, 0))
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT
                 COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign,
                 COUNT(*) as visits,
@@ -464,10 +473,11 @@ def get_facebook_ads_stats():
             LEFT JOIN campaign_budgets cb ON cb.campaign_name = COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)')
             WHERE pv.page_name IN ('become-reseller', 'catalog')
             AND pv.source = 'facebook'
+            AND {pixel_clause}
             GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
             ORDER BY visits DESC
             LIMIT 20
-        ''')
+        ''', pixel_params)
         campaigns_raw = cursor.fetchall()
         now = datetime.now()
         campaign_breakdown = []
@@ -552,12 +562,18 @@ def get_campaign_detail():
         if not campaign:
             return jsonify({'error': 'Missing campaign'}), 400
 
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+        pixel_clause = "(pixel_id = %s OR pixel_id IS NULL)" if active_pixel else "TRUE"
+
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         where_campaign = "utm_campaign = %s" if campaign != '(ไม่ระบุแคมเปญ)' else "utm_campaign IS NULL"
-        params_base = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
-        page_filter = "page_name IN ('become-reseller','catalog') AND source = 'facebook'"
+        campaign_param = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
+        pixel_param = (active_pixel,) if active_pixel else ()
+        # pixel_clause is in page_filter (comes first), campaign param comes after → pixel first
+        params_base = pixel_param + campaign_param
+        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause}"
 
         cursor.execute(f'''
             SELECT COUNT(*) as cnt, MIN(created_at) as first_visit, MAX(created_at) as last_visit
@@ -1065,10 +1081,14 @@ def get_campaign_budgets():
     conn = None
     cursor = None
     try:
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+        pixel_clause = "(pv.pixel_id = %s OR pv.pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_params = [active_pixel] if active_pixel else []
+
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT
                 COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign_name,
                 COUNT(*) as visits,
@@ -1080,9 +1100,10 @@ def get_campaign_budgets():
                 ON cb.campaign_name = COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)')
             WHERE pv.page_name IN ('become-reseller','catalog')
             AND pv.source = 'facebook'
+            AND {pixel_clause}
             GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
             ORDER BY visits DESC
-        ''')
+        ''', pixel_params)
         rows = cursor.fetchall()
         now = datetime.now()
         result = []
@@ -1169,12 +1190,18 @@ def fb_ai_campaign_analysis():
         if not campaign:
             return jsonify({'error': 'Missing campaign'}), 400
 
+        active_pixel = _get_pixel_settings().get('pixel_id') or None
+        pixel_clause = "(pixel_id = %s OR pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_param = (active_pixel,) if active_pixel else ()
+
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         where_campaign = "utm_campaign = %s" if campaign != '(ไม่ระบุแคมเปญ)' else "utm_campaign IS NULL"
-        params = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
-        page_filter = "page_name IN ('become-reseller','catalog') AND source = 'facebook'"
+        campaign_param = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
+        # pixel_clause first in page_filter → pixel param first
+        params = pixel_param + campaign_param
+        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause}"
 
         # Visits stats
         cursor.execute(f'''
