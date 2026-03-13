@@ -5999,7 +5999,7 @@ def get_facebook_ads_stats():
         # Get today's stats
         cursor.execute('''
             SELECT COUNT(*) as count FROM page_visits 
-            WHERE page_name = 'become-reseller' 
+            WHERE page_name IN ('become-reseller', 'catalog')
             AND source = 'facebook'
             AND DATE(created_at) = CURRENT_DATE
         ''')
@@ -6015,7 +6015,7 @@ def get_facebook_ads_stats():
         # Get this week's stats
         cursor.execute('''
             SELECT COUNT(*) as count FROM page_visits 
-            WHERE page_name = 'become-reseller' 
+            WHERE page_name IN ('become-reseller', 'catalog')
             AND source = 'facebook'
             AND created_at >= CURRENT_DATE - INTERVAL '7 days'
         ''')
@@ -6031,7 +6031,7 @@ def get_facebook_ads_stats():
         # Get this month's stats
         cursor.execute('''
             SELECT COUNT(*) as count FROM page_visits 
-            WHERE page_name = 'become-reseller' 
+            WHERE page_name IN ('become-reseller', 'catalog')
             AND source = 'facebook'
             AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
         ''')
@@ -6047,7 +6047,7 @@ def get_facebook_ads_stats():
         # Get total stats
         cursor.execute('''
             SELECT COUNT(*) as count FROM page_visits 
-            WHERE page_name = 'become-reseller' 
+            WHERE page_name IN ('become-reseller', 'catalog')
             AND source = 'facebook'
         ''')
         total_visits = cursor.fetchone()['count']
@@ -6062,7 +6062,7 @@ def get_facebook_ads_stats():
         cursor.execute('''
             SELECT DATE(created_at) as date, COUNT(*) as visits
             FROM page_visits 
-            WHERE page_name = 'become-reseller' 
+            WHERE page_name IN ('become-reseller', 'catalog')
             AND source = 'facebook'
             AND created_at >= CURRENT_DATE - INTERVAL '6 days'
             GROUP BY DATE(created_at)

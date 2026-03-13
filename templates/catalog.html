@@ -1831,5 +1831,40 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && gcOpen) closePanel(); });
 })();
 </script>
+
+<!-- Facebook Pixel + Visit Tracking -->
+<script>
+(async function() {
+    // ① โหลด Pixel ID จาก settings แล้วยิง PageView
+    try {
+        const res = await fetch('/api/facebook-pixel-settings/public');
+        const d = await res.json();
+        if (d.pixel_id) {
+            !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+            n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+            (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', d.pixel_id);
+            if (d.track_page_view !== false) fbq('track', 'PageView');
+            window.fbPixelSettings = d;
+        }
+    } catch(e) {}
+
+    // ② บันทึก visit ลง DB พร้อมตรวจ source จาก fbclid / utm_source
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const hasFbclid = params.has('fbclid');
+        const utmSource = (params.get('utm_source') || '').toLowerCase();
+        const isFacebook = hasFbclid || utmSource === 'facebook' || utmSource === 'fb';
+        const source = isFacebook ? 'facebook' : 'direct';
+        await fetch('/api/track-visit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ page_name: 'catalog', source: source })
+        });
+    } catch(e) {}
+})();
+</script>
 </body>
 </html>

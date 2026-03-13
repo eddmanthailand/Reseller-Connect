@@ -70,7 +70,7 @@ let fbAdsChart = null;
 
 async function loadFacebookAdsPage() {
     const urlInput = document.getElementById('fbLandingUrl');
-    if (urlInput) urlInput.value = 'https://ekgshops.com/join';
+    if (urlInput) urlInput.value = 'https://ekgshops.com/catalog';
     loadFbAdsPixelSettings();
     loadFacebookAdsStats();
     loadMetaApiStatus();
