@@ -455,6 +455,20 @@ function renderCampaignBreakdown(campaigns) {
     }).join('');
 }
 
+function _fadeAndReload(campaignName, delayMs = 350) {
+    const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+    const row = document.getElementById(`fbRow_${safeId}`);
+    if (row) {
+        row.style.transition = 'opacity 0.3s';
+        row.style.opacity = '0';
+    }
+    setTimeout(() => {
+        if (row) row.remove();
+        // Reload all stats + campaign breakdown from server
+        loadFacebookAdsStats();
+    }, delayMs);
+}
+
 async function hideCampaign(campaignName, btnEl) {
     if (!confirm(`ซ่อนแคมเปญ "${campaignName}" ออกจาก Dashboard?\n(ข้อมูลยังอยู่ สามารถยกเลิกได้ภายหลัง)`)) return;
     try {
@@ -465,10 +479,8 @@ async function hideCampaign(campaignName, btnEl) {
             body: JSON.stringify({ campaign_name: campaignName, is_hidden: true })
         });
         if (r.ok) {
-            const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
-            const row = document.getElementById(`fbRow_${safeId}`);
-            if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
             showAlert(`ซ่อนแคมเปญ "${campaignName}" แล้ว`, 'success');
+            _fadeAndReload(campaignName);
         } else {
             showAlert('ไม่สามารถซ่อนแคมเปญได้', 'error');
         }
@@ -492,10 +504,8 @@ async function deleteCampaign(campaignName, visitCount, btnEl) {
         });
         const d = await r.json();
         if (r.ok && d.success) {
-            const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
-            const row = document.getElementById(`fbRow_${safeId}`);
-            if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
             showAlert(`ลบแคมเปญ "${campaignName}" แล้ว (${d.deleted_visits} visits)`, 'success');
+            _fadeAndReload(campaignName);
         } else {
             showAlert(d.error || 'ไม่สามารถลบแคมเปญได้', 'error');
         }
