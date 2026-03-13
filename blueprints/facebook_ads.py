@@ -62,6 +62,71 @@ def _get_meta_credentials(cursor):
     return token.strip() if token else '', account_id.strip() if account_id else ''
 
 
+def _get_pixel_settings():
+    """Get pixel_id, access_token, test_event_code from DB (cached 60s)."""
+    import time
+    cache = getattr(_get_pixel_settings, '_cache', None)
+    if cache and time.time() - cache['ts'] < 60:
+        return cache['data']
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT pixel_id, access_token, test_event_code FROM facebook_pixel_settings WHERE is_active = true LIMIT 1')
+        row = cursor.fetchone()
+        data = dict(row) if row else {}
+        _get_pixel_settings._cache = {'ts': time.time(), 'data': data}
+        return data
+    except Exception:
+        return {}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+def _send_capi_event(event_name, event_source_url, visitor_ip=None, user_agent=None,
+                     fbc=None, fbp=None, extra_data=None):
+    """Send server-side event to Meta Conversions API asynchronously."""
+    import threading, hashlib, time, urllib.request
+
+    def _fire():
+        try:
+            settings = _get_pixel_settings()
+            pixel_id = settings.get('pixel_id', '')
+            access_token = settings.get('access_token', '')
+            test_event_code = settings.get('test_event_code', '')
+            if not pixel_id or not access_token:
+                return
+
+            user_data = {'client_ip_address': visitor_ip or '', 'client_user_agent': user_agent or ''}
+            if fbc: user_data['fbc'] = fbc
+            if fbp: user_data['fbp'] = fbp
+
+            event = {
+                'event_name': event_name,
+                'event_time': int(time.time()),
+                'action_source': 'website',
+                'event_source_url': event_source_url or '',
+                'user_data': user_data,
+            }
+            if extra_data:
+                event['custom_data'] = extra_data
+
+            payload = {'data': [event]}
+            if test_event_code:
+                payload['test_event_code'] = test_event_code
+
+            url = f'https://graph.facebook.com/v19.0/{pixel_id}/events?access_token={access_token}'
+            body = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                logging.info(f'[CAPI] {event_name} sent → {resp.status}')
+        except Exception as ex:
+            logging.warning(f'[CAPI] Failed to send {event_name}: {ex}')
+
+    threading.Thread(target=_fire, daemon=True).start()
+
+
 # ==================== ADMIN PAGE ====================
 
 @facebook_ads_bp.route('/admin/facebook-ads')
@@ -209,6 +274,14 @@ def track_page_visit():
         ''', (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium,
               referrer or None, traffic_type))
         conn.commit()
+
+        # Server-side PageView → Meta CAPI
+        fbc = data.get('fbc') or None
+        fbp = data.get('fbp') or None
+        event_url = data.get('event_source_url') or referrer or ''
+        _send_capi_event('PageView', event_url, visitor_ip=visitor_ip,
+                         user_agent=user_agent, fbc=fbc, fbp=fbp)
+
         return jsonify({'success': True}), 200
     except Exception as e:
         if conn: conn.rollback()
@@ -253,6 +326,23 @@ def track_conversion_event():
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         ''', (session_id or None, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent))
         conn.commit()
+
+        # Map internal event → Meta standard event name then send via CAPI
+        _capi_map = {
+            'catalog_view':       'ViewContent',
+            'chatbot_open':       None,  # no standard Meta event
+            'register_click':     'Lead',
+            'register_complete':  'CompleteRegistration',
+            'first_order':        'Purchase',
+        }
+        meta_event = _capi_map.get(event_type)
+        if meta_event:
+            fbc = data.get('fbc') or None
+            fbp = data.get('fbp') or None
+            event_url = data.get('event_source_url') or referrer or ''
+            _send_capi_event(meta_event, event_url, visitor_ip=visitor_ip,
+                             user_agent=user_agent, fbc=fbc, fbp=fbp)
+
         return jsonify({'success': True}), 200
     except Exception as e:
         if conn: conn.rollback()

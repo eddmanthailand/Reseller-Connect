@@ -209,10 +209,24 @@
                 }
             } catch(e) {}
             try {
+                const _p = new URLSearchParams(window.location.search);
+                const _gc = n => { const m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)'); return m ? m.pop() : ''; };
+                const _fbc_val = _p.get('fbclid') ? `fb.1.${Date.now()}.${_p.get('fbclid')}` : _gc('_fbc');
                 await fetch('/api/track-visit', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ page_name: 'join', source: 'ad' })
+                    body: JSON.stringify({
+                        page_name: 'join',
+                        source: 'ad',
+                        utm_source: _p.get('utm_source') || 'facebook',
+                        utm_medium: _p.get('utm_medium') || '',
+                        utm_campaign: _p.get('utm_campaign') || '',
+                        fbclid: _p.get('fbclid') || '',
+                        fbc: _fbc_val,
+                        fbp: _gc('_fbp'),
+                        event_source_url: window.location.href,
+                        referrer: document.referrer || ''
+                    })
                 });
             } catch(e) {}
         })();

@@ -1858,11 +1858,16 @@
 
     // ② บันทึก visit + funnel tracking
     const _params = new URLSearchParams(window.location.search);
+    const _getCookie = n => { const m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)'); return m ? m.pop() : ''; };
+    const _fbclid = _params.get('fbclid') || '';
     const _trackMeta = {
         utm_source: _params.get('utm_source') || '',
         utm_medium: _params.get('utm_medium') || '',
         utm_campaign: _params.get('utm_campaign') || '',
-        fbclid: _params.get('fbclid') || '',
+        fbclid: _fbclid,
+        fbc: _fbclid ? `fb.1.${Date.now()}.${_fbclid}` : _getCookie('_fbc'),
+        fbp: _getCookie('_fbp'),
+        event_source_url: window.location.href,
         referrer: document.referrer || '',
         session_id: (() => {
             let sid = sessionStorage.getItem('_ekg_sid');
