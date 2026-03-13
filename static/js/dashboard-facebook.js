@@ -231,12 +231,9 @@ function _metaStat(label, value, color = '#1d1d1f') {
 
 async function loadFbAdsPixelSettings() {
     try {
-        const response = await fetch(`${API_URL}/facebook-pixel-settings`, {
-            credentials: 'include'
-        });
+        const response = await fetch(`${API_URL}/facebook-pixel-settings`, { credentials: 'include' });
         if (response.ok) {
             const data = await response.json();
-            
             if (data.pixel_id) {
                 const pixelInput = document.getElementById('fbAdsPixelId');
                 if (pixelInput) pixelInput.value = data.pixel_id;
@@ -248,6 +245,50 @@ async function loadFbAdsPixelSettings() {
         }
     } catch (error) {
         console.error('Error loading Facebook Pixel settings:', error);
+    }
+}
+
+async function saveAllMetaSettings() {
+    const pixelId   = (document.getElementById('fbAdsPixelId')?.value || '').trim();
+    const token     = (document.getElementById('fbAdsAccessToken')?.value || '').trim();
+    const accountId = (document.getElementById('metaAdAccountId')?.value || '').trim();
+    const isActive  = document.getElementById('fbAdsPixelActive')?.checked || false;
+
+    if (isActive && !pixelId) { showAlert('กรุณากรอก Pixel ID ก่อนเปิดใช้งาน', 'error'); return; }
+
+    const statusEl = document.getElementById('metaApiStatus');
+    if (statusEl) { statusEl.innerHTML = '<span style="color:#6e6e73;">กำลังบันทึก...</span>'; }
+
+    try {
+        // บันทึก Pixel settings (CAPI token + pixel_id + is_active)
+        const r1 = await fetch(`${API_URL}/facebook-pixel-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ pixel_id: pixelId, access_token: token, is_active: isActive,
+                                   track_page_view: true, track_lead: true, track_complete_registration: true })
+        });
+
+        // บันทึก Meta Ads API token + account_id
+        const r2 = await fetch(`${API_URL}/admin/facebook-ads/meta-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ meta_access_token: token, meta_ad_account_id: accountId })
+        });
+
+        if (r1.ok && r2.ok) {
+            showAlert('บันทึกการตั้งค่าเรียบร้อย', 'success');
+            const tokenInput = document.getElementById('fbAdsAccessToken');
+            if (tokenInput && token) tokenInput.value = '';
+            await loadMetaApiStatus();
+        } else {
+            const e1 = r1.ok ? null : (await r1.json()).error;
+            const e2 = r2.ok ? null : (await r2.json()).error;
+            showAlert(e1 || e2 || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch(e) {
+        showAlert('ไม่สามารถบันทึกได้: ' + e.message, 'error');
     }
 }
 

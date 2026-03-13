@@ -266,23 +266,40 @@
         <!-- ── RIGHT COLUMN: Settings ── -->
         <div>
 
-            <!-- Pixel Settings -->
+            <!-- Pixel + Meta Account (รวม) -->
             <div class="fb-card">
                 <div class="fb-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    ตั้งค่า Facebook Pixel
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    ตั้งค่า Facebook Pixel & Meta API
                 </div>
+
+                <!-- Pixel ID -->
                 <div style="margin-bottom:12px;">
                     <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Pixel ID</label>
-                    <input type="text" id="fbAdsPixelId" class="fb-input" placeholder="เช่น 1234567890123456">
+                    <input type="text" id="fbAdsPixelId" class="fb-input" placeholder="เช่น 1671556133839943">
                     <div style="font-size:11px;color:#6e6e73;margin-top:4px;">หาได้จาก Facebook Events Manager</div>
                 </div>
+
+                <!-- Ad Account ID -->
                 <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Access Token (ถ้ามี)</label>
-                    <input type="password" id="fbAdsAccessToken" class="fb-input" placeholder="สำหรับ Conversions API">
-                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">ไม่บังคับ — Server-Side Tracking</div>
+                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Ad Account ID</label>
+                    <input type="text" id="metaAdAccountId" class="fb-input" placeholder="เช่น 955908924843880">
+                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">หาได้จาก Meta Ads Manager</div>
                 </div>
+
+                <!-- Access Token (ใช้ร่วมกัน) -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Access Token</label>
+                    <input type="password" id="fbAdsAccessToken" class="fb-input" placeholder="EAAxxxxxx...">
+                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">ใช้ร่วมกันทั้ง Conversions API และ Meta Ads API</div>
+                </div>
+
+                <!-- สถานะเชื่อมต่อ -->
+                <div id="metaApiStatus" style="font-size:12px;margin-bottom:10px;"></div>
+
                 <div class="fb-divider"></div>
+
+                <!-- Toggle Pixel -->
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
                     <div>
                         <div style="font-size:14px;font-weight:500;">เปิดใช้งาน Pixel</div>
@@ -293,7 +310,19 @@
                         <span class="fb-toggle-slider"></span>
                     </label>
                 </div>
-                <button onclick="saveFbAdsPixelSettings()" class="fb-btn-blue">บันทึกการตั้งค่า Pixel</button>
+
+                <button onclick="saveAllMetaSettings()" class="fb-btn-blue">บันทึกการตั้งค่า</button>
+
+                <!-- Meta Insights (ขยายตัวเมื่อเชื่อมต่อแล้ว) -->
+                <div id="metaInsightsCard" style="display:none;margin-top:14px;">
+                    <div class="fb-divider"></div>
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button id="metaBtn7d" onclick="loadMetaInsights('7d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">7d</button>
+                        <button id="metaBtn30d" onclick="loadMetaInsights('30d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">30d</button>
+                        <button id="metaBtn90d" onclick="loadMetaInsights('90d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">90d</button>
+                    </div>
+                    <div id="metaInsightsContent"></div>
+                </div>
             </div>
 
             <!-- Landing Page -->
@@ -319,33 +348,6 @@
                     <strong style="color:#1d1d1f;">วิธีตั้งค่าแคมเปญแยกกัน:</strong><br>
                     เพิ่ม utm_campaign ต่อท้าย URL เช่น:<br>
                     <span style="font-family:'SF Mono',monospace;font-size:11px;color:#007aff;display:block;margin-top:4px;word-break:break-all;">...catalog?utm_source=facebook&amp;utm_campaign=ekg-shops</span>
-                </div>
-            </div>
-
-            <!-- Meta Ad Account -->
-            <div class="fb-card" style="margin-top:16px;">
-                <div class="fb-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    Meta Ad Account
-                </div>
-                <div style="margin-bottom:10px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Access Token</label>
-                    <input type="password" id="metaAccessToken" class="fb-input" placeholder="EAAxxxxxx...">
-                </div>
-                <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Ad Account ID</label>
-                    <input type="text" id="metaAdAccountId" class="fb-input" placeholder="act_xxxxxxxxx">
-                </div>
-                <div id="metaApiStatus" style="font-size:12px;color:#6e6e73;margin-bottom:10px;"></div>
-                <button onclick="saveMetaApiSettings()" class="fb-btn-blue">บันทึก Meta API</button>
-                <div id="metaInsightsCard" style="display:none;margin-top:14px;">
-                    <div class="fb-divider"></div>
-                    <div style="display:flex;gap:6px;margin-bottom:10px;">
-                        <button id="metaBtn7d" onclick="loadMetaInsights('7d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">7d</button>
-                        <button id="metaBtn30d" onclick="loadMetaInsights('30d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">30d</button>
-                        <button id="metaBtn90d" onclick="loadMetaInsights('90d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">90d</button>
-                    </div>
-                    <div id="metaInsightsContent"></div>
                 </div>
             </div>
 
