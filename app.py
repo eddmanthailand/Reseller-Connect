@@ -403,6 +403,14 @@ def brand_management():
     """Render the brand management page"""
     return render_template('brand_management.html')
 
+@app.route('/admin/facebook-ads')
+@login_required
+@admin_required
+def admin_facebook_ads_page():
+    user_role = session.get('role', 'admin')
+    return render_template('admin_facebook_ads.html', user_role=user_role)
+
+
 @app.route('/admin/categories')
 @admin_required
 def category_management():
