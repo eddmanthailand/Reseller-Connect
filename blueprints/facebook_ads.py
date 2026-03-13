@@ -62,6 +62,43 @@ def _get_meta_credentials(cursor):
     return token.strip() if token else '', account_id.strip() if account_id else ''
 
 
+def _get_meta_campaign_names():
+    """
+    Fetch all campaign names from Meta Ads API for the configured Ad Account.
+    Returns a set of lowercase campaign names, or None if API unavailable (show all).
+    Cached 10 minutes.
+    """
+    import time, urllib.request, json as _json
+    cache = getattr(_get_meta_campaign_names, '_cache', None)
+    if cache and time.time() - cache['ts'] < 600:
+        return cache['data']
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        cursor.close(); conn.close()
+
+        if not token or not account_id:
+            return None
+
+        acc = account_id if account_id.startswith('act_') else f'act_{account_id}'
+        url = (f'https://graph.facebook.com/v19.0/{acc}/campaigns'
+               f'?fields=name,status&limit=200&access_token={token}')
+        req = urllib.request.Request(url, headers={'User-Agent': 'EKG-Server/1.0'})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = _json.loads(resp.read())
+
+        campaigns = data.get('data', [])
+        names = {c['name'].lower().strip() for c in campaigns}
+        _get_meta_campaign_names._cache = {'ts': time.time(), 'data': names}
+        return names
+    except Exception as e:
+        print(f'[META CAMPAIGNS] fetch error: {e}')
+        _get_meta_campaign_names._cache = {'ts': time.time(), 'data': None}
+        return None
+
+
 def _get_pixel_settings():
     """Get pixel_id, access_token, test_event_code from DB (cached 60s)."""
     import time
@@ -368,7 +405,7 @@ def get_facebook_ads_stats():
     try:
         active_pixel = _get_pixel_settings().get('pixel_id') or None
         # pixel filter: match current pixel OR legacy rows (pixel_id IS NULL)
-        pixel_clause = "(pv.pixel_id = %s OR pv.pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_clause = "pv.pixel_id = %s" if active_pixel else "TRUE"
         pixel_params = [active_pixel] if active_pixel else []
 
         conn = get_db()
@@ -468,20 +505,30 @@ def get_facebook_ads_stats():
                 COUNT(*) as visits,
                 MAX(pv.created_at) as last_visit,
                 COALESCE(cb.total_budget, 0) as budget,
-                cb.notes as budget_notes
+                cb.notes as budget_notes,
+                COALESCE(cb.is_hidden, false) as is_hidden
             FROM page_visits pv
             LEFT JOIN campaign_budgets cb ON cb.campaign_name = COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)')
             WHERE pv.page_name IN ('become-reseller', 'catalog')
             AND pv.source = 'facebook'
             AND {pixel_clause}
-            GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
+            AND COALESCE(cb.is_hidden, false) = false
+            GROUP BY pv.utm_campaign, cb.total_budget, cb.notes, cb.is_hidden
             ORDER BY visits DESC
             LIMIT 20
         ''', pixel_params)
         campaigns_raw = cursor.fetchall()
+        meta_names = _get_meta_campaign_names()  # set of lowercase names, or None = show all
         now = datetime.now()
         campaign_breakdown = []
         for r in campaigns_raw:
+            camp_name = r['campaign']
+            # Filter: only include campaigns that exist in Meta Ads (if API available)
+            if meta_names is not None:
+                if camp_name == '(ไม่ระบุแคมเปญ)':
+                    pass  # always include untagged traffic
+                elif camp_name.lower().strip() not in meta_names:
+                    continue
             visits = r['visits']
             budget = float(r['budget'] or 0)
             last_visit = r['last_visit']
@@ -494,7 +541,7 @@ def get_facebook_ads_stats():
                 active_status = 'inactive'
             cpv = round(budget / visits, 2) if budget > 0 and visits > 0 else None
             campaign_breakdown.append({
-                'campaign': r['campaign'],
+                'campaign': camp_name,
                 'visits': visits,
                 'budget': budget,
                 'cpv': cpv,
@@ -563,7 +610,7 @@ def get_campaign_detail():
             return jsonify({'error': 'Missing campaign'}), 400
 
         active_pixel = _get_pixel_settings().get('pixel_id') or None
-        pixel_clause = "(pixel_id = %s OR pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_clause = "pixel_id = %s" if active_pixel else "TRUE"
 
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -1082,7 +1129,7 @@ def get_campaign_budgets():
     cursor = None
     try:
         active_pixel = _get_pixel_settings().get('pixel_id') or None
-        pixel_clause = "(pv.pixel_id = %s OR pv.pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_clause = "pv.pixel_id = %s" if active_pixel else "TRUE"
         pixel_params = [active_pixel] if active_pixel else []
 
         conn = get_db()
@@ -1101,13 +1148,19 @@ def get_campaign_budgets():
             WHERE pv.page_name IN ('become-reseller','catalog')
             AND pv.source = 'facebook'
             AND {pixel_clause}
+            AND COALESCE(cb.is_hidden, false) = false
             GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
             ORDER BY visits DESC
         ''', pixel_params)
         rows = cursor.fetchall()
+        meta_names = _get_meta_campaign_names()  # None = show all
         now = datetime.now()
         result = []
         for r in rows:
+            camp_name = r['campaign_name']
+            if meta_names is not None:
+                if camp_name != '(ไม่ระบุแคมเปญ)' and camp_name.lower().strip() not in meta_names:
+                    continue
             visits = r['visits']
             budget = float(r['total_budget'] or 0)
             last_visit = r['last_visit']
@@ -1120,7 +1173,7 @@ def get_campaign_budgets():
                 status = 'inactive'
             cpv = round(budget / visits, 2) if budget > 0 and visits > 0 else None
             result.append({
-                'campaign_name': r['campaign_name'],
+                'campaign_name': camp_name,
                 'visits': visits,
                 'total_budget': budget,
                 'cpv': cpv,
@@ -1171,6 +1224,41 @@ def save_campaign_budget():
         if conn: conn.close()
 
 
+# ==================== HIDE / UNHIDE CAMPAIGN ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-hide', methods=['POST'])
+@login_required
+@admin_required
+def toggle_campaign_visibility():
+    """Hide or unhide a campaign from the dashboard"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json(silent=True) or {}
+        campaign_name = (data.get('campaign_name') or '').strip()
+        is_hidden = bool(data.get('is_hidden', True))
+        if not campaign_name:
+            return jsonify({'error': 'Missing campaign_name'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO campaign_budgets (campaign_name, total_budget, is_hidden, updated_at)
+            VALUES (%s, 0, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (campaign_name) DO UPDATE
+                SET is_hidden = EXCLUDED.is_hidden,
+                    updated_at = CURRENT_TIMESTAMP
+        ''', (campaign_name, is_hidden))
+        conn.commit()
+        return jsonify({'success': True, 'campaign_name': campaign_name, 'is_hidden': is_hidden}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 # ==================== AI PER-CAMPAIGN ANALYSIS ====================
 
 @facebook_ads_bp.route('/api/facebook-ads/ai-campaign-analysis', methods=['GET'])
@@ -1191,7 +1279,7 @@ def fb_ai_campaign_analysis():
             return jsonify({'error': 'Missing campaign'}), 400
 
         active_pixel = _get_pixel_settings().get('pixel_id') or None
-        pixel_clause = "(pixel_id = %s OR pixel_id IS NULL)" if active_pixel else "TRUE"
+        pixel_clause = "pixel_id = %s" if active_pixel else "TRUE"
         pixel_param = (active_pixel,) if active_pixel else ()
 
         conn = get_db()

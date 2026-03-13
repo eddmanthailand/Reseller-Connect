@@ -421,8 +421,13 @@ function renderCampaignBreakdown(campaigns) {
         const cpvChip = c.cpv != null
             ? `<span style="font-size:10px;color:#ff9500;margin-left:4px;">CPV ฿${c.cpv}</span>`
             : '';
+        const hideBtn = c.campaign !== '(ไม่ระบุแคมเปญ)'
+            ? `<button onclick="event.stopPropagation();hideCampaign('${safeName}',this)" title="ซ่อนแคมเปญนี้"
+                style="border:none;background:none;cursor:pointer;font-size:10px;color:#c7c7cc;padding:2px 4px;border-radius:4px;line-height:1;flex-shrink:0;"
+                onmouseover="this.style.color='#ff3b30'" onmouseout="this.style.color='#c7c7cc'">ซ่อน</button>`
+            : '';
         return `
-        <div style="margin-bottom:4px;">
+        <div id="fbRow_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-bottom:4px;">
             <div onclick="toggleCampaignDetail('${safeName}', this)" style="cursor:pointer;padding:8px 6px;border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                     <div style="display:flex;align-items:center;gap:6px;font-size:13px;flex:1;min-width:0;">
@@ -430,6 +435,7 @@ function renderCampaignBreakdown(campaigns) {
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                        ${hideBtn}
                         ${_statusBadge(c.active_status)}
                         <span style="font-size:13px;font-weight:600;color:#007aff;">${(c.visits||0).toLocaleString()}</span>
                     </div>
@@ -444,6 +450,25 @@ function renderCampaignBreakdown(campaigns) {
             <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}" style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
+}
+
+async function hideCampaign(campaignName, btnEl) {
+    if (!confirm(`ซ่อนแคมเปญ "${campaignName}" ออกจาก Dashboard?\n(สามารถยกเลิกได้ในอนาคต)`)) return;
+    try {
+        const r = await fetch(`${API_URL}/facebook-ads/campaign-hide`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ campaign_name: campaignName, is_hidden: true })
+        });
+        if (r.ok) {
+            const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            const row = document.getElementById(`fbRow_${safeId}`);
+            if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+        } else {
+            showAlert('ไม่สามารถซ่อนแคมเปญได้', 'error');
+        }
+    } catch(e) { showAlert('เกิดข้อผิดพลาด', 'error'); }
 }
 
 async function toggleCampaignDetail(campaign, rowEl) {
