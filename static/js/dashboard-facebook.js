@@ -354,6 +354,12 @@ async function loadFacebookAdsStats() {
 let _fbCampaignCharts = {};
 let _fbOpenCampaign = null;
 
+function _statusBadge(s) {
+    if (s === 'active') return '<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#dcfce7;color:#15803d;">● Active</span>';
+    if (s === 'pausing') return '<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#fef9c3;color:#854d0e;">⏸ หยุดพัก</span>';
+    return '<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:#f1f5f9;color:#64748b;">— Inactive</span>';
+}
+
 function renderCampaignBreakdown(campaigns) {
     const el = document.getElementById('fbCampaignBreakdown');
     if (!el) return;
@@ -364,25 +370,37 @@ function renderCampaignBreakdown(campaigns) {
     const max = campaigns[0].visits || 1;
     el.innerHTML = campaigns.map((c, i) => {
         const pct = Math.round((c.visits / max) * 100);
-        const safeName = c.campaign.replace(/"/g, '&quot;');
+        const safeName = (c.campaign || '').replace(/"/g, '&quot;');
         const displayName = c.campaign === '(ไม่ระบุแคมเปญ)'
             ? '<span style="color:#6e6e73;font-style:italic;">ไม่ระบุ</span>'
             : `<span style="color:#1d1d1f;font-weight:500;">${c.campaign}</span>`;
+        const budgetChip = c.budget > 0
+            ? `<span style="font-size:10px;color:#6e6e73;margin-left:4px;">฿${(c.budget||0).toLocaleString()}</span>`
+            : '';
+        const cpvChip = c.cpv != null
+            ? `<span style="font-size:10px;color:#ff9500;margin-left:4px;">CPV ฿${c.cpv}</span>`
+            : '';
         return `
         <div style="margin-bottom:4px;">
             <div onclick="toggleCampaignDetail('${safeName}', this)" style="cursor:pointer;padding:8px 6px;border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
-                        <svg id="fbChevron_${i}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.5" style="transition:transform 0.2s;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
-                        ${displayName}
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;flex:1;min-width:0;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.5" style="transition:transform 0.2s;flex-shrink:0;" class="fbChevronIcon"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>
                     </div>
-                    <div style="font-size:13px;font-weight:600;color:#007aff;">${c.visits.toLocaleString()}</div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                        ${_statusBadge(c.active_status)}
+                        <span style="font-size:13px;font-weight:600;color:#007aff;">${(c.visits||0).toLocaleString()}</span>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-left:18px;margin-bottom:5px;">
+                    ${budgetChip}${cpvChip}
                 </div>
                 <div style="height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;margin-left:18px;">
                     <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#007aff,#34c759);border-radius:2px;transition:width 0.5s ease;"></div>
                 </div>
             </div>
-            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" style="display:none;margin:0 0 8px 18px;"></div>
+            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}" style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
 }
@@ -429,6 +447,8 @@ function renderCampaignDetailPanel(el, d, safeId) {
     const peakText = d.peak_hours && d.peak_hours.length
         ? d.peak_hours.map(p => `${p.hour}:00`).join(', ')
         : 'ไม่พอข้อมูล';
+    const campaign = el.getAttribute('data-campaign') || '';
+    const existingBudget = parseFloat(el.getAttribute('data-budget') || '0');
 
     el.innerHTML = `
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;border:0.5px solid #e5e5ea;">
@@ -451,6 +471,24 @@ function renderCampaignDetailPanel(el, d, safeId) {
                 <span style="color:#6e6e73;">🕗 Peak</span>
                 <span style="font-weight:700;color:#ff9500;margin-left:4px;">${peakText}</span>
             </div>
+        </div>
+
+        <!-- Budget row -->
+        <div style="background:#fff;border-radius:8px;padding:10px 12px;border:0.5px solid #e5e5ea;margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">💰 งบประมาณแคมเปญ</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input id="budgetInput_${safeId}" type="number" min="0" step="100"
+                    value="${existingBudget > 0 ? existingBudget : ''}"
+                    placeholder="กรอกงบรวม (บาท)"
+                    style="flex:1;border:1px solid #e5e5ea;border-radius:7px;padding:6px 10px;font-size:12px;outline:none;color:#1d1d1f;"
+                    onfocus="this.style.borderColor='#007aff'" onblur="this.style.borderColor='#e5e5ea'"/>
+                <button onclick="saveCampaignBudget('${campaign}','${safeId}')"
+                    style="padding:6px 14px;background:#007aff;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                    บันทึก
+                </button>
+            </div>
+            <div id="budgetSaveMsg_${safeId}" style="font-size:11px;color:#34c759;margin-top:5px;display:none;">✓ บันทึกแล้ว</div>
+            ${existingBudget > 0 && d.total_visits > 0 ? `<div style="margin-top:6px;font-size:11px;color:#ff9500;">CPV = ฿${(existingBudget/d.total_visits).toFixed(2)} / visit</div>` : ''}
         </div>
 
         <!-- Device breakdown -->
@@ -482,6 +520,14 @@ function renderCampaignDetailPanel(el, d, safeId) {
         <!-- Hour distribution -->
         <div style="font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px;">⏰ การกระจายตามชั่วโมง (เที่ยงคืน→23:00)</div>
         <div style="height:44px;"><canvas id="fbHourChart_${safeId}"></canvas></div>
+
+        <!-- AI Analysis button -->
+        <button onclick="loadCampaignAiAnalysis('${campaign}','${safeId}')"
+            id="campaignAiBtn_${safeId}"
+            style="margin-top:12px;width:100%;padding:8px;background:linear-gradient(135deg,#af52de,#5856d6);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.2px;">
+            ✨ วิเคราะห์แคมเปญนี้ด้วย AI
+        </button>
+        <div id="campaignAiResult_${safeId}" style="margin-top:10px;"></div>
     </div>`;
 
     // Render trend chart
@@ -1116,7 +1162,8 @@ async function loadAiAnalysis() {
                 <div style="font-size:11px;font-weight:700;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">คำแนะนำ</div>
                 ${(data.recommendations || []).map((r,i) => `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:0.5px solid #f2f2f7;font-size:12px;color:#1d1d1f;"><span style="color:#af52de;font-weight:600;">${i+1}.</span>${r}</div>`).join('')}
             </div>
-            ${data.best_time ? `<div style="padding:8px 10px;background:#f0fdf4;border-radius:8px;font-size:12px;color:#15803d;">⏰ ${data.best_time}</div>` : ''}
+            ${data.roi_summary ? `<div style="padding:8px 10px;background:#fff7ed;border-radius:8px;font-size:12px;color:#92400e;margin-top:8px;border:1px solid #fed7aa;">💰 ROI: ${data.roi_summary}</div>` : ''}
+            ${data.best_time ? `<div style="padding:8px 10px;background:#f0fdf4;border-radius:8px;font-size:12px;color:#15803d;margin-top:6px;">⏰ ${data.best_time}</div>` : ''}
         `;
     } catch(e) {
         container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:12px;border:1px dashed #fca5a5;border-radius:10px;">เกิดข้อผิดพลาด: ${e.message}</div>`;
@@ -1194,3 +1241,71 @@ async function generateAiCopy() {
     }
 }
 
+
+// ==================== CAMPAIGN BUDGET + PER-CAMPAIGN AI ====================
+
+async function saveCampaignBudget(campaignName, safeId) {
+    const input = document.getElementById(`budgetInput_${safeId}`);
+    const msgEl = document.getElementById(`budgetSaveMsg_${safeId}`);
+    if (!input) return;
+    const budget = parseFloat(input.value) || 0;
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/campaign-budgets`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaign_name: campaignName, total_budget: budget })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (msgEl) {
+            msgEl.style.display = 'block';
+            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+        }
+        // Update the data-budget attribute so CPV shows correctly on reload
+        const detailEl = document.getElementById(`fbDetail_${safeId}`);
+        if (detailEl) detailEl.setAttribute('data-budget', budget);
+    } catch(e) {
+        if (msgEl) { msgEl.style.color = '#ff3b30'; msgEl.textContent = '✗ บันทึกไม่สำเร็จ'; msgEl.style.display = 'block'; }
+    }
+}
+
+async function loadCampaignAiAnalysis(campaignName, safeId) {
+    const resultEl = document.getElementById(`campaignAiResult_${safeId}`);
+    const btn = document.getElementById(`campaignAiBtn_${safeId}`);
+    if (!resultEl) return;
+    resultEl.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:14px 0;"><div class="fb-spinner" style="display:inline-block;width:18px;height:18px;border:2px solid #e5e5ea;border-top-color:#af52de;border-radius:50%;animation:spin 0.8s linear infinite;"></div><br>AI กำลังวิเคราะห์แคมเปญ...</div>';
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/ai-campaign-analysis?campaign=${encodeURIComponent(campaignName)}`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        const score = d.performance_score || 0;
+        const scoreColor = score >= 70 ? '#34c759' : score >= 40 ? '#ff9500' : '#ff3b30';
+        resultEl.innerHTML = `
+        <div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #e5e5ea;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:12px;font-weight:700;color:#5856d6;">✨ AI Analysis</span>
+                <span style="font-size:18px;font-weight:700;color:${scoreColor};">${score}<span style="font-size:10px;">/100</span></span>
+            </div>
+            <div style="font-size:12px;color:#1d1d1f;line-height:1.6;margin-bottom:8px;padding:8px;background:#f9f9f9;border-radius:8px;">${d.verdict || ''}</div>
+            ${d.roi_assessment ? `<div style="font-size:11px;color:#92400e;background:#fff7ed;padding:7px 10px;border-radius:8px;margin-bottom:8px;border:1px solid #fed7aa;">💰 ${d.roi_assessment}</div>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:4px;">จุดแข็ง</div>
+                    ${(d.strengths||[]).map(s=>`<div style="font-size:11px;color:#1d1d1f;padding:2px 0;border-bottom:0.5px solid #f2f2f7;">✓ ${s}</div>`).join('')}
+                </div>
+                <div>
+                    <div style="font-size:10px;font-weight:700;color:#ff3b30;text-transform:uppercase;margin-bottom:4px;">จุดอ่อน</div>
+                    ${(d.weaknesses||[]).map(w=>`<div style="font-size:11px;color:#1d1d1f;padding:2px 0;border-bottom:0.5px solid #f2f2f7;">⚠ ${w}</div>`).join('')}
+                </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:#6e6e73;text-transform:uppercase;margin-bottom:4px;">สิ่งที่ควรทำ</div>
+            ${(d.actions||[]).map((a,i)=>`<div style="font-size:11px;color:#1d1d1f;padding:3px 0;border-bottom:0.5px solid #f2f2f7;"><span style="color:#007aff;font-weight:600;">${i+1}.</span> ${a}</div>`).join('')}
+            ${d.budget_advice ? `<div style="font-size:11px;color:#4338ca;background:#f0f4ff;padding:7px 10px;border-radius:8px;margin-top:8px;">📊 ${d.budget_advice}</div>` : ''}
+        </div>`;
+    } catch(e) {
+        resultEl.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:10px;border:1px dashed #fca5a5;border-radius:8px;">เกิดข้อผิดพลาด: ${e.message}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '✨ วิเคราะห์แคมเปญนี้ด้วย AI'; }
+    }
+}

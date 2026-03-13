@@ -365,17 +365,43 @@ def get_facebook_ads_stats():
 
         cursor.execute('''
             SELECT
-                COALESCE(utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign,
-                COUNT(*) as visits
-            FROM page_visits
-            WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
-            GROUP BY utm_campaign
+                COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign,
+                COUNT(*) as visits,
+                MAX(pv.created_at) as last_visit,
+                COALESCE(cb.total_budget, 0) as budget,
+                cb.notes as budget_notes
+            FROM page_visits pv
+            LEFT JOIN campaign_budgets cb ON cb.campaign_name = COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)')
+            WHERE pv.page_name IN ('become-reseller', 'catalog')
+            AND pv.source = 'facebook'
+            GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
             ORDER BY visits DESC
             LIMIT 20
         ''')
         campaigns_raw = cursor.fetchall()
-        campaign_breakdown = [{'campaign': r['campaign'], 'visits': r['visits']} for r in campaigns_raw]
+        now = datetime.now()
+        campaign_breakdown = []
+        for r in campaigns_raw:
+            visits = r['visits']
+            budget = float(r['budget'] or 0)
+            last_visit = r['last_visit']
+            hours_since = (now - last_visit).total_seconds() / 3600 if last_visit else 9999
+            if hours_since <= 48:
+                active_status = 'active'
+            elif hours_since <= 168:
+                active_status = 'pausing'
+            else:
+                active_status = 'inactive'
+            cpv = round(budget / visits, 2) if budget > 0 and visits > 0 else None
+            campaign_breakdown.append({
+                'campaign': r['campaign'],
+                'visits': visits,
+                'budget': budget,
+                'cpv': cpv,
+                'active_status': active_status,
+                'last_visit_hours': round(hours_since, 1),
+                'budget_notes': r['budget_notes'],
+            })
 
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.created_at, u.is_approved,
@@ -706,15 +732,49 @@ def fb_ai_analysis():
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cursor.execute('''
-            SELECT utm_campaign, COUNT(*) as visits,
-                   ROUND(AVG(EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok'))) as avg_hour,
-                   COUNT(CASE WHEN user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct
-            FROM page_visits
-            WHERE source = 'facebook' AND utm_campaign IS NOT NULL
-            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
-            GROUP BY utm_campaign ORDER BY visits DESC LIMIT 10
+            SELECT
+                pv.utm_campaign,
+                COUNT(*) as visits,
+                ROUND(AVG(EXTRACT(HOUR FROM pv.created_at AT TIME ZONE 'Asia/Bangkok'))) as avg_hour,
+                COUNT(CASE WHEN pv.user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct,
+                MAX(pv.created_at) as last_visit,
+                COALESCE(cb.total_budget, 0) as budget
+            FROM page_visits pv
+            LEFT JOIN campaign_budgets cb ON cb.campaign_name = pv.utm_campaign
+            WHERE pv.source = 'facebook' AND pv.utm_campaign IS NOT NULL
+            AND pv.created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY pv.utm_campaign, cb.total_budget ORDER BY visits DESC LIMIT 10
         ''')
-        campaigns = [dict(r) for r in cursor.fetchall()]
+        campaigns_raw = cursor.fetchall()
+        now = datetime.now()
+        campaigns = []
+        total_budget_all = 0
+        total_visits_all = 0
+        for r in campaigns_raw:
+            visits = r['visits']
+            budget = float(r['budget'] or 0)
+            total_budget_all += budget
+            total_visits_all += visits
+            hours_since = (now - r['last_visit']).total_seconds() / 3600 if r['last_visit'] else 9999
+            campaigns.append({
+                'campaign': r['utm_campaign'],
+                'visits': visits,
+                'avg_hour': r['avg_hour'],
+                'mobile_pct': round(float(r['mobile_pct'] or 0), 1),
+                'budget': budget,
+                'cpv': round(budget / visits, 2) if budget > 0 and visits > 0 else None,
+                'active': hours_since <= 48,
+            })
+        overall_cpv = round(total_budget_all / total_visits_all, 2) if total_budget_all > 0 and total_visits_all > 0 else None
+
+        # Funnel overview (30 days)
+        cursor.execute('''
+            SELECT event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
+            FROM conversion_events
+            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY event_type
+        ''')
+        funnel = {r['event_type']: r['cnt'] for r in cursor.fetchall()}
 
         cursor.execute('''
             SELECT traffic_type, COUNT(*) as visits
@@ -734,6 +794,13 @@ def fb_ai_analysis():
         ''')
         peak_hours = [dict(r) for r in cursor.fetchall()]
 
+        budget_section = f"""
+ข้อมูลงบประมาณ (30 วันล่าสุด):
+- งบรวมทุกแคมเปญ: {f'{total_budget_all:,.0f} บาท' if total_budget_all > 0 else 'ยังไม่ได้ตั้งค่างบ'}
+- Cost Per Visit รวม: {f'{overall_cpv:.2f} บาท/visit' if overall_cpv else 'ไม่มีข้อมูลงบ'}
+- Funnel: Catalog Views={funnel.get('catalog_view','?')}, Chatbot={funnel.get('chatbot_open','?')}, คลิกสมัคร={funnel.get('register_click','?')}, สมัครสำเร็จ={funnel.get('register_complete','?')}
+""" if total_budget_all > 0 else "\nหมายเหตุ: ยังไม่มีข้อมูลงบประมาณ — แนะนำให้ admin กรอก budget ในแต่ละแคมเปญเพื่อให้วิเคราะห์ ROI ได้\n"
+
         prompt = f"""คุณเป็น Digital Marketing Analyst ผู้เชี่ยวชาญ e-commerce ไทย
 วิเคราะห์ข้อมูลโฆษณาร้านขายชุดพยาบาล EKG Shops นี้ และให้คำแนะนำเป็นภาษาไทยที่กระชับ ตรงประเด็น
 
@@ -745,12 +812,13 @@ def fb_ai_analysis():
 
 ชั่วโมงที่มี traffic สูงสุด:
 {peak_hours}
-
+{budget_section}
 กรุณาตอบในรูปแบบ JSON ดังนี้ (ตอบ JSON เท่านั้น ไม่มีข้อความอื่น):
 {{
   "summary": "สรุปภาพรวม 2-3 ประโยค",
   "top_insight": "insight สำคัญที่สุด 1 ข้อ",
   "recommendations": ["คำแนะนำข้อ 1", "คำแนะนำข้อ 2", "คำแนะนำข้อ 3"],
+  "roi_summary": "ประเมินความคุ้มค่าของงบที่ใช้ (ถ้าไม่มีข้อมูลงบให้แนะนำให้ตั้งค่า)",
   "best_time": "ช่วงเวลาที่ดีที่สุดในการยิงโฆษณา",
   "score": 75
 }}
@@ -889,6 +957,233 @@ def fb_ai_timing():
             if text.startswith('json'): text = text[4:]
         import json as _json
         result = _json.loads(text.strip())
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ==================== CAMPAIGN BUDGET API ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-budgets', methods=['GET'])
+@login_required
+@admin_required
+def get_campaign_budgets():
+    """Get all campaigns with budget, visits, CPV, and active status"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('''
+            SELECT
+                COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign_name,
+                COUNT(*) as visits,
+                MAX(pv.created_at) as last_visit,
+                COALESCE(cb.total_budget, 0) as total_budget,
+                cb.notes
+            FROM page_visits pv
+            LEFT JOIN campaign_budgets cb
+                ON cb.campaign_name = COALESCE(pv.utm_campaign, '(ไม่ระบุแคมเปญ)')
+            WHERE pv.page_name IN ('become-reseller','catalog')
+            AND pv.source = 'facebook'
+            GROUP BY pv.utm_campaign, cb.total_budget, cb.notes
+            ORDER BY visits DESC
+        ''')
+        rows = cursor.fetchall()
+        now = datetime.now()
+        result = []
+        for r in rows:
+            visits = r['visits']
+            budget = float(r['total_budget'] or 0)
+            last_visit = r['last_visit']
+            hours_since = (now - last_visit).total_seconds() / 3600 if last_visit else 9999
+            if hours_since <= 48:
+                status = 'active'
+            elif hours_since <= 168:
+                status = 'pausing'
+            else:
+                status = 'inactive'
+            cpv = round(budget / visits, 2) if budget > 0 and visits > 0 else None
+            result.append({
+                'campaign_name': r['campaign_name'],
+                'visits': visits,
+                'total_budget': budget,
+                'cpv': cpv,
+                'active_status': status,
+                'last_visit_hours': round(hours_since, 1),
+                'notes': r['notes'],
+            })
+        return jsonify({'campaigns': result}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-budgets', methods=['POST'])
+@login_required
+@admin_required
+def save_campaign_budget():
+    """Upsert budget for a campaign"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json(silent=True) or {}
+        campaign_name = (data.get('campaign_name') or '').strip()
+        total_budget = float(data.get('total_budget') or 0)
+        notes = (data.get('notes') or '').strip() or None
+        if not campaign_name:
+            return jsonify({'error': 'Missing campaign_name'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO campaign_budgets (campaign_name, total_budget, notes, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (campaign_name) DO UPDATE
+                SET total_budget = EXCLUDED.total_budget,
+                    notes = EXCLUDED.notes,
+                    updated_at = CURRENT_TIMESTAMP
+        ''', (campaign_name, total_budget, notes))
+        conn.commit()
+        return jsonify({'success': True, 'campaign_name': campaign_name, 'total_budget': total_budget}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ==================== AI PER-CAMPAIGN ANALYSIS ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/ai-campaign-analysis', methods=['GET'])
+@login_required
+@admin_required
+def fb_ai_campaign_analysis():
+    """On-demand AI analysis for a specific campaign"""
+    conn = None
+    cursor = None
+    try:
+        from google import genai as _g
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่มี Gemini API Key'}), 503
+
+        campaign = request.args.get('campaign', '').strip()
+        if not campaign:
+            return jsonify({'error': 'Missing campaign'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        where_campaign = "utm_campaign = %s" if campaign != '(ไม่ระบุแคมเปญ)' else "utm_campaign IS NULL"
+        params = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
+        page_filter = "page_name IN ('become-reseller','catalog') AND source = 'facebook'"
+
+        # Visits stats
+        cursor.execute(f'''
+            SELECT COUNT(*) as total_visits,
+                   MIN(created_at) as first_visit, MAX(created_at) as last_visit,
+                   COUNT(CASE WHEN user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct
+            FROM page_visits WHERE {page_filter} AND {where_campaign}
+        ''', params)
+        stats = cursor.fetchone()
+        total_visits = stats['total_visits'] or 0
+        first_visit = stats['first_visit']
+        last_visit = stats['last_visit']
+        mobile_pct = round(float(stats['mobile_pct'] or 0), 1)
+        duration_days = (last_visit.date() - first_visit.date()).days + 1 if first_visit and last_visit else 0
+
+        # Peak hours
+        cursor.execute(f'''
+            SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
+            FROM page_visits WHERE {page_filter} AND {where_campaign}
+            GROUP BY hr ORDER BY cnt DESC LIMIT 3
+        ''', params)
+        peak_hours = [{'hour': int(r['hr']), 'count': r['cnt']} for r in cursor.fetchall()]
+
+        # Day of week
+        cursor.execute(f'''
+            SELECT TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'Day') as dow, COUNT(*) as cnt
+            FROM page_visits WHERE {page_filter} AND {where_campaign}
+            GROUP BY dow ORDER BY cnt DESC LIMIT 3
+        ''', params)
+        peak_days = [r['dow'].strip() for r in cursor.fetchall()]
+
+        # Active status
+        now = datetime.now()
+        hours_since = (now - last_visit).total_seconds() / 3600 if last_visit else 9999
+        if hours_since <= 48:
+            active_status = 'กำลังทำงาน'
+        elif hours_since <= 168:
+            active_status = 'หยุดพักชั่วคราว (ไม่มี visit ใน 2-7 วัน)'
+        else:
+            active_status = 'น่าจะหยุดแล้ว (ไม่มี visit เกิน 7 วัน)'
+
+        # Budget from DB
+        cursor.execute('SELECT total_budget, notes FROM campaign_budgets WHERE campaign_name = %s', (campaign,))
+        budget_row = cursor.fetchone()
+        budget = float(budget_row['total_budget']) if budget_row else 0
+        cpv = round(budget / total_visits, 2) if budget > 0 and total_visits > 0 else None
+
+        # Conversion events
+        cursor.execute('''
+            SELECT event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
+            FROM conversion_events WHERE utm_campaign = %s
+            GROUP BY event_type
+        ''', (campaign,))
+        funnel = {r['event_type']: r['cnt'] for r in cursor.fetchall()}
+
+        prompt = f"""คุณเป็น Digital Marketing Analyst ผู้เชี่ยวชาญ Facebook Ads สำหรับ e-commerce ไทย
+วิเคราะห์แคมเปญ Facebook Ads ชื่อ "{campaign}" ของร้านชุดพยาบาล EKG Shops
+
+ข้อมูลแคมเปญ:
+- ยอด Visits: {total_visits:,} ครั้ง
+- ระยะเวลา: {duration_days} วัน (เริ่ม {str(first_visit.date()) if first_visit else '-'})
+- สถานะ: {active_status}
+- มือถือ: {mobile_pct}% | คอมพิวเตอร์: {100-mobile_pct}%
+- Peak hours: {[f"{h['hour']}:00" for h in peak_hours]}
+- Peak days: {peak_days}
+- งบประมาณรวม: {f'{budget:,.0f} บาท' if budget > 0 else 'ยังไม่ได้ตั้งค่า'}
+- Cost Per Visit (CPV): {f'{cpv:.2f} บาท/visit' if cpv else 'ไม่มีข้อมูลงบ'}
+
+Conversion Funnel:
+- เข้าชม Catalog: {funnel.get('catalog_view', '-')}
+- เปิด Chatbot: {funnel.get('chatbot_open', '-')}
+- คลิกสมัคร: {funnel.get('register_click', '-')}
+- สมัครสำเร็จ: {funnel.get('register_complete', '-')}
+
+ตอบเป็น JSON เท่านั้น:
+{{
+  "verdict": "ประเมินแคมเปญนี้ใน 1 ประโยค",
+  "performance_score": 75,
+  "roi_assessment": "ประเมินความคุ้มค่าของงบที่ใช้ (ถ้าไม่มีข้อมูลงบให้แนะนำให้ตั้งค่า)",
+  "strengths": ["จุดแข็ง 1", "จุดแข็ง 2"],
+  "weaknesses": ["จุดอ่อน 1", "จุดอ่อน 2"],
+  "actions": ["สิ่งที่ควรทำต่อ 1", "สิ่งที่ควรทำต่อ 2", "สิ่งที่ควรทำต่อ 3"],
+  "budget_advice": "คำแนะนำด้านงบประมาณ"
+}}"""
+
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        text = response.text.strip()
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'): text = text[4:]
+        import json as _json
+        result = _json.loads(text.strip())
+        result['campaign'] = campaign
+        result['stats'] = {
+            'total_visits': total_visits, 'duration_days': duration_days,
+            'mobile_pct': mobile_pct, 'budget': budget, 'cpv': cpv,
+            'active_status': active_status,
+        }
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

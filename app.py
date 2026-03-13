@@ -236,6 +236,22 @@ def google_callback():
         new_user_id = cursor.fetchone()['id']
         conn.commit()
 
+        # Track register_complete conversion event
+        try:
+            visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+            user_agent = request.headers.get('User-Agent', '')
+            utm_campaign = session.get('_utm_campaign') or request.referrer or None
+            traffic_type = 'facebook' if (utm_campaign and 'fb' in str(utm_campaign).lower()) else 'organic'
+            import uuid as _uuid
+            sess_id = session.get('_tracking_session') or str(_uuid.uuid4())[:16]
+            cursor.execute('''
+                INSERT INTO conversion_events (session_id, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (sess_id, 'register_complete', 'google_oauth', traffic_type, utm_campaign, visitor_ip, user_agent[:300] if user_agent else ''))
+            conn.commit()
+        except Exception:
+            pass
+
         session.clear()
         session['user_id'] = new_user_id
         session['role'] = 'Reseller'
