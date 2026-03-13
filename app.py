@@ -957,6 +957,14 @@ def public_chat_message():
         BRONZE_TIER_ID = 1
         keywords = _re.sub(r'[^\wก-๙\s]', ' ', user_msg).split()
         keywords = [k for k in keywords if len(k) >= 2][:6]
+        # For Thai text without spaces, also check for known product category terms as substrings
+        _KNOWN_CAT_TERMS = ['เสื้อพยาบาล', 'กระโปรงพยาบาล', 'ชุดพยาบาล', 'กาวน์', 'เสื้อกาวน์',
+                            'กางเกงพยาบาล', 'ชุดเดรส', 'ชุดพิธีการ', 'ผ้ากันเปื้อน', 'หมวกพยาบาล',
+                            'ชุดผ่าตัด', 'เสื้อผ่าตัด', 'ชุดพยาบาล', 'เสื้อ', 'กระโปรง', 'ชุด']
+        for _ckt in _KNOWN_CAT_TERMS:
+            if _ckt in user_msg and _ckt not in keywords:
+                keywords.append(_ckt)
+        keywords = keywords[:8]
         products_text = ''
         prod_list = []
         prod_rows = []
@@ -965,7 +973,7 @@ def public_chat_message():
         # Extract product IDs already shown in history (for "show more" pagination)
         _shown_hist_ids = set()
         for _sh in history:
-            for _sid in _re.findall(r'\bID:(\d+)\b', str(_sh.get('text', ''))):
+            for _sid in _re.findall(r'\(#(\d+)\)', str(_sh.get('text', ''))):
                 _shown_hist_ids.add(int(_sid))
         _SHOW_MORE_KW = ('ดูเพิ่ม', 'แสดงเพิ่ม', 'เพิ่มเติม', 'ดูทั้งหมด', 'อีกบ้าง', 'แสดงอีก',
                          'ต้องการดูเพิ่ม', 'มีอีกไหม', 'ดูเพิ่มเติม', 'อยากดูเพิ่ม', 'ดูสินค้าเพิ่ม')
@@ -1028,9 +1036,9 @@ def public_chat_message():
                         'member_price': f'฿{member_price:.0f}' if member_price > 0 else '',
                     })
                     if disc > 0 and member_price > 0:
-                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
+                        products_text += f"  - {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
                     else:
-                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคา฿{price:.0f}"
+                        products_text += f"  - {pr['name']} ราคา฿{price:.0f}"
                     if cat:
                         products_text += f" หมวด:{cat}"
                     if skus:
@@ -1039,7 +1047,7 @@ def public_chat_message():
                         products_text += f" ({bot_desc})"
                     if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
-                    products_text += '\n'
+                    products_text += f" (#{pr['id']})\n"
             except Exception as _e:
                 print(f'[GuestBot] product search error: {_e}')
 
@@ -1098,16 +1106,16 @@ def public_chat_message():
                         'member_price': f'฿{member_price:.0f}' if member_price > 0 else '',
                     })
                     if disc > 0 and member_price > 0:
-                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
+                        products_text += f"  - {pr['name']} ราคาปกติ฿{price:.0f} → ราคาสมาชิก฿{member_price:.0f} (ลด{disc:.0f}%)"
                     else:
-                        products_text += f"  - ID:{pr['id']} [{brand}] {pr['name']} ราคา฿{price:.0f}"
+                        products_text += f"  - {pr['name']} ราคา฿{price:.0f}"
                     if cat:
                         products_text += f" หมวด:{cat}"
                     if skus:
                         products_text += f" ไซส์:{skus}"
                     if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
-                    products_text += '\n'
+                    products_text += f" (#{pr['id']})\n"
             except Exception as _fe:
                 print(f'[GuestBot] fallback product search error: {_fe}')
 
@@ -1154,16 +1162,16 @@ def public_chat_message():
                                       'price': f'฿{_sm_price:.0f}',
                                       'member_price': f'฿{_sm_mprice:.0f}' if _sm_mprice > 0 else ''})
                     if _sm_disc > 0 and _sm_mprice > 0:
-                        products_text += f"  - ID:{pr['id']} [{_sm_brand}] {pr['name']} ราคาปกติ฿{_sm_price:.0f} → ราคาสมาชิก฿{_sm_mprice:.0f} (ลด{_sm_disc:.0f}%)"
+                        products_text += f"  - {pr['name']} ราคาปกติ฿{_sm_price:.0f} → ราคาสมาชิก฿{_sm_mprice:.0f} (ลด{_sm_disc:.0f}%)"
                     else:
-                        products_text += f"  - ID:{pr['id']} [{_sm_brand}] {pr['name']} ราคา฿{_sm_price:.0f}"
+                        products_text += f"  - {pr['name']} ราคา฿{_sm_price:.0f}"
                     if _sm_cat:
                         products_text += f" หมวด:{_sm_cat}"
                     if _sm_skus:
                         products_text += f" ไซส์:{_sm_skus}"
                     if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
-                    products_text += '\n'
+                    products_text += f" (#{pr['id']})\n"
                 prod_rows = _sm_rows
             except Exception as _sme:
                 print(f'[GuestBot] show-more error: {_sme}')
@@ -1197,7 +1205,7 @@ def public_chat_message():
         # If prod_rows empty but history mentions product IDs → load those products for size chart
         if not prod_rows and history:
             _hist_text = ' '.join(str(h.get('text', '')) for h in history[-8:])
-            _hist_pids = [int(x) for x in _re.findall(r'\bID:(\d+)\b', _hist_text)]
+            _hist_pids = [int(x) for x in _re.findall(r'\(#(\d+)\)', _hist_text)]
             if _hist_pids:
                 try:
                     conn.rollback()
@@ -1379,10 +1387,11 @@ def public_chat_message():
 - 🖼️ show_product_ids: ใส่ product ID ใน 2 กรณีนี้:
   1) ลูกค้าถามสินค้าประเภทใดประเภทหนึ่งชัดเจน เช่น "กระโปรงมีไหม" "มีเสื้ออะไรบ้าง" "กาวน์มีไหม" → ใส่ ID ทุกรายการที่ตรงประเภทนั้น
   2) ลูกค้า "ขอดูรูป/ดูสินค้า/ส่งรูป/ดูแบบ/อยากเห็น" ชัดเจน
-  * product ID คือตัวเลขหลัง "ID:" ในรายการสินค้าด้านล่าง เช่น "ID:42" = ใส่ 42 ลงใน show_product_ids เท่านั้น
-  * ❌ ห้ามเขียนตัวเลข ID ใน message field เด็ดขาดในทุกรูปแบบ: "ID:22", "(ID:22)", "รหัส 22", "รหัสสินค้า 22", "เลข 22" — ลูกค้าต้องไม่เห็นตัวเลข ID ใดๆ ในข้อความตอบ
-  * ✅ ถูกต้อง: ใช้ชื่อสินค้าแทนเสมอ เช่น "เสื้อพยาบาล-ปกบัว" แทนที่จะพูด "สินค้า ID:15"
-  * ✅ ถูกต้อง: รายการสินค้าด้านล่างมีรูปแบบ "ID:XX [brand] ชื่อสินค้า" — ให้ใช้แค่ "ชื่อสินค้า" เมื่อกล่าวถึงในข้อความ ไม่ต้องพูด ID
+  * product ID คือตัวเลขใน "(#XX)" ที่ต่อท้ายชื่อสินค้าในรายการด้านล่าง เช่น "(#42)" = ใส่ 42 ลงใน show_product_ids — นี่คือรหัสภายใน ห้ามนำไปแสดงในข้อความตอบเด็ดขาด
+  * ❌ ห้ามเขียนตัวเลข/รหัสใดๆ ใน message เด็ดขาด: "(#22)", "ID:22", "(ID:22)", "รหัส 22", "#22" — ลูกค้าต้องไม่เห็นตัวเลขหรือรหัสสินค้าใดๆ ในข้อความ
+  * ❌ ห้ามคัดลอก format จากรายการสินค้า (เช่น "(#XX)", "[มีตารางไซส์]", "หมวด:XX", "ไซส์:XX") ลงใน quick_replies
+  * ✅ ถูกต้อง: reply และ quick_replies ใช้แค่ "ชื่อสินค้า" เท่านั้น เช่น "เสื้อพยาบาล-ปกบัว" — ไม่มีรหัส ไม่มี format พิเศษ
+  * ✅ ถูกต้อง: รายการสินค้าด้านล่างมีรูปแบบ "ชื่อสินค้า ราคา (#XX)" — ใช้แค่ "ชื่อสินค้า" ในข้อความตอบ
 - 🚫 ห้ามพูดถึงรูปภาพในการตอบทุกกรณี: ในบทสนทนานี้ไม่มีรูปภาพตารางไซส์ส่งมาเลย ข้อมูลตารางไซส์มาจากหัวข้อ "ตารางขนาดสินค้า" ในข้อความ — ห้ามพูดว่า "รูปภาพ" "รูปตาราง" "จากรูปที่ส่ง" หรือ "รูปของคุณ" ในทุกกรณี ให้พูดแทนว่า "ตามตารางขนาดสินค้า" หรือ "ตามข้อมูลในระบบ" เท่านั้น
 - 📋 เมื่อถามว่ามีแบบไหนบ้าง/มีอะไรบ้าง: แสดงรายชื่อสินค้า**ทุกรายการ**จากรายการด้านล่าง ห้ามตัดหรือย่อ พร้อมใส่ show_product_ids ด้วยเพื่อให้ลูกค้าเห็นภาพ แล้วถามว่าสนใจชิ้นไหนเป็นพิเศษ
 - 🎨 คำค้นเชิงสไตล์/สไตลิช (sexy, เซ็กซี่, เข้ารูป, ดูดี, สวย, เท่, น่ารัก, 2 piece, two piece, เซ็ต): ห้ามบอกว่า "ไม่มีข้อมูล" — ให้แนะนำสินค้าที่ใกล้เคียงที่สุดจากรายการ เช่น เดรสเข้ารูป ชุดพิธีการ และบอกจุดเด่นของสินค้าที่มี
