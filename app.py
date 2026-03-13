@@ -5957,20 +5957,22 @@ def track_page_visit():
         data = request.get_json(silent=True) or {}
         page_name = data.get('page_name', 'unknown')
         source = data.get('source', 'direct')
-        
+        utm_campaign = data.get('utm_campaign', None)
+        utm_medium = data.get('utm_medium', None)
+
         # Get visitor info
         visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         if visitor_ip:
             visitor_ip = visitor_ip.split(',')[0].strip()
         user_agent = request.headers.get('User-Agent', '')[:500]
-        
+
         conn = get_db()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
-            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent)
-            VALUES (%s, %s, %s, %s)
-        ''', (page_name, source, visitor_ip, user_agent))
+            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium))
         
         conn.commit()
         return jsonify({'success': True}), 200
@@ -6091,6 +6093,21 @@ def get_facebook_ads_stats():
             chart_visits.append(daily_visits.get(date, 0))
             chart_registrations.append(daily_registrations.get(date, 0))
         
+        # Get per-campaign breakdown (all time)
+        cursor.execute('''
+            SELECT
+                COALESCE(utm_campaign, '(ไม่ระบุแคมเปญ)') as campaign,
+                COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('become-reseller', 'catalog')
+            AND source = 'facebook'
+            GROUP BY utm_campaign
+            ORDER BY visits DESC
+            LIMIT 20
+        ''')
+        campaigns_raw = cursor.fetchall()
+        campaign_breakdown = [{'campaign': r['campaign'], 'visits': r['visits']} for r in campaigns_raw]
+
         # Get recent registrations from Facebook
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.created_at, u.is_approved,
@@ -6102,7 +6119,7 @@ def get_facebook_ads_stats():
             LIMIT 10
         ''')
         recent_registrations = [dict(row) for row in cursor.fetchall()]
-        
+
         return jsonify({
             'today': {
                 'visits': today_visits,
@@ -6129,7 +6146,8 @@ def get_facebook_ads_stats():
                 'visits': chart_visits,
                 'registrations': chart_registrations
             },
-            'recent_registrations': recent_registrations
+            'recent_registrations': recent_registrations,
+            'campaign_breakdown': campaign_breakdown
         }), 200
         
     except Exception as e:

@@ -1851,17 +1851,19 @@
         }
     } catch(e) {}
 
-    // ② บันทึก visit ลง DB พร้อมตรวจ source จาก fbclid / utm_source
+    // ② บันทึก visit ลง DB พร้อมตรวจ source + campaign จาก URL params
     try {
         const params = new URLSearchParams(window.location.search);
         const hasFbclid = params.has('fbclid');
         const utmSource = (params.get('utm_source') || '').toLowerCase();
+        const utmCampaign = params.get('utm_campaign') || null;
+        const utmMedium = params.get('utm_medium') || null;
         const isFacebook = hasFbclid || utmSource === 'facebook' || utmSource === 'fb';
         const source = isFacebook ? 'facebook' : 'direct';
         await fetch('/api/track-visit', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ page_name: 'catalog', source: source })
+            body: JSON.stringify({ page_name: 'catalog', source, utm_campaign: utmCampaign, utm_medium: utmMedium })
         });
     } catch(e) {}
 })();

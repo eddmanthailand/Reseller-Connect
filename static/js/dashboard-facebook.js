@@ -220,9 +220,9 @@ async function loadMetaInsights(period = '30d') {
     }
 }
 
-function _metaStat(label, value, color) {
-    return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.08);">
-        <div style="font-size:10px;opacity:0.55;margin-bottom:3px;">${label}</div>
+function _metaStat(label, value, color = '#1d1d1f') {
+    return `<div style="background:#f9f9f9;border-radius:9px;padding:10px 12px;border:0.5px solid #e5e5ea;">
+        <div style="font-size:11px;color:#6e6e73;margin-bottom:3px;font-weight:500;">${label}</div>
         <div style="font-size:16px;font-weight:700;color:${color};">${value}</div>
     </div>`;
 }
@@ -291,55 +291,94 @@ async function saveFbAdsPixelSettings() {
     }
 }
 
+let _fbStatsData = null;
+let _fbActivePeriod = 'today';
+
+function fbSetPeriod(period, btn) {
+    _fbActivePeriod = period;
+    document.querySelectorAll('.fb-seg-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (_fbStatsData) _fbApplyPeriod(_fbStatsData, period);
+}
+
+function _fbApplyPeriod(data, period) {
+    const p = data[period];
+    if (!p) return;
+    const visits = document.getElementById('fbStatsTodayVisits');
+    const regs = document.getElementById('fbStatsTodayRegs');
+    const conv = document.getElementById('fbStatsTodayConv');
+    if (visits) visits.textContent = p.visits.toLocaleString();
+    if (regs) regs.textContent = p.registrations.toLocaleString();
+    if (conv) conv.textContent = p.conversion + '%';
+}
+
 async function loadFacebookAdsStats() {
     try {
-        const response = await fetch(`${API_URL}/facebook-ads/stats`, {
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            console.error('Failed to load Facebook Ads stats');
-            return;
-        }
-        
+        const response = await fetch(`${API_URL}/facebook-ads/stats`, { credentials: 'include' });
+        if (!response.ok) { console.error('Failed to load Facebook Ads stats'); return; }
+
         const data = await response.json();
-        
-        // Update stats cards
-        document.getElementById('fbStatsTodayVisits').textContent = data.today.visits;
-        document.getElementById('fbStatsTodayRegs').textContent = data.today.registrations;
-        document.getElementById('fbStatsTodayConv').textContent = data.today.conversion + '%';
-        
-        document.getElementById('fbStatsWeekVisits').textContent = data.week.visits;
-        document.getElementById('fbStatsWeekRegs').textContent = data.week.registrations;
-        document.getElementById('fbStatsWeekConv').textContent = data.week.conversion + '%';
-        
-        document.getElementById('fbStatsMonthVisits').textContent = data.month.visits;
-        document.getElementById('fbStatsMonthRegs').textContent = data.month.registrations;
-        document.getElementById('fbStatsMonthConv').textContent = data.month.conversion + '%';
-        
-        document.getElementById('fbStatsTotalVisits').textContent = data.total.visits;
-        document.getElementById('fbStatsTotalRegs').textContent = data.total.registrations;
-        document.getElementById('fbStatsTotalConv').textContent = data.total.conversion + '%';
-        
-        // Update chart
+        _fbStatsData = data;
+
+        // Fill hidden legacy IDs for any other code that uses them
+        const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setEl('fbStatsWeekVisits', data.week.visits);
+        setEl('fbStatsWeekRegs', data.week.registrations);
+        setEl('fbStatsWeekConv', data.week.conversion + '%');
+        setEl('fbStatsMonthVisits', data.month.visits);
+        setEl('fbStatsMonthRegs', data.month.registrations);
+        setEl('fbStatsMonthConv', data.month.conversion + '%');
+        setEl('fbStatsTotalVisits', data.total.visits);
+        setEl('fbStatsTotalRegs', data.total.registrations);
+        setEl('fbStatsTotalConv', data.total.conversion + '%');
+
+        // Apply current period to visible cards
+        _fbApplyPeriod(data, _fbActivePeriod);
+
+        // Chart, campaign breakdown, recent regs
         renderFbAdsChart(data.chart);
-        
-        // Update recent registrations table
+        renderCampaignBreakdown(data.campaign_breakdown || []);
         renderFbRecentRegistrations(data.recent_registrations);
-        
+
+        // Pixel badge
+        const badge = document.getElementById('fbPixelStatusBadge');
+        if (badge) badge.style.display = 'inline-flex';
+
     } catch (error) {
         console.error('Error loading Facebook Ads stats:', error);
     }
 }
 
+function renderCampaignBreakdown(campaigns) {
+    const el = document.getElementById('fbCampaignBreakdown');
+    if (!el) return;
+    if (!campaigns || campaigns.length === 0) {
+        el.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:13px;padding:20px 0;">ยังไม่มีข้อมูลแคมเปญ<br><span style="font-size:11px;">เพิ่ม utm_campaign= ใน URL โฆษณา</span></div>';
+        return;
+    }
+    const max = campaigns[0].visits || 1;
+    el.innerHTML = campaigns.map(c => {
+        const pct = Math.round((c.visits / max) * 100);
+        const name = c.campaign === '(ไม่ระบุแคมเปญ)'
+            ? '<span style="color:#6e6e73;font-style:italic;">ไม่ระบุ</span>'
+            : `<span style="color:#1d1d1f;">${c.campaign}</span>`;
+        return `<div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <div style="font-size:13px;font-weight:500;">${name}</div>
+                <div style="font-size:13px;font-weight:600;color:#007aff;">${c.visits.toLocaleString()}</div>
+            </div>
+            <div style="height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;">
+                <div style="height:100%;width:${pct}%;background:#007aff;border-radius:2px;transition:width 0.4s ease;"></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
 function renderFbAdsChart(chartData) {
     const ctx = document.getElementById('fbAdsChart');
     if (!ctx) return;
-    
-    if (fbAdsChart) {
-        fbAdsChart.destroy();
-    }
-    
+    if (fbAdsChart) { fbAdsChart.destroy(); }
+
     fbAdsChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -348,18 +387,24 @@ function renderFbAdsChart(chartData) {
                 {
                     label: 'ผู้เข้าชม',
                     data: chartData.visits,
-                    borderColor: '#1877f2',
-                    backgroundColor: 'rgba(24, 119, 242, 0.1)',
+                    borderColor: '#007aff',
+                    backgroundColor: 'rgba(0,122,255,0.08)',
                     fill: true,
-                    tension: 0.3
+                    tension: 0.4,
+                    pointBackgroundColor: '#007aff',
+                    pointRadius: 3,
+                    borderWidth: 2
                 },
                 {
                     label: 'สมัคร',
                     data: chartData.registrations,
-                    borderColor: '#42b72a',
-                    backgroundColor: 'rgba(66, 183, 42, 0.1)',
+                    borderColor: '#34c759',
+                    backgroundColor: 'rgba(52,199,89,0.08)',
                     fill: true,
-                    tension: 0.3
+                    tension: 0.4,
+                    pointBackgroundColor: '#34c759',
+                    pointRadius: 3,
+                    borderWidth: 2
                 }
             ]
         },
@@ -369,18 +414,20 @@ function renderFbAdsChart(chartData) {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { color: 'rgba(255,255,255,0.7)' }
+                    labels: { color: '#6e6e73', font: { size: 12 }, boxWidth: 12 }
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: { color: 'rgba(255,255,255,0.5)' },
-                    grid: { color: 'rgba(255,255,255,0.1)' }
+                    ticks: { color: '#6e6e73', font: { size: 11 } },
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    border: { display: false }
                 },
                 x: {
-                    ticks: { color: 'rgba(255,255,255,0.5)' },
-                    grid: { color: 'rgba(255,255,255,0.1)' }
+                    ticks: { color: '#6e6e73', font: { size: 11 } },
+                    grid: { display: false },
+                    border: { display: false }
                 }
             }
         }
@@ -390,38 +437,34 @@ function renderFbAdsChart(chartData) {
 function renderFbRecentRegistrations(registrations) {
     const tbody = document.getElementById('fbRecentRegistrations');
     if (!tbody) return;
-    
     if (!registrations || registrations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; opacity: 0.5;">ยังไม่มีผู้สมัครจาก Facebook Ads</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6e6e73;padding:20px 0;font-size:13px;">ยังไม่มีผู้สมัครจาก Facebook Ads</td></tr>';
         return;
     }
-    
     tbody.innerHTML = registrations.map(reg => {
-        const date = new Date(reg.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
-        const statusBadge = reg.is_approved 
-            ? '<span style="background: rgba(34,197,94,0.2); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: 11px;">อนุมัติแล้ว</span>'
-            : '<span style="background: rgba(251,191,36,0.2); color: #fbbf24; padding: 2px 8px; border-radius: 4px; font-size: 11px;">รออนุมัติ</span>';
-        
-        return `<tr>
-            <td>${reg.full_name || '-'}</td>
-            <td>${reg.username}</td>
-            <td>${date}</td>
-            <td>${statusBadge}</td>
+        const date = new Date(reg.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
+        const badge = reg.is_approved
+            ? '<span style="background:#e8fbe8;color:#1a7f37;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;">อนุมัติแล้ว</span>'
+            : '<span style="background:#fff8e1;color:#b45309;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;">รออนุมัติ</span>';
+        return `<tr style="border-bottom:0.5px solid #f2f2f7;">
+            <td style="padding:10px 0;color:#1d1d1f;">${reg.full_name || '-'}</td>
+            <td style="padding:10px 0;color:#6e6e73;">${reg.username}</td>
+            <td style="padding:10px 0;color:#6e6e73;">${date}</td>
+            <td style="padding:10px 0;">${badge}</td>
         </tr>`;
     }).join('');
 }
 
 function copyLandingUrl() {
-    const urlInput = document.getElementById('fbLandingUrl');
-    if (urlInput) {
-        urlInput.select();
-        navigator.clipboard.writeText(urlInput.value).then(() => {
-            showAlert('คัดลอก URL สำเร็จ', 'success');
-        }).catch(() => {
-            document.execCommand('copy');
-            showAlert('คัดลอก URL สำเร็จ', 'success');
-        });
-    }
+    const url = 'https://ekgshops.com/catalog';
+    navigator.clipboard.writeText(url).then(() => {
+        showAlert('คัดลอก URL สำเร็จ', 'success');
+    }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = url; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        showAlert('คัดลอก URL สำเร็จ', 'success');
+    });
 }
 
 async function loadPromptPaySettings() {
