@@ -5956,19 +5956,62 @@ def get_facebook_pixel_public():
 
 # ==================== PAGE VISITS TRACKING API ====================
 
+def _classify_traffic(utm_source, utm_medium, fbclid, referrer):
+    """Classify traffic into source label and traffic_type category."""
+    from urllib.parse import urlparse
+    s = (utm_source or '').lower().strip()
+    m = (utm_medium or '').lower().strip()
+    if fbclid or s in ('facebook', 'fb', 'ig', 'instagram'):
+        return 'facebook', 'facebook_ad'
+    if s == 'google' and m in ('cpc', 'paid', 'ppc'):
+        return 'google_ads', 'paid_search'
+    if m in ('cpc', 'paid', 'ppc', 'banner', 'display', 'paidsocial'):
+        return s or 'paid', 'paid_other'
+    if s in ('email', 'sms', 'line_official', 'newsletter'):
+        return s, 'crm'
+    if s and s not in ('', 'direct'):
+        return s, 'utm_other'
+    if referrer:
+        try:
+            domain = urlparse(referrer).netloc.lower()
+            if 'google.' in domain:
+                return 'google', 'organic_search'
+            if any(d in domain for d in ('bing.', 'yahoo.', 'duckduckgo.')):
+                return 'organic_search', 'organic_search'
+            if 'facebook.' in domain or 'fb.' in domain:
+                return 'facebook', 'organic_social'
+            if 'instagram.' in domain:
+                return 'instagram', 'organic_social'
+            if 'line.' in domain:
+                return 'line', 'organic_social'
+            if 'tiktok.' in domain:
+                return 'tiktok', 'organic_social'
+            if 'youtube.' in domain:
+                return 'youtube', 'organic_social'
+            if 'twitter.' in domain or 'x.com' in domain:
+                return 'twitter', 'organic_social'
+            return 'referral', 'referral'
+        except Exception:
+            return 'referral', 'referral'
+    return 'direct', 'direct'
+
+
 @app.route('/api/track-visit', methods=['POST'])
 def track_page_visit():
-    """Track a page visit (public endpoint for landing pages)"""
+    """Track a page visit with traffic classification"""
     conn = None
     cursor = None
     try:
         data = request.get_json(silent=True) or {}
         page_name = data.get('page_name', 'unknown')
-        source = data.get('source', 'direct')
-        utm_campaign = data.get('utm_campaign', None)
-        utm_medium = data.get('utm_medium', None)
+        utm_source = data.get('utm_source') or data.get('source', '')
+        utm_campaign = data.get('utm_campaign') or None
+        utm_medium = data.get('utm_medium') or None
+        fbclid = data.get('fbclid') or None
+        referrer = (data.get('referrer') or '')[:500]
 
-        # Get visitor info
+        source, traffic_type = _classify_traffic(utm_source, utm_medium, fbclid, referrer)
+
         visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         if visitor_ip:
             visitor_ip = visitor_ip.split(',')[0].strip()
@@ -5976,24 +6019,63 @@ def track_page_visit():
 
         conn = get_db()
         cursor = conn.cursor()
-
         cursor.execute('''
-            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium))
-        
+            INSERT INTO page_visits (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium, referrer, traffic_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (page_name, source, visitor_ip, user_agent, utm_campaign, utm_medium,
+              referrer or None, traffic_type))
         conn.commit()
         return jsonify({'success': True}), 200
-        
     except Exception as e:
-        if conn:
-            conn.rollback()
+        if conn: conn.rollback()
         return handle_error(e)
     finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/track-event', methods=['POST'])
+def track_conversion_event():
+    """Track conversion funnel events (chatbot_open, register_click, register_complete, etc.)"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json(silent=True) or {}
+        event_type = data.get('event_type', '')
+        if not event_type:
+            return jsonify({'error': 'Missing event_type'}), 400
+        valid_events = {'catalog_view', 'chatbot_open', 'register_click', 'register_complete', 'first_order'}
+        if event_type not in valid_events:
+            return jsonify({'error': 'Invalid event_type'}), 400
+
+        visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if visitor_ip:
+            visitor_ip = visitor_ip.split(',')[0].strip()
+
+        utm_source = data.get('utm_source') or data.get('source', '')
+        utm_campaign = data.get('utm_campaign') or None
+        utm_medium = data.get('utm_medium') or None
+        fbclid = data.get('fbclid') or None
+        referrer = (data.get('referrer') or '')[:500]
+        session_id = data.get('session_id') or ''
+        user_agent = request.headers.get('User-Agent', '')[:500]
+
+        source, traffic_type = _classify_traffic(utm_source, utm_medium, fbclid, referrer)
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO conversion_events (session_id, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (session_id or None, event_type, source, traffic_type, utm_campaign, visitor_ip, user_agent))
+        conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @app.route('/api/facebook-ads/stats', methods=['GET'])
 @login_required
@@ -6255,6 +6337,396 @@ def get_campaign_detail():
 
     except Exception as e:
         return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/facebook-ads/traffic-sources', methods=['GET'])
+@login_required
+@admin_required
+def get_traffic_sources():
+    """Phase 2A: Traffic source breakdown (organic vs paid vs direct vs referral)"""
+    conn = None
+    cursor = None
+    try:
+        period = request.args.get('period', 'total')
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        if period == 'today':
+            date_filter = "AND created_at >= CURRENT_DATE"
+        elif period == 'week':
+            date_filter = "AND created_at >= CURRENT_DATE - INTERVAL '6 days'"
+        elif period == 'month':
+            date_filter = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)"
+        else:
+            date_filter = ""
+
+        # Traffic type breakdown
+        cursor.execute(f'''
+            SELECT
+                COALESCE(traffic_type, 'direct') as type,
+                COALESCE(source, 'direct') as source,
+                COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller') {date_filter}
+            GROUP BY traffic_type, source
+            ORDER BY visits DESC
+        ''')
+        raw = cursor.fetchall()
+
+        # Group into categories
+        categories = {
+            'facebook_ad': {'label': 'Facebook Ads', 'color': '#1877f2', 'visits': 0, 'sources': []},
+            'paid_search': {'label': 'Google Ads', 'color': '#fbbc04', 'visits': 0, 'sources': []},
+            'paid_other': {'label': 'โฆษณาอื่นๆ', 'color': '#ff9500', 'visits': 0, 'sources': []},
+            'organic_search': {'label': 'Organic Search', 'color': '#34c759', 'visits': 0, 'sources': []},
+            'organic_social': {'label': 'Organic Social', 'color': '#5856d6', 'visits': 0, 'sources': []},
+            'direct': {'label': 'Direct / ไม่ทราบที่มา', 'color': '#8e8e93', 'visits': 0, 'sources': []},
+            'referral': {'label': 'Referral', 'color': '#ff2d55', 'visits': 0, 'sources': []},
+            'crm': {'label': 'Email / LINE', 'color': '#00c7be', 'visits': 0, 'sources': []},
+            'utm_other': {'label': 'UTM อื่นๆ', 'color': '#af52de', 'visits': 0, 'sources': []},
+        }
+        for r in raw:
+            t = r['type'] if r['type'] in categories else 'utm_other'
+            categories[t]['visits'] += r['visits']
+            categories[t]['sources'].append({'source': r['source'], 'visits': r['visits']})
+
+        result = [dict(type=k, **v) for k, v in categories.items() if v['visits'] > 0]
+        result.sort(key=lambda x: x['visits'], reverse=True)
+        total = sum(r['visits'] for r in result)
+        for r in result:
+            r['pct'] = round(r['visits'] / total * 100) if total else 0
+
+        # Daily breakdown (30 days) for top 3 types
+        cursor.execute('''
+            SELECT DATE(created_at) as d,
+                   COALESCE(traffic_type,'direct') as type,
+                   COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller')
+            AND created_at >= CURRENT_DATE - INTERVAL '29 days'
+            GROUP BY d, traffic_type ORDER BY d
+        ''')
+        from datetime import datetime, timedelta
+        daily_data = {}
+        for r in cursor.fetchall():
+            ds = str(r['d'])
+            t = r['type']
+            if ds not in daily_data: daily_data[ds] = {}
+            daily_data[ds][t] = r['visits']
+        labels = [(datetime.now() - timedelta(days=i)).strftime('%d/%m') for i in range(29, -1, -1)]
+        dates_keys = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(29, -1, -1)]
+
+        return jsonify({
+            'breakdown': result,
+            'total': total,
+            'chart': {'labels': labels, 'dates': dates_keys, 'raw': daily_data}
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/facebook-ads/funnel', methods=['GET'])
+@login_required
+@admin_required
+def get_funnel_stats():
+    """Phase 2C: Conversion funnel stats"""
+    conn = None
+    cursor = None
+    try:
+        period = request.args.get('period', 'total')
+        campaign = request.args.get('campaign', None)
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        if period == 'today':
+            date_filter = "AND created_at >= CURRENT_DATE"
+        elif period == 'week':
+            date_filter = "AND created_at >= CURRENT_DATE - INTERVAL '6 days'"
+        elif period == 'month':
+            date_filter = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)"
+        else:
+            date_filter = ""
+
+        camp_filter = ""
+        camp_params = []
+        if campaign:
+            camp_filter = "AND utm_campaign = %s"
+            camp_params = [campaign]
+
+        steps = ['catalog_view', 'chatbot_open', 'register_click', 'register_complete']
+        funnel = {}
+        for step in steps:
+            cursor.execute(f'''
+                SELECT COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
+                FROM conversion_events
+                WHERE event_type = %s {date_filter} {camp_filter}
+            ''', [step] + camp_params)
+            r = cursor.fetchone()
+            funnel[step] = r['cnt'] if r else 0
+
+        # catalog_view fallback from page_visits
+        if funnel['catalog_view'] == 0:
+            cursor.execute(f'''
+                SELECT COUNT(*) as cnt FROM page_visits
+                WHERE page_name IN ('catalog','become-reseller') {date_filter}
+                {('AND utm_campaign = %s' if campaign else '')}
+            ''', camp_params)
+            r = cursor.fetchone()
+            funnel['catalog_view'] = r['cnt'] if r else 0
+
+        # Per-source funnel
+        cursor.execute(f'''
+            SELECT source, event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
+            FROM conversion_events
+            WHERE event_type IN ('catalog_view','register_complete') {date_filter}
+            GROUP BY source, event_type ORDER BY cnt DESC
+        ''')
+        by_source = {}
+        for r in cursor.fetchall():
+            s = r['source']
+            if s not in by_source: by_source[s] = {}
+            by_source[s][r['event_type']] = r['cnt']
+
+        source_funnel = []
+        for s, data in by_source.items():
+            views = data.get('catalog_view', 0)
+            regs = data.get('register_complete', 0)
+            source_funnel.append({
+                'source': s, 'views': views, 'registrations': regs,
+                'conversion': round(regs / views * 100, 1) if views else 0
+            })
+        source_funnel.sort(key=lambda x: x['views'], reverse=True)
+
+        steps_meta = [
+            {'key': 'catalog_view', 'label': '👁 เข้าชม Catalog'},
+            {'key': 'chatbot_open', 'label': '💬 เปิด Chatbot'},
+            {'key': 'register_click', 'label': '👆 คลิกสมัคร'},
+            {'key': 'register_complete', 'label': '✅ สมัครสำเร็จ'},
+        ]
+        top = funnel.get('catalog_view', 1) or 1
+        steps_data = [{
+            **m,
+            'count': funnel.get(m['key'], 0),
+            'pct': round(funnel.get(m['key'], 0) / top * 100) if top else 0
+        } for m in steps_meta]
+
+        return jsonify({
+            'funnel': steps_data,
+            'by_source': source_funnel
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/facebook-ads/ai-analysis', methods=['GET'])
+@login_required
+@admin_required
+def fb_ai_analysis():
+    """Phase 2B: AI campaign analysis using Gemini"""
+    conn = None
+    cursor = None
+    try:
+        from google import genai as _g
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่มี Gemini API Key'}), 503
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Get campaign data (last 30 days)
+        cursor.execute('''
+            SELECT utm_campaign, COUNT(*) as visits,
+                   ROUND(AVG(EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok'))) as avg_hour,
+                   COUNT(CASE WHEN user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct
+            FROM page_visits
+            WHERE source = 'facebook' AND utm_campaign IS NOT NULL
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY utm_campaign ORDER BY visits DESC LIMIT 10
+        ''')
+        campaigns = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute('''
+            SELECT traffic_type, COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller')
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY traffic_type ORDER BY visits DESC
+        ''')
+        traffic_types = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute('''
+            SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller')
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY hr ORDER BY cnt DESC LIMIT 5
+        ''')
+        peak_hours = [dict(r) for r in cursor.fetchall()]
+
+        prompt = f"""คุณเป็น Digital Marketing Analyst ผู้เชี่ยวชาญ e-commerce ไทย
+วิเคราะห์ข้อมูลโฆษณาร้านขายชุดพยาบาล EKG Shops นี้ และให้คำแนะนำเป็นภาษาไทยที่กระชับ ตรงประเด็น
+
+ข้อมูลแคมเปญ Facebook (30 วันล่าสุด):
+{campaigns}
+
+การแบ่งประเภท traffic:
+{traffic_types}
+
+ชั่วโมงที่มี traffic สูงสุด:
+{peak_hours}
+
+กรุณาตอบในรูปแบบ JSON ดังนี้ (ตอบ JSON เท่านั้น ไม่มีข้อความอื่น):
+{{
+  "summary": "สรุปภาพรวม 2-3 ประโยค",
+  "top_insight": "insight สำคัญที่สุด 1 ข้อ",
+  "recommendations": ["คำแนะนำข้อ 1", "คำแนะนำข้อ 2", "คำแนะนำข้อ 3"],
+  "best_time": "ช่วงเวลาที่ดีที่สุดในการยิงโฆษณา",
+  "score": 75
+}}
+score คือคะแนนภาพรวมประสิทธิภาพ 0-100"""
+
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        text = response.text.strip()
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'): text = text[4:]
+        import json as _json
+        result = _json.loads(text.strip())
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@app.route('/api/facebook-ads/ai-copy', methods=['POST'])
+@login_required
+@admin_required
+def fb_ai_copy():
+    """Phase 2B: AI ad copy generator"""
+    try:
+        from google import genai as _g
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่มี Gemini API Key'}), 503
+
+        data = request.get_json(silent=True) or {}
+        product = data.get('product', 'ชุดพยาบาล EKG')
+        tone = data.get('tone', 'friendly')
+        goal = data.get('goal', 'สมัครสมาชิก')
+        campaign = data.get('campaign', '')
+
+        tone_map = {'friendly': 'เป็นกันเอง สบายๆ', 'professional': 'มืออาชีพ น่าเชื่อถือ', 'urgent': 'สร้างความเร่งด่วน มี deadline'}
+        tone_desc = tone_map.get(tone, tone_map['friendly'])
+
+        prompt = f"""คุณเป็น Copywriter มืออาชีพ เชี่ยวชาญ Facebook Ads สำหรับ e-commerce ไทย
+สร้าง Facebook Ad Copy สำหรับร้าน EKG Shops (ขายชุดพยาบาลคุณภาพสูง ราคาพิเศษสำหรับ reseller)
+
+สินค้า/แคมเปญ: {product} {('(' + campaign + ')' if campaign else '')}
+โทน: {tone_desc}
+เป้าหมาย: {goal}
+
+ตอบเป็น JSON เท่านั้น:
+{{
+  "headline": "หัวข้อโฆษณา (ไม่เกิน 40 ตัวอักษร)",
+  "primary_text": "เนื้อหาหลัก 3-4 ประโยค มี emoji เหมาะสม",
+  "cta": "call-to-action สั้นๆ",
+  "hashtags": ["#แฮชแท็ก1", "#แฮชแท็ก2", "#แฮชแท็ก3"],
+  "tip": "เคล็ดลับการใช้ copy นี้ให้ได้ผล"
+}}"""
+
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        text = response.text.strip()
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'): text = text[4:]
+        import json as _json
+        result = _json.loads(text.strip())
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/facebook-ads/ai-timing', methods=['GET'])
+@login_required
+@admin_required
+def fb_ai_timing():
+    """Phase 2B: AI timing recommendations"""
+    conn = None
+    cursor = None
+    try:
+        from google import genai as _g
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่มี Gemini API Key'}), 503
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('''
+            SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr,
+                   TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'Day') as dow,
+                   COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller')
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY hr, dow ORDER BY visits DESC
+        ''')
+        hour_dow = [{'hr': int(r['hr']), 'dow': r['dow'].strip(), 'visits': r['visits']} for r in cursor.fetchall()]
+
+        cursor.execute('''
+            SELECT EXTRACT(DOW FROM created_at AT TIME ZONE 'Asia/Bangkok') as dow_num,
+                   TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'Day') as dow,
+                   COUNT(*) as visits
+            FROM page_visits
+            WHERE page_name IN ('catalog','become-reseller')
+            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY dow_num, dow ORDER BY dow_num
+        ''')
+        by_dow = [{'dow': r['dow'].strip(), 'visits': r['visits']} for r in cursor.fetchall()]
+
+        prompt = f"""คุณเป็น Data Analyst สำหรับ Facebook Ads
+วิเคราะห์ข้อมูลเวลาของร้านชุดพยาบาล EKG Shops และแนะนำเวลาที่ดีที่สุดในการยิงโฆษณา
+
+ข้อมูล Hour x Day of Week (visits):
+{hour_dow[:20]}
+
+ยอด visit รายวัน:
+{by_dow}
+
+ตอบ JSON เท่านั้น:
+{{
+  "best_hours": [20, 21, 22],
+  "best_days": ["วันจันทร์", "วันอังคาร"],
+  "avoid_hours": [2, 3, 4],
+  "schedule_suggestion": "คำแนะนำการตั้ง Ad Schedule 2-3 ประโยค",
+  "budget_tip": "เคล็ดลับการจัดสรร budget ตามเวลา"
+}}"""
+
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+        text = response.text.strip()
+        if text.startswith('```'):
+            text = text.split('```')[1]
+            if text.startswith('json'): text = text[4:]
+        import json as _json
+        result = _json.loads(text.strip())
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         if cursor: cursor.close()
         if conn: conn.close()

@@ -75,6 +75,8 @@ async function loadFacebookAdsPage() {
     loadFacebookAdsStats();
     loadMetaApiStatus();
     loadAdLandingUrls();
+    loadTrafficSources('total');
+    loadFunnelStats('total');
 }
 
 async function loadAdLandingUrls() {
@@ -937,6 +939,258 @@ function handleQrUpload(event) {
             placeholder.style.display = 'none';
         };
         reader.readAsDataURL(file);
+    }
+}
+
+// ==================== PHASE 2A: TRAFFIC SOURCES ====================
+
+let _trafficChartInst = null;
+
+async function loadTrafficSources(period, btn) {
+    const container = document.getElementById('fbTrafficSources');
+    if (!container) return;
+    if (btn) {
+        btn.closest('div').querySelectorAll('.fb-seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:13px;padding:12px 0;">กำลังโหลด...</div>';
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/traffic-sources?period=${period}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Load failed');
+        const data = await res.json();
+        renderTrafficSources(data);
+    } catch(e) {
+        container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:12px 0;">โหลดข้อมูลไม่สำเร็จ</div>`;
+    }
+}
+
+function renderTrafficSources(data) {
+    const container = document.getElementById('fbTrafficSources');
+    if (!container) return;
+    const breakdown = data.breakdown || [];
+    const total = data.total || 0;
+
+    if (!breakdown.length) {
+        container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:16px 0;border:1px dashed #e5e5ea;border-radius:10px;">ยังไม่มีข้อมูล traffic</div>';
+        return;
+    }
+
+    let html = '';
+    breakdown.forEach(item => {
+        html += `
+        <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:13px;font-weight:600;color:#1d1d1f;">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};margin-right:6px;"></span>
+                    ${item.label}
+                </span>
+                <span style="font-size:12px;color:#6e6e73;">${item.visits.toLocaleString()} visits · ${item.pct}%</span>
+            </div>
+            <div style="height:6px;background:#f2f2f7;border-radius:3px;overflow:hidden;">
+                <div style="height:100%;width:${item.pct}%;background:${item.color};border-radius:3px;transition:width 0.6s ease;"></div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+
+    // Traffic chart (stacked line, 30 days)
+    const chartEl = document.getElementById('fbTrafficChart');
+    if (!chartEl || !data.chart) return;
+    if (_trafficChartInst) { _trafficChartInst.destroy(); _trafficChartInst = null; }
+    const rawDaily = data.chart.raw || {};
+    const labels = data.chart.labels || [];
+    const dates = data.chart.dates || [];
+    const topTypes = breakdown.slice(0, 4);
+    const datasets = topTypes.map(item => ({
+        label: item.label,
+        data: dates.map(d => (rawDaily[d] && rawDaily[d][item.type]) || 0),
+        borderColor: item.color,
+        backgroundColor: item.color + '22',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4
+    }));
+    _trafficChartInst = new Chart(chartEl.getContext('2d'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10 } } },
+            scales: {
+                x: { ticks: { font: { size: 10 }, maxTicksLimit: 8 }, grid: { display: false } },
+                y: { ticks: { font: { size: 10 } }, beginAtZero: true, grid: { color: '#f2f2f7' } }
+            }
+        }
+    });
+}
+
+// ==================== PHASE 2C: CONVERSION FUNNEL ====================
+
+async function loadFunnelStats(period, btn) {
+    const container = document.getElementById('fbFunnelStats');
+    if (!container) return;
+    if (btn) {
+        btn.closest('div').querySelectorAll('.fb-seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:13px;padding:12px 0;">กำลังโหลด...</div>';
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/funnel?period=${period}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Load failed');
+        const data = await res.json();
+        renderFunnelStats(data);
+    } catch(e) {
+        container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:12px 0;">โหลดข้อมูลไม่สำเร็จ</div>`;
+    }
+}
+
+function renderFunnelStats(data) {
+    const container = document.getElementById('fbFunnelStats');
+    if (!container) return;
+    const funnel = data.funnel || [];
+    if (!funnel.length) {
+        container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:16px 0;border:1px dashed #e5e5ea;border-radius:10px;">ยังไม่มีข้อมูล funnel</div>';
+        return;
+    }
+    const colors = ['#5856d6', '#007aff', '#ff9500', '#34c759'];
+    let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+    funnel.forEach((step, i) => {
+        const w = step.pct || 0;
+        html += `
+        <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                <span style="font-size:12px;font-weight:600;color:#1d1d1f;">${step.label}</span>
+                <span style="font-size:12px;color:#6e6e73;">${(step.count||0).toLocaleString()} · ${w}%</span>
+            </div>
+            <div style="height:20px;background:#f2f2f7;border-radius:6px;overflow:hidden;">
+                <div style="height:100%;width:${Math.max(w,2)}%;background:${colors[i % colors.length]};border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;transition:width 0.7s ease;">
+                    ${w >= 15 ? `<span style="font-size:10px;color:#fff;font-weight:600;">${w}%</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+
+    // By source table
+    const bySource = data.by_source || [];
+    if (bySource.length) {
+        html += `<div style="margin-top:12px;"><div style="font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Conversion รายแหล่งที่มา</div>`;
+        bySource.slice(0, 5).forEach(s => {
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid #f2f2f7;">
+                <span style="font-size:12px;color:#1d1d1f;">${s.source}</span>
+                <span style="font-size:12px;color:#6e6e73;">${s.views} views · ${s.registrations} regs · <strong style="color:#34c759;">${s.conversion}%</strong></span>
+            </div>`;
+        });
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+// ==================== PHASE 2B: AI FEATURES ====================
+
+async function loadAiAnalysis() {
+    const container = document.getElementById('fbAiAnalysis');
+    const btn = document.getElementById('aiAnalysisBtn');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:20px 0;"><div class="fb-spinner" style="display:inline-block;width:20px;height:20px;border:2px solid #e5e5ea;border-top-color:#af52de;border-radius:50%;animation:spin 0.8s linear infinite;"></div><br>AI กำลังวิเคราะห์...</div>';
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/ai-analysis`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const score = data.score || 0;
+        const scoreColor = score >= 70 ? '#34c759' : score >= 40 ? '#ff9500' : '#ff3b30';
+        container.innerHTML = `
+            <div style="background:#f9f9f9;border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid #af52de;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:11px;font-weight:700;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;">ภาพรวม</span>
+                    <span style="font-size:20px;font-weight:700;color:${scoreColor};">${score}<span style="font-size:12px;">/100</span></span>
+                </div>
+                <p style="font-size:12px;color:#1d1d1f;line-height:1.6;">${data.summary || ''}</p>
+                ${data.top_insight ? `<div style="margin-top:8px;padding:8px;background:#fff;border-radius:8px;border:1px solid #e5e5ea;font-size:12px;color:#007aff;">💡 ${data.top_insight}</div>` : ''}
+            </div>
+            <div style="margin-bottom:8px;">
+                <div style="font-size:11px;font-weight:700;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">คำแนะนำ</div>
+                ${(data.recommendations || []).map((r,i) => `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:0.5px solid #f2f2f7;font-size:12px;color:#1d1d1f;"><span style="color:#af52de;font-weight:600;">${i+1}.</span>${r}</div>`).join('')}
+            </div>
+            ${data.best_time ? `<div style="padding:8px 10px;background:#f0fdf4;border-radius:8px;font-size:12px;color:#15803d;">⏰ ${data.best_time}</div>` : ''}
+        `;
+    } catch(e) {
+        container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:12px;border:1px dashed #fca5a5;border-radius:10px;">เกิดข้อผิดพลาด: ${e.message}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> วิเคราะห์'; }
+    }
+}
+
+async function loadAiTiming() {
+    const container = document.getElementById('fbAiTiming');
+    const btn = document.getElementById('aiTimingBtn');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:20px 0;"><div class="fb-spinner" style="display:inline-block;width:20px;height:20px;border:2px solid #e5e5ea;border-top-color:#ff9500;border-radius:50%;animation:spin 0.8s linear infinite;"></div><br>AI กำลังวิเคราะห์...</div>';
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/ai-timing`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const fmtHours = arr => (arr || []).map(h => `${h}:00`).join(', ');
+        container.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div style="background:#f0fdf4;border-radius:10px;padding:10px;">
+                    <div style="font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:4px;">⏰ ชั่วโมงที่ดีที่สุด</div>
+                    <div style="font-size:13px;font-weight:600;color:#1d1d1f;">${fmtHours(data.best_hours)}</div>
+                </div>
+                <div style="background:#fff9f0;border-radius:10px;padding:10px;">
+                    <div style="font-size:10px;font-weight:700;color:#b45309;text-transform:uppercase;margin-bottom:4px;">📅 วันที่ดีที่สุด</div>
+                    <div style="font-size:13px;font-weight:600;color:#1d1d1f;">${(data.best_days || []).join(', ')}</div>
+                </div>
+            </div>
+            ${data.schedule_suggestion ? `<div style="background:#f9f9f9;border-radius:10px;padding:10px;margin-bottom:8px;font-size:12px;color:#1d1d1f;line-height:1.6;border-left:3px solid #ff9500;">${data.schedule_suggestion}</div>` : ''}
+            ${data.budget_tip ? `<div style="background:#f0f4ff;border-radius:10px;padding:10px;font-size:12px;color:#4338ca;line-height:1.6;">💰 ${data.budget_tip}</div>` : ''}
+            ${(data.avoid_hours || []).length ? `<div style="margin-top:8px;font-size:11px;color:#ff3b30;">⚠️ หลีกเลี่ยง: ${fmtHours(data.avoid_hours)}</div>` : ''}
+        `;
+    } catch(e) {
+        container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:12px;border:1px dashed #fca5a5;border-radius:10px;">เกิดข้อผิดพลาด: ${e.message}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> วิเคราะห์'; }
+    }
+}
+
+async function generateAiCopy() {
+    const container = document.getElementById('fbAiCopy');
+    const btn = document.getElementById('aiCopyBtn');
+    if (!container) return;
+    const product = document.getElementById('aiCopyProduct')?.value?.trim() || 'ชุดพยาบาล EKG';
+    const tone = document.getElementById('aiCopyTone')?.value || 'friendly';
+    const goal = document.getElementById('aiCopyGoal')?.value || 'สมัครสมาชิก';
+    container.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:12px;padding:16px 0;"><div class="fb-spinner" style="display:inline-block;width:16px;height:16px;border:2px solid #e5e5ea;border-top-color:#34c759;border-radius:50%;animation:spin 0.8s linear infinite;"></div> กำลังสร้าง...</div>';
+    if (btn) { btn.disabled = true; btn.innerHTML = '⌛ กำลังสร้าง...'; }
+    try {
+        const res = await fetch(`${window.API_URL || '/api'}/facebook-ads/ai-copy`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product, tone, goal })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        container.innerHTML = `
+            <div style="background:#f9f9f9;border-radius:10px;padding:12px;border:1px solid #e5e5ea;">
+                <div style="font-size:14px;font-weight:700;color:#1d1d1f;margin-bottom:8px;border-bottom:1px solid #e5e5ea;padding-bottom:8px;">📢 ${data.headline || ''}</div>
+                <div style="font-size:12px;color:#1d1d1f;line-height:1.7;margin-bottom:8px;white-space:pre-line;">${data.primary_text || ''}</div>
+                <div style="font-size:12px;font-weight:700;color:#007aff;margin-bottom:8px;">👉 ${data.cta || ''}</div>
+                <div style="font-size:11px;color:#5856d6;margin-bottom:8px;">${(data.hashtags || []).join(' ')}</div>
+                ${data.tip ? `<div style="background:#fffbeb;border-radius:8px;padding:8px;font-size:11px;color:#92400e;border:1px solid #fde68a;">💡 เคล็ดลับ: ${data.tip}</div>` : ''}
+                <button onclick="navigator.clipboard.writeText(\`${(data.headline||'')+'\\n'+(data.primary_text||'')+'\\n'+(data.cta||'')}\`.replace(/\`/g,''))" style="margin-top:10px;width:100%;padding:7px;border:1px solid #e5e5ea;border-radius:8px;background:#fff;font-size:12px;cursor:pointer;color:#6e6e73;">📋 คัดลอก Copy</button>
+            </div>
+        `;
+    } catch(e) {
+        container.innerHTML = `<div style="text-align:center;color:#ff3b30;font-size:12px;padding:10px;border:1px dashed #fca5a5;border-radius:10px;">เกิดข้อผิดพลาด: ${e.message}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> สร้าง Ad Copy'; }
     }
 }
 

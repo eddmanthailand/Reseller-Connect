@@ -1632,6 +1632,11 @@
                 document.body.appendChild(el);
                 el.addEventListener('animationend', () => el.remove(), { once: true });
             }
+            // Track chatbot_open funnel event (once per session)
+            if (!sessionStorage.getItem('_ekg_chat_tracked')) {
+                sessionStorage.setItem('_ekg_chat_tracked', '1');
+                if (window._trackEvent) window._trackEvent('chatbot_open');
+            }
         }
     });
 
@@ -1851,22 +1856,53 @@
         }
     } catch(e) {}
 
-    // ② บันทึก visit ลง DB พร้อมตรวจ source + campaign จาก URL params
+    // ② บันทึก visit + funnel tracking
+    const _params = new URLSearchParams(window.location.search);
+    const _trackMeta = {
+        utm_source: _params.get('utm_source') || '',
+        utm_medium: _params.get('utm_medium') || '',
+        utm_campaign: _params.get('utm_campaign') || '',
+        fbclid: _params.get('fbclid') || '',
+        referrer: document.referrer || '',
+        session_id: (() => {
+            let sid = sessionStorage.getItem('_ekg_sid');
+            if (!sid) { sid = Math.random().toString(36).slice(2) + Date.now(); sessionStorage.setItem('_ekg_sid', sid); }
+            return sid;
+        })()
+    };
+
+    // Helper: track any conversion funnel event
+    window._trackEvent = async function(event_type) {
+        try {
+            await fetch('/api/track-event', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ event_type, ..._trackMeta })
+            });
+        } catch(e) {}
+    };
+
+    // Track catalog_view
     try {
-        const params = new URLSearchParams(window.location.search);
-        const hasFbclid = params.has('fbclid');
-        const utmSource = (params.get('utm_source') || '').toLowerCase();
-        const utmCampaign = params.get('utm_campaign') || null;
-        const utmMedium = params.get('utm_medium') || null;
-        const isFacebook = hasFbclid || utmSource === 'facebook' || utmSource === 'fb';
-        const source = isFacebook ? 'facebook' : 'direct';
         await fetch('/api/track-visit', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ page_name: 'catalog', source, utm_campaign: utmCampaign, utm_medium: utmMedium })
+            body: JSON.stringify({ page_name: 'catalog', ..._trackMeta })
         });
+        window._trackEvent('catalog_view');
     } catch(e) {}
 })();
+</script>
+<script>
+// Track register_click when any /join link is clicked (once per session)
+document.querySelectorAll('a[href="/join"]').forEach(function(link) {
+    link.addEventListener('click', function() {
+        if (!sessionStorage.getItem('_ekg_reg_click')) {
+            sessionStorage.setItem('_ekg_reg_click', '1');
+            if (window._trackEvent) window._trackEvent('register_click');
+        }
+    });
+});
 </script>
 </body>
 </html>
