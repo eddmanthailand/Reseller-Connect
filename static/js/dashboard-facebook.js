@@ -421,10 +421,13 @@ function renderCampaignBreakdown(campaigns) {
         const cpvChip = c.cpv != null
             ? `<span style="font-size:10px;color:#ff9500;margin-left:4px;">CPV ฿${c.cpv}</span>`
             : '';
-        const hideBtn = c.campaign !== '(ไม่ระบุแคมเปญ)'
+        const actionBtns = c.campaign !== '(ไม่ระบุแคมเปญ)'
             ? `<button onclick="event.stopPropagation();hideCampaign('${safeName}',this)" title="ซ่อนแคมเปญนี้"
                 style="border:none;background:none;cursor:pointer;font-size:10px;color:#c7c7cc;padding:2px 4px;border-radius:4px;line-height:1;flex-shrink:0;"
-                onmouseover="this.style.color='#ff3b30'" onmouseout="this.style.color='#c7c7cc'">ซ่อน</button>`
+                onmouseover="this.style.color='#ff9500'" onmouseout="this.style.color='#c7c7cc'">ซ่อน</button>
+               <button onclick="event.stopPropagation();deleteCampaign('${safeName}',${c.visits||0},this)" title="ลบแคมเปญนี้ถาวร"
+                style="border:none;background:none;cursor:pointer;font-size:10px;color:#c7c7cc;padding:2px 4px;border-radius:4px;line-height:1;flex-shrink:0;"
+                onmouseover="this.style.color='#ff3b30'" onmouseout="this.style.color='#c7c7cc'">ลบ</button>`
             : '';
         return `
         <div id="fbRow_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-bottom:4px;">
@@ -435,7 +438,7 @@ function renderCampaignBreakdown(campaigns) {
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                        ${hideBtn}
+                        ${actionBtns}
                         ${_statusBadge(c.active_status)}
                         <span style="font-size:13px;font-weight:600;color:#007aff;">${(c.visits||0).toLocaleString()}</span>
                     </div>
@@ -453,7 +456,7 @@ function renderCampaignBreakdown(campaigns) {
 }
 
 async function hideCampaign(campaignName, btnEl) {
-    if (!confirm(`ซ่อนแคมเปญ "${campaignName}" ออกจาก Dashboard?\n(สามารถยกเลิกได้ในอนาคต)`)) return;
+    if (!confirm(`ซ่อนแคมเปญ "${campaignName}" ออกจาก Dashboard?\n(ข้อมูลยังอยู่ สามารถยกเลิกได้ภายหลัง)`)) return;
     try {
         const r = await fetch(`${API_URL}/facebook-ads/campaign-hide`, {
             method: 'POST',
@@ -464,11 +467,39 @@ async function hideCampaign(campaignName, btnEl) {
         if (r.ok) {
             const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const row = document.getElementById(`fbRow_${safeId}`);
-            if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+            if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+            showAlert(`ซ่อนแคมเปญ "${campaignName}" แล้ว`, 'success');
         } else {
             showAlert('ไม่สามารถซ่อนแคมเปญได้', 'error');
         }
     } catch(e) { showAlert('เกิดข้อผิดพลาด', 'error'); }
+}
+
+async function deleteCampaign(campaignName, visitCount, btnEl) {
+    const confirmed = confirm(
+        `⚠️ ลบแคมเปญ "${campaignName}" ถาวร?\n\n` +
+        `จะลบข้อมูล ${visitCount} visit ออกจากระบบทั้งหมด\n` +
+        `ไม่สามารถกู้คืนได้ — กด OK เพื่อยืนยัน`
+    );
+    if (!confirmed) return;
+
+    try {
+        const r = await fetch(`${API_URL}/facebook-ads/campaign-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ campaign_name: campaignName })
+        });
+        const d = await r.json();
+        if (r.ok && d.success) {
+            const safeId = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            const row = document.getElementById(`fbRow_${safeId}`);
+            if (row) { row.style.transition = 'opacity 0.3s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+            showAlert(`ลบแคมเปญ "${campaignName}" แล้ว (${d.deleted_visits} visits)`, 'success');
+        } else {
+            showAlert(d.error || 'ไม่สามารถลบแคมเปญได้', 'error');
+        }
+    } catch(e) { showAlert('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
 }
 
 async function toggleCampaignDetail(campaign, rowEl) {

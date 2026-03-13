@@ -1259,6 +1259,53 @@ def toggle_campaign_visibility():
         if conn: conn.close()
 
 
+# ==================== DELETE CAMPAIGN DATA ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_campaign_data():
+    """Permanently delete all tracking data for a specific campaign"""
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json(silent=True) or {}
+        campaign_name = (data.get('campaign_name') or '').strip()
+        if not campaign_name:
+            return jsonify({'error': 'Missing campaign_name'}), 400
+        if campaign_name == '(ไม่ระบุแคมเปญ)':
+            return jsonify({'error': 'ไม่สามารถลบแคมเปญกลุ่ม "ไม่ระบุ" ได้'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Count before delete
+        cursor.execute('SELECT COUNT(*) FROM page_visits WHERE utm_campaign = %s', (campaign_name,))
+        pv_count = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM conversion_events WHERE utm_campaign = %s', (campaign_name,))
+        ce_count = cursor.fetchone()[0]
+
+        # Delete tracking data
+        cursor.execute('DELETE FROM page_visits WHERE utm_campaign = %s', (campaign_name,))
+        cursor.execute('DELETE FROM conversion_events WHERE utm_campaign = %s', (campaign_name,))
+        # Remove from campaign_budgets if exists
+        cursor.execute('DELETE FROM campaign_budgets WHERE campaign_name = %s', (campaign_name,))
+        conn.commit()
+
+        return jsonify({
+            'success': True,
+            'campaign_name': campaign_name,
+            'deleted_visits': pv_count,
+            'deleted_conversions': ce_count
+        }), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 # ==================== AI PER-CAMPAIGN ANALYSIS ====================
 
 @facebook_ads_bp.route('/api/facebook-ads/ai-campaign-analysis', methods=['GET'])
