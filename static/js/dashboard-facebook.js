@@ -349,6 +349,9 @@ async function loadFacebookAdsStats() {
     }
 }
 
+let _fbCampaignCharts = {};
+let _fbOpenCampaign = null;
+
 function renderCampaignBreakdown(campaigns) {
     const el = document.getElementById('fbCampaignBreakdown');
     if (!el) return;
@@ -357,21 +360,186 @@ function renderCampaignBreakdown(campaigns) {
         return;
     }
     const max = campaigns[0].visits || 1;
-    el.innerHTML = campaigns.map(c => {
+    el.innerHTML = campaigns.map((c, i) => {
         const pct = Math.round((c.visits / max) * 100);
-        const name = c.campaign === '(ไม่ระบุแคมเปญ)'
+        const safeName = c.campaign.replace(/"/g, '&quot;');
+        const displayName = c.campaign === '(ไม่ระบุแคมเปญ)'
             ? '<span style="color:#6e6e73;font-style:italic;">ไม่ระบุ</span>'
-            : `<span style="color:#1d1d1f;">${c.campaign}</span>`;
-        return `<div style="margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <div style="font-size:13px;font-weight:500;">${name}</div>
-                <div style="font-size:13px;font-weight:600;color:#007aff;">${c.visits.toLocaleString()}</div>
+            : `<span style="color:#1d1d1f;font-weight:500;">${c.campaign}</span>`;
+        return `
+        <div style="margin-bottom:4px;">
+            <div onclick="toggleCampaignDetail('${safeName}', this)" style="cursor:pointer;padding:8px 6px;border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
+                        <svg id="fbChevron_${i}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c7c7cc" stroke-width="2.5" style="transition:transform 0.2s;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                        ${displayName}
+                    </div>
+                    <div style="font-size:13px;font-weight:600;color:#007aff;">${c.visits.toLocaleString()}</div>
+                </div>
+                <div style="height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;margin-left:18px;">
+                    <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#007aff,#34c759);border-radius:2px;transition:width 0.5s ease;"></div>
+                </div>
             </div>
-            <div style="height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;">
-                <div style="height:100%;width:${pct}%;background:#007aff;border-radius:2px;transition:width 0.4s ease;"></div>
-            </div>
+            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
+}
+
+async function toggleCampaignDetail(campaign, rowEl) {
+    const safeId = campaign.replace(/[^a-zA-Z0-9]/g, '_');
+    const detailEl = document.getElementById(`fbDetail_${safeId}`);
+    if (!detailEl) return;
+
+    const chevrons = rowEl.querySelectorAll('svg');
+    const chevron = chevrons[0];
+
+    if (detailEl.style.display !== 'none') {
+        detailEl.style.display = 'none';
+        if (chevron) chevron.style.transform = '';
+        _fbOpenCampaign = null;
+        return;
+    }
+
+    // Close previously open panel
+    if (_fbOpenCampaign && _fbOpenCampaign !== safeId) {
+        const prev = document.getElementById(`fbDetail_${_fbOpenCampaign}`);
+        if (prev) prev.style.display = 'none';
+        const prevChevrons = prev && prev.parentElement.querySelectorAll('svg');
+        if (prevChevrons && prevChevrons[0]) prevChevrons[0].style.transform = '';
+    }
+    _fbOpenCampaign = safeId;
+
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+    detailEl.style.display = 'block';
+    detailEl.innerHTML = `<div style="padding:12px;text-align:center;color:#6e6e73;font-size:12px;">กำลังโหลด...</div>`;
+
+    try {
+        const r = await fetch(`${API_URL}/facebook-ads/campaign-detail?campaign=${encodeURIComponent(campaign)}`, { credentials: 'include' });
+        const d = await r.json();
+        renderCampaignDetailPanel(detailEl, d, safeId);
+    } catch(e) {
+        detailEl.innerHTML = `<div style="padding:12px;color:#ff3b30;font-size:12px;">โหลดข้อมูลไม่สำเร็จ</div>`;
+    }
+}
+
+function renderCampaignDetailPanel(el, d, safeId) {
+    const fmt = dt => dt ? new Date(dt).toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'2-digit'}) : '-';
+    const peakText = d.peak_hours && d.peak_hours.length
+        ? d.peak_hours.map(p => `${p.hour}:00`).join(', ')
+        : 'ไม่พอข้อมูล';
+
+    el.innerHTML = `
+    <div style="background:#f9f9f9;border-radius:10px;padding:14px;border:0.5px solid #e5e5ea;">
+
+        <!-- Meta row -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="background:#fff;border-radius:7px;padding:6px 10px;border:0.5px solid #e5e5ea;font-size:11px;">
+                <span style="color:#6e6e73;">👁 Visits</span>
+                <span style="font-weight:700;color:#1d1d1f;margin-left:4px;">${(d.total_visits||0).toLocaleString()}</span>
+            </div>
+            <div style="background:#fff;border-radius:7px;padding:6px 10px;border:0.5px solid #e5e5ea;font-size:11px;">
+                <span style="color:#6e6e73;">📅 ระยะเวลา</span>
+                <span style="font-weight:700;color:#1d1d1f;margin-left:4px;">${d.duration_days} วัน</span>
+            </div>
+            <div style="background:#fff;border-radius:7px;padding:6px 10px;border:0.5px solid #e5e5ea;font-size:11px;">
+                <span style="color:#6e6e73;">🗓 เริ่ม</span>
+                <span style="font-weight:700;color:#1d1d1f;margin-left:4px;">${fmt(d.date_first)}</span>
+            </div>
+            <div style="background:#fff;border-radius:7px;padding:6px 10px;border:0.5px solid #e5e5ea;font-size:11px;">
+                <span style="color:#6e6e73;">🕗 Peak</span>
+                <span style="font-weight:700;color:#ff9500;margin-left:4px;">${peakText}</span>
+            </div>
+        </div>
+
+        <!-- Device breakdown -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <div style="flex:1;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
+                    <span style="color:#6e6e73;">📱 มือถือ</span>
+                    <span style="font-weight:600;color:#1d1d1f;">${d.device.mobile_pct}%</span>
+                </div>
+                <div style="height:6px;background:#e5e5ea;border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:${d.device.mobile_pct}%;background:#007aff;border-radius:3px;transition:width 0.5s;"></div>
+                </div>
+            </div>
+            <div style="flex:1;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
+                    <span style="color:#6e6e73;">💻 คอมพิวเตอร์</span>
+                    <span style="font-weight:600;color:#1d1d1f;">${100-d.device.mobile_pct}%</span>
+                </div>
+                <div style="height:6px;background:#e5e5ea;border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:${100-d.device.mobile_pct}%;background:#34c759;border-radius:3px;transition:width 0.5s;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trend mini chart -->
+        <div style="font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📈 แนวโน้ม 14 วัน</div>
+        <div style="height:70px;"><canvas id="fbMiniChart_${safeId}"></canvas></div>
+
+        <!-- Hour distribution -->
+        <div style="font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px;">⏰ การกระจายตามชั่วโมง (เที่ยงคืน→23:00)</div>
+        <div style="height:44px;"><canvas id="fbHourChart_${safeId}"></canvas></div>
+    </div>`;
+
+    // Render trend chart
+    setTimeout(() => {
+        const tCtx = document.getElementById(`fbMiniChart_${safeId}`);
+        if (tCtx) {
+            if (_fbCampaignCharts[`trend_${safeId}`]) _fbCampaignCharts[`trend_${safeId}`].destroy();
+            _fbCampaignCharts[`trend_${safeId}`] = new Chart(tCtx, {
+                type: 'line',
+                data: {
+                    labels: d.trend.labels,
+                    datasets: [{
+                        data: d.trend.visits,
+                        borderColor: '#007aff',
+                        backgroundColor: 'rgba(0,122,255,0.07)',
+                        fill: true, tension: 0.4, pointRadius: 2,
+                        borderWidth: 1.5, pointBackgroundColor: '#007aff'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: '#6e6e73', font: { size: 9 }, maxTicksLimit: 3 }, grid: { color: 'rgba(0,0,0,0.04)' }, border: { display: false } },
+                        x: { ticks: { color: '#6e6e73', font: { size: 9 }, maxTicksLimit: 7 }, grid: { display: false }, border: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Hour distribution bar chart
+        const hCtx = document.getElementById(`fbHourChart_${safeId}`);
+        if (hCtx) {
+            if (_fbCampaignCharts[`hour_${safeId}`]) _fbCampaignCharts[`hour_${safeId}`].destroy();
+            _fbCampaignCharts[`hour_${safeId}`] = new Chart(hCtx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => i % 6 === 0 ? `${i}:00` : ''),
+                    datasets: [{
+                        data: d.hour_dist,
+                        backgroundColor: d.hour_dist.map((v, i) => {
+                            const max = Math.max(...d.hour_dist);
+                            return v === max ? '#ff9500' : 'rgba(0,122,255,0.25)';
+                        }),
+                        borderRadius: 2, borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: {
+                        callbacks: { title: (items) => `${items[0].dataIndex}:00 น.`, label: (item) => `${item.raw} visits` }
+                    }},
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: { ticks: { color: '#6e6e73', font: { size: 9 } }, grid: { display: false }, border: { display: false } }
+                    }
+                }
+            });
+        }
+    }, 50);
 }
 
 function renderFbAdsChart(chartData) {

@@ -6158,6 +6158,100 @@ def get_facebook_ads_stats():
         if conn:
             conn.close()
 
+@app.route('/api/facebook-ads/campaign-detail', methods=['GET'])
+@login_required
+@admin_required
+def get_campaign_detail():
+    """Get detailed stats for a single Facebook Ads campaign"""
+    conn = None
+    cursor = None
+    try:
+        campaign = request.args.get('campaign', '')
+        if not campaign:
+            return jsonify({'error': 'Missing campaign'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        where_campaign = "utm_campaign = %s" if campaign != '(ไม่ระบุแคมเปญ)' else "utm_campaign IS NULL"
+        params_base = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
+        page_filter = "page_name IN ('become-reseller','catalog') AND source = 'facebook'"
+
+        # Total visits
+        cursor.execute(f'''
+            SELECT COUNT(*) as cnt, MIN(created_at) as first_visit, MAX(created_at) as last_visit
+            FROM page_visits WHERE {page_filter} AND {where_campaign}
+        ''', params_base)
+        row = cursor.fetchone()
+        total_visits = row['cnt']
+        date_first = row['first_visit']
+        date_last = row['last_visit']
+        duration_days = (date_last.date() - date_first.date()).days + 1 if date_first and date_last else 0
+
+        # Daily trend (last 14 days)
+        cursor.execute(f'''
+            SELECT DATE(created_at) as d, COUNT(*) as visits
+            FROM page_visits
+            WHERE {page_filter} AND {where_campaign}
+            AND created_at >= CURRENT_DATE - INTERVAL '13 days'
+            GROUP BY DATE(created_at) ORDER BY d
+        ''', params_base)
+        daily_raw = {str(r['d']): r['visits'] for r in cursor.fetchall()}
+        from datetime import datetime, timedelta
+        trend_labels, trend_visits = [], []
+        for i in range(13, -1, -1):
+            d = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            trend_labels.append((datetime.now() - timedelta(days=i)).strftime('%d/%m'))
+            trend_visits.append(daily_raw.get(d, 0))
+
+        # Device breakdown from user_agent
+        cursor.execute(f'''
+            SELECT user_agent FROM page_visits
+            WHERE {page_filter} AND {where_campaign} AND user_agent IS NOT NULL
+        ''', params_base)
+        agents = [r['user_agent'] for r in cursor.fetchall()]
+        mobile_kw = ('mobile', 'android', 'iphone', 'ipad', 'ipod')
+        mobile = sum(1 for a in agents if any(k in a.lower() for k in mobile_kw))
+        desktop = len(agents) - mobile
+        mobile_pct = round(mobile / len(agents) * 100) if agents else 0
+
+        # Peak hour distribution
+        cursor.execute(f'''
+            SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
+            FROM page_visits
+            WHERE {page_filter} AND {where_campaign}
+            GROUP BY hr ORDER BY cnt DESC LIMIT 3
+        ''', params_base)
+        peak_hours = [{'hour': int(r['hr']), 'count': r['cnt']} for r in cursor.fetchall()]
+
+        # Hour distribution for chart (0-23)
+        cursor.execute(f'''
+            SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
+            FROM page_visits WHERE {page_filter} AND {where_campaign}
+            GROUP BY hr ORDER BY hr
+        ''', params_base)
+        hour_raw = {int(r['hr']): r['cnt'] for r in cursor.fetchall()}
+        hour_dist = [hour_raw.get(h, 0) for h in range(24)]
+
+        return jsonify({
+            'campaign': campaign,
+            'total_visits': total_visits,
+            'date_first': str(date_first.date()) if date_first else None,
+            'date_last': str(date_last.date()) if date_last else None,
+            'duration_days': duration_days,
+            'trend': {'labels': trend_labels, 'visits': trend_visits},
+            'device': {'mobile': mobile, 'desktop': desktop, 'mobile_pct': mobile_pct},
+            'peak_hours': peak_hours,
+            'hour_dist': hour_dist
+        }), 200
+
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 # ==================== FACEBOOK META API ====================
 
 def _get_meta_credentials(cursor):
