@@ -26,6 +26,7 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Product Management (SPU/SKU):** Full CRUD for products, brands, and categories; dynamic options/attributes; auto-generation of SKU variants; multi-image upload; low stock indicators; product status management; shipping fields. Made-to-Order (MTO) system with production days, MOQ, deposit settings, and a 4-page management workflow.
 - **Order & Sales Management:** Configurable order numbering; sales statistics, 7-day sales charts, recent orders, top-selling products; sales history with filters; brand sales analytics. Shipping update page for in-transit orders with status changes and chat notifications. Quick order functionality includes "📷 อ่านใบปะหน้าอัตโนมัติ" (label OCR) via Gemini Vision to auto-fill order details and real-time phone lookup.
 - **Stripe Online Payment:** Resellers can pay via card (Stripe Checkout) as alternative to PromptPay slip upload. On successful payment, order is auto-approved to `preparing` status via Stripe webhook. Stripe credentials fetched from Replit Connectors API. Routes in `routes/stripe_payment.py`.
+- **Facebook Ads Module:** Traffic source intelligence, conversion funnel tracking, AI analysis/timing/copy generation, Facebook Pixel settings, and Meta Marketing API integration. Routes in `blueprints/facebook_ads.py`. Shared auth helpers (`login_required`, `admin_required`, `handle_error`) in `utils.py`.
 - **Refund System:** Dedicated table and APIs for refund information, slip upload, chat notification, and PromptPay QR generation.
 - **Warehouse & Stock Management:** Full CRUD for warehouses; multi-warehouse stock tracking; stock transfer and adjustment systems with audit logging.
 - **Reseller Features:** Dedicated dashboard; tier-specific pricing; customer database management; profile management.
@@ -37,9 +38,10 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Size Chart Groups:** Reusable size chart templates (`size_chart_groups` table) with dynamic columns/rows (JSONB). Admin can create templates, assign multiple products to a template, and the bot automatically includes the text-based size chart in prompts for both guest and member bots when size-related keywords are detected. Located at Admin → "ตารางขนาดสินค้า". API: `/api/admin/size-chart-groups` (CRUD) + `/api/admin/products-for-size-chart`. JS: `static/js/dashboard-size-charts.js`.
 
 ### System Design Choices
-- **Backend Framework:** Flask (lightweight, flexible).
+- **Backend Framework:** Flask (lightweight, flexible) with Blueprint-based modular architecture.
+- **Modular Structure:** `routes/` (Stripe, AI Agent), `blueprints/` (Facebook Ads), `utils.py` (shared auth decorators + error handler), `database.py` (DB pool).
 - **Database:** Neon PostgreSQL (reliability, scalability, Replit integration).
-- **Authentication:** Custom session-based for granular control.
+- **Authentication:** Custom session-based for granular control. Decorators (`login_required`, `admin_required`) in `utils.py`, importable by all blueprints without circular imports.
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
 - **Deployment:** Gunicorn production server with `gevent` async workers.
 
