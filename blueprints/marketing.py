@@ -4,6 +4,7 @@ from utils import login_required, admin_required, handle_error
 import psycopg2.extras
 import psycopg2
 import json, os
+from datetime import datetime
 from blueprints.bot_cache import bot_cache_invalidate
 
 marketing_bp = Blueprint('marketing', __name__)
@@ -132,9 +133,9 @@ def _calc_coupon_discount(cursor, coupon_code, cart_total, user_id, user_tier_ra
         return (None, 0, 'ไม่พบคูปองนี้')
     if not coupon['is_active']:
         return (None, 0, 'คูปองนี้ไม่ได้เปิดใช้งาน')
-    if coupon['start_date'] and coupon['start_date'] > __import__('datetime').datetime.now():
+    if coupon['start_date'] and coupon['start_date'] > datetime.now():
         return (None, 0, 'คูปองยังไม่เริ่มใช้งาน')
-    if coupon['end_date'] and coupon['end_date'] < __import__('datetime').datetime.now():
+    if coupon['end_date'] and coupon['end_date'] < datetime.now():
         return (None, 0, 'คูปองหมดอายุแล้ว')
     if coupon['total_quota'] > 0 and coupon['usage_count'] >= coupon['total_quota']:
         return (None, 0, 'คูปองถูกใช้ครบแล้ว')
@@ -873,8 +874,7 @@ def reseller_get_coupon_wallet():
                 if r[f] is not None:
                     r[f] = float(r[f])
             # Mark expired
-            import datetime
-            if r['status'] == 'ready' and r['end_date'] and r['end_date'] < datetime.datetime.now():
+            if r['status'] == 'ready' and r['end_date'] and r['end_date'] < datetime.now():
                 r['status'] = 'expired'
         _enrich_applies_to_names(cursor, rows)
         return jsonify(rows), 200
