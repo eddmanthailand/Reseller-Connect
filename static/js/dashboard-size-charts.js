@@ -346,9 +346,9 @@ const SizeCharts = (() => {
     const awEl = document.getElementById('sc-allowance-waist');
     const ahEl = document.getElementById('sc-allowance-hip');
     if (ftEl) _fabricType = ftEl.value;
-    if (acEl) _allowances.chest = parseFloat(acEl.value) || 1;
-    if (awEl) _allowances.waist = parseFloat(awEl.value) || 1;
-    if (ahEl) _allowances.hip = parseFloat(ahEl.value) || 1.5;
+    if (acEl) { const v = parseFloat(acEl.value); _allowances.chest = isNaN(v) ? 1 : v; }
+    if (awEl) { const v = parseFloat(awEl.value); _allowances.waist = isNaN(v) ? 1 : v; }
+    if (ahEl) { const v = parseFloat(ahEl.value); _allowances.hip   = isNaN(v) ? 1.5 : v; }
     const payload = {
       name,
       description: document.getElementById('sc-description').value.trim(),

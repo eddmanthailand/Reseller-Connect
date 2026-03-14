@@ -1326,7 +1326,7 @@
                                     <div>
                                         <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบอก +</label>
                                         <div style="display:flex;align-items:center;gap:4px;">
-                                            <input id="sc-allowance-chest" type="number" min="0" max="5" step="0.5" value="1"
+                                            <input id="sc-allowance-chest" type="number" min="-5" max="5" step="0.5" value="1"
                                                 onchange="SizeCharts.updateAllowance('chest',this.value)"
                                                 style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
                                             <span style="font-size:12px;color:#9ca3af;">"</span>
@@ -1335,7 +1335,7 @@
                                     <div>
                                         <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบเอว +</label>
                                         <div style="display:flex;align-items:center;gap:4px;">
-                                            <input id="sc-allowance-waist" type="number" min="0" max="5" step="0.5" value="1"
+                                            <input id="sc-allowance-waist" type="number" min="-5" max="5" step="0.5" value="1"
                                                 onchange="SizeCharts.updateAllowance('waist',this.value)"
                                                 style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
                                             <span style="font-size:12px;color:#9ca3af;">"</span>
@@ -1344,14 +1344,14 @@
                                     <div>
                                         <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบสะโพก +</label>
                                         <div style="display:flex;align-items:center;gap:4px;">
-                                            <input id="sc-allowance-hip" type="number" min="0" max="5" step="0.5" value="1.5"
+                                            <input id="sc-allowance-hip" type="number" min="-5" max="5" step="0.5" value="1.5"
                                                 onchange="SizeCharts.updateAllowance('hip',this.value)"
                                                 style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
                                             <span style="font-size:12px;color:#9ca3af;">"</span>
                                         </div>
                                     </div>
                                 </div>
-                                <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">💡 ผ้าไม่ยืด: สะโพก +1.5" (มาตรฐาน) | ผ้ายืด: สะโพก +1" ก็พอ — เปลี่ยนประเภทผ้าจะปรับอัตโนมัติ</p>
+                                <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">💡 ผ้าไม่ยืด: สะโพก +1.5" | ผ้ายืดทั่วไป: +1" | ผ้ายืดรัดรูป: ใส่ค่าติดลบได้ เช่น -1" คือใส่เสื้อเล็กกว่าตัว 1"</p>
                             </div>
 
                             <div style="margin-bottom:16px;">
