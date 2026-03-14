@@ -630,7 +630,7 @@ def get_facebook_ads_stats():
             },
             'recent_registrations': recent_registrations,
             'campaign_breakdown': campaign_breakdown,
-            'meta_campaigns': _get_meta_campaign_insights('last_30d')
+            'meta_campaigns': _get_meta_campaign_insights('maximum')
         }), 200
     except Exception as e:
         return handle_error(e)
