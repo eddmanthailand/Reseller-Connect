@@ -624,10 +624,15 @@ def stripe_webhook():
         stripe.api_key = secret_key
 
         webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
+        is_production = os.environ.get('REPLIT_DEPLOYMENT') == '1'
         if webhook_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        elif is_production:
+            print('[STRIPE WEBHOOK] CRITICAL: STRIPE_WEBHOOK_SECRET not set in production — rejecting unverified event')
+            return jsonify({'error': 'Webhook secret not configured'}), 400
         else:
             import json
+            print('[STRIPE WEBHOOK] WARNING: STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev mode only)')
             event = stripe.Event.construct_from(json.loads(payload), secret_key)
 
         if event['type'] == 'checkout.session.completed':
