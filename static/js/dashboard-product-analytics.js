@@ -1,12 +1,13 @@
 // ==========================================
-// Product Analytics Dashboard
+// Product Analytics — Apple-style Dashboard
 // ==========================================
 
 let _paTrendChart = null;
+let _paCampaignsPopulated = false;
 
 async function loadProductAnalytics() {
-    const days     = document.getElementById('paRangeSel')?.value     || 30;
-    const campaign = document.getElementById('paCampaignSel')?.value  || '';
+    const days     = document.getElementById('paRangeSel')?.value    || 30;
+    const campaign = document.getElementById('paCampaignSel')?.value || '';
 
     await Promise.all([
         _paLoadSummary(days, campaign),
@@ -16,7 +17,7 @@ async function loadProductAnalytics() {
     ]);
 }
 
-// ── Summary cards ─────────────────────────────────────────────
+// ── Summary cards ──────────────────────────────────────────────
 async function _paLoadSummary(days, campaign) {
     const el = document.getElementById('paSummaryCards');
     if (!el) return;
@@ -24,40 +25,42 @@ async function _paLoadSummary(days, campaign) {
         const params = new URLSearchParams({ days });
         if (campaign) params.set('campaign', campaign);
         const r = await fetch(`${API_URL}/product-analytics/summary?${params}`, { credentials: 'include' });
+        if (!r.ok) throw new Error(r.status);
         const d = await r.json();
 
         const cards = [
-            { label: 'ครั้งที่ดูสินค้า',     value: _paFmt(d.total_views),     color: '#007aff', icon: '👁️' },
-            { label: 'สินค้าที่ถูกดู',        value: _paFmt(d.unique_products), color: '#34c759', icon: '📦' },
-            { label: 'ผู้เข้าชม (session)',   value: _paFmt(d.unique_sessions), color: '#ff9f0a', icon: '👤' },
-            { label: 'มาจากโฆษณา',           value: _paFmt(d.paid_sessions),   color: '#ff375f', icon: '📢' }
+            { icon: '👁️', val: d.total_views     || 0, lbl: 'ครั้งที่ดูสินค้า',   color: 'var(--pa-blue)',   sub: `${days} วันล่าสุด` },
+            { icon: '📦', val: d.unique_products  || 0, lbl: 'สินค้าที่ถูกดู',     color: 'var(--pa-green)',  sub: 'รายการ' },
+            { icon: '👤', val: d.unique_sessions  || 0, lbl: 'ผู้เข้าชม',          color: 'var(--pa-orange)', sub: 'unique sessions' },
+            { icon: '📢', val: d.paid_sessions    || 0, lbl: 'มาจากโฆษณา',        color: 'var(--pa-purple)', sub: 'มี UTM Campaign' }
         ];
 
         el.innerHTML = cards.map(c => `
-            <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:14px 16px;">
-                <div style="font-size:20px;margin-bottom:4px;">${c.icon}</div>
-                <div style="font-size:22px;font-weight:700;color:${c.color};">${c.value}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;">${c.label}</div>
-            </div>
-        `).join('');
+            <div class="pa-card">
+                <div class="pa-card-icon">${c.icon}</div>
+                <div class="pa-card-val" style="color:${c.color};">${_paFmt(c.val)}</div>
+                <div class="pa-card-lbl">${c.lbl}</div>
+                <div class="pa-card-sub">${c.sub}</div>
+            </div>`).join('');
 
-        // Populate campaign filter dropdown once
-        _paPopulateCampaignFilter(d.top_campaigns || []);
+        if (!_paCampaignsPopulated) _paPopulateCampaignFilter(d.top_campaigns || []);
 
     } catch(e) {
-        if (el) el.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;">โหลดไม่สำเร็จ</div>';
+        if (el) el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:rgba(255,59,48,0.7);font-size:12px;">โหลดไม่สำเร็จ</div>';
     }
 }
 
 function _paPopulateCampaignFilter(topCampaigns) {
     const sel = document.getElementById('paCampaignSel');
-    if (!sel || sel.dataset.populated) return;
-    sel.dataset.populated = '1';
+    if (!sel) return;
+    _paCampaignsPopulated = true;
+    // Remove old options except first
+    while (sel.options.length > 1) sel.remove(1);
     topCampaigns.forEach(c => {
         if (!c.utm_campaign) return;
         const opt = document.createElement('option');
         opt.value = c.utm_campaign;
-        opt.textContent = `${c.utm_campaign} (${_paFmt(c.views)} ครั้ง)`;
+        opt.textContent = `${c.utm_campaign}`;
         sel.appendChild(opt);
     });
 }
@@ -70,13 +73,25 @@ async function _paLoadTrend(days, campaign) {
         const params = new URLSearchParams({ days });
         if (campaign) params.set('campaign', campaign);
         const r = await fetch(`${API_URL}/product-analytics/daily-trend?${params}`, { credentials: 'include' });
+        if (!r.ok) throw new Error(r.status);
         const rows = await r.json();
 
-        const labels  = rows.map(r => r.day ? r.day.slice(5) : '');
-        const views   = rows.map(r => r.views || 0);
-        const unique  = rows.map(r => r.unique_viewers || 0);
+        const labels = rows.map(r => {
+            if (!r.day) return '';
+            const d = new Date(r.day);
+            return `${d.getDate()}/${d.getMonth()+1}`;
+        });
+        const views  = rows.map(r => r.views         || 0);
+        const unique = rows.map(r => r.unique_viewers || 0);
 
         if (_paTrendChart) { _paTrendChart.destroy(); _paTrendChart = null; }
+
+        const noData = rows.length === 0;
+        if (noData) {
+            canvas.parentElement.innerHTML += '<div class="pa-empty"><div class="pa-empty-icon">📈</div>ยังไม่มีข้อมูล เริ่มสะสมเมื่อลูกค้ากดดูสินค้า</div>';
+            return;
+        }
+
         _paTrendChart = new Chart(canvas, {
             type: 'line',
             data: {
@@ -85,100 +100,111 @@ async function _paLoadTrend(days, campaign) {
                     {
                         label: 'ครั้งที่ดู',
                         data: views,
-                        borderColor: '#007aff',
-                        backgroundColor: 'rgba(0,122,255,0.12)',
-                        tension: 0.4,
+                        borderColor: '#0a84ff',
+                        backgroundColor: 'rgba(10,132,255,0.1)',
+                        tension: 0.42,
                         fill: true,
-                        pointRadius: rows.length > 30 ? 0 : 3
+                        pointRadius: rows.length > 45 ? 0 : 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
                     },
                     {
                         label: 'ผู้เข้าชม',
                         data: unique,
-                        borderColor: '#34c759',
-                        backgroundColor: 'rgba(52,199,89,0.08)',
-                        tension: 0.4,
+                        borderColor: '#30d158',
+                        backgroundColor: 'rgba(48,209,88,0.07)',
+                        tension: 0.42,
                         fill: true,
-                        pointRadius: rows.length > 30 ? 0 : 3
+                        pointRadius: rows.length > 45 ? 0 : 3,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
                     }
                 ]
             },
             options: {
                 responsive: true,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { labels: { color: 'rgba(255,255,255,0.6)', font: { size: 11 } } }
+                    legend: {
+                        labels: {
+                            color: 'rgba(255,255,255,0.5)',
+                            font: { size: 11 },
+                            boxWidth: 12,
+                            boxHeight: 2
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(28,28,30,0.95)',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        titleColor: 'rgba(255,255,255,0.7)',
+                        bodyColor: '#fff',
+                        padding: 10,
+                        cornerRadius: 10
+                    }
                 },
                 scales: {
-                    x: { ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                    x: {
+                        ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
+                    },
+                    y: {
+                        ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } },
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                        beginAtZero: true
+                    }
                 }
             }
         });
     } catch(e) {}
 }
 
-// ── Top products table ─────────────────────────────────────────
+// ── Top products list ──────────────────────────────────────────
 async function _paLoadTopProducts(days, campaign) {
     const el = document.getElementById('paTopProducts');
     if (!el) return;
-    el.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">กำลังโหลด...</div>';
     try {
-        const params = new URLSearchParams({ days, limit: 50 });
+        const params = new URLSearchParams({ days, limit: 20 });
         if (campaign) params.set('campaign', campaign);
         const r = await fetch(`${API_URL}/product-analytics/top-products?${params}`, { credentials: 'include' });
+        if (!r.ok) throw new Error(r.status);
         const rows = await r.json();
 
         if (!rows.length) {
-            el.innerHTML = '<div style="text-align:center;padding:24px;color:rgba(255,255,255,0.3);font-size:13px;">ยังไม่มีข้อมูล — เริ่ม track เมื่อลูกค้ากดดูสินค้าในแคตตาล็อก</div>';
+            el.innerHTML = '<div class="pa-empty"><div class="pa-empty-icon">📦</div>ยังไม่มีข้อมูล</div>';
             return;
         }
 
         const maxViews = Math.max(...rows.map(r => r.views || 1));
-        el.innerHTML = `
-            <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                    <thead>
-                        <tr style="color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.08);">
-                            <th style="text-align:left;padding:8px 10px;font-weight:500;">#</th>
-                            <th style="text-align:left;padding:8px 10px;font-weight:500;">สินค้า</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">ดู</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">ผู้เข้าชม</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">สั่งซื้อ</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">Conv.</th>
-                            <th style="padding:8px 10px;min-width:80px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows.map((row, i) => {
-                            const pct = Math.round((row.views / maxViews) * 100);
-                            const convColor = row.conversion_pct >= 10 ? '#34c759' : row.conversion_pct >= 3 ? '#ff9f0a' : 'rgba(255,255,255,0.4)';
-                            const img = row.image_url
-                                ? `<img src="${row.image_url}" style="width:32px;height:32px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">`
-                                : `<div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">👗</div>`;
-                            return `
-                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding:8px 10px;color:rgba(255,255,255,0.3);">${i+1}</td>
-                                    <td style="padding:8px 10px;">
-                                        <div style="display:flex;align-items:center;gap:8px;">
-                                            ${img}
-                                            <span style="color:rgba(255,255,255,0.85);line-height:1.3;">${_paEsc(row.name)}</span>
-                                        </div>
-                                    </td>
-                                    <td style="padding:8px 10px;text-align:right;font-weight:600;color:#007aff;">${_paFmt(row.views)}</td>
-                                    <td style="padding:8px 10px;text-align:right;color:rgba(255,255,255,0.6);">${_paFmt(row.unique_viewers)}</td>
-                                    <td style="padding:8px 10px;text-align:right;color:rgba(255,255,255,0.6);">${_paFmt(row.orders)}</td>
-                                    <td style="padding:8px 10px;text-align:right;font-weight:600;color:${convColor};">${row.conversion_pct}%</td>
-                                    <td style="padding:8px 10px;">
-                                        <div style="height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">
-                                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#007aff,#5856d6);border-radius:3px;transition:width 0.5s;"></div>
-                                        </div>
-                                    </td>
-                                </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>`;
+        el.innerHTML = rows.map((row, i) => {
+            const pct  = Math.round((row.views / maxViews) * 100);
+            const conv = parseFloat(row.conversion_pct || 0);
+            const convClass = conv >= 10 ? 'good' : conv >= 3 ? 'mid' : '';
+            const convLabel = conv > 0 ? `${conv}% conv.` : '-';
+            const rank = i < 3
+                ? ['🥇','🥈','🥉'][i]
+                : `<span style="font-size:11px;">${i+1}</span>`;
+            const img = row.image_url
+                ? `<img class="pa-prod-img" src="${_paEsc(row.image_url)}" alt="" onerror="this.src='';this.style.background='rgba(255,255,255,0.07)'">`
+                : `<div class="pa-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:18px;">👗</div>`;
+
+            return `
+                <div class="pa-prod-row">
+                    <div class="pa-prod-rank">${rank}</div>
+                    ${img}
+                    <div class="pa-prod-info">
+                        <div class="pa-prod-name">${_paEsc(row.name)}</div>
+                        <div class="pa-prod-bar-wrap"><div class="pa-prod-bar" style="width:${pct}%"></div></div>
+                    </div>
+                    <div class="pa-prod-stat">
+                        <div class="pa-prod-views">${_paFmt(row.views)}</div>
+                        <div class="pa-prod-conv ${convClass}">${convLabel}</div>
+                    </div>
+                </div>`;
+        }).join('');
+
     } catch(e) {
-        el.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,59,48,0.7);font-size:12px;">โหลดไม่สำเร็จ</div>';
+        if (el) el.innerHTML = '<div class="pa-empty" style="color:rgba(255,59,48,0.6);">โหลดไม่สำเร็จ</div>';
     }
 }
 
@@ -186,55 +212,33 @@ async function _paLoadTopProducts(days, campaign) {
 async function _paLoadCampaignBreakdown(days) {
     const el = document.getElementById('paCampaignBreakdown');
     if (!el) return;
-    el.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">กำลังโหลด...</div>';
     try {
         const r = await fetch(`${API_URL}/product-analytics/campaign-breakdown?days=${days}`, { credentials: 'include' });
+        if (!r.ok) throw new Error(r.status);
         const rows = await r.json();
 
         if (!rows.length) {
-            el.innerHTML = '<div style="text-align:center;padding:24px;color:rgba(255,255,255,0.3);font-size:13px;">ยังไม่มีข้อมูล</div>';
+            el.innerHTML = '<div class="pa-empty"><div class="pa-empty-icon">📢</div>ยังไม่มีข้อมูล</div>';
             return;
         }
 
         const maxViews = Math.max(...rows.map(r => r.views || 1));
-        el.innerHTML = `
-            <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                    <thead>
-                        <tr style="color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.08);">
-                            <th style="text-align:left;padding:8px 10px;font-weight:500;">แคมเปญ</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">ครั้งที่ดู</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">สินค้า</th>
-                            <th style="text-align:right;padding:8px 10px;font-weight:500;">ผู้เข้าชม</th>
-                            <th style="padding:8px 10px;min-width:80px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows.map(row => {
-                            const pct = Math.round((row.views / maxViews) * 100);
-                            const isPaid = row.campaign !== '(ไม่มี UTM)';
-                            return `
-                                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding:8px 10px;">
-                                        <span style="color:${isPaid ? '#ff9f0a' : 'rgba(255,255,255,0.5)'};">
-                                            ${isPaid ? '📢' : '🌐'} ${_paEsc(row.campaign)}
-                                        </span>
-                                    </td>
-                                    <td style="padding:8px 10px;text-align:right;font-weight:600;color:#007aff;">${_paFmt(row.views)}</td>
-                                    <td style="padding:8px 10px;text-align:right;color:rgba(255,255,255,0.6);">${_paFmt(row.unique_products)}</td>
-                                    <td style="padding:8px 10px;text-align:right;color:rgba(255,255,255,0.6);">${_paFmt(row.unique_viewers)}</td>
-                                    <td style="padding:8px 10px;">
-                                        <div style="height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">
-                                            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#ff9f0a,#ff375f);border-radius:3px;transition:width 0.5s;"></div>
-                                        </div>
-                                    </td>
-                                </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>`;
+        el.innerHTML = rows.map(row => {
+            const pct     = Math.round((row.views / maxViews) * 100);
+            const isPaid  = row.campaign !== '(ไม่มี UTM)';
+            const label   = row.campaign.length > 24 ? row.campaign.slice(0, 22) + '…' : row.campaign;
+            return `
+                <div class="pa-camp-row">
+                    <div class="pa-camp-badge ${isPaid ? '' : 'organic'}">${label}</div>
+                    <div class="pa-camp-bar-wrap">
+                        <div class="pa-camp-bar" style="width:${pct}%;${isPaid ? '' : 'background:linear-gradient(90deg,rgba(255,255,255,0.3),rgba(255,255,255,0.2));'}"></div>
+                    </div>
+                    <div class="pa-camp-views">${_paFmt(row.views)}</div>
+                </div>`;
+        }).join('');
+
     } catch(e) {
-        el.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,59,48,0.7);font-size:12px;">โหลดไม่สำเร็จ</div>';
+        if (el) el.innerHTML = '<div class="pa-empty" style="color:rgba(255,59,48,0.6);">โหลดไม่สำเร็จ</div>';
     }
 }
 
@@ -244,5 +248,5 @@ function _paFmt(n) {
     return Number(n).toLocaleString('th-TH');
 }
 function _paEsc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

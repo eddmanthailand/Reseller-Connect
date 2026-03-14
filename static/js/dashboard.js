@@ -612,6 +612,8 @@ function switchPage(pageName) {
         loadCoupons();
     } else if (pageName === 'customers') {
         loadCustomers();
+    } else if (pageName === 'product-analytics') {
+        if (typeof loadProductAnalytics === 'function') loadProductAnalytics();
     }
 }
 
