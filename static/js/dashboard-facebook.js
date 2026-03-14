@@ -463,7 +463,9 @@ function renderCampaignBreakdown(campaigns) {
                     <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#007aff,#34c759);border-radius:2px;transition:width 0.5s ease;"></div>
                 </div>
             </div>
-            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}"
+            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}"
+                 data-display-name="${(c.display_name||c.campaign||'').replace(/"/g,'&quot;')}"
+                 data-budget="${c.budget||0}"
                  data-meta-spend="${c.meta_spend||0}" data-meta-impressions="${c.meta_impressions||0}"
                  data-meta-clicks="${c.meta_clicks||0}" data-meta-cpc="${c.meta_cpc||0}"
                  data-meta-lifetime="${c.meta_lifetime_budget||0}" data-meta-daily="${c.meta_daily_budget||0}"
@@ -520,9 +522,11 @@ async function toggleCampaignDetail(campaign, rowEl) {
 
     try {
         // Fetch campaign detail + demographics in parallel
+        // Use display_name (Meta campaign name) for demographics lookup — avoids ID→name mismatch
+        const displayNameForDemo = detailEl.getAttribute('data-display-name') || campaign;
         const [r1, r2] = await Promise.all([
             fetch(`${API_URL}/facebook-ads/campaign-detail?campaign=${encodeURIComponent(campaign)}`, { credentials: 'include' }),
-            fetch(`${API_URL}/facebook-ads/campaign-demographics?name=${encodeURIComponent(campaign.toLowerCase())}`, { credentials: 'include' })
+            fetch(`${API_URL}/facebook-ads/campaign-demographics?name=${encodeURIComponent(displayNameForDemo.toLowerCase())}`, { credentials: 'include' })
         ]);
         const d    = await r1.json();
         const demo = r2.ok ? await r2.json() : null;

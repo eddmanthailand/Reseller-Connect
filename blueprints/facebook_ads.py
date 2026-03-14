@@ -856,6 +856,14 @@ def get_campaign_demographics():
     if not campaign_name:
         return jsonify({'error': 'name required'}), 400
 
+    # If the caller passed a numeric campaign ID, resolve it to the actual campaign name
+    if campaign_name.isdigit():
+        insights = _get_meta_campaign_insights('maximum')
+        for c in insights:
+            if str(c.get('id', '')) == campaign_name:
+                campaign_name = c['name'].lower().strip()
+                break
+
     demo_map    = _get_meta_demographics()
     region_map  = _get_meta_regions()
 
