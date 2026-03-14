@@ -13,7 +13,8 @@ async function loadProductAnalytics() {
         _paLoadSummary(days, campaign),
         _paLoadTrend(days, campaign),
         _paLoadTopProducts(days, campaign),
-        _paLoadCampaignBreakdown(days)
+        _paLoadCampaignBreakdown(days),
+        _paLoadProvinceBreakdown(days)
     ]);
 }
 
@@ -251,6 +252,41 @@ async function _paLoadCampaignBreakdown(days) {
                     <div class="pa-camp-badge ${isPaid ? '' : 'organic'}">${label}</div>
                     <div class="pa-camp-bar-wrap">
                         <div class="pa-camp-bar" style="width:${pct}%;${isPaid ? '' : 'background:linear-gradient(90deg,rgba(255,255,255,0.3),rgba(255,255,255,0.2));'}"></div>
+                    </div>
+                    <div class="pa-camp-views">${_paFmt(row.views)}</div>
+                </div>`;
+        }).join('');
+
+    } catch(e) {
+        if (el) el.innerHTML = '<div class="pa-empty" style="color:rgba(255,59,48,0.6);">โหลดไม่สำเร็จ</div>';
+    }
+}
+
+// ── Province breakdown ─────────────────────────────────────────
+async function _paLoadProvinceBreakdown(days) {
+    const el = document.getElementById('paProvinceBreakdown');
+    if (!el) return;
+    try {
+        const r = await fetch(`${API_URL}/product-analytics/province-breakdown?days=${days}&limit=15`, { credentials: 'include' });
+        if (!r.ok) throw new Error(r.status);
+        const rows = await r.json();
+
+        const known = rows.filter(r => r.province !== 'ไม่ทราบที่อยู่');
+        if (!known.length) {
+            el.innerHTML = '<div class="pa-empty"><div class="pa-empty-icon">📍</div>ยังไม่มีข้อมูลจังหวัด<br><small style="opacity:.6">ข้อมูลจะปรากฏหลังจากมีผู้ชมสินค้าใหม่</small></div>';
+            return;
+        }
+
+        const maxViews = Math.max(...known.map(r => r.views || 1));
+        const colors = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5ac8fa','#ff6b35','#30b0c7','#ffcc02','#a8e063'];
+        el.innerHTML = known.map((row, i) => {
+            const pct   = Math.round((row.views / maxViews) * 100);
+            const color = colors[i % colors.length];
+            return `
+                <div class="pa-camp-row">
+                    <div class="pa-camp-badge" style="background:${color}20;color:${color};border:1px solid ${color}40;">📍 ${_paEsc(row.province)}</div>
+                    <div class="pa-camp-bar-wrap">
+                        <div class="pa-camp-bar" style="width:${pct}%;background:linear-gradient(90deg,${color}cc,${color}66);"></div>
                     </div>
                     <div class="pa-camp-views">${_paFmt(row.views)}</div>
                 </div>`;

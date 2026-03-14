@@ -4,8 +4,36 @@ from utils import login_required, admin_required, handle_error
 import psycopg2.extras
 from decimal import Decimal
 import datetime
+import requests as _requests
+import threading
 
 product_analytics_bp = Blueprint('product_analytics', __name__)
+
+
+def _lookup_province(ip, product_id, session_id):
+    """Lookup province from IP and update product_views in background."""
+    try:
+        if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
+            return
+        r = _requests.get(f'http://ip-api.com/json/{ip}?fields=regionName&lang=th', timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            province = data.get('regionName') or None
+            if province:
+                conn = cur = None
+                try:
+                    conn = get_db()
+                    cur = conn.cursor()
+                    cur.execute(
+                        'UPDATE product_views SET province=%s WHERE product_id=%s AND session_id=%s AND province IS NULL ORDER BY viewed_at DESC LIMIT 1',
+                        (province, product_id, session_id)
+                    )
+                    conn.commit()
+                finally:
+                    if cur: cur.close()
+                    if conn: conn.close()
+    except Exception:
+        pass
 
 
 def _serialize(obj):
@@ -49,6 +77,9 @@ def track_product_view():
         ''', (product_id, session_id, visitor_ip, user_agent,
               utm_campaign, utm_medium, referrer, traffic_type))
         conn.commit()
+        # Lookup province in background (non-blocking)
+        t = threading.Thread(target=_lookup_province, args=(visitor_ip, product_id, session_id), daemon=True)
+        t.start()
         return jsonify({'ok': True}), 200
     except Exception as e:
         return handle_error(e)
@@ -247,6 +278,39 @@ def get_campaign_breakdown():
             FROM product_views
             WHERE viewed_at >= NOW() - INTERVAL '%s days'
             GROUP BY utm_campaign
+            ORDER BY views DESC
+            LIMIT %s
+        ''', (days, limit))
+
+        return jsonify(_serialize([dict(r) for r in cursor.fetchall()])), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+@product_analytics_bp.route('/api/product-analytics/province-breakdown', methods=['GET'])
+@login_required
+@admin_required
+def get_province_breakdown():
+    """Views by province (from IP geolocation)"""
+    days  = int(request.args.get('days', 30))
+    limit = min(int(request.args.get('limit', 15)), 50)
+
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cursor.execute('''
+            SELECT
+                COALESCE(province, 'ไม่ทราบที่อยู่') AS province,
+                COUNT(*)                              AS views,
+                COUNT(DISTINCT session_id)            AS unique_viewers
+            FROM product_views
+            WHERE viewed_at >= NOW() - INTERVAL '%s days'
+            GROUP BY province
             ORDER BY views DESC
             LIMIT %s
         ''', (days, limit))

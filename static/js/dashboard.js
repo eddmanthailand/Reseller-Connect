@@ -614,7 +614,21 @@ function switchPage(pageName) {
         loadCustomers();
     } else if (pageName === 'product-analytics') {
         if (typeof loadProductAnalytics === 'function') loadProductAnalytics();
+        _startProductAnalyticsAutoRefresh();
+    } else {
+        _stopProductAnalyticsAutoRefresh();
     }
+}
+
+let _paAutoRefreshTimer = null;
+function _startProductAnalyticsAutoRefresh() {
+    _stopProductAnalyticsAutoRefresh();
+    _paAutoRefreshTimer = setInterval(() => {
+        if (typeof loadProductAnalytics === 'function') loadProductAnalytics();
+    }, 30000);
+}
+function _stopProductAnalyticsAutoRefresh() {
+    if (_paAutoRefreshTimer) { clearInterval(_paAutoRefreshTimer); _paAutoRefreshTimer = null; }
 }
 
 if ('serviceWorker' in navigator) {
