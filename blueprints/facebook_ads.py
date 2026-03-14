@@ -10,6 +10,9 @@ from utils import handle_error, login_required, admin_required
 
 facebook_ads_bp = Blueprint('facebook_ads', __name__)
 
+# Filter out private/internal IPs (test data from localhost)
+_REAL_IP_FILTER = r"visitor_ip !~ '^(10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|\:\:1$)'"
+
 
 # ==================== HELPERS ====================
 
@@ -452,10 +455,10 @@ def get_facebook_ads_stats():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
             WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
+            AND source = 'facebook' AND {_REAL_IP_FILTER}
             AND DATE(created_at) = CURRENT_DATE
         ''')
         today_visits = cursor.fetchone()['count']
@@ -467,10 +470,10 @@ def get_facebook_ads_stats():
         ''')
         today_registrations = cursor.fetchone()['count']
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
             WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
+            AND source = 'facebook' AND {_REAL_IP_FILTER}
             AND created_at >= CURRENT_DATE - INTERVAL '7 days'
         ''')
         week_visits = cursor.fetchone()['count']
@@ -482,10 +485,10 @@ def get_facebook_ads_stats():
         ''')
         week_registrations = cursor.fetchone()['count']
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
             WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
+            AND source = 'facebook' AND {_REAL_IP_FILTER}
             AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
         ''')
         month_visits = cursor.fetchone()['count']
@@ -497,10 +500,10 @@ def get_facebook_ads_stats():
         ''')
         month_registrations = cursor.fetchone()['count']
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
             WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
+            AND source = 'facebook' AND {_REAL_IP_FILTER}
         ''')
         total_visits = cursor.fetchone()['count']
 
@@ -510,14 +513,13 @@ def get_facebook_ads_stats():
         ''')
         total_registrations = cursor.fetchone()['count']
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT DATE(created_at) as date, COUNT(*) as visits
             FROM page_visits
             WHERE page_name IN ('become-reseller', 'catalog')
-            AND source = 'facebook'
+            AND source = 'facebook' AND {_REAL_IP_FILTER}
             AND created_at >= CURRENT_DATE - INTERVAL '6 days'
-            GROUP BY DATE(created_at)
-            ORDER BY date
+            GROUP BY DATE(created_at) ORDER BY date
         ''')
         daily_visits = {str(row['date']): row['visits'] for row in cursor.fetchall()}
 
@@ -526,8 +528,7 @@ def get_facebook_ads_stats():
             FROM users
             WHERE notes LIKE '%[source: facebook]%'
             AND created_at >= CURRENT_DATE - INTERVAL '6 days'
-            GROUP BY DATE(created_at)
-            ORDER BY date
+            GROUP BY DATE(created_at) ORDER BY date
         ''')
         daily_registrations = {str(row['date']): row['registrations'] for row in cursor.fetchall()}
 
@@ -553,6 +554,7 @@ def get_facebook_ads_stats():
             WHERE pv.page_name IN ('become-reseller', 'catalog')
             AND pv.source = 'facebook'
             AND {pixel_clause}
+            AND {_REAL_IP_FILTER}
             AND COALESCE(cb.is_hidden, false) = false
             GROUP BY pv.utm_campaign, cb.total_budget, cb.notes, cb.is_hidden
             ORDER BY visits DESC
@@ -933,8 +935,8 @@ def fb_ai_analysis():
         meta_total_clicks = sum(c['clicks'] for c in meta_camps)
         meta_total_impressions = sum(c['impressions'] for c in meta_camps)
 
-        # --- DB: UTM-based visit breakdown (all-time, no 30-day limit) ---
-        cursor.execute('''
+        # --- DB: UTM-based visit breakdown (all-time, real IPs only) ---
+        cursor.execute(f'''
             SELECT
                 pv.utm_campaign,
                 COUNT(*) as visits,
@@ -942,7 +944,7 @@ def fb_ai_analysis():
                 COUNT(CASE WHEN pv.user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct,
                 MAX(pv.created_at) as last_visit
             FROM page_visits pv
-            WHERE pv.source = 'facebook' AND pv.utm_campaign IS NOT NULL
+            WHERE pv.source = 'facebook' AND pv.utm_campaign IS NOT NULL AND {_REAL_IP_FILTER}
             GROUP BY pv.utm_campaign ORDER BY visits DESC LIMIT 10
         ''')
         campaigns_raw = cursor.fetchall()
@@ -967,23 +969,23 @@ def fb_ai_analysis():
                 'cpv': round(spend / visits, 2) if spend > 0 and visits > 0 else None,
             })
 
-        # --- Funnel (all-time) ---
-        cursor.execute('''
+        # --- Funnel (all-time, real IPs only) ---
+        cursor.execute(f'''
             SELECT event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
-            FROM conversion_events GROUP BY event_type
+            FROM conversion_events WHERE {_REAL_IP_FILTER} GROUP BY event_type
         ''')
         funnel = {r['event_type']: r['cnt'] for r in cursor.fetchall()}
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT traffic_type, COUNT(*) as visits FROM page_visits
-            WHERE page_name IN ('catalog','become-reseller')
+            WHERE page_name IN ('catalog','become-reseller') AND {_REAL_IP_FILTER}
             GROUP BY traffic_type ORDER BY visits DESC
         ''')
         traffic_types = [dict(r) for r in cursor.fetchall()]
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
-            FROM page_visits WHERE page_name IN ('catalog','become-reseller')
+            FROM page_visits WHERE page_name IN ('catalog','become-reseller') AND {_REAL_IP_FILTER}
             GROUP BY hr ORDER BY cnt DESC LIMIT 5
         ''')
         peak_hours = [dict(r) for r in cursor.fetchall()]
