@@ -197,7 +197,7 @@ def dashboard():
     role = session.get('role')
     
     if role in ['Super Admin', 'Assistant Admin']:
-        return redirect(url_for('admin_management'))
+        return redirect('/admin')
     elif role == 'Reseller':
         return render_template('reseller_spa.html')
     else:
@@ -222,7 +222,7 @@ def admin_chat_page():
 @admin_required
 def product_list():
     """Redirect to admin dashboard (Product Management is now integrated)"""
-    return redirect(url_for('admin_management'))
+    return redirect('/admin')
 
 @auth_bp.route('/admin/products/create')
 @admin_required
