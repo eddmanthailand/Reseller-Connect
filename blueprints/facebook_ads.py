@@ -99,10 +99,11 @@ def _get_meta_campaign_insights(period='last_30d'):
             camp_data = _json.loads(resp.read())
         campaigns = {c['id']: c for c in camp_data.get('data', [])}
 
-        # Step 2: insights (spend/clicks/impressions) per campaign
+        # Step 2: insights (spend/clicks/impressions/frequency/actions) per campaign
         ins_params = urllib.parse.urlencode({
             'level': 'campaign',
-            'fields': 'campaign_id,campaign_name,spend,impressions,clicks,reach,cpc',
+            'fields': 'campaign_id,campaign_name,spend,impressions,clicks,reach,cpc,'
+                      'frequency,unique_clicks,cost_per_unique_click,actions,cost_per_action_type',
             'date_preset': period,
             'limit': 200,
             'access_token': token
@@ -122,15 +123,23 @@ def _get_meta_campaign_insights(period='last_30d'):
             raw_daily    = c.get('daily_budget')
             lifetime_budget = round(int(raw_lifetime) / 100, 2) if raw_lifetime else None
             daily_budget    = round(int(raw_daily)    / 100, 2) if raw_daily    else None
+            impr = int(ins.get('impressions') or 0)
+            clks = int(ins.get('clicks') or 0)
             result.append({
                 'id': cid,
                 'name': c['name'],
                 'status': c['effective_status'],
                 'spend': float(ins.get('spend') or 0),
-                'impressions': int(ins.get('impressions') or 0),
-                'clicks': int(ins.get('clicks') or 0),
+                'impressions': impr,
+                'clicks': clks,
                 'reach': int(ins.get('reach') or 0),
                 'cpc': float(ins.get('cpc') or 0),
+                'frequency': float(ins.get('frequency') or 0),
+                'unique_clicks': int(ins.get('unique_clicks') or 0),
+                'cost_per_unique_click': float(ins.get('cost_per_unique_click') or 0),
+                'ctr': round(clks / impr * 100, 2) if impr > 0 else 0,
+                'actions': ins.get('actions', []),
+                'cost_per_action_type': ins.get('cost_per_action_type', []),
                 'lifetime_budget': lifetime_budget,
                 'daily_budget': daily_budget,
             })
@@ -148,6 +157,115 @@ def _get_meta_campaign_names():
     if not insights:
         return None
     return {c['name'].lower().strip() for c in insights}
+
+
+def _get_meta_demographics(period='maximum'):
+    """
+    Fetch age+gender breakdown per campaign from Meta API. Cached 15 min.
+    Returns dict keyed by lowercase campaign name → list of {age, gender, spend, impressions, clicks, actions}
+    """
+    import time, urllib.request, json as _json, urllib.parse
+    cache = getattr(_get_meta_demographics, '_cache', None)
+    if cache and time.time() - cache['ts'] < 900:
+        return cache['data']
+
+    def _set_cache(val):
+        _get_meta_demographics._cache = {'ts': time.time(), 'data': val}
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        cursor.close(); conn.close()
+        if not token or not account_id:
+            _set_cache({}); return {}
+        acc = account_id if account_id.startswith('act_') else f'act_{account_id}'
+        params = urllib.parse.urlencode({
+            'level': 'campaign',
+            'fields': 'campaign_name,spend,impressions,clicks,reach,actions',
+            'breakdowns': 'age,gender',
+            'date_preset': period,
+            'limit': 500,
+            'access_token': token
+        })
+        url = f'https://graph.facebook.com/v19.0/{acc}/insights?{params}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'EKG-Server/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = _json.loads(resp.read())
+        result = {}
+        for r in data.get('data', []):
+            key = r.get('campaign_name', '').lower().strip()
+            if key not in result:
+                result[key] = []
+            result[key].append({
+                'age': r.get('age', ''),
+                'gender': r.get('gender', ''),
+                'spend': float(r.get('spend') or 0),
+                'impressions': int(r.get('impressions') or 0),
+                'clicks': int(r.get('clicks') or 0),
+                'reach': int(r.get('reach') or 0),
+                'actions': r.get('actions', []),
+            })
+        _set_cache(result)
+        return result
+    except Exception as e:
+        print(f'[META DEMOGRAPHICS] fetch error: {e}')
+        _set_cache({}); return {}
+
+
+def _get_meta_regions(period='maximum'):
+    """
+    Fetch region (province) breakdown per campaign from Meta API. Cached 15 min.
+    Returns dict keyed by lowercase campaign name → list of {region, spend, impressions, clicks}
+    """
+    import time, urllib.request, json as _json, urllib.parse
+    cache = getattr(_get_meta_regions, '_cache', None)
+    if cache and time.time() - cache['ts'] < 900:
+        return cache['data']
+
+    def _set_cache(val):
+        _get_meta_regions._cache = {'ts': time.time(), 'data': val}
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        cursor.close(); conn.close()
+        if not token or not account_id:
+            _set_cache({}); return {}
+        acc = account_id if account_id.startswith('act_') else f'act_{account_id}'
+        params = urllib.parse.urlencode({
+            'level': 'campaign',
+            'fields': 'campaign_name,spend,impressions,clicks,reach',
+            'breakdowns': 'region',
+            'date_preset': period,
+            'limit': 500,
+            'access_token': token
+        })
+        url = f'https://graph.facebook.com/v19.0/{acc}/insights?{params}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'EKG-Server/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = _json.loads(resp.read())
+        result = {}
+        for r in data.get('data', []):
+            key = r.get('campaign_name', '').lower().strip()
+            if key not in result:
+                result[key] = []
+            result[key].append({
+                'region': r.get('region', ''),
+                'spend': float(r.get('spend') or 0),
+                'impressions': int(r.get('impressions') or 0),
+                'clicks': int(r.get('clicks') or 0),
+                'reach': int(r.get('reach') or 0),
+            })
+        # sort each campaign's regions by impressions desc
+        for key in result:
+            result[key].sort(key=lambda x: x['impressions'], reverse=True)
+        _set_cache(result)
+        return result
+    except Exception as e:
+        print(f'[META REGIONS] fetch error: {e}')
+        _set_cache({}); return {}
 
 
 def _get_pixel_settings():
@@ -568,16 +686,23 @@ def get_facebook_ads_stats():
             LIMIT 20
         ''', pixel_params)
         campaigns_raw = cursor.fetchall()
-        # Build Meta spend lookup {lowercase_name: insight_dict} — use 'maximum' for all-time spend
+        # Build Meta spend lookup — use 'maximum' for all-time spend
         meta_insights = _get_meta_campaign_insights('maximum')
-        meta_spend_map = {c['name'].lower().strip(): c for c in meta_insights}
+        # Only show UTM campaigns whose name matches an ACTIVE campaign in Meta Ads Manager
+        active_meta_names = {c['name'].lower().strip() for c in meta_insights if c.get('status') == 'ACTIVE'}
+        meta_spend_map    = {c['name'].lower().strip(): c for c in meta_insights}
 
         now = datetime.now()
         campaign_breakdown = []
         for r in campaigns_raw:
             camp_name = r['campaign']
-            # Show all UTM campaigns from Facebook traffic.
-            # Meta spend data will be attached only for campaigns whose names match Meta Ads Manager.
+            camp_key  = camp_name.lower().strip()
+
+            # Filter: only include campaigns that are ACTIVE in Meta Ads Manager
+            # Always include '(ไม่ระบุแคมเปญ)' bucket so untagged Facebook traffic is visible
+            if camp_name != '(ไม่ระบุแคมเปญ)' and active_meta_names and camp_key not in active_meta_names:
+                continue
+
             visits = r['visits']
             budget = float(r['budget'] or 0)
             last_visit = r['last_visit']
@@ -589,16 +714,21 @@ def get_facebook_ads_stats():
             else:
                 active_status = 'inactive'
 
-            # Merge Meta API spend data (actual spend from Facebook — all-time)
-            meta = meta_spend_map.get(camp_name.lower().strip(), {})
-            meta_spend       = meta.get('spend', 0) or 0
-            meta_impressions = meta.get('impressions', 0) or 0
-            meta_clicks      = meta.get('clicks', 0) or 0
-            meta_cpc         = meta.get('cpc', 0) or 0
-            meta_reach       = meta.get('reach', 0) or 0
-            # Budget configured in Facebook Ads Manager (lifetime or daily)
-            meta_lifetime_budget = meta.get('lifetime_budget')   # THB, or None
-            meta_daily_budget    = meta.get('daily_budget')      # THB, or None
+            # Merge Meta API data (actual spend + all metrics — all-time)
+            meta = meta_spend_map.get(camp_key, {})
+            meta_spend               = meta.get('spend', 0) or 0
+            meta_impressions         = meta.get('impressions', 0) or 0
+            meta_clicks              = meta.get('clicks', 0) or 0
+            meta_cpc                 = meta.get('cpc', 0) or 0
+            meta_reach               = meta.get('reach', 0) or 0
+            meta_frequency           = meta.get('frequency', 0) or 0
+            meta_unique_clicks       = meta.get('unique_clicks', 0) or 0
+            meta_cost_per_unique_click = meta.get('cost_per_unique_click', 0) or 0
+            meta_ctr                 = meta.get('ctr', 0) or 0
+            meta_actions             = meta.get('actions', [])
+            meta_cost_per_action     = meta.get('cost_per_action_type', [])
+            meta_lifetime_budget     = meta.get('lifetime_budget')
+            meta_daily_budget        = meta.get('daily_budget')
 
             # CPV: prefer actual Meta spend, fall back to manual budget
             effective_budget = meta_spend if meta_spend > 0 else budget
@@ -618,8 +748,15 @@ def get_facebook_ads_stats():
                 'meta_clicks': meta_clicks,
                 'meta_cpc': meta_cpc,
                 'meta_reach': meta_reach,
+                'meta_frequency': meta_frequency,
+                'meta_unique_clicks': meta_unique_clicks,
+                'meta_cost_per_unique_click': meta_cost_per_unique_click,
+                'meta_ctr': meta_ctr,
+                'meta_actions': meta_actions,
+                'meta_cost_per_action': meta_cost_per_action,
                 'meta_lifetime_budget': meta_lifetime_budget,
                 'meta_daily_budget': meta_daily_budget,
+                'meta_status': meta.get('status', ''),
             })
 
         cursor.execute('''
@@ -668,6 +805,104 @@ def get_facebook_ads_stats():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-demographics', methods=['GET'])
+@login_required
+@admin_required
+def get_campaign_demographics():
+    """Get age/gender and region breakdown for a single campaign from Meta Ads API"""
+    campaign_name = request.args.get('name', '').strip().lower()
+    if not campaign_name:
+        return jsonify({'error': 'name required'}), 400
+
+    demo_map    = _get_meta_demographics()
+    region_map  = _get_meta_regions()
+
+    demo_rows   = demo_map.get(campaign_name, [])
+    region_rows = region_map.get(campaign_name, [])
+
+    # Aggregate gender totals
+    gender_totals = {}
+    for r in demo_rows:
+        g = r['gender']
+        if g == 'unknown':
+            continue
+        if g not in gender_totals:
+            gender_totals[g] = {'spend': 0, 'impressions': 0, 'clicks': 0, 'reach': 0, 'actions': []}
+        gender_totals[g]['spend']       += r['spend']
+        gender_totals[g]['impressions'] += r['impressions']
+        gender_totals[g]['clicks']      += r['clicks']
+        gender_totals[g]['reach']       += r['reach']
+        gender_totals[g]['actions']     += r.get('actions', [])
+
+    # Aggregate age totals (across genders)
+    age_totals = {}
+    for r in demo_rows:
+        if r['gender'] == 'unknown':
+            continue
+        a = r['age']
+        if a not in age_totals:
+            age_totals[a] = {'spend': 0, 'impressions': 0, 'clicks': 0}
+        age_totals[a]['spend']       += r['spend']
+        age_totals[a]['impressions'] += r['impressions']
+        age_totals[a]['clicks']      += r['clicks']
+
+    # Aggregate actions from gender totals into readable list
+    def _agg_actions(action_list):
+        agg = {}
+        for act in action_list:
+            t = act.get('action_type', '')
+            v = float(act.get('value', 0))
+            agg[t] = agg.get(t, 0) + v
+        return [{'type': k, 'value': int(v)} for k, v in sorted(agg.items(), key=lambda x: -x[1])]
+
+    all_actions = []
+    for g_data in gender_totals.values():
+        all_actions += g_data.get('actions', [])
+    aggregated_actions = _agg_actions(all_actions)
+
+    # Clean gender list
+    gender_list = []
+    total_impr = sum(v['impressions'] for v in gender_totals.values()) or 1
+    total_spend = sum(v['spend'] for v in gender_totals.values()) or 1
+    for g, v in gender_totals.items():
+        gender_list.append({
+            'gender': g,
+            'label': 'หญิง' if g == 'female' else 'ชาย',
+            'spend': round(v['spend'], 2),
+            'impressions': v['impressions'],
+            'clicks': v['clicks'],
+            'reach': v['reach'],
+            'spend_pct': round(v['spend'] / total_spend * 100, 1),
+            'impr_pct': round(v['impressions'] / total_impr * 100, 1),
+        })
+    gender_list.sort(key=lambda x: -x['impressions'])
+
+    # Age breakdown sorted
+    age_order = ['13-17','18-24','25-34','35-44','45-54','55-64','65+']
+    total_age_impr = sum(v['impressions'] for v in age_totals.values()) or 1
+    age_list = []
+    for a in age_order:
+        if a not in age_totals:
+            continue
+        v = age_totals[a]
+        age_list.append({
+            'age': a,
+            'spend': round(v['spend'], 2),
+            'impressions': v['impressions'],
+            'clicks': v['clicks'],
+            'impr_pct': round(v['impressions'] / total_age_impr * 100, 1),
+            'ctr': round(v['clicks'] / v['impressions'] * 100, 2) if v['impressions'] > 0 else 0,
+        })
+
+    return jsonify({
+        'campaign': campaign_name,
+        'gender': gender_list,
+        'age': age_list,
+        'regions': region_rows[:15],
+        'actions': aggregated_actions,
+    })
 
 
 @facebook_ads_bp.route('/api/facebook-ads/campaign-detail', methods=['GET'])

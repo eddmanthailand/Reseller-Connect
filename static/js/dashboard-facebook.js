@@ -438,13 +438,8 @@ function renderCampaignBreakdown(campaigns) {
         const metaStatsChip = c.meta_impressions > 0
             ? `<span style="font-size:10px;color:#6e6e73;margin-left:4px;">👁 ${(c.meta_impressions||0).toLocaleString()} · 🖱 ${(c.meta_clicks||0).toLocaleString()}</span>`
             : '';
-        const actionBtns = c.campaign !== '(ไม่ระบุแคมเปญ)'
-            ? `<button onclick="event.stopPropagation();hideCampaign('${safeName}',this)" title="ซ่อนแคมเปญนี้"
-                style="border:none;background:none;cursor:pointer;font-size:10px;color:#c7c7cc;padding:2px 4px;border-radius:4px;line-height:1;flex-shrink:0;"
-                onmouseover="this.style.color='#ff9500'" onmouseout="this.style.color='#c7c7cc'">ซ่อน</button>
-               <button onclick="event.stopPropagation();deleteCampaign('${safeName}',${c.visits||0},this)" title="ลบแคมเปญนี้ถาวร"
-                style="border:none;background:none;cursor:pointer;font-size:10px;color:#c7c7cc;padding:2px 4px;border-radius:4px;line-height:1;flex-shrink:0;"
-                onmouseover="this.style.color='#ff3b30'" onmouseout="this.style.color='#c7c7cc'">ลบ</button>`
+        const metaStatusDot = c.meta_status === 'ACTIVE'
+            ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#34c759;margin-right:3px;"></span>`
             : '';
         return `
         <div id="fbRow_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-bottom:4px;">
@@ -455,7 +450,7 @@ function renderCampaignBreakdown(campaigns) {
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                        ${actionBtns}
+                        ${metaStatusDot}
                         ${_statusBadge(c.active_status)}
                         <span style="font-size:13px;font-weight:600;color:#007aff;">${(c.visits||0).toLocaleString()}</span>
                     </div>
@@ -471,6 +466,10 @@ function renderCampaignBreakdown(campaigns) {
                  data-meta-spend="${c.meta_spend||0}" data-meta-impressions="${c.meta_impressions||0}"
                  data-meta-clicks="${c.meta_clicks||0}" data-meta-cpc="${c.meta_cpc||0}"
                  data-meta-lifetime="${c.meta_lifetime_budget||0}" data-meta-daily="${c.meta_daily_budget||0}"
+                 data-meta-frequency="${c.meta_frequency||0}" data-meta-unique-clicks="${c.meta_unique_clicks||0}"
+                 data-meta-cpuc="${c.meta_cost_per_unique_click||0}" data-meta-ctr="${c.meta_ctr||0}"
+                 data-meta-actions='${JSON.stringify(c.meta_actions||[])}'
+                 data-meta-cost-per-action='${JSON.stringify(c.meta_cost_per_action||[])}'
                  style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
@@ -488,49 +487,6 @@ function _fadeAndReload(campaignName, delayMs = 350) {
         // Reload all stats + campaign breakdown from server
         loadFacebookAdsStats();
     }, delayMs);
-}
-
-async function hideCampaign(campaignName, btnEl) {
-    if (!confirm(`ซ่อนแคมเปญ "${campaignName}" ออกจาก Dashboard?\n(ข้อมูลยังอยู่ สามารถยกเลิกได้ภายหลัง)`)) return;
-    try {
-        const r = await fetch(`${API_URL}/facebook-ads/campaign-hide`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ campaign_name: campaignName, is_hidden: true })
-        });
-        if (r.ok) {
-            showAlert(`ซ่อนแคมเปญ "${campaignName}" แล้ว`, 'success');
-            _fadeAndReload(campaignName);
-        } else {
-            showAlert('ไม่สามารถซ่อนแคมเปญได้', 'error');
-        }
-    } catch(e) { showAlert('เกิดข้อผิดพลาด', 'error'); }
-}
-
-async function deleteCampaign(campaignName, visitCount, btnEl) {
-    const confirmed = confirm(
-        `⚠️ ลบแคมเปญ "${campaignName}" ถาวร?\n\n` +
-        `จะลบข้อมูล ${visitCount} visit ออกจากระบบทั้งหมด\n` +
-        `ไม่สามารถกู้คืนได้ — กด OK เพื่อยืนยัน`
-    );
-    if (!confirmed) return;
-
-    try {
-        const r = await fetch(`${API_URL}/facebook-ads/campaign-delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ campaign_name: campaignName })
-        });
-        const d = await r.json();
-        if (r.ok && d.success) {
-            showAlert(`ลบแคมเปญ "${campaignName}" แล้ว (${d.deleted_visits} visits)`, 'success');
-            _fadeAndReload(campaignName);
-        } else {
-            showAlert(d.error || 'ไม่สามารถลบแคมเปญได้', 'error');
-        }
-    } catch(e) { showAlert('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
 }
 
 async function toggleCampaignDetail(campaign, rowEl) {
@@ -562,15 +518,20 @@ async function toggleCampaignDetail(campaign, rowEl) {
     detailEl.innerHTML = `<div style="padding:12px;text-align:center;color:#6e6e73;font-size:12px;">กำลังโหลด...</div>`;
 
     try {
-        const r = await fetch(`${API_URL}/facebook-ads/campaign-detail?campaign=${encodeURIComponent(campaign)}`, { credentials: 'include' });
-        const d = await r.json();
-        renderCampaignDetailPanel(detailEl, d, safeId);
+        // Fetch campaign detail + demographics in parallel
+        const [r1, r2] = await Promise.all([
+            fetch(`${API_URL}/facebook-ads/campaign-detail?campaign=${encodeURIComponent(campaign)}`, { credentials: 'include' }),
+            fetch(`${API_URL}/facebook-ads/campaign-demographics?name=${encodeURIComponent(campaign.toLowerCase())}`, { credentials: 'include' })
+        ]);
+        const d    = await r1.json();
+        const demo = r2.ok ? await r2.json() : null;
+        renderCampaignDetailPanel(detailEl, d, safeId, demo);
     } catch(e) {
         detailEl.innerHTML = `<div style="padding:12px;color:#ff3b30;font-size:12px;">โหลดข้อมูลไม่สำเร็จ</div>`;
     }
 }
 
-function renderCampaignDetailPanel(el, d, safeId) {
+function renderCampaignDetailPanel(el, d, safeId, demo) {
     const fmt = dt => dt ? new Date(dt).toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'2-digit'}) : '-';
     const peakText = d.peak_hours && d.peak_hours.length
         ? d.peak_hours.map(p => `${p.hour}:00`).join(', ')
@@ -583,6 +544,14 @@ function renderCampaignDetailPanel(el, d, safeId) {
     const metaCpc = parseFloat(el.getAttribute('data-meta-cpc') || '0');
     const metaLifetime = parseFloat(el.getAttribute('data-meta-lifetime') || '0');
     const metaDaily = parseFloat(el.getAttribute('data-meta-daily') || '0');
+    const metaFrequency = parseFloat(el.getAttribute('data-meta-frequency') || '0');
+    const metaUniqueClicks = parseInt(el.getAttribute('data-meta-unique-clicks') || '0');
+    const metaCpuc = parseFloat(el.getAttribute('data-meta-cpuc') || '0');
+    const metaCtr = parseFloat(el.getAttribute('data-meta-ctr') || '0');
+    let metaActions = [];
+    let metaCostPerAction = [];
+    try { metaActions = JSON.parse(el.getAttribute('data-meta-actions') || '[]'); } catch(e) {}
+    try { metaCostPerAction = JSON.parse(el.getAttribute('data-meta-cost-per-action') || '[]'); } catch(e) {}
 
     el.innerHTML = `
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;border:0.5px solid #e5e5ea;">
@@ -647,6 +616,24 @@ function renderCampaignDetailPanel(el, d, safeId) {
                     <div style="font-size:10px;color:#6e6e73;">CPV จริง</div>
                     <div style="font-size:14px;font-weight:700;color:#15803d;">฿${(metaSpend/d.total_visits).toFixed(2)}</div>
                 </div>` : ''}
+                ${metaFrequency > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">Frequency</div>
+                    <div style="font-size:14px;font-weight:700;color:#5856d6;">${metaFrequency.toFixed(2)}x</div>
+                    <div style="font-size:9px;color:#6e6e73;">เฉลี่ยเห็น/คน</div>
+                </div>` : ''}
+                ${metaUniqueClicks > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">Unique Clicks</div>
+                    <div style="font-size:14px;font-weight:700;color:#1d1d1f;">${metaUniqueClicks.toLocaleString()}</div>
+                    ${metaCpuc > 0 ? `<div style="font-size:9px;color:#6e6e73;">฿${metaCpuc.toFixed(2)}/คน</div>` : ''}
+                </div>` : ''}
+                ${metaCtr > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">CTR</div>
+                    <div style="font-size:14px;font-weight:700;color:#ff9500;">${metaCtr.toFixed(2)}%</div>
+                    <div style="font-size:9px;color:#6e6e73;">อัตราคลิก</div>
+                </div>` : ''}
             </div>
         </div>` : ''}
 
@@ -698,6 +685,98 @@ function renderCampaignDetailPanel(el, d, safeId) {
         <!-- Hour distribution -->
         <div style="font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px;">⏰ การกระจายตามชั่วโมง (เที่ยงคืน→23:00)</div>
         <div style="height:44px;"><canvas id="fbHourChart_${safeId}"></canvas></div>
+
+        <!-- Actions section (from Meta API) -->
+        ${metaActions.length > 0 ? (() => {
+            const actionLabels = {
+                'link_click': '🔗 คลิกลิงก์',
+                'page_engagement': '👍 Page Engagement',
+                'post_engagement': '📝 Post Engagement',
+                'onsite_conversion.total_messaging_connection': '💬 ส่งข้อความ',
+                'click_to_call_native_call_placed': '📞 โทรศัพท์',
+                'lead': '📋 Lead',
+                'purchase': '🛒 Purchase',
+                'complete_registration': '✅ สมัครสมาชิก',
+                'view_content': '👀 ดูสินค้า',
+            };
+            const costMap = {};
+            metaCostPerAction.forEach(x => { costMap[x.action_type] = parseFloat(x.value || 0); });
+            const rows = metaActions.slice(0, 6).map(a => {
+                const label = actionLabels[a.action_type] || a.action_type;
+                const cost = costMap[a.action_type];
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#fff;border-radius:6px;border:0.5px solid #e5e5ea;margin-bottom:4px;">
+                    <span style="font-size:11px;color:#3c3c43;">${label}</span>
+                    <div style="text-align:right;">
+                        <span style="font-size:12px;font-weight:700;color:#1d1d1f;">${parseInt(a.value).toLocaleString()}</span>
+                        ${cost ? `<span style="font-size:10px;color:#6e6e73;margin-left:6px;">฿${cost.toFixed(2)}/action</span>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+            return `<div style="background:#f0f0ff;border-radius:8px;padding:10px 12px;border:1px solid #c7c7fb;margin-bottom:10px;">
+                <div style="font-size:11px;font-weight:600;color:#5856d6;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⚡ Actions (ตลอดแคมเปญ)</div>
+                ${rows}
+            </div>`;
+        })() : ''}
+
+        <!-- Demographics section (gender + age + regions from Meta) -->
+        ${demo && (demo.gender.length > 0 || demo.age.length > 0 || demo.regions.length > 0) ? `
+        <div style="background:#fff8f0;border-radius:8px;padding:10px 12px;border:1px solid #ffd6a5;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:11px;font-weight:600;color:#c2410c;text-transform:uppercase;letter-spacing:0.5px;">👥 ผู้ชม (ตลอดแคมเปญ)</div>
+                <span style="font-size:10px;color:#c2410c;background:#ffedd5;padding:1px 7px;border-radius:10px;">จาก Meta Ads</span>
+            </div>
+
+            ${demo.gender.length > 0 ? `
+            <div style="margin-bottom:10px;">
+                <div style="font-size:10px;font-weight:600;color:#6e6e73;margin-bottom:6px;">เพศ</div>
+                ${demo.gender.map(g => `
+                <div style="margin-bottom:5px;">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+                        <span style="color:#3c3c43;">${g.label}</span>
+                        <span style="color:#6e6e73;">${g.impr_pct}% · ${g.impressions.toLocaleString()} impressions · ฿${g.spend.toLocaleString('th-TH',{minimumFractionDigits:0})}</span>
+                    </div>
+                    <div style="height:6px;background:#f2f2f7;border-radius:3px;overflow:hidden;">
+                        <div style="height:100%;width:${g.impr_pct}%;background:${g.gender==='female'?'#ff6b9d':'#007aff'};border-radius:3px;transition:width 0.5s;"></div>
+                    </div>
+                </div>`).join('')}
+            </div>` : ''}
+
+            ${demo.age.length > 0 ? `
+            <div style="margin-bottom:10px;">
+                <div style="font-size:10px;font-weight:600;color:#6e6e73;margin-bottom:6px;">ช่วงอายุ</div>
+                ${demo.age.map(a => `
+                <div style="margin-bottom:4px;">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">
+                        <span style="color:#3c3c43;">${a.age}</span>
+                        <span style="color:#6e6e73;">${a.impr_pct}% · ${a.impressions.toLocaleString()} impr · CTR ${a.ctr}%</span>
+                    </div>
+                    <div style="height:5px;background:#f2f2f7;border-radius:3px;overflow:hidden;">
+                        <div style="height:100%;width:${a.impr_pct}%;background:linear-gradient(90deg,#ff9500,#ff6b00);border-radius:3px;transition:width 0.5s;"></div>
+                    </div>
+                </div>`).join('')}
+            </div>` : ''}
+
+            ${demo.regions.length > 0 ? `
+            <div>
+                <div style="font-size:10px;font-weight:600;color:#6e6e73;margin-bottom:6px;">Top จังหวัด (impressions)</div>
+                <div style="display:grid;gap:3px;">
+                ${demo.regions.slice(0,8).map((r,i) => {
+                    const maxImpr = demo.regions[0].impressions || 1;
+                    const pct = Math.round(r.impressions / maxImpr * 100);
+                    const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(1) : '0';
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:#fff;border-radius:5px;border:0.5px solid #e5e5ea;">
+                        <span style="font-size:10px;color:#8e8e93;width:14px;text-align:center;">${i+1}</span>
+                        <span style="font-size:11px;color:#3c3c43;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.region}</span>
+                        <div style="width:60px;height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;flex-shrink:0;">
+                            <div style="height:100%;width:${pct}%;background:#007aff;border-radius:2px;"></div>
+                        </div>
+                        <span style="font-size:10px;color:#1d1d1f;font-weight:600;width:40px;text-align:right;">${r.impressions.toLocaleString()}</span>
+                        <span style="font-size:10px;color:#6e6e73;width:36px;text-align:right;">CTR ${ctr}%</span>
+                    </div>`;
+                }).join('')}
+                </div>
+            </div>` : ''}
+        </div>` : ''}
 
         <!-- AI Analysis button -->
         <button onclick="loadCampaignAiAnalysis('${campaign}','${safeId}')"
