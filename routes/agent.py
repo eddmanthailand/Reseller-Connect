@@ -17,7 +17,7 @@ def admin_required(f):
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'กรุณาเข้าสู่ระบบก่อน'}), 401
-            return redirect(url_for('login_page'))
+            return redirect('/login')
         if session.get('role') not in ['Super Admin', 'Assistant Admin']:
             return jsonify({'error': 'คุณไม่มีสิทธิ์เข้าถึงส่วนนี้ (เฉพาะแอดมิน)'}), 403
         return f(*args, **kwargs)
