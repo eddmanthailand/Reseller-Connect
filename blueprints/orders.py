@@ -228,7 +228,19 @@ def create_order():
               applied_coupon['id'] if applied_coupon else None, coupon_discount,
               applied_promo['id'] if applied_promo else None, promo_discount))
         order = dict(cursor.fetchone())
-        
+
+        # Race-condition guard: if once_per_user promo was applied, re-verify within this transaction
+        # (two concurrent requests could both pass the pre-insert check before either commits)
+        if applied_promo and applied_promo.get('once_per_user'):
+            cursor.execute('''
+                SELECT COUNT(*) as cnt FROM orders
+                WHERE user_id = %s AND promotion_id = %s
+                  AND status NOT IN ('cancelled', 'rejected', 'failed_delivery')
+            ''', (user_id, applied_promo['id']))
+            if cursor.fetchone()['cnt'] > 1:
+                conn.rollback()
+                return jsonify({'error': 'โปรโมชั่นนี้ใช้ได้เพียง 1 ครั้งต่อคน'}), 409
+
         # Create order items and track their IDs using cart_item_id as unique key
         order_item_map = {}  # {cart_item_id: order_item_id}
         for item in items:

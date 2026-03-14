@@ -51,7 +51,7 @@ def _calc_best_promotion(cursor, cart_total, cart_brand_ids, cart_category_ids, 
             cursor.execute('''
                 SELECT 1 FROM orders
                 WHERE user_id = %s AND promotion_id = %s
-                  AND status NOT IN ('cancelled', 'rejected', 'pending_payment', 'failed_delivery')
+                  AND status NOT IN ('cancelled', 'rejected', 'failed_delivery')
                 LIMIT 1
             ''', (user_id, promo['id']))
             if cursor.fetchone():
