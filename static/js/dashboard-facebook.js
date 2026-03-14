@@ -413,9 +413,10 @@ function renderCampaignBreakdown(campaigns) {
     el.innerHTML = campaigns.map((c, i) => {
         const pct = Math.round((c.visits / max) * 100);
         const safeName = (c.campaign || '').replace(/"/g, '&quot;');
+        const nameToShow = c.display_name || c.campaign || '';
         const displayName = c.campaign === '(ไม่ระบุแคมเปญ)'
             ? '<span style="color:#6e6e73;font-style:italic;">ไม่ระบุ</span>'
-            : `<span style="color:#1d1d1f;font-weight:500;">${c.campaign}</span>`;
+            : `<span style="color:#1d1d1f;font-weight:500;">${nameToShow}</span>`;
         // Actual Meta spend (from Facebook Ads Manager API)
         const metaSpendChip = c.meta_spend > 0
             ? `<span style="font-size:10px;font-weight:600;color:#15803d;background:#dcfce7;padding:1px 6px;border-radius:10px;margin-left:4px;" title="Spend จริงจาก Facebook Ads Manager">

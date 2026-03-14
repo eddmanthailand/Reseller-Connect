@@ -688,9 +688,19 @@ def get_facebook_ads_stats():
         campaigns_raw = cursor.fetchall()
         # Build Meta spend lookup — use 'maximum' for all-time spend
         meta_insights = _get_meta_campaign_insights('maximum')
-        # Only show UTM campaigns whose name matches an ACTIVE campaign in Meta Ads Manager
-        active_meta_names = {c['name'].lower().strip() for c in meta_insights if c.get('status') == 'ACTIVE'}
-        meta_spend_map    = {c['name'].lower().strip(): c for c in meta_insights}
+        # Index by both lowercase name AND campaign ID (Facebook sometimes sets utm_campaign to the campaign ID)
+        meta_spend_map = {}
+        for c in meta_insights:
+            meta_spend_map[c['name'].lower().strip()] = c
+            if c.get('id'):
+                meta_spend_map[str(c['id'])] = c          # match by campaign ID
+        # Active keys = names + IDs for ACTIVE campaigns only
+        active_meta_keys = set()
+        for c in meta_insights:
+            if c.get('status') == 'ACTIVE':
+                active_meta_keys.add(c['name'].lower().strip())
+                if c.get('id'):
+                    active_meta_keys.add(str(c['id']))
 
         now = datetime.now()
         campaign_breakdown = []
@@ -699,8 +709,9 @@ def get_facebook_ads_stats():
             camp_key  = camp_name.lower().strip()
 
             # Filter: only include campaigns that are ACTIVE in Meta Ads Manager
-            # Always include '(ไม่ระบุแคมเปญ)' bucket so untagged Facebook traffic is visible
-            if camp_name != '(ไม่ระบุแคมเปญ)' and active_meta_names and camp_key not in active_meta_names:
+            # Match by name OR campaign ID (Facebook sometimes stores utm_campaign as the ID)
+            # Always include '(ไม่ระบุแคมเปญ)' so untagged Facebook traffic is visible
+            if camp_name != '(ไม่ระบุแคมเปญ)' and active_meta_keys and camp_key not in active_meta_keys:
                 continue
 
             visits = r['visits']
@@ -716,6 +727,8 @@ def get_facebook_ads_stats():
 
             # Merge Meta API data (actual spend + all metrics — all-time)
             meta = meta_spend_map.get(camp_key, {})
+            # If UTM is a campaign ID, show the Meta campaign name as display name
+            display_name = meta.get('name', camp_name) if meta and camp_key.isdigit() else camp_name
             meta_spend               = meta.get('spend', 0) or 0
             meta_impressions         = meta.get('impressions', 0) or 0
             meta_clicks              = meta.get('clicks', 0) or 0
@@ -734,8 +747,13 @@ def get_facebook_ads_stats():
             effective_budget = meta_spend if meta_spend > 0 else budget
             cpv = round(effective_budget / visits, 2) if effective_budget > 0 and visits > 0 else None
 
+            # Use meta campaign ID as merge key to prevent duplicate rows
+            # when both UTM name and UTM ID point to the same Meta campaign
+            merge_key = str(meta.get('id', '')) if meta.get('id') else display_name
             campaign_breakdown.append({
+                '_merge_key': merge_key,
                 'campaign': camp_name,
+                'display_name': display_name,
                 'visits': visits,
                 'budget': budget,
                 'cpv': cpv,
@@ -758,6 +776,28 @@ def get_facebook_ads_stats():
                 'meta_daily_budget': meta_daily_budget,
                 'meta_status': meta.get('status', ''),
             })
+
+        # Merge duplicate rows that map to the same Meta campaign (name-based + ID-based UTMs)
+        merged = {}
+        for item in campaign_breakdown:
+            key = item['_merge_key']
+            if key not in merged:
+                merged[key] = item.copy()
+            else:
+                # Sum visits only; keep Meta data from whichever row has it (they're the same campaign)
+                merged[key]['visits'] += item['visits']
+                if not merged[key]['meta_spend'] and item['meta_spend']:
+                    for f in ('meta_spend','meta_impressions','meta_clicks','meta_cpc','meta_reach',
+                              'meta_frequency','meta_unique_clicks','meta_cost_per_unique_click',
+                              'meta_ctr','meta_actions','meta_cost_per_action',
+                              'meta_lifetime_budget','meta_daily_budget','meta_status'):
+                        merged[key][f] = item[f]
+        campaign_breakdown = sorted(merged.values(), key=lambda x: -x['visits'])
+        for item in campaign_breakdown:
+            item.pop('_merge_key', None)
+            # Recalculate CPV with merged visit count
+            eff = item['meta_spend'] if item['meta_spend'] > 0 else item['budget']
+            item['cpv'] = round(eff / item['visits'], 2) if eff > 0 and item['visits'] > 0 else None
 
         cursor.execute('''
             SELECT u.id, u.full_name, u.username, u.created_at, u.is_approved,
