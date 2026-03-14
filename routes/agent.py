@@ -250,7 +250,8 @@ def _agent_build_system_prompt(settings, context=None):
 - update_product_description: แก้ไขคำอธิบายสินค้าชิ้นเดียว (params: product_name, description, field="bot_description"|"description") — field="bot_description" คือสำหรับบอทแชทน้องนุ่น (default), field="description" คือหน้าสาธารณะ
 - bulk_update_product_description: อัปเดตคำอธิบายสินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", description="คำอธิบาย", field="bot_description"|"description") — default field="bot_description"
 - copy_product_description: คัดลอกคำอธิบาย (bot_description หรือ description) จากสินค้าต้นทาง ไปยังสินค้าปลายทางหลายชิ้น (params: source_product_name="ชื่อสินค้าต้นทาง", target_product_names=["ชื่อสินค้า1","ชื่อสินค้า2",...], field="bot_description"|"description") — ใช้เมื่อผู้ใช้บอกว่า "เอาคำอธิบายของ X ไปใส่ใน Y และ Z"
-- update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
+- update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name"|"keywords", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก, หรืออัปเดตคำค้นหา (keywords)
+- bulk_update_product_keywords: อัปเดต keywords (คำค้นหา) สินค้าหลายชิ้นพร้อมกัน (params: keyword="คำที่อยู่ในชื่อสินค้า", keywords="คำค้น1, คำค้น2, ...") — ใช้เมื่อต้องการอัปเดต keywords ทีละหลายสินค้า
 - assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
 - create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, fabric_type="non-stretch"|"stretch" optional (default: "non-stretch"), allowances={{"chest":1,"waist":1,"hip":1.5}} optional (ค่าเผื่อนิ้วสำหรับบอทเทียบไซส์), columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"นิ้ว"}},...], rows=[{{"size":"S","values":["34","28","37"]}},{{"size":"M","values":["36","30","39"]}},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
 - create_size_chart_from_image: อ่านรูปตารางไซส์จากสินค้าด้วย Vision AI แล้วสร้างกลุ่มตารางขนาดทันที (params: source_product_name="ชื่อสินค้าที่มีรูปตารางไซส์", chart_name="ชื่อกลุ่มตารางที่จะสร้าง", product_keyword="คำในชื่อสินค้าที่จะผูก" optional) — ใช้เมื่อผู้ใช้บอกว่า "อ่านรูปจากสินค้า X แล้วสร้างตาราง" หรือ "ดึงข้อมูลตารางไซส์จากภาพแล้วสร้าง" หรือสั่งงานต่อเนื่อง "อ่าน+สร้าง+ผูก" ในคำสั่งเดียว — tool นี้รวมทั้ง อ่าน/แสดงข้อมูล/สร้าง/ผูก ในขั้นตอนเดียว ถ้าผู้ใช้ต้องการทำทุกอย่างในคำสั่งเดียว ให้ใช้ tool นี้เสมอ
@@ -264,7 +265,8 @@ def _agent_build_system_prompt(settings, context=None):
 
 === DB Schema สำคัญ (สำหรับ query_db) ===
 - ค้นสินค้า: ใช้ query_products แทน query_db เสมอ (ง่าย ถูกต้อง ไม่ต้อง JOIN เอง)
-- products: id, name, parent_sku, description, bot_description, status, product_type, brand_id, size_chart_image_url, weight, length, width, height, low_stock_threshold, is_featured — ไม่มี column "category", "is_active", "image_url", "size_chart" โดยตรง
+- products: id, name, parent_sku, description, bot_description, keywords, status, product_type, brand_id, size_chart_image_url, weight, length, width, height, low_stock_threshold, is_featured — ไม่มี column "category", "is_active", "image_url", "size_chart" โดยตรง
+- keywords: คำค้นหาสินค้า (text, comma-separated) ใช้ช่วยให้ค้นเจอในแคตตาล็อก — ดูได้ด้วย: SELECT name, keywords FROM products WHERE name ILIKE '%...%'
 - หมวดหมู่สินค้า: ต้อง JOIN product_categories pc ON pc.product_id=p.id JOIN categories c ON c.id=pc.category_id
 - รูปสินค้า: อยู่ในตาราง product_images (product_id, image_url, sort_order) — ต้อง JOIN เช่น LEFT JOIN product_images pi ON pi.product_id=p.id AND pi.sort_order=0 เพื่อดูรูปแรก
 - ตารางไซส์รูปภาพ: ใช้ column size_chart_image_url ในตาราง products (ไม่ใช่ size_chart)
@@ -2033,6 +2035,28 @@ def agent_chat():
                                 'message': intent.get('message', f"จะคัดลอก{field_label}จาก **{src['name']}** → {', '.join(tgt_found)}"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'bulk_update_product_keywords':
+                kw_match   = (params.get('keyword') or '').strip()
+                kw_value   = (params.get('keywords') or '').strip()
+                if not kw_match or not kw_value:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ keyword (คำในชื่อสินค้า) และ keywords (คำค้นหาที่ต้องการตั้ง)'}), 200
+                cursor.execute("SELECT id, name, keywords FROM products WHERE name ILIKE %s AND status='active' ORDER BY name LIMIT 30", (f'%{kw_match}%',))
+                prods = cursor.fetchall()
+                if not prods:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบสินค้าที่ชื่อมีคำ "{kw_match}"'}), 200
+                prod_list = ', '.join([p['name'] for p in prods[:5]]) + (f' ... +{len(prods)-5}' if len(prods) > 5 else '')
+                plan = {
+                    'before': {'จำนวนสินค้า': f'{len(prods)} รายการ', 'ตัวอย่าง': prod_list},
+                    'after':  {'keywords': kw_value, 'สินค้าที่จะอัปเดต': prod_list}
+                }
+                prod_ids = [p['id'] for p in prods]
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'product_ids': prod_ids, 'keywords': kw_value})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'product_ids': prod_ids, 'keywords': kw_value},
+                                'message': intent.get('message', f"จะอัปเดต keywords ของ {len(prods)} สินค้า (ที่มีคำ '{kw_match}') เป็น: {kw_value}"),
+                                'model_used': model_used}), 200
+
             elif tool == 'update_product_field':
                 prod_name  = (params.get('product_name') or '').strip()
                 db_field   = (params.get('field') or '').strip()
@@ -2047,6 +2071,7 @@ def agent_chat():
                     'name':               ('text',    'ชื่อสินค้า'),
                     'production_days':    ('integer', 'จำนวนวันผลิต'),
                     'deposit_percent':    ('integer', 'มัดจำ (%)'),
+                    'keywords':           ('text',    'คำค้นหา (keywords)'),
                 }
                 if db_field not in allowed_fields:
                     opts = ', '.join(allowed_fields.keys())
@@ -2545,6 +2570,27 @@ def agent_execute():
             return jsonify({'message': f"✅ คัดลอก{field_label}จาก **{src_prod['name'] if src_prod else ''}** → {', '.join(tgt_names)} สำเร็จ ({updated_count} สินค้า)",
                             'before': before_data, 'after': after_data}), 200
 
+        elif tool == 'bulk_update_product_keywords':
+            prod_ids = params.get('product_ids', [])
+            kw_value = (params.get('keywords') or '').strip()
+            if not prod_ids or not kw_value:
+                return jsonify({'message': 'ข้อมูลไม่ครบ ต้องมี product_ids และ keywords'}), 200
+            cursor.execute('SELECT id, name, keywords FROM products WHERE id = ANY(%s)', (prod_ids,))
+            prods = cursor.fetchall()
+            if not prods:
+                return jsonify({'message': 'ไม่พบสินค้าที่ระบุ'}), 200
+            cursor.execute('UPDATE products SET keywords = %s, updated_at = CURRENT_TIMESTAMP WHERE id = ANY(%s)', (kw_value, prod_ids))
+            updated = cursor.rowcount
+            prod_names = ', '.join([p['name'] for p in prods[:5]]) + (f' ... +{len(prods)-5}' if len(prods) > 5 else '')
+            before_data = {'จำนวนสินค้า': f'{updated} รายการ', 'ตัวอย่าง': prod_names}
+            after_data  = {'keywords': kw_value, 'สินค้าที่อัปเดต': prod_names}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data, ensure_ascii=False), _json.dumps(after_data, ensure_ascii=False), log_id))
+            conn.commit()
+            return jsonify({'message': f"✅ อัปเดต keywords ของ {updated} สินค้าสำเร็จ",
+                            'before': before_data, 'after': after_data}), 200
+
         elif tool == 'update_product_field':
             product_id = params.get('product_id')
             db_field   = (params.get('db_field') or params.get('field') or '').strip()
@@ -2559,6 +2605,7 @@ def agent_execute():
                 'name':                ('text',    'ชื่อสินค้า'),
                 'production_days':     ('integer', 'จำนวนวันผลิต'),
                 'deposit_percent':     ('integer', 'มัดจำ (%)'),
+                'keywords':            ('text',    'คำค้นหา (keywords)'),
             }
             if db_field not in allowed_fields or not product_id or new_value is None:
                 return jsonify({'message': 'ข้อมูลไม่ครบหรือ field ไม่รองรับ'}), 200
