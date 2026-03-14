@@ -974,7 +974,7 @@ def public_chat_message():
         _is_show_more = any(kw in user_msg for kw in _SHOW_MORE_KW)
         _remaining_count = 0
         if keywords:
-            _kw_cond_part = ('p.name ILIKE %s OR p.bot_description ILIKE %s OR '
+            _kw_cond_part = ('p.name ILIKE %s OR p.bot_description ILIKE %s OR p.keywords ILIKE %s OR '
                              'EXISTS (SELECT 1 FROM product_categories _pc '
                              'JOIN categories _c ON _c.id = _pc.category_id '
                              'WHERE _pc.product_id = p.id AND _c.name ILIKE %s)')
@@ -982,8 +982,8 @@ def public_chat_message():
             kw_params = [BRONZE_TIER_ID, BRONZE_TIER_ID]
             kw_count_params = []
             for k in keywords:
-                kw_params += [f'%{k}%', f'%{k}%', f'%{k}%']
-                kw_count_params += [f'%{k}%', f'%{k}%', f'%{k}%']
+                kw_params += [f'%{k}%', f'%{k}%', f'%{k}%', f'%{k}%']
+                kw_count_params += [f'%{k}%', f'%{k}%', f'%{k}%', f'%{k}%']
             try:
                 cursor.execute(f"""
                     SELECT p.id, p.name, p.bot_description, p.size_chart_group_id,
@@ -1226,6 +1226,7 @@ def public_chat_message():
                     _sc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                     _sc.execute('''
                         SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows,
+                               scg.fabric_type, scg.allowances,
                                p.name as product_name
                         FROM size_chart_groups scg
                         JOIN products p ON p.size_chart_group_id = scg.id
@@ -1254,7 +1255,17 @@ def public_chat_message():
                             _vals = _tr.get('values', [])
                             _line = [_tr.get('size', '')] + _vals
                             _chart_lines.append(' | '.join(str(v) for v in _line))
-                        _guest_size_chart_section += f"\n[ตารางขนาด: {_cr['name']}]\n" + '\n'.join(_chart_lines) + '\n'
+                        _fabric_type = _cr.get('fabric_type') or 'non-stretch'
+                        _alw = _cr.get('allowances') or {}
+                        if isinstance(_alw, str):
+                            try: _alw = json.loads(_alw)
+                            except: _alw = {}
+                        _alw_chest = _alw.get('chest', 1)
+                        _alw_waist = _alw.get('waist', 1)
+                        _alw_hip = _alw.get('hip', 1.5)
+                        _fabric_label = 'ผ้าไม่ยืด (non-stretch)' if _fabric_type == 'non-stretch' else 'ผ้ายืด (stretch)'
+                        _alw_line = f"ประเภทผ้า: {_fabric_label} | ค่าเผื่อ: อก +{_alw_chest}\" | เอว +{_alw_waist}\" | สะโพก +{_alw_hip}\""
+                        _guest_size_chart_section += f"\n[ตารางขนาด: {_cr['name']}]\n{_alw_line}\n" + '\n'.join(_chart_lines) + '\n'
             except Exception as _sc_err:
                 print(f'[GuestBot] size chart text error: {_sc_err}')
                 try: conn.rollback()
@@ -1408,14 +1419,12 @@ def public_chat_message():
   * ถ้าสินค้ามี [มีตารางไซส์] → หมายความว่ามีตารางขนาดในส่วน "ตารางขนาดสินค้า" ด้านล่าง ให้อ่านตัวเลขจากตารางนั้นและตอบลูกค้าได้เลยโดยตรง ห้ามบอกให้ลูกค้า "กดดูในหน้าสินค้า" ถ้ามีข้อมูลในตาราง
   * ถ้าสินค้าไม่มีตารางไซส์ (ไม่มีข้อมูลในส่วน "ตารางขนาดสินค้า") → บอกว่า "ขออภัยค่ะ ยังไม่มีตารางขนาดสำหรับสินค้านี้ในระบบ ลองบอกขนาดรอบอก รอบเอว รอบสะโพก น้องนุ่นจะช่วยแนะนำตามประสบการณ์ได้ค่ะ"
 - ⚠️ กฎการเลือกไซส์ (บังคับใช้ทุกครั้งที่แนะนำไซส์ — ห้ามข้ามขั้นตอนหรือใช้วิธีอื่น):
-  ขั้น 1 — คำนวณ "ค่าต้องการ" แต่ละจุด (อก/เอว/สะโพก) โดยใช้เผื่อตามประเภทผ้า:
-    • อก: ลูกค้า + เผื่อ 1" (ขั้นต่ำ)   เช่น อก 32" → ต้องการ ≥ 33"
-    • เอว: ลูกค้า + เผื่อ 1" (ขั้นต่ำ)   เช่น เอว 30" → ต้องการ ≥ 31"
-    • สะโพก (ผ้าไม่ยืด): ลูกค้า + เผื่อ 1.5" (ขั้นต่ำ เพราะเมื่อนั่งสะโพกขยาย 1"–1.5")
-        เช่น สะโพก 36" → ต้องการ ≥ 37.5" (ปัดขึ้นเป็น 38" เมื่อตารางเป็นเลขเต็ม)
-        เช่น สะโพก 40" → ต้องการ ≥ 41.5" → ดูตารางว่าแถวไหนมีสะโพก ≥ 41.5" (ไม่ใช่ 41")
-    • สะโพก (ผ้ายืด): ลูกค้า + เผื่อ 1" พอ
-    (ถ้า bot_description บอกค่าเผื่อ → ใช้ค่านั้น; ถ้าไม่บอก → ใช้เผื่อตามประเภทผ้าข้างต้น)
+  ขั้น 1 — คำนวณ "ค่าต้องการ" แต่ละจุด (อก/เอว/สะโพก) โดยอ่านค่าเผื่อจากบรรทัด "ค่าเผื่อ:" ในหัวข้อ [ตารางขนาด] ด้านล่าง:
+    • เช่น "ค่าเผื่อ: อก +1" | เอว +1" | สะโพก +1.5"" → ใช้ค่าเหล่านั้นตรงๆ
+    • อก: ลูกค้า + ค่าเผื่ออก   เช่น อก 32" + 1" → ต้องการ ≥ 33"
+    • เอว: ลูกค้า + ค่าเผื่อเอว   เช่น เอว 30" + 1" → ต้องการ ≥ 31"
+    • สะโพก: ลูกค้า + ค่าเผื่อสะโพก   เช่น สะโพก 40" + 1.5" → ต้องการ ≥ 41.5"
+    (ถ้าไม่มีข้อมูล "ค่าเผื่อ" ในตาราง → ใช้ค่าเริ่มต้น: อก +1" | เอว +1" | สะโพก ผ้าไม่ยืด +1.5", ผ้ายืด +1")
   ขั้น 2 — สแกนตารางทีละแถวจากเล็กสุด: แถวใดที่ค่าตาราง ≥ ค่าต้องการ **ครบทุกจุดในแถวเดียวกัน** → แถวนั้น "ผ่าน"
     กฎเกณฑ์: ค่าตาราง ≥ ค่าต้องการ = ✓ | ค่าตาราง < ค่าต้องการ = ✗ (แม้ต่างกันแค่ 0.5" ก็ถือว่าไม่ผ่าน)
   ขั้น 3 — ไซส์ที่แนะนำ = แถวแรก (เล็กสุด) ที่ผ่านทุกจุด
@@ -3420,13 +3429,14 @@ def create_product():
             low_stock = None
         cursor.execute('''
             INSERT INTO products (brand_id, name, parent_sku, description, bot_description,
-                                  size_chart_image_url, status, 
+                                  size_chart_image_url, status, keywords,
                                   weight, length, width, height, low_stock_threshold, size_chart_group_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         ''', (brand_id, data['name'], data['parent_sku'], data.get('description', ''),
               data.get('bot_description', '') or '',
               data.get('size_chart_image_url'), status,
+              data.get('keywords', '') or '',
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
               low_stock, data.get('size_chart_group_id') or None))
         
@@ -3615,13 +3625,13 @@ def update_product(product_id):
         cursor.execute('''
             UPDATE products 
             SET brand_id = %s, name = %s, description = %s, bot_description = %s,
-                size_chart_image_url = %s, status = %s,
+                size_chart_image_url = %s, status = %s, keywords = %s,
                 weight = %s, length = %s, width = %s, height = %s, low_stock_threshold = %s,
                 size_chart_group_id = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (brand_id, data['name'], data.get('description', ''), data.get('bot_description', '') or '',
-              data.get('size_chart_image_url'), status,
+              data.get('size_chart_image_url'), status, data.get('keywords', '') or '',
               data.get('weight'), data.get('length'), data.get('width'), data.get('height'),
               low_stock, data.get('size_chart_group_id') or None, product_id))
         
@@ -15964,7 +15974,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 
             _prod_where = '''
                 WHERE p.status = 'active'
-                  AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
+                  AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR p.keywords ILIKE %s OR b.name ILIKE %s)
                 GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                 LIMIT 15
             '''
@@ -15976,10 +15986,10 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                 pat = f'%{kw}%'
                 cursor.execute(_product_base_select + f'''
                     WHERE p.status = 'active'
-                      AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR b.name ILIKE %s)
+                      AND (p.name ILIKE %s OR p.description ILIKE %s OR p.bot_description ILIKE %s OR p.keywords ILIKE %s OR b.name ILIKE %s)
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_image_url, b.name
                     LIMIT {limit}
-                ''', (pat, pat, pat, pat))
+                ''', (pat, pat, pat, pat, pat))
                 for _pr in cursor.fetchall():
                     if _pr['id'] not in seen_ids:
                         seen_ids.add(_pr['id'])
@@ -16182,7 +16192,8 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     conn.rollback()
                     _msc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                     _msc.execute('''
-                        SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows
+                        SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows,
+                               scg.fabric_type, scg.allowances
                         FROM size_chart_groups scg
                         JOIN products p ON p.size_chart_group_id = scg.id
                         WHERE p.id = ANY(%s)
@@ -16210,7 +16221,14 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                             _mvals = _mr.get('values', [])
                             _mline = [_mr.get('size', '')] + _mvals
                             _mlines.append(' | '.join(str(v) for v in _mline))
-                        _member_size_chart_section += f"\n[ตารางขนาด: {_mc['name']}]\n" + '\n'.join(_mlines) + '\n'
+                        _mfabric = _mc.get('fabric_type') or 'non-stretch'
+                        _malw = _mc.get('allowances') or {}
+                        if isinstance(_malw, str):
+                            try: _malw = json.loads(_malw)
+                            except: _malw = {}
+                        _mfabric_label = 'ผ้าไม่ยืด (non-stretch)' if _mfabric == 'non-stretch' else 'ผ้ายืด (stretch)'
+                        _malw_line = f"ประเภทผ้า: {_mfabric_label} | ค่าเผื่อ: อก +{_malw.get('chest',1)}\" | เอว +{_malw.get('waist',1)}\" | สะโพก +{_malw.get('hip',1.5)}\""
+                        _member_size_chart_section += f"\n[ตารางขนาด: {_mc['name']}]\n{_malw_line}\n" + '\n'.join(_mlines) + '\n'
                     if _member_size_chart_section and not size_chart_hint:
                         size_chart_hint = '\n[มีตารางขนาดแนบในส่วน "ตารางขนาดสินค้า" — ใช้ข้อมูลนั้นตอบคำถามเรื่องขนาด/ไซส์ได้เลยค่ะ]'
             except Exception as _msc_err:
@@ -16284,14 +16302,12 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
 - 🚫 ห้ามเดาหรือแต่งตัวเลขขนาดไซส์เด็ดขาด (เช่น อก/เอว/สะโพกของแต่ละไซส์) — ตัวเลขเหล่านี้ต้องอ่านมาจากตารางไซส์รูปภาพที่ระบบส่งมาเท่านั้น ห้ามใช้ความรู้ทั่วไปหรือประมาณเอาเอง ถ้าไม่มีตารางไซส์ในรูปภาพ → ให้บอกว่า "ต้องดูตารางไซส์ของสินค้านั้นก่อนค่ะ น้องนุ่นจะเทียบไซส์ได้ถูกต้องก็ต่อเมื่อเห็นตารางไซส์ของสินค้านั้นจริงๆ ค่ะ" แล้วถามสมาชิกว่าสนใจสินค้าประเภทไหน/แบบไหน
 - ❓ ถ้าสมาชิกถามเรื่องไซส์แต่ยังไม่ได้ระบุว่าสนใจสินค้าชิ้นไหนหรือประเภทไหน → ให้ถามกลับก่อนเสมอ เช่น "สนใจสินค้าประเภทไหนคะ? (เช่น ชุดพยาบาล ชุดเภสัช เสื้อสคับ ฯลฯ) น้องนุ่นจะได้ดึงตารางไซส์ที่ถูกต้องมาเทียบให้ค่ะ" แล้วใส่ quick_replies เป็นชื่อหมวดหมู่จริงจากรายการ — ห้ามตอบตัวเลขไซส์โดยไม่รู้ก่อนว่าเป็นสินค้าอะไร
 - ⚠️ กฎการเลือกไซส์ (บังคับใช้ทุกครั้งที่แนะนำไซส์ — ห้ามข้ามขั้นตอนหรือใช้วิธีอื่น):
-  ขั้น 1 — คำนวณ "ค่าต้องการ" แต่ละจุด (อก/เอว/สะโพก) โดยใช้เผื่อตามประเภทผ้า:
-    • อก: ลูกค้า + เผื่อ 1" (ขั้นต่ำ)   เช่น อก 32" → ต้องการ ≥ 33"
-    • เอว: ลูกค้า + เผื่อ 1" (ขั้นต่ำ)   เช่น เอว 30" → ต้องการ ≥ 31"
-    • สะโพก (ผ้าไม่ยืด): ลูกค้า + เผื่อ 1.5" (ขั้นต่ำ เพราะเมื่อนั่งสะโพกขยาย 1"–1.5")
-        เช่น สะโพก 36" → ต้องการ ≥ 37.5" (ปัดขึ้นเป็น 38" เมื่อตารางเป็นเลขเต็ม)
-        เช่น สะโพก 40" → ต้องการ ≥ 41.5" → ดูตารางว่าแถวไหนมีสะโพก ≥ 41.5" (ไม่ใช่ 41")
-    • สะโพก (ผ้ายืด): ลูกค้า + เผื่อ 1" พอ
-    (ถ้า bot_description บอกค่าเผื่อ → ใช้ค่านั้น; ถ้าไม่บอก → ใช้เผื่อตามประเภทผ้าข้างต้น)
+  ขั้น 1 — คำนวณ "ค่าต้องการ" แต่ละจุด (อก/เอว/สะโพก) โดยอ่านค่าเผื่อจากบรรทัด "ค่าเผื่อ:" ในหัวข้อ [ตารางขนาด] ด้านล่าง:
+    • เช่น "ค่าเผื่อ: อก +1" | เอว +1" | สะโพก +1.5"" → ใช้ค่าเหล่านั้นตรงๆ
+    • อก: ลูกค้า + ค่าเผื่ออก   เช่น อก 32" + 1" → ต้องการ ≥ 33"
+    • เอว: ลูกค้า + ค่าเผื่อเอว   เช่น เอว 30" + 1" → ต้องการ ≥ 31"
+    • สะโพก: ลูกค้า + ค่าเผื่อสะโพก   เช่น สะโพก 40" + 1.5" → ต้องการ ≥ 41.5"
+    (ถ้าไม่มีข้อมูล "ค่าเผื่อ" ในตาราง → ใช้ค่าเริ่มต้น: อก +1" | เอว +1" | สะโพก ผ้าไม่ยืด +1.5", ผ้ายืด +1")
   ขั้น 2 — สแกนตารางทีละแถวจากเล็กสุด: แถวใดที่ค่าตาราง ≥ ค่าต้องการ **ครบทุกจุดในแถวเดียวกัน** → แถวนั้น "ผ่าน"
     กฎเกณฑ์: ค่าตาราง ≥ ค่าต้องการ = ✓ | ค่าตาราง < ค่าต้องการ = ✗ (แม้ต่างกันแค่ 0.5" ก็ถือว่าไม่ผ่าน)
   ขั้น 3 — ไซส์ที่แนะนำ = แถวแรก (เล็กสุด) ที่ผ่านทุกจุด
@@ -18699,12 +18715,16 @@ def admin_create_size_chart_group():
         rows = data.get('rows', [])
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        fabric_type = data.get('fabric_type', 'non-stretch') or 'non-stretch'
+        allowances = data.get('allowances') or {'chest': 1, 'waist': 1, 'hip': 1.5}
         cursor.execute('''
-            INSERT INTO size_chart_groups (name, description, columns, rows)
-            VALUES (%s, %s, %s, %s) RETURNING *
+            INSERT INTO size_chart_groups (name, description, columns, rows, fabric_type, allowances)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
         ''', (data['name'], data.get('description', ''),
               json.dumps(columns, ensure_ascii=False),
-              json.dumps(rows, ensure_ascii=False)))
+              json.dumps(rows, ensure_ascii=False),
+              fabric_type,
+              json.dumps(allowances)))
         row = dict(cursor.fetchone())
         conn.commit()
         return jsonify(row), 201
@@ -18755,13 +18775,17 @@ def admin_update_size_chart_group(group_id):
             return jsonify({'error': 'กรุณาระบุชื่อตารางขนาด'}), 400
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        _ft = data.get('fabric_type', 'non-stretch') or 'non-stretch'
+        _al = data.get('allowances') or {'chest': 1, 'waist': 1, 'hip': 1.5}
         cursor.execute('''
             UPDATE size_chart_groups
-            SET name=%s, description=%s, columns=%s, rows=%s, updated_at=NOW()
+            SET name=%s, description=%s, columns=%s, rows=%s,
+                fabric_type=%s, allowances=%s, updated_at=NOW()
             WHERE id=%s RETURNING *
         ''', (data['name'], data.get('description', ''),
               json.dumps(data.get('columns', []), ensure_ascii=False),
               json.dumps(data.get('rows', []), ensure_ascii=False),
+              _ft, json.dumps(_al),
               group_id))
         row = cursor.fetchone()
         if not row:

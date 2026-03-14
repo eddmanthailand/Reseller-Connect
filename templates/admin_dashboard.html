@@ -1310,6 +1310,50 @@
                                 <input id="sc-description" type="text" placeholder="เช่น ใช้สำหรับเสื้อพยาบาล เสื้อกาวน์ ชุดพิธีการ" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;">
                             </div>
 
+                            <!-- ประเภทผ้า + ค่าเผื่อสำหรับบอท -->
+                            <div style="margin-bottom:16px;background:#f8faff;border:1px solid #dbeafe;border-radius:10px;padding:16px;">
+                                <label style="display:block;font-weight:700;margin-bottom:12px;color:#1e40af;font-size:14px;">🤖 การตั้งค่าสำหรับบอทแนะนำไซส์</label>
+                                <div style="margin-bottom:12px;">
+                                    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#374151;">ประเภทผ้า</label>
+                                    <select id="sc-fabric-type" onchange="SizeCharts.updateFabricType(this.value)"
+                                        style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;cursor:pointer;">
+                                        <option value="non-stretch">🔵 ผ้าไม่ยืด (วาเลนติโน่, ซาติน, โพลีเอสเตอร์, ฝ้าย)</option>
+                                        <option value="stretch">🟢 ผ้ายืด (Jersey, Spandex, ผ้ายืด)</option>
+                                    </select>
+                                </div>
+                                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px;color:#374151;">ค่าเผื่อขั้นต่ำ (นิ้ว) — บอทจะใช้บวกเพิ่มจากขนาดลูกค้าก่อนเทียบตาราง</label>
+                                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                                    <div>
+                                        <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบอก +</label>
+                                        <div style="display:flex;align-items:center;gap:4px;">
+                                            <input id="sc-allowance-chest" type="number" min="0" max="5" step="0.5" value="1"
+                                                onchange="SizeCharts.updateAllowance('chest',this.value)"
+                                                style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
+                                            <span style="font-size:12px;color:#9ca3af;">"</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบเอว +</label>
+                                        <div style="display:flex;align-items:center;gap:4px;">
+                                            <input id="sc-allowance-waist" type="number" min="0" max="5" step="0.5" value="1"
+                                                onchange="SizeCharts.updateAllowance('waist',this.value)"
+                                                style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
+                                            <span style="font-size:12px;color:#9ca3af;">"</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="font-size:12px;color:#6b7280;margin-bottom:4px;display:block;">รอบสะโพก +</label>
+                                        <div style="display:flex;align-items:center;gap:4px;">
+                                            <input id="sc-allowance-hip" type="number" min="0" max="5" step="0.5" value="1.5"
+                                                onchange="SizeCharts.updateAllowance('hip',this.value)"
+                                                style="width:70px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;text-align:center;">
+                                            <span style="font-size:12px;color:#9ca3af;">"</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">💡 ผ้าไม่ยืด: สะโพก +1.5" (มาตรฐาน) | ผ้ายืด: สะโพก +1" ก็พอ — เปลี่ยนประเภทผ้าจะปรับอัตโนมัติ</p>
+                            </div>
+
                             <div style="margin-bottom:16px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                                     <label style="font-weight:600;color:#374151;">ตารางขนาด</label>
@@ -4230,7 +4274,7 @@
     <script src="/static/js/dashboard-mto.js?v=20250306"></script>
     <script src="/static/js/dashboard-chat.js?v=20250306"></script>
     <script src="/static/js/dashboard-marketing.js?v=20250306"></script>
-    <script src="/static/js/dashboard-size-charts.js?v=20260308"></script>
+    <script src="/static/js/dashboard-size-charts.js?v=20260314"></script>
     <script src="/static/js/pwa.js?v=6"></script>
     <script src="/static/js/chat-notify.js?v=4"></script>
 

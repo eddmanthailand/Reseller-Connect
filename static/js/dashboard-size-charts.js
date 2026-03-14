@@ -1,14 +1,16 @@
 const SizeCharts = (() => {
   let _columns = [
     { name: 'ขนาด', unit: '' },
-    { name: 'รอบอก', unit: 'ซม.' },
-    { name: 'รอบเอว', unit: 'ซม.' },
-    { name: 'ความยาว', unit: 'ซม.' }
+    { name: 'รอบอก', unit: 'นิ้ว' },
+    { name: 'รอบเอว', unit: 'นิ้ว' },
+    { name: 'รอบสะโพก', unit: 'นิ้ว' }
   ];
   let _rows = [];
   let _allProducts = [];
   let _selectedProductIds = new Set();
   let _filterText = '';
+  let _fabricType = 'non-stretch';
+  let _allowances = { chest: 1, waist: 1, hip: 1.5 };
 
   const UNITS = ['', 'ซม.', 'นิ้ว', 'กก.', 'ม.', 'มม.'];
 
@@ -75,6 +77,31 @@ const SizeCharts = (() => {
       </tr>`).join('');
   }
 
+  function _syncAllowanceInputs() {
+    const ft = document.getElementById('sc-fabric-type');
+    const ac = document.getElementById('sc-allowance-chest');
+    const aw = document.getElementById('sc-allowance-waist');
+    const ah = document.getElementById('sc-allowance-hip');
+    if (ft) ft.value = _fabricType;
+    if (ac) ac.value = _allowances.chest;
+    if (aw) aw.value = _allowances.waist;
+    if (ah) ah.value = _allowances.hip;
+  }
+
+  function updateFabricType(val) {
+    _fabricType = val;
+    if (val === 'stretch') {
+      _allowances = { chest: 1, waist: 0.5, hip: 1 };
+    } else {
+      _allowances = { chest: 1, waist: 1, hip: 1.5 };
+    }
+    _syncAllowanceInputs();
+  }
+
+  function updateAllowance(key, val) {
+    _allowances[key] = parseFloat(val) || 0;
+  }
+
   function _renderProductPicker() {
     const el = document.getElementById('sc-products-list');
     if (!el || !_allProducts.length) return;
@@ -127,6 +154,10 @@ const SizeCharts = (() => {
     }
   }
 
+  function _fabricLabel(ft) {
+    return ft === 'stretch' ? '🟢 ผ้ายืด' : '🔵 ผ้าไม่ยืด';
+  }
+
   async function load() {
     const el = document.getElementById('size-charts-list');
     if (!el) return;
@@ -144,18 +175,27 @@ const SizeCharts = (() => {
       el.innerHTML = groups.map(g => {
         const cols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
         const rows = Array.isArray(g.rows) ? g.rows : JSON.parse(g.rows || '[]');
+        const allowances = g.allowances || { chest: 1, waist: 1, hip: 1.5 };
         const sizes = rows.map(r => r.size).join(', ') || '-';
         const colLabels = cols.filter(c => _colName(c) !== 'ขนาด').map(c => {
           const n = _colName(c); const u = _colUnit(c);
           return u ? `${n} (${u})` : n;
         }).join(' | ');
+        const fabricTag = g.fabric_type === 'stretch'
+          ? `<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">ผ้ายืด</span>`
+          : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">ผ้าไม่ยืด</span>`;
+        const allowText = `อก +${allowances.chest}" | เอว +${allowances.waist}" | สะโพก +${allowances.hip}"`;
         return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
             <div>
-              <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#1f2937;">${g.name}</h3>
-              ${g.description ? `<p style="margin:0;font-size:13px;color:#6b7280;">${g.description}</p>` : ''}
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${g.name}</h3>
+                ${fabricTag}
+              </div>
+              ${g.description ? `<p style="margin:0 0 4px;font-size:13px;color:#6b7280;">${g.description}</p>` : ''}
+              <p style="margin:0;font-size:12px;color:#9ca3af;">เผื่อ: ${allowText}</p>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-shrink:0;margin-left:8px;">
               <button onclick="SizeCharts.openEditModal(${g.id})" style="background:#f3f4f6;border:1px solid #d1d5db;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;">แก้ไข</button>
               <button onclick="SizeCharts.deleteGroup(${g.id},'${g.name}')" style="background:#fef2f2;border:1px solid #fca5a5;color:#ef4444;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;">ลบ</button>
             </div>
@@ -178,11 +218,14 @@ const SizeCharts = (() => {
     document.getElementById('sc-edit-id').value = '';
     document.getElementById('sc-name').value = '';
     document.getElementById('sc-description').value = '';
+    _fabricType = 'non-stretch';
+    _allowances = { chest: 1, waist: 1, hip: 1.5 };
+    _syncAllowanceInputs();
     _columns = [
       { name: 'ขนาด', unit: '' },
-      { name: 'รอบอก', unit: 'ซม.' },
-      { name: 'รอบเอว', unit: 'ซม.' },
-      { name: 'ความยาว', unit: 'ซม.' }
+      { name: 'รอบอก', unit: 'นิ้ว' },
+      { name: 'รอบเอว', unit: 'นิ้ว' },
+      { name: 'รอบสะโพก', unit: 'นิ้ว' }
     ];
     _rows = [
       { size: 'SS', values: ['', '', ''] },
@@ -209,6 +252,9 @@ const SizeCharts = (() => {
       document.getElementById('sc-edit-id').value = g.id;
       document.getElementById('sc-name').value = g.name;
       document.getElementById('sc-description').value = g.description || '';
+      _fabricType = g.fabric_type || 'non-stretch';
+      _allowances = g.allowances || { chest: 1, waist: 1, hip: 1.5 };
+      _syncAllowanceInputs();
       const rawCols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
       _columns = rawCols.map(_toColObj);
       _rows = (Array.isArray(g.rows) ? g.rows : JSON.parse(g.rows || '[]')).map(r => ({
@@ -249,7 +295,7 @@ const SizeCharts = (() => {
   function addColumn() {
     const colName = prompt('ชื่อคอลัมน์ใหม่ (เช่น สะโพก, รอบคอ, น้ำหนักผ้า):');
     if (!colName || !colName.trim()) return;
-    _columns.push({ name: colName.trim(), unit: 'ซม.' });
+    _columns.push({ name: colName.trim(), unit: 'นิ้ว' });
     _rows = _rows.map(r => ({ ...r, values: [...(r.values || []), ''] }));
     _renderTable();
   }
@@ -295,9 +341,19 @@ const SizeCharts = (() => {
     const name = document.getElementById('sc-name').value.trim();
     if (!name) { _toast('กรุณาใส่ชื่อ template', 'error'); return; }
     const id = document.getElementById('sc-edit-id').value;
+    const ftEl = document.getElementById('sc-fabric-type');
+    const acEl = document.getElementById('sc-allowance-chest');
+    const awEl = document.getElementById('sc-allowance-waist');
+    const ahEl = document.getElementById('sc-allowance-hip');
+    if (ftEl) _fabricType = ftEl.value;
+    if (acEl) _allowances.chest = parseFloat(acEl.value) || 1;
+    if (awEl) _allowances.waist = parseFloat(awEl.value) || 1;
+    if (ahEl) _allowances.hip = parseFloat(ahEl.value) || 1.5;
     const payload = {
       name,
       description: document.getElementById('sc-description').value.trim(),
+      fabric_type: _fabricType,
+      allowances: _allowances,
       columns: _columns.map(_toColObj),
       rows: _rows,
       product_ids: [..._selectedProductIds]
@@ -333,5 +389,5 @@ const SizeCharts = (() => {
     });
   });
 
-  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateColUnit, updateCell, toggleProduct, filterProducts, save, deleteGroup };
+  return { load, openCreateModal, openEditModal, closeModal, addRow, removeRow, addColumn, removeCol, updateColName, updateColUnit, updateCell, toggleProduct, filterProducts, save, deleteGroup, updateFabricType, updateAllowance };
 })();

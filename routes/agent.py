@@ -252,9 +252,9 @@ def _agent_build_system_prompt(settings, context=None):
 - copy_product_description: คัดลอกคำอธิบาย (bot_description หรือ description) จากสินค้าต้นทาง ไปยังสินค้าปลายทางหลายชิ้น (params: source_product_name="ชื่อสินค้าต้นทาง", target_product_names=["ชื่อสินค้า1","ชื่อสินค้า2",...], field="bot_description"|"description") — ใช้เมื่อผู้ใช้บอกว่า "เอาคำอธิบายของ X ไปใส่ใน Y และ Z"
 - update_product_field: แก้ไข field อื่นๆ ของสินค้า (params: product_name, field="is_featured"|"low_stock_threshold"|"weight"|"name", value) — เช่น ตั้งเป็นสินค้าแนะนำ, เปลี่ยนชื่อ, ตั้งขีดแจ้งเตือนสต็อก
 - assign_size_chart_group: ผูกกลุ่มตารางขนาดให้สินค้า (params: group_name="ชื่อกลุ่มตาราง", product_keyword="คำในชื่อสินค้า") — ผูกสินค้าทุกชิ้นที่ชื่อมีคำ product_keyword เข้ากับกลุ่มตารางขนาดที่ระบุ
-- create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"ซม."}},...], rows=[{{"size":"S","values":["88","68","59"]}},{{"size":"M","values":["92","72","60"]}},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
+- create_size_chart_group: สร้างกลุ่มตารางขนาดใหม่พร้อมข้อมูลเลยในคำสั่งเดียว (params: name="ชื่อกลุ่ม", description="คำอธิบาย" optional, fabric_type="non-stretch"|"stretch" optional (default: "non-stretch"), allowances={{"chest":1,"waist":1,"hip":1.5}} optional (ค่าเผื่อนิ้วสำหรับบอทเทียบไซส์), columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"นิ้ว"}},...], rows=[{{"size":"S","values":["34","28","37"]}},{{"size":"M","values":["36","30","39"]}},...], product_keyword="คำในชื่อสินค้า" optional เพื่อผูกสินค้าทันที) — ใช้เมื่อผู้ใช้ให้ข้อมูลตารางมาครบ
 - create_size_chart_from_image: อ่านรูปตารางไซส์จากสินค้าด้วย Vision AI แล้วสร้างกลุ่มตารางขนาดทันที (params: source_product_name="ชื่อสินค้าที่มีรูปตารางไซส์", chart_name="ชื่อกลุ่มตารางที่จะสร้าง", product_keyword="คำในชื่อสินค้าที่จะผูก" optional) — ใช้เมื่อผู้ใช้บอกว่า "อ่านรูปจากสินค้า X แล้วสร้างตาราง" หรือ "ดึงข้อมูลตารางไซส์จากภาพแล้วสร้าง" หรือสั่งงานต่อเนื่อง "อ่าน+สร้าง+ผูก" ในคำสั่งเดียว — tool นี้รวมทั้ง อ่าน/แสดงข้อมูล/สร้าง/ผูก ในขั้นตอนเดียว ถ้าผู้ใช้ต้องการทำทุกอย่างในคำสั่งเดียว ให้ใช้ tool นี้เสมอ
-- update_size_chart_group: แก้ไขกลุ่มตารางขนาดที่มีอยู่แล้ว (params: name="ชื่อกลุ่มที่จะแก้ไข", new_name="ชื่อใหม่" optional, description="คำอธิบายใหม่" optional, columns=[{{"name":"ขนาด","unit":""}},{{"name":"รอบอก","unit":"ซม."}},...] optional, rows=[{{"size":"S","values":["88","68"]}},{{"size":"M","values":["92","72"]}},...] optional) — ระบุเฉพาะ field ที่ต้องการแก้ไข ไม่จำเป็นต้องส่งทุก field
+- update_size_chart_group: แก้ไขกลุ่มตารางขนาดที่มีอยู่แล้ว (params: name="ชื่อกลุ่มที่จะแก้ไข", new_name="ชื่อใหม่" optional, description="คำอธิบายใหม่" optional, fabric_type="non-stretch"|"stretch" optional, allowances={{"chest":1,"waist":1,"hip":1.5}} optional, columns=[...] optional, rows=[...] optional) — ระบุเฉพาะ field ที่ต้องการแก้ไข ไม่จำเป็นต้องส่งทุก field
 - delete_size_chart_group: ลบกลุ่มตารางขนาด (params: name="ชื่อกลุ่มที่จะลบ") — สินค้าที่ผูกอยู่จะถูก unlink อัตโนมัติ
 
 [READ — ตารางขนาด]
@@ -2619,6 +2619,8 @@ def agent_execute():
             _cx_cols    = list(params.get('columns', []))
             _cx_rows    = params.get('rows', [])
             _cx_keyword = (params.get('product_keyword') or '').strip()
+            _cx_fabric  = params.get('fabric_type', 'non-stretch') or 'non-stretch'
+            _cx_alw     = params.get('allowances') or ({'chest': 1, 'waist': 0.5, 'hip': 1} if _cx_fabric == 'stretch' else {'chest': 1, 'waist': 1, 'hip': 1.5})
             _cx_first_name = (_cx_cols[0].get('name', '') if isinstance(_cx_cols[0], dict) else str(_cx_cols[0])) if _cx_cols else ''
             if _cx_first_name != 'ขนาด':
                 _cx_cols = [{'name': 'ขนาด', 'unit': ''}] + _cx_cols
@@ -2628,8 +2630,8 @@ def agent_execute():
             if cursor.fetchone():
                 return jsonify({'error': f'มีกลุ่มตารางขนาดชื่อ "{_cx_name}" อยู่แล้ว'}), 400
             cursor.execute(
-                'INSERT INTO size_chart_groups (name, description, columns, rows) VALUES (%s, %s, %s::jsonb, %s::jsonb) RETURNING id',
-                (_cx_name, _cx_desc, _csg_json2.dumps(_cx_cols, ensure_ascii=False), _csg_json2.dumps(_cx_rows, ensure_ascii=False))
+                'INSERT INTO size_chart_groups (name, description, columns, rows, fabric_type, allowances) VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb) RETURNING id',
+                (_cx_name, _cx_desc, _csg_json2.dumps(_cx_cols, ensure_ascii=False), _csg_json2.dumps(_cx_rows, ensure_ascii=False), _cx_fabric, _csg_json2.dumps(_cx_alw))
             )
             _cx_grp_id = cursor.fetchone()['id']
             _cx_linked = 0
@@ -2714,6 +2716,8 @@ def agent_execute():
             _ux_desc     = params.get('description')
             _ux_cols     = params.get('columns')
             _ux_rows     = params.get('rows')
+            _ux_fabric   = params.get('fabric_type')
+            _ux_alw      = params.get('allowances')
             _ux_fields = []
             _ux_vals   = []
             if _ux_new_name:
@@ -2728,6 +2732,12 @@ def agent_execute():
             if _ux_rows is not None:
                 _ux_fields.append('rows=%s::jsonb')
                 _ux_vals.append(_upd_json2.dumps(_ux_rows, ensure_ascii=False))
+            if _ux_fabric is not None:
+                _ux_fields.append('fabric_type=%s')
+                _ux_vals.append(_ux_fabric)
+            if _ux_alw is not None:
+                _ux_fields.append('allowances=%s::jsonb')
+                _ux_vals.append(_upd_json2.dumps(_ux_alw))
             if not _ux_fields:
                 return jsonify({'error': 'ไม่มีข้อมูลที่จะอัปเดต'}), 400
             _ux_fields.append('updated_at=CURRENT_TIMESTAMP')
@@ -2738,6 +2748,8 @@ def agent_execute():
             if _ux_desc is not None: _ux_after['คำอธิบาย'] = str(_ux_desc)[:60]
             if _ux_cols is not None: _ux_after['คอลัมน์'] = ' | '.join((c.get('name', '') if isinstance(c, dict) else str(c)) for c in _ux_cols)
             if _ux_rows is not None: _ux_after['จำนวนไซส์'] = str(len(_ux_rows)) + ' แถว'
+            if _ux_fabric is not None: _ux_after['ประเภทผ้า'] = _ux_fabric
+            if _ux_alw is not None: _ux_after['ค่าเผื่อ'] = f"อก +{_ux_alw.get('chest',1)}\" เอว +{_ux_alw.get('waist',1)}\" สะโพก +{_ux_alw.get('hip',1.5)}\""
             if log_id:
                 cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
                                ('executed', _upd_json2.dumps({'ชื่อ': _ux_grp['name']}), _upd_json2.dumps(_ux_after), log_id))

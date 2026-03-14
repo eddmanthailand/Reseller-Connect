@@ -637,7 +637,12 @@
                         </div>
                         <div style="margin-top: 16px;">
                             <label class="form-label">🤖 คำอธิบายสำหรับบอทแชท (ไม่บังคับ)</label>
-                            <textarea id="bot_description" class="form-input" rows="2" placeholder="เช่น ผ้าดีใส่สบาย เหมาะสำหรับอากาศร้อน มีซับใน ยืดหยุ่นสูง — บอทจะใช้ข้อมูลนี้แนะนำสินค้าให้ลูกค้า"></textarea>
+                            <textarea id="bot_description" class="form-input" rows="2" placeholder="เช่น ผ้าวาเลนติโน่ไม่ยืด มีซับใน คอปก ใส่สบาย — บอทจะใช้อธิบายสินค้าให้ลูกค้า (ไม่ใช่สำหรับค่าเผื่อไซส์)"></textarea>
+                        </div>
+                        <div style="margin-top: 16px;">
+                            <label class="form-label">🔍 คำค้นหา / Keywords (ไม่บังคับ)</label>
+                            <input id="product_keywords" class="form-input" type="text" placeholder="เช่น พยาบาล, สครับ, ขาว, ปกบัว — คั่นด้วยจุลภาค, บอทและระบบค้นหาจะใช้แมทช์สินค้าในแชท">
+                            <p style="margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.5);">ใส่คำสั้นๆ ที่ลูกค้ามักพิมพ์ เช่น ชื่อผ้า, สีสินค้า, กลุ่มลูกค้า</p>
                         </div>
                         
                         <!-- Warehouse Selection -->
@@ -1725,6 +1730,7 @@
             const parentSku = document.getElementById('parent_sku').value.trim();
             const description = document.getElementById('product_description').value.trim();
             const botDescription = (document.getElementById('bot_description')?.value || '').trim();
+            const productKeywords = (document.getElementById('product_keywords')?.value || '').trim();
             
             // Shipping info fields
             const weight = document.getElementById('product_weight').value;
@@ -1823,6 +1829,7 @@
                     parent_sku: parentSku,
                     description,
                     bot_description: botDescription,
+                    keywords: productKeywords,
                     image_urls: imageUrls,
                     size_chart_image_url: sizeChartImageUrl,
                     size_chart_group_id: sizeChartGroupId,
