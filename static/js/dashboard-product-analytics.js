@@ -100,22 +100,24 @@ async function _paLoadTrend(days, campaign) {
                     {
                         label: 'ครั้งที่ดู',
                         data: views,
-                        borderColor: '#0a84ff',
-                        backgroundColor: 'rgba(10,132,255,0.1)',
+                        borderColor: '#007aff',
+                        backgroundColor: 'rgba(0,122,255,0.08)',
                         tension: 0.42,
                         fill: true,
                         pointRadius: rows.length > 45 ? 0 : 3,
+                        pointBackgroundColor: '#007aff',
                         pointHoverRadius: 5,
                         borderWidth: 2
                     },
                     {
                         label: 'ผู้เข้าชม',
                         data: unique,
-                        borderColor: '#30d158',
-                        backgroundColor: 'rgba(48,209,88,0.07)',
+                        borderColor: '#34c759',
+                        backgroundColor: 'rgba(52,199,89,0.06)',
                         tension: 0.42,
                         fill: true,
                         pointRadius: rows.length > 45 ? 0 : 3,
+                        pointBackgroundColor: '#34c759',
                         pointHoverRadius: 5,
                         borderWidth: 2
                     }
@@ -127,30 +129,36 @@ async function _paLoadTrend(days, campaign) {
                 plugins: {
                     legend: {
                         labels: {
-                            color: 'rgba(255,255,255,0.5)',
-                            font: { size: 11 },
-                            boxWidth: 12,
-                            boxHeight: 2
+                            color: '#6e6e73',
+                            font: { size: 11, family: '-apple-system, BlinkMacSystemFont, sans-serif' },
+                            boxWidth: 12, boxHeight: 2
                         }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(28,28,30,0.95)',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: 'rgba(255,255,255,0.96)',
+                        borderColor: '#e5e5ea',
                         borderWidth: 1,
-                        titleColor: 'rgba(255,255,255,0.7)',
-                        bodyColor: '#fff',
-                        padding: 10,
-                        cornerRadius: 10
+                        titleColor: '#3a3a3c',
+                        bodyColor: '#1d1d1f',
+                        padding: 12,
+                        cornerRadius: 12,
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                        callbacks: {
+                            labelColor: (ctx) => ({
+                                borderColor: ctx.dataset.borderColor,
+                                backgroundColor: ctx.dataset.borderColor
+                            })
+                        }
                     }
                 },
                 scales: {
                     x: {
-                        ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 10 },
-                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
+                        ticks: { color: '#aeaeb2', font: { size: 10 }, maxTicksLimit: 10 },
+                        grid: { color: '#f2f2f7', drawBorder: false }
                     },
                     y: {
-                        ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } },
-                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                        ticks: { color: '#aeaeb2', font: { size: 10 } },
+                        grid: { color: '#f2f2f7', drawBorder: false },
                         beginAtZero: true
                     }
                 }
@@ -185,8 +193,8 @@ async function _paLoadTopProducts(days, campaign) {
                 ? ['🥇','🥈','🥉'][i]
                 : `<span style="font-size:11px;">${i+1}</span>`;
             const img = row.image_url
-                ? `<img class="pa-prod-img" src="${_paEsc(row.image_url)}" alt="" onerror="this.src='';this.style.background='rgba(255,255,255,0.07)'">`
-                : `<div class="pa-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:18px;">👗</div>`;
+                ? `<img class="pa-prod-img" src="${_paEsc(row.image_url)}" alt="" onerror="this.src='';this.style.background='#f2f2f7'">`
+                : `<div class="pa-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:#f2f2f7;">👗</div>`;
 
             return `
                 <div class="pa-prod-row">
