@@ -14,6 +14,11 @@ from replit.object_storage import Client
 
 auth_bp = Blueprint('auth', __name__)
 
+# Rate limiting for login attempts (in-memory, per IP)
+login_attempts = {}
+RATE_LIMIT_WINDOW = 300       # 5 minutes
+RATE_LIMIT_MAX_ATTEMPTS = 10  # max attempts per window
+
 # ==================== GOOGLE OAUTH ====================
 oauth = OAuth()
 google = oauth.register(
