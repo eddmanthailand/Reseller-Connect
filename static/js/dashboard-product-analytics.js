@@ -167,52 +167,63 @@ async function _paLoadTrend(days, campaign) {
     } catch(e) {}
 }
 
-// ── Top products list ──────────────────────────────────────────
+// ── Top products image grid ────────────────────────────────────
 async function _paLoadTopProducts(days, campaign) {
     const el = document.getElementById('paTopProducts');
     if (!el) return;
     try {
-        const params = new URLSearchParams({ days, limit: 20 });
+        const params = new URLSearchParams({ days, limit: 24 });
         if (campaign) params.set('campaign', campaign);
         const r = await fetch(`${API_URL}/product-analytics/top-products?${params}`, { credentials: 'include' });
         if (!r.ok) throw new Error(r.status);
         const rows = await r.json();
 
         if (!rows.length) {
-            el.innerHTML = '<div class="pa-empty"><div class="pa-empty-icon">📦</div>ยังไม่มีข้อมูล</div>';
+            el.innerHTML = '<div class="pa-empty"><div class="pa-empty-icon">📦</div>ยังไม่มีข้อมูล<br><small>ข้อมูลจะสะสมเมื่อลูกค้ากดดูสินค้าในแคตตาล็อก</small></div>';
             return;
         }
 
         const maxViews = Math.max(...rows.map(r => r.views || 1));
-        el.innerHTML = rows.map((row, i) => {
+        const medals   = ['🥇','🥈','🥉'];
+
+        const cards = rows.map((row, i) => {
             const pct  = Math.round((row.views / maxViews) * 100);
             const conv = parseFloat(row.conversion_pct || 0);
             const convClass = conv >= 10 ? 'good' : conv >= 3 ? 'mid' : '';
-            const convLabel = conv > 0 ? `${conv}% conv.` : '-';
-            const rank = i < 3
-                ? ['🥇','🥈','🥉'][i]
-                : `<span style="font-size:11px;">${i+1}</span>`;
-            const img = row.image_url
-                ? `<img class="pa-prod-img" src="${_paEsc(row.image_url)}" alt="" onerror="this.src='';this.style.background='#f2f2f7'">`
-                : `<div class="pa-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:#f2f2f7;">👗</div>`;
+            const convLabel = conv > 0 ? `${conv}% conv.` : '';
+            const rankHtml  = i < 3
+                ? `<div class="pa-prod-card-rank">${medals[i]}</div>`
+                : `<div class="pa-prod-card-rank" style="font-size:11px;font-weight:700;background:rgba(0,0,0,0.45);color:#fff;border-radius:6px;padding:2px 6px;top:8px;left:8px;">${i+1}</div>`;
+
+            const imgContent = row.image_url
+                ? `<img class="pa-prod-card-img" src="${_paEsc(row.image_url)}" alt="${_paEsc(row.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                   <div class="pa-prod-card-ph" style="display:none;">👗</div>`
+                : `<div class="pa-prod-card-ph">👗</div>`;
 
             return `
-                <div class="pa-prod-row">
-                    <div class="pa-prod-rank">${rank}</div>
-                    ${img}
-                    <div class="pa-prod-info">
-                        <div class="pa-prod-name">${_paEsc(row.name)}</div>
-                        <div class="pa-prod-bar-wrap"><div class="pa-prod-bar" style="width:${pct}%"></div></div>
+                <div class="pa-prod-card">
+                    ${imgContent}
+                    ${rankHtml}
+                    <div class="pa-prod-card-overlay">
+                        <div class="pa-prod-card-name">${_paEsc(row.name)}</div>
+                        <div class="pa-prod-card-meta">
+                            <div class="pa-prod-card-views">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                ${_paFmt(row.views)}
+                            </div>
+                            ${convLabel ? `<div class="pa-prod-card-conv ${convClass}">${convLabel}</div>` : ''}
+                        </div>
                     </div>
-                    <div class="pa-prod-stat">
-                        <div class="pa-prod-views">${_paFmt(row.views)}</div>
-                        <div class="pa-prod-conv ${convClass}">${convLabel}</div>
+                    <div class="pa-prod-card-bar">
+                        <div class="pa-prod-card-bar-fill" style="width:${pct}%"></div>
                     </div>
                 </div>`;
         }).join('');
 
+        el.innerHTML = `<div class="pa-prod-grid">${cards}</div>`;
+
     } catch(e) {
-        if (el) el.innerHTML = '<div class="pa-empty" style="color:rgba(255,59,48,0.6);">โหลดไม่สำเร็จ</div>';
+        if (el) el.innerHTML = '<div class="pa-empty" style="color:#ff3b30;">โหลดไม่สำเร็จ</div>';
     }
 }
 

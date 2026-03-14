@@ -112,6 +112,7 @@ def get_top_products():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+        # order_items has sku_id, join through skus to get product_id
         if campaign:
             cursor.execute('''
                 SELECT
@@ -119,20 +120,21 @@ def get_top_products():
                     p.name,
                     p.product_type,
                     pi.image_url,
-                    COUNT(pv.id)                                            AS views,
-                    COUNT(DISTINCT pv.session_id)                           AS unique_viewers,
-                    COUNT(DISTINCT oi.order_id)                             AS orders,
+                    COUNT(pv.id)                                              AS views,
+                    COUNT(DISTINCT pv.session_id)                             AS unique_viewers,
+                    COUNT(DISTINCT oi.id)                                     AS orders,
                     CASE WHEN COUNT(DISTINCT pv.session_id) > 0
-                         THEN ROUND(COUNT(DISTINCT oi.order_id)::NUMERIC
+                         THEN ROUND(COUNT(DISTINCT oi.id)::NUMERIC
                                     / COUNT(DISTINCT pv.session_id) * 100, 1)
-                         ELSE 0 END                                         AS conversion_pct
+                         ELSE 0 END                                           AS conversion_pct
                 FROM product_views pv
                 JOIN products p ON p.id = pv.product_id
                 LEFT JOIN (
                     SELECT DISTINCT ON (product_id) product_id, image_url
                     FROM product_images ORDER BY product_id, id ASC
                 ) pi ON pi.product_id = p.id
-                LEFT JOIN order_items oi ON oi.product_id = p.id
+                LEFT JOIN skus sk ON sk.product_id = p.id
+                LEFT JOIN order_items oi ON oi.sku_id = sk.id
                     AND oi.created_at >= NOW() - INTERVAL '%s days'
                 WHERE pv.viewed_at >= NOW() - INTERVAL '%s days'
                   AND pv.utm_campaign = %s
@@ -147,20 +149,21 @@ def get_top_products():
                     p.name,
                     p.product_type,
                     pi.image_url,
-                    COUNT(pv.id)                                            AS views,
-                    COUNT(DISTINCT pv.session_id)                           AS unique_viewers,
-                    COUNT(DISTINCT oi.order_id)                             AS orders,
+                    COUNT(pv.id)                                              AS views,
+                    COUNT(DISTINCT pv.session_id)                             AS unique_viewers,
+                    COUNT(DISTINCT oi.id)                                     AS orders,
                     CASE WHEN COUNT(DISTINCT pv.session_id) > 0
-                         THEN ROUND(COUNT(DISTINCT oi.order_id)::NUMERIC
+                         THEN ROUND(COUNT(DISTINCT oi.id)::NUMERIC
                                     / COUNT(DISTINCT pv.session_id) * 100, 1)
-                         ELSE 0 END                                         AS conversion_pct
+                         ELSE 0 END                                           AS conversion_pct
                 FROM product_views pv
                 JOIN products p ON p.id = pv.product_id
                 LEFT JOIN (
                     SELECT DISTINCT ON (product_id) product_id, image_url
                     FROM product_images ORDER BY product_id, id ASC
                 ) pi ON pi.product_id = p.id
-                LEFT JOIN order_items oi ON oi.product_id = p.id
+                LEFT JOIN skus sk ON sk.product_id = p.id
+                LEFT JOIN order_items oi ON oi.sku_id = sk.id
                     AND oi.created_at >= NOW() - INTERVAL '%s days'
                 WHERE pv.viewed_at >= NOW() - INTERVAL '%s days'
                 GROUP BY p.id, p.name, p.product_type, pi.image_url
