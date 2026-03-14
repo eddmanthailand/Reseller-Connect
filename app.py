@@ -95,6 +95,9 @@ app.register_blueprint(stripe_bp)
 from blueprints.facebook_ads import facebook_ads_bp
 app.register_blueprint(facebook_ads_bp)
 
+from blueprints.product_analytics import product_analytics_bp
+app.register_blueprint(product_analytics_bp)
+
 from blueprints.guest_bot import guest_bot_bp
 app.register_blueprint(guest_bot_bp)
 

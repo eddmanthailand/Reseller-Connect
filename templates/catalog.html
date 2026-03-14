@@ -804,6 +804,21 @@
     function openSkuModal(data, tier1Discount) {
         const product = data.product;
         const skus = data.skus || [];
+
+        // Track product view for analytics
+        try {
+            fetch('/api/product-views/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    product_id:   product.id,
+                    session_id:   _trackMeta.session_id,
+                    utm_campaign: _trackMeta.utm_campaign || null,
+                    utm_medium:   _trackMeta.utm_medium   || null,
+                    referrer:     _trackMeta.referrer      || null
+                })
+            }).catch(() => {});
+        } catch(_) {}
         const wrap = document.getElementById('skuModalWrap');
         const header = document.getElementById('skuModalHeader');
         const body = document.getElementById('skuModalBody');

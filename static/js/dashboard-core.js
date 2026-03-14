@@ -151,7 +151,7 @@ function handleHashNavigation() {
     if (fullHash) {
         // Extract page name before any query parameters
         const [pageName, queryString] = fullHash.split('?');
-        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings', 'promotions', 'coupons'];
+        const validPages = ['home', 'users', 'products', 'brands', 'categories', 'warehouses', 'stock-summary', 'stock-transfer', 'stock-adjustment', 'stock-import', 'stock-history', 'orders', 'shipping-update', 'quick-order', 'tier-settings', 'settings', 'facebook-ads', 'chat', 'mto-products', 'mto-requests', 'mto-quotations', 'mto-orders', 'mto-payments', 'activity-logs', 'shipping-settings', 'promotions', 'coupons', 'product-analytics'];
         if (validPages.includes(pageName)) {
             switchPage(pageName);
             // Auto-open order detail if order_id param is present
