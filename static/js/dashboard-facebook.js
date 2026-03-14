@@ -381,6 +381,7 @@ async function loadFacebookAdsStats() {
         // Chart, campaign breakdown, recent regs
         renderFbAdsChart(data.chart);
         renderCampaignBreakdown(data.campaign_breakdown || []);
+        renderMetaCampaigns(data.meta_campaigns || []);
         renderFbRecentRegistrations(data.recent_registrations);
 
         // Pixel badge
@@ -695,6 +696,46 @@ function renderCampaignDetailPanel(el, d, safeId) {
             });
         }
     }, 50);
+}
+
+function renderMetaCampaigns(campaigns) {
+    const wrap = document.getElementById('metaCampaignsWrap');
+    if (!wrap) return;
+    if (!campaigns || campaigns.length === 0) {
+        wrap.innerHTML = '<p style="color:#6e6e73;font-size:13px;padding:12px 0">ไม่พบข้อมูลแคมเปญจาก Meta Ads API</p>';
+        return;
+    }
+    const statusLabel = s => {
+        const map = { ACTIVE: ['เปิดใช้งาน','#34c759'], PAUSED: ['หยุดชั่วคราว','#ff9500'], DELETED: ['ลบแล้ว','#ff3b30'], ARCHIVED: ['เก็บถาวร','#8e8e93'] };
+        const [text, color] = map[s] || [s, '#8e8e93'];
+        return `<span style="background:${color}22;color:${color};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${text}</span>`;
+    };
+    const rows = campaigns.map(c => `
+        <tr>
+            <td style="padding:10px 12px;font-size:13px;font-weight:500;color:#1d1d1f">${c.name}</td>
+            <td style="padding:10px 12px;text-align:center">${statusLabel(c.status)}</td>
+            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">฿${c.spend.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">${c.impressions.toLocaleString('th-TH')}</td>
+            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">${c.clicks.toLocaleString('th-TH')}</td>
+            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#6e6e73">${c.cpc > 0 ? '฿'+c.cpc.toFixed(2) : '-'}</td>
+        </tr>
+    `).join('');
+    wrap.innerHTML = `
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+            <thead>
+                <tr style="border-bottom:1px solid #e5e5ea">
+                    <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">ชื่อแคมเปญ</th>
+                    <th style="padding:8px 12px;text-align:center;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">สถานะ</th>
+                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">ยอดใช้จ่าย</th>
+                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Impressions</th>
+                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Clicks</th>
+                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">CPC</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        </div>`;
 }
 
 function renderFbAdsChart(chartData) {

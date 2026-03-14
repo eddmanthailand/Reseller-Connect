@@ -62,16 +62,20 @@ def _get_meta_credentials(cursor):
     return token.strip() if token else '', account_id.strip() if account_id else ''
 
 
-def _get_meta_campaign_names():
+def _get_meta_campaign_insights(period='last_30d'):
     """
-    Fetch all campaign names from Meta Ads API for the configured Ad Account.
-    Returns a set of lowercase campaign names, or None if API unavailable (show all).
-    Cached 10 minutes.
+    Fetch campaign list + spend/clicks/impressions from Meta Ads API.
+    Returns list of dicts, or [] on failure. Cached 10 minutes.
+    Each dict: {name, status, spend, impressions, clicks, cpc, reach}
     """
-    import time, urllib.request, json as _json
-    cache = getattr(_get_meta_campaign_names, '_cache', None)
+    import time, urllib.request, json as _json, urllib.parse
+    cache_key = f'_cache_{period}'
+    cache = getattr(_get_meta_campaign_insights, cache_key, None)
     if cache and time.time() - cache['ts'] < 600:
         return cache['data']
+
+    def _set_cache(val):
+        setattr(_get_meta_campaign_insights, cache_key, {'ts': time.time(), 'data': val})
 
     try:
         conn = get_db()
@@ -80,23 +84,60 @@ def _get_meta_campaign_names():
         cursor.close(); conn.close()
 
         if not token or not account_id:
-            return None
+            _set_cache([]); return []
 
         acc = account_id if account_id.startswith('act_') else f'act_{account_id}'
-        url = (f'https://graph.facebook.com/v19.0/{acc}/campaigns'
-               f'?fields=name,status&limit=200&access_token={token}')
-        req = urllib.request.Request(url, headers={'User-Agent': 'EKG-Server/1.0'})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = _json.loads(resp.read())
 
-        campaigns = data.get('data', [])
-        names = {c['name'].lower().strip() for c in campaigns}
-        _get_meta_campaign_names._cache = {'ts': time.time(), 'data': names}
-        return names
+        # Step 1: campaign list (name + status)
+        camp_url = (f'https://graph.facebook.com/v19.0/{acc}/campaigns'
+                    f'?fields=id,name,status,effective_status&limit=200&access_token={token}')
+        req = urllib.request.Request(camp_url, headers={'User-Agent': 'EKG-Server/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            camp_data = _json.loads(resp.read())
+        campaigns = {c['id']: c for c in camp_data.get('data', [])}
+
+        # Step 2: insights (spend/clicks/impressions) per campaign
+        ins_params = urllib.parse.urlencode({
+            'level': 'campaign',
+            'fields': 'campaign_id,campaign_name,spend,impressions,clicks,reach,cpc',
+            'date_preset': period,
+            'limit': 200,
+            'access_token': token
+        })
+        ins_url = f'https://graph.facebook.com/v19.0/{acc}/insights?{ins_params}'
+        req2 = urllib.request.Request(ins_url, headers={'User-Agent': 'EKG-Server/1.0'})
+        with urllib.request.urlopen(req2, timeout=10) as resp:
+            ins_data = _json.loads(resp.read())
+
+        # Merge by campaign_id
+        insights_map = {r['campaign_id']: r for r in ins_data.get('data', [])}
+        result = []
+        for cid, c in campaigns.items():
+            ins = insights_map.get(cid, {})
+            result.append({
+                'id': cid,
+                'name': c['name'],
+                'status': c['effective_status'],
+                'spend': float(ins.get('spend') or 0),
+                'impressions': int(ins.get('impressions') or 0),
+                'clicks': int(ins.get('clicks') or 0),
+                'reach': int(ins.get('reach') or 0),
+                'cpc': float(ins.get('cpc') or 0),
+            })
+        result.sort(key=lambda x: x['spend'], reverse=True)
+        _set_cache(result)
+        return result
     except Exception as e:
-        print(f'[META CAMPAIGNS] fetch error: {e}')
-        _get_meta_campaign_names._cache = {'ts': time.time(), 'data': None}
+        print(f'[META INSIGHTS] fetch error: {e}')
+        _set_cache([]); return []
+
+
+def _get_meta_campaign_names():
+    """Returns set of lowercase campaign names from Meta API (for legacy filter use)."""
+    insights = _get_meta_campaign_insights()
+    if not insights:
         return None
+    return {c['name'].lower().strip() for c in insights}
 
 
 def _get_pixel_settings():
@@ -588,7 +629,8 @@ def get_facebook_ads_stats():
                 'registrations': chart_registrations
             },
             'recent_registrations': recent_registrations,
-            'campaign_breakdown': campaign_breakdown
+            'campaign_breakdown': campaign_breakdown,
+            'meta_campaigns': _get_meta_campaign_insights('last_30d')
         }), 200
     except Exception as e:
         return handle_error(e)
