@@ -345,7 +345,12 @@ def _agent_call_gemini(message, context_page, settings, image_data=None, image_m
             # เพื่อป้องกัน AI ตอบจากข้อมูลเก่าที่อาจถูกตัดทอน
             if role == 'model' and ('📊 Query Result' in txt or '📊 ' in txt):
                 txt = '[ผลลัพธ์ query ข้อมูลจาก DB — ข้อมูลนี้อาจไม่ครบ ถ้าต้องการข้อมูลต้อง query_db ใหม่]'
-            contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
+            # Guard: Gemini ต้องการ turns สลับ user/model — ถ้า role ซ้ำกับ turn ล่าสุด ให้ merge
+            if contents and contents[-1].role == role:
+                prev_text = contents[-1].parts[0].text if contents[-1].parts else ''
+                contents[-1] = genai_types.Content(role=role, parts=[genai_types.Part(text=prev_text + '\n' + txt)])
+            else:
+                contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=txt)]))
 
         print(f'[AGENT_DEBUG] building contents history={len(history or [])} items dump={repr([(h.get("role","?"),h.get("text","")[:80]) for h in (history or [])])}')
         current_text = "=== หน้าปัจจุบัน: " + str(context_page) + " ===\n\nคำสั่ง: " + str(message)

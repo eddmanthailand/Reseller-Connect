@@ -460,7 +460,8 @@ async function agentSend() {
             }
         });
 
-        // conversation history: user+ai only, deduplicate consecutive identical user messages
+        // conversation history: user/ai/plan/success — plan + success ต้องอยู่ใน history ด้วย
+        // เพื่อให้ AI รู้ว่าเคยตอบ/อนุมัติอะไรไปแล้ว ป้องกันการ generate plan ซ้ำ
         const history = [];
         let _lastUserText = null;
         _rawHistory.forEach(m => {
@@ -473,10 +474,39 @@ async function agentSend() {
                 let text = m.text || '';
                 if (text.includes('📊')) text = '[ผลลัพธ์ query จาก DB — ถ้าต้องการข้อมูลต้อง query_db ใหม่]';
                 if (text) history.push({ role: 'model', text });
+            } else if (m.role === 'plan') {
+                _lastUserText = null;
+                // ดึง target key จาก params เพื่อบอก AI ว่างานนี้เกี่ยวกับอะไร
+                const _pKey = m.params
+                    ? (m.params.chart_name || m.params.name || m.params.product_name ||
+                       m.params.group_name || m.params.new_name || m.params.keyword ||
+                       m.params.reseller_name || m.params.order_number || '')
+                    : '';
+                if (m.approved) {
+                    // format ที่ system prompt รู้จัก — บอก AI ว่างานนี้ทำไปแล้ว ห้าม generate plan ซ้ำ
+                    history.push({ role: 'model', text: `[CONTEXT: งาน "${m.tool}" สำหรับ "${_pKey}" ได้รับการอนุมัติและส่งไปดำเนินการแล้ว]` });
+                } else {
+                    // plan ที่ยังรอการอนุมัติ — บอก AI ว่ากำลังรอ user confirm
+                    history.push({ role: 'model', text: `[แผนการดำเนินงาน: ${m.tool} สำหรับ "${_pKey}" — รอการอนุมัติจาก Admin]` });
+                }
+            } else if (m.role === 'success') {
+                _lastUserText = null;
+                // success ครอบคลุมแล้วใน completed_actions — ไม่ใส่ใน history เพื่อหลีกเลี่ยง consecutive model turns
             }
         });
+        // ป้องกัน consecutive model messages ที่ทำให้ Gemini API error
+        // merge model messages ที่ติดกันเป็นชิ้นเดียว
+        const mergedHistory = [];
+        for (const h of history) {
+            const last = mergedHistory[mergedHistory.length - 1];
+            if (last && last.role === h.role && h.role === 'model') {
+                last.text = last.text + '\n' + h.text;
+            } else {
+                mergedHistory.push({ ...h });
+            }
+        }
 
-        const body = { message: text, context_page: _agentCurrentPage(), history, completed_actions };
+        const body = { message: text, context_page: _agentCurrentPage(), history: mergedHistory, completed_actions };
         if (sentImage) { body.image_data = sentImage; body.image_mime = sentMime; }
         const res  = await fetch('/api/admin/agent/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
