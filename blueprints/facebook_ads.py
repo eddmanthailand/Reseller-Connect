@@ -571,18 +571,13 @@ def get_facebook_ads_stats():
         # Build Meta spend lookup {lowercase_name: insight_dict} — use 'maximum' for all-time spend
         meta_insights = _get_meta_campaign_insights('maximum')
         meta_spend_map = {c['name'].lower().strip(): c for c in meta_insights}
-        meta_names = set(meta_spend_map.keys()) if meta_insights else None
 
         now = datetime.now()
         campaign_breakdown = []
         for r in campaigns_raw:
             camp_name = r['campaign']
-            # Filter: only include campaigns that exist in Meta Ads (if API available)
-            if meta_names is not None:
-                if camp_name == '(ไม่ระบุแคมเปญ)':
-                    pass  # always include untagged traffic
-                elif camp_name.lower().strip() not in meta_names:
-                    continue
+            # Show all UTM campaigns from Facebook traffic.
+            # Meta spend data will be attached only for campaigns whose names match Meta Ads Manager.
             visits = r['visits']
             budget = float(r['budget'] or 0)
             last_visit = r['last_visit']
@@ -1242,14 +1237,10 @@ def get_campaign_budgets():
             ORDER BY visits DESC
         ''', pixel_params)
         rows = cursor.fetchall()
-        meta_names = _get_meta_campaign_names()  # None = show all
         now = datetime.now()
         result = []
         for r in rows:
             camp_name = r['campaign_name']
-            if meta_names is not None:
-                if camp_name != '(ไม่ระบุแคมเปญ)' and camp_name.lower().strip() not in meta_names:
-                    continue
             visits = r['visits']
             budget = float(r['total_budget'] or 0)
             last_visit = r['last_visit']
