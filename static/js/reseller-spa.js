@@ -2475,15 +2475,40 @@ async function placeOrderWithStripe() {
     btnText.textContent = 'กำลังสร้างคำสั่งซื้อ...';
 
     try {
-        const order = await _createOrder('stripe', shippingData);
+        const notes = document.getElementById('orderNotes')?.value || '';
+        const orderPayload = { payment_method: 'stripe', notes, shipping_fee: checkoutData.shippingCost || 0, ...shippingData };
+        if (_appliedCoupon) orderPayload.coupon_code = _appliedCoupon.code;
+
+        const res    = await fetch(`${RESELLER_API_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload)
+        });
+        const result = await res.json();
+
         btn.disabled  = false;
         btnText.textContent = 'ยืนยันและชำระเงิน';
-        showCardPaymentModal(order.id);
+
+        if (res.status === 409 && result.error === 'cart_empty_pending_order' && result.order) {
+            // Existing unpaid stripe order found — offer to resume payment
+            const pendingOrder = result.order;
+            const amt = Number(pendingOrder.final_amount).toLocaleString('th-TH');
+            const confirmed = confirm(
+                `มีคำสั่งซื้อ ${pendingOrder.order_number} (฿${amt}) ที่ยังไม่ได้ชำระค้างอยู่\n\nต้องการชำระเงินสำหรับคำสั่งซื้อนี้เลยไหม?`
+            );
+            if (confirmed) showCardPaymentModal(pendingOrder.id);
+            return;
+        }
+
+        if (!res.ok) throw new Error(result.error || 'ไม่สามารถสร้างคำสั่งซื้อได้');
+        showCardPaymentModal(result.order.id);
     } catch (err) {
         console.error('Create order error:', err);
         showAlert(err.message || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ', 'error');
-        btn.disabled  = false;
-        btnText.textContent = 'ยืนยันและชำระเงิน';
+        const btn2 = document.getElementById('btnPlaceOrder');
+        const btn2Text = document.getElementById('btnPlaceOrderText');
+        if (btn2) btn2.disabled = false;
+        if (btn2Text) btn2Text.textContent = 'ยืนยันและชำระเงิน';
     }
 }
 // ─────────────────────────────────────────────────────────────────────────────

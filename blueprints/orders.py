@@ -100,6 +100,21 @@ def create_order():
         items = cursor.fetchall()
         
         if not items:
+            # Check if there's an existing unpaid Stripe order for this user
+            if payment_method in ('stripe', 'stripe_promptpay'):
+                cursor.execute('''
+                    SELECT id, order_number, final_amount, payment_method
+                    FROM orders
+                    WHERE user_id = %s AND status = 'pending_payment'
+                      AND payment_method IN ('stripe', 'stripe_promptpay')
+                    ORDER BY created_at DESC LIMIT 1
+                ''', (user_id,))
+                existing_order = cursor.fetchone()
+                if existing_order:
+                    return jsonify({
+                        'error': 'cart_empty_pending_order',
+                        'order': dict(existing_order)
+                    }), 409
             return jsonify({'error': 'Cart is empty'}), 400
         
         # Get all sku_ids from cart
