@@ -91,9 +91,9 @@ def _get_meta_campaign_insights(period='last_30d'):
 
         acc = account_id if account_id.startswith('act_') else f'act_{account_id}'
 
-        # Step 1: campaign list (name + status)
+        # Step 1: campaign list (name + status + budget from Facebook settings)
         camp_url = (f'https://graph.facebook.com/v19.0/{acc}/campaigns'
-                    f'?fields=id,name,status,effective_status&limit=200&access_token={token}')
+                    f'?fields=id,name,status,effective_status,lifetime_budget,daily_budget&limit=200&access_token={token}')
         req = urllib.request.Request(camp_url, headers={'User-Agent': 'EKG-Server/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
             camp_data = _json.loads(resp.read())
@@ -117,6 +117,11 @@ def _get_meta_campaign_insights(period='last_30d'):
         result = []
         for cid, c in campaigns.items():
             ins = insights_map.get(cid, {})
+            # lifetime_budget / daily_budget from Meta are in cents (÷100 = THB)
+            raw_lifetime = c.get('lifetime_budget')
+            raw_daily    = c.get('daily_budget')
+            lifetime_budget = round(int(raw_lifetime) / 100, 2) if raw_lifetime else None
+            daily_budget    = round(int(raw_daily)    / 100, 2) if raw_daily    else None
             result.append({
                 'id': cid,
                 'name': c['name'],
@@ -126,6 +131,8 @@ def _get_meta_campaign_insights(period='last_30d'):
                 'clicks': int(ins.get('clicks') or 0),
                 'reach': int(ins.get('reach') or 0),
                 'cpc': float(ins.get('cpc') or 0),
+                'lifetime_budget': lifetime_budget,
+                'daily_budget': daily_budget,
             })
         result.sort(key=lambda x: x['spend'], reverse=True)
         _set_cache(result)
@@ -136,8 +143,8 @@ def _get_meta_campaign_insights(period='last_30d'):
 
 
 def _get_meta_campaign_names():
-    """Returns set of lowercase campaign names from Meta API (for legacy filter use)."""
-    insights = _get_meta_campaign_insights()
+    """Returns set of lowercase campaign names from Meta API (all-time, for filter use)."""
+    insights = _get_meta_campaign_insights('maximum')
     if not insights:
         return None
     return {c['name'].lower().strip() for c in insights}
@@ -561,8 +568,8 @@ def get_facebook_ads_stats():
             LIMIT 20
         ''', pixel_params)
         campaigns_raw = cursor.fetchall()
-        # Build Meta spend lookup {lowercase_name: insight_dict}
-        meta_insights = _get_meta_campaign_insights()
+        # Build Meta spend lookup {lowercase_name: insight_dict} — use 'maximum' for all-time spend
+        meta_insights = _get_meta_campaign_insights('maximum')
         meta_spend_map = {c['name'].lower().strip(): c for c in meta_insights}
         meta_names = set(meta_spend_map.keys()) if meta_insights else None
 
@@ -587,13 +594,16 @@ def get_facebook_ads_stats():
             else:
                 active_status = 'inactive'
 
-            # Merge Meta API spend data (actual spend from Facebook)
+            # Merge Meta API spend data (actual spend from Facebook — all-time)
             meta = meta_spend_map.get(camp_name.lower().strip(), {})
-            meta_spend      = meta.get('spend', 0) or 0
+            meta_spend       = meta.get('spend', 0) or 0
             meta_impressions = meta.get('impressions', 0) or 0
-            meta_clicks     = meta.get('clicks', 0) or 0
-            meta_cpc        = meta.get('cpc', 0) or 0
-            meta_reach      = meta.get('reach', 0) or 0
+            meta_clicks      = meta.get('clicks', 0) or 0
+            meta_cpc         = meta.get('cpc', 0) or 0
+            meta_reach       = meta.get('reach', 0) or 0
+            # Budget configured in Facebook Ads Manager (lifetime or daily)
+            meta_lifetime_budget = meta.get('lifetime_budget')   # THB, or None
+            meta_daily_budget    = meta.get('daily_budget')      # THB, or None
 
             # CPV: prefer actual Meta spend, fall back to manual budget
             effective_budget = meta_spend if meta_spend > 0 else budget
@@ -613,6 +623,8 @@ def get_facebook_ads_stats():
                 'meta_clicks': meta_clicks,
                 'meta_cpc': meta_cpc,
                 'meta_reach': meta_reach,
+                'meta_lifetime_budget': meta_lifetime_budget,
+                'meta_daily_budget': meta_daily_budget,
             })
 
         cursor.execute('''

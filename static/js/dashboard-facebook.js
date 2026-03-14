@@ -470,6 +470,7 @@ function renderCampaignBreakdown(campaigns) {
             <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}"
                  data-meta-spend="${c.meta_spend||0}" data-meta-impressions="${c.meta_impressions||0}"
                  data-meta-clicks="${c.meta_clicks||0}" data-meta-cpc="${c.meta_cpc||0}"
+                 data-meta-lifetime="${c.meta_lifetime_budget||0}" data-meta-daily="${c.meta_daily_budget||0}"
                  style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
@@ -580,6 +581,8 @@ function renderCampaignDetailPanel(el, d, safeId) {
     const metaImpressions = parseInt(el.getAttribute('data-meta-impressions') || '0');
     const metaClicks = parseInt(el.getAttribute('data-meta-clicks') || '0');
     const metaCpc = parseFloat(el.getAttribute('data-meta-cpc') || '0');
+    const metaLifetime = parseFloat(el.getAttribute('data-meta-lifetime') || '0');
+    const metaDaily = parseFloat(el.getAttribute('data-meta-daily') || '0');
 
     el.innerHTML = `
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;border:0.5px solid #e5e5ea;">
@@ -604,15 +607,29 @@ function renderCampaignDetailPanel(el, d, safeId) {
             </div>
         </div>
 
-        <!-- Meta Spend row (from Facebook Ads Manager API) -->
+        <!-- Meta Spend row (from Facebook Ads Manager API — all-time) -->
         ${metaSpend > 0 ? `
         <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;border:1px solid #bbf7d0;margin-bottom:10px;">
-            <div style="font-size:11px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📊 ข้อมูลจาก Facebook Ads Manager</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:11px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">📊 ข้อมูลจาก Facebook Ads Manager</div>
+                <span style="font-size:10px;color:#15803d;background:#dcfce7;padding:1px 7px;border-radius:10px;">ตลอดแคมเปญ</span>
+            </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
                     <div style="font-size:10px;color:#6e6e73;">ใช้จ่ายจริง</div>
                     <div style="font-size:14px;font-weight:700;color:#15803d;">฿${metaSpend.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
                 </div>
+                ${metaLifetime > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">งบ Lifetime</div>
+                    <div style="font-size:14px;font-weight:700;color:#0369a1;">฿${metaLifetime.toLocaleString('th-TH',{minimumFractionDigits:0})}</div>
+                    <div style="font-size:10px;color:#15803d;">(ใช้ไป ${metaSpend > 0 ? Math.round(metaSpend/metaLifetime*100) : 0}%)</div>
+                </div>` : ''}
+                ${metaDaily > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">งบต่อวัน</div>
+                    <div style="font-size:14px;font-weight:700;color:#0369a1;">฿${metaDaily.toLocaleString('th-TH',{minimumFractionDigits:0})}/วัน</div>
+                </div>` : ''}
                 <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
                     <div style="font-size:10px;color:#6e6e73;">Impressions</div>
                     <div style="font-size:14px;font-weight:700;color:#1d1d1f;">${metaImpressions.toLocaleString()}</div>
