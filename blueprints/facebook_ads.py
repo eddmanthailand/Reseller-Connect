@@ -561,7 +561,11 @@ def get_facebook_ads_stats():
             LIMIT 20
         ''', pixel_params)
         campaigns_raw = cursor.fetchall()
-        meta_names = _get_meta_campaign_names()  # set of lowercase names, or None = show all
+        # Build Meta spend lookup {lowercase_name: insight_dict}
+        meta_insights = _get_meta_campaign_insights()
+        meta_spend_map = {c['name'].lower().strip(): c for c in meta_insights}
+        meta_names = set(meta_spend_map.keys()) if meta_insights else None
+
         now = datetime.now()
         campaign_breakdown = []
         for r in campaigns_raw:
@@ -582,15 +586,33 @@ def get_facebook_ads_stats():
                 active_status = 'pausing'
             else:
                 active_status = 'inactive'
-            cpv = round(budget / visits, 2) if budget > 0 and visits > 0 else None
+
+            # Merge Meta API spend data (actual spend from Facebook)
+            meta = meta_spend_map.get(camp_name.lower().strip(), {})
+            meta_spend      = meta.get('spend', 0) or 0
+            meta_impressions = meta.get('impressions', 0) or 0
+            meta_clicks     = meta.get('clicks', 0) or 0
+            meta_cpc        = meta.get('cpc', 0) or 0
+            meta_reach      = meta.get('reach', 0) or 0
+
+            # CPV: prefer actual Meta spend, fall back to manual budget
+            effective_budget = meta_spend if meta_spend > 0 else budget
+            cpv = round(effective_budget / visits, 2) if effective_budget > 0 and visits > 0 else None
+
             campaign_breakdown.append({
                 'campaign': camp_name,
                 'visits': visits,
                 'budget': budget,
                 'cpv': cpv,
+                'cpv_source': 'meta' if meta_spend > 0 else 'manual',
                 'active_status': active_status,
                 'last_visit_hours': round(hours_since, 1),
                 'budget_notes': r['budget_notes'],
+                'meta_spend': meta_spend,
+                'meta_impressions': meta_impressions,
+                'meta_clicks': meta_clicks,
+                'meta_cpc': meta_cpc,
+                'meta_reach': meta_reach,
             })
 
         cursor.execute('''

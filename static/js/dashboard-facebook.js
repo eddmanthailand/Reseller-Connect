@@ -416,11 +416,27 @@ function renderCampaignBreakdown(campaigns) {
         const displayName = c.campaign === '(ไม่ระบุแคมเปญ)'
             ? '<span style="color:#6e6e73;font-style:italic;">ไม่ระบุ</span>'
             : `<span style="color:#1d1d1f;font-weight:500;">${c.campaign}</span>`;
-        const budgetChip = c.budget > 0
-            ? `<span style="font-size:10px;color:#6e6e73;margin-left:4px;">฿${(c.budget||0).toLocaleString()}</span>`
+        // Actual Meta spend (from Facebook Ads Manager API)
+        const metaSpendChip = c.meta_spend > 0
+            ? `<span style="font-size:10px;font-weight:600;color:#15803d;background:#dcfce7;padding:1px 6px;border-radius:10px;margin-left:4px;" title="Spend จริงจาก Facebook Ads Manager">
+                📊 ใช้จ่าย ฿${(c.meta_spend||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}
+               </span>`
             : '';
+        // Manual budget chip (dimmer, only show if no meta_spend OR as reference)
+        const budgetChip = (c.budget > 0 && !c.meta_spend)
+            ? `<span style="font-size:10px;color:#6e6e73;margin-left:4px;" title="งบรวมที่ตั้งเอง">฿${(c.budget||0).toLocaleString()}</span>`
+            : (c.budget > 0 && c.meta_spend > 0)
+            ? `<span style="font-size:10px;color:#b0b0b5;margin-left:2px;" title="งบที่ตั้งเอง (ใช้ Spend จริงแทน)">(งบตั้ง ฿${(c.budget||0).toLocaleString()})</span>`
+            : '';
+        // CPV chip: green = from Meta spend, orange = from manual budget
+        const cpvColor = c.cpv_source === 'meta' ? '#15803d' : '#ff9500';
+        const cpvLabel = c.cpv_source === 'meta' ? 'CPV จริง' : 'CPV';
         const cpvChip = c.cpv != null
-            ? `<span style="font-size:10px;color:#ff9500;margin-left:4px;">CPV ฿${c.cpv}</span>`
+            ? `<span style="font-size:10px;color:${cpvColor};font-weight:600;margin-left:4px;">${cpvLabel} ฿${c.cpv}</span>`
+            : '';
+        // Impressions + Clicks micro stats (only if Meta data available)
+        const metaStatsChip = c.meta_impressions > 0
+            ? `<span style="font-size:10px;color:#6e6e73;margin-left:4px;">👁 ${(c.meta_impressions||0).toLocaleString()} · 🖱 ${(c.meta_clicks||0).toLocaleString()}</span>`
             : '';
         const actionBtns = c.campaign !== '(ไม่ระบุแคมเปญ)'
             ? `<button onclick="event.stopPropagation();hideCampaign('${safeName}',this)" title="ซ่อนแคมเปญนี้"
@@ -444,14 +460,17 @@ function renderCampaignBreakdown(campaigns) {
                         <span style="font-size:13px;font-weight:600;color:#007aff;">${(c.visits||0).toLocaleString()}</span>
                     </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;margin-left:18px;margin-bottom:5px;">
-                    ${budgetChip}${cpvChip}
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-left:18px;margin-bottom:5px;">
+                    ${metaSpendChip}${cpvChip}${budgetChip}${metaStatsChip}
                 </div>
                 <div style="height:4px;background:#f2f2f7;border-radius:2px;overflow:hidden;margin-left:18px;">
                     <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#007aff,#34c759);border-radius:2px;transition:width 0.5s ease;"></div>
                 </div>
             </div>
-            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}" style="display:none;margin:0 0 8px 18px;"></div>
+            <div id="fbDetail_${safeName.replace(/[^a-zA-Z0-9]/g,'_')}" data-campaign="${safeName}" data-budget="${c.budget||0}"
+                 data-meta-spend="${c.meta_spend||0}" data-meta-impressions="${c.meta_impressions||0}"
+                 data-meta-clicks="${c.meta_clicks||0}" data-meta-cpc="${c.meta_cpc||0}"
+                 style="display:none;margin:0 0 8px 18px;"></div>
         </div>`;
     }).join('');
 }
@@ -557,6 +576,10 @@ function renderCampaignDetailPanel(el, d, safeId) {
         : 'ไม่พอข้อมูล';
     const campaign = el.getAttribute('data-campaign') || '';
     const existingBudget = parseFloat(el.getAttribute('data-budget') || '0');
+    const metaSpend = parseFloat(el.getAttribute('data-meta-spend') || '0');
+    const metaImpressions = parseInt(el.getAttribute('data-meta-impressions') || '0');
+    const metaClicks = parseInt(el.getAttribute('data-meta-clicks') || '0');
+    const metaCpc = parseFloat(el.getAttribute('data-meta-cpc') || '0');
 
     el.innerHTML = `
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;border:0.5px solid #e5e5ea;">
@@ -581,9 +604,38 @@ function renderCampaignDetailPanel(el, d, safeId) {
             </div>
         </div>
 
+        <!-- Meta Spend row (from Facebook Ads Manager API) -->
+        ${metaSpend > 0 ? `
+        <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;border:1px solid #bbf7d0;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📊 ข้อมูลจาก Facebook Ads Manager</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">ใช้จ่ายจริง</div>
+                    <div style="font-size:14px;font-weight:700;color:#15803d;">฿${metaSpend.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">Impressions</div>
+                    <div style="font-size:14px;font-weight:700;color:#1d1d1f;">${metaImpressions.toLocaleString()}</div>
+                </div>
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">Clicks</div>
+                    <div style="font-size:14px;font-weight:700;color:#1d1d1f;">${metaClicks.toLocaleString()}</div>
+                </div>
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">CPC</div>
+                    <div style="font-size:14px;font-weight:700;color:#1d1d1f;">฿${metaCpc.toFixed(2)}</div>
+                </div>
+                ${d.total_visits > 0 ? `
+                <div style="flex:1;min-width:80px;background:#fff;border-radius:6px;padding:6px 10px;border:0.5px solid #bbf7d0;text-align:center;">
+                    <div style="font-size:10px;color:#6e6e73;">CPV จริง</div>
+                    <div style="font-size:14px;font-weight:700;color:#15803d;">฿${(metaSpend/d.total_visits).toFixed(2)}</div>
+                </div>` : ''}
+            </div>
+        </div>` : ''}
+
         <!-- Budget row -->
         <div style="background:#fff;border-radius:8px;padding:10px 12px;border:0.5px solid #e5e5ea;margin-bottom:12px;">
-            <div style="font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">💰 งบประมาณแคมเปญ</div>
+            <div style="font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">💰 งบประมาณ${metaSpend > 0 ? ' (ข้อมูลสำรอง)' : ''}</div>
             <div style="display:flex;gap:8px;align-items:center;">
                 <input id="budgetInput_${safeId}" type="number" min="0" step="100"
                     value="${existingBudget > 0 ? existingBudget : ''}"
@@ -596,7 +648,8 @@ function renderCampaignDetailPanel(el, d, safeId) {
                 </button>
             </div>
             <div id="budgetSaveMsg_${safeId}" style="font-size:11px;color:#34c759;margin-top:5px;display:none;">✓ บันทึกแล้ว</div>
-            ${existingBudget > 0 && d.total_visits > 0 ? `<div style="margin-top:6px;font-size:11px;color:#ff9500;">CPV = ฿${(existingBudget/d.total_visits).toFixed(2)} / visit</div>` : ''}
+            ${!metaSpend && existingBudget > 0 && d.total_visits > 0 ? `<div style="margin-top:6px;font-size:11px;color:#ff9500;">CPV = ฿${(existingBudget/d.total_visits).toFixed(2)} / visit</div>` : ''}
+            ${metaSpend > 0 ? `<div style="margin-top:6px;font-size:11px;color:#6e6e73;">💡 ระบบใช้ Spend จริงจาก Facebook แทนงบที่กรอก</div>` : ''}
         </div>
 
         <!-- Device breakdown -->
