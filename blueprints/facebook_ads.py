@@ -664,7 +664,7 @@ def get_campaign_detail():
         pixel_param = (active_pixel,) if active_pixel else ()
         # pixel_clause is in page_filter (comes first), campaign param comes after → pixel first
         params_base = pixel_param + campaign_param
-        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause}"
+        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause} AND {_REAL_IP_FILTER}"
 
         cursor.execute(f'''
             SELECT COUNT(*) as cnt, MIN(created_at) as first_visit, MAX(created_at) as last_visit
@@ -853,7 +853,7 @@ def get_funnel_stats():
             cursor.execute(f'''
                 SELECT COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
                 FROM conversion_events
-                WHERE event_type = %s {date_filter} {camp_filter}
+                WHERE event_type = %s AND {_REAL_IP_FILTER} {date_filter} {camp_filter}
             ''', [step] + camp_params)
             r = cursor.fetchone()
             funnel[step] = r['cnt'] if r else 0
@@ -861,7 +861,7 @@ def get_funnel_stats():
         if funnel['catalog_view'] == 0:
             cursor.execute(f'''
                 SELECT COUNT(*) as cnt FROM page_visits
-                WHERE page_name IN ('catalog','become-reseller') {date_filter}
+                WHERE page_name IN ('catalog','become-reseller') AND {_REAL_IP_FILTER} {date_filter}
                 {('AND utm_campaign = %s' if campaign else '')}
             ''', camp_params)
             r = cursor.fetchone()
@@ -870,7 +870,7 @@ def get_funnel_stats():
         cursor.execute(f'''
             SELECT source, event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
             FROM conversion_events
-            WHERE event_type IN ('catalog_view','register_complete') {date_filter}
+            WHERE event_type IN ('catalog_view','register_complete') AND {_REAL_IP_FILTER} {date_filter}
             GROUP BY source, event_type ORDER BY cnt DESC
         ''')
         by_source = {}
@@ -1391,7 +1391,7 @@ def fb_ai_campaign_analysis():
         campaign_param = (campaign,) if campaign != '(ไม่ระบุแคมเปญ)' else ()
         # pixel_clause first in page_filter → pixel param first
         params = pixel_param + campaign_param
-        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause}"
+        page_filter = f"page_name IN ('become-reseller','catalog') AND source = 'facebook' AND {pixel_clause} AND {_REAL_IP_FILTER}"
 
         # Visits stats
         cursor.execute(f'''
