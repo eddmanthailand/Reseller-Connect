@@ -29,6 +29,8 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 - **Facebook Ads Module:** Traffic source intelligence, conversion funnel tracking, AI analysis/timing/copy generation, Facebook Pixel settings, and Meta Marketing API integration. Routes in `blueprints/facebook_ads.py`. Shared auth helpers (`login_required`, `admin_required`, `handle_error`) in `utils.py`.
 - **Chatbot Architecture (modularized Mar 2026):** บอท 3 ตัวแยกเป็น blueprints — `blueprints/guest_bot.py` (guest น้องนุ่น, route `/api/public/chat/message`), `blueprints/member_bot.py` (member/reseller bot + all `/api/chat/*` routes), `blueprints/bot_cache.py` (shared `_BOT_CACHE`, `_bot_cache_get`, `bot_cache_invalidate`), `blueprints/push_utils.py` (shared push/notification: `send_push_notification`, `notify_admins_guest_lead`, `create_notification`). AI ผู้ช่วย admin ยังอยู่ที่ `routes/agent.py`.
 - **Warehouse & Stock Blueprint (modularized Mar 2026):** `blueprints/warehouse.py` — Warehouse CRUD, product warehouse stock, stock transfers, stock adjustments, audit log, SKU search, stock alerts & summary (routes `/api/admin/warehouses/*`, `/api/admin/stock-*`, `/api/admin/low-stock/*` ฯลฯ).
+- **Settings Blueprint (modularized Mar 2026):** `blueprints/settings.py` — Sales Channels, PromptPay Settings, Shipping Rates/Promotions/Providers, Order Number Settings, Notifications API, Admin Pages (routes `/api/sales-channels`, `/api/promptpay-settings`, `/api/shipping-*`, `/api/order-number-settings`, `/api/notifications`).
+- **Push/PWA Blueprint (modularized Mar 2026):** `blueprints/push.py` — Service Worker (`/sw.js`), Manifest (`/manifest.json`, `/manifest-admin.json`), VAPID push subscribe/unsubscribe/status/test, iSHIP Webhook (`/api/webhook/iship`).
 - **Marketing Blueprint (modularized Mar 2026):** `blueprints/marketing.py` — Promotions, Coupons, Size Chart Groups, Reseller coupon wallet/claim/preview (routes `/api/admin/promotions`, `/api/admin/coupons`, `/api/admin/size-chart-groups`, `/api/reseller/coupons/*` ฯลฯ). Helper functions `_calc_best_promotion`, `_calc_coupon_discount`, `_enrich_applies_to_names` exported และถูก import ใน Reseller Cart API ใน app.py.
 - **Refund System:** Dedicated table and APIs for refund information, slip upload, chat notification, and PromptPay QR generation.
 - **Reseller Features:** Dedicated dashboard; tier-specific pricing; customer database management; profile management.
@@ -41,7 +43,7 @@ The backend is a Flask 3.1.2 application, utilizing Flask-CORS and a Neon Postgr
 
 ### System Design Choices
 - **Backend Framework:** Flask (lightweight, flexible) with Blueprint-based modular architecture.
-- **Modular Structure:** `routes/` (Stripe, AI Agent), `blueprints/` (Facebook Ads, Guest Bot, Member Bot, Warehouse & Stock, Marketing), `utils.py` (shared auth decorators + error handler), `database.py` (DB pool).
+- **Modular Structure:** `routes/` (Stripe, AI Agent), `blueprints/` (Facebook Ads, Guest Bot, Member Bot, Warehouse & Stock, Marketing, Settings, Push/PWA), `utils.py` (shared auth decorators + error handler), `database.py` (DB pool).
 - **Database:** Neon PostgreSQL (reliability, scalability, Replit integration).
 - **Authentication:** Custom session-based for granular control. Decorators (`login_required`, `admin_required`) in `utils.py`, importable by all blueprints without circular imports.
 - **Frontend:** Vanilla JavaScript (performance, no framework overhead), CSS Grid (responsive layout), Fetch API for RESTful interaction.
