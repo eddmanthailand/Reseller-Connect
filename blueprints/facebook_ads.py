@@ -926,80 +926,91 @@ def fb_ai_analysis():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+        # --- Meta API: real spend/clicks/impressions (all-time) ---
+        meta_camps = _get_meta_campaign_insights('maximum')
+        meta_by_name = {c['name'].lower().strip(): c for c in meta_camps}
+        meta_total_spend = sum(c['spend'] for c in meta_camps)
+        meta_total_clicks = sum(c['clicks'] for c in meta_camps)
+        meta_total_impressions = sum(c['impressions'] for c in meta_camps)
+
+        # --- DB: UTM-based visit breakdown (all-time, no 30-day limit) ---
         cursor.execute('''
             SELECT
                 pv.utm_campaign,
                 COUNT(*) as visits,
                 ROUND(AVG(EXTRACT(HOUR FROM pv.created_at AT TIME ZONE 'Asia/Bangkok'))) as avg_hour,
                 COUNT(CASE WHEN pv.user_agent ~* 'mobile|android|iphone|ipad' THEN 1 END)::float / NULLIF(COUNT(*),0) * 100 as mobile_pct,
-                MAX(pv.created_at) as last_visit,
-                COALESCE(cb.total_budget, 0) as budget
+                MAX(pv.created_at) as last_visit
             FROM page_visits pv
-            LEFT JOIN campaign_budgets cb ON cb.campaign_name = pv.utm_campaign
             WHERE pv.source = 'facebook' AND pv.utm_campaign IS NOT NULL
-            AND pv.created_at >= CURRENT_DATE - INTERVAL '30 days'
-            GROUP BY pv.utm_campaign, cb.total_budget ORDER BY visits DESC LIMIT 10
+            GROUP BY pv.utm_campaign ORDER BY visits DESC LIMIT 10
         ''')
         campaigns_raw = cursor.fetchall()
         now = datetime.now()
         campaigns = []
-        total_budget_all = 0
         total_visits_all = 0
         for r in campaigns_raw:
             visits = r['visits']
-            budget = float(r['budget'] or 0)
-            total_budget_all += budget
             total_visits_all += visits
             hours_since = (now - r['last_visit']).total_seconds() / 3600 if r['last_visit'] else 9999
+            meta = meta_by_name.get((r['utm_campaign'] or '').lower().strip(), {})
+            spend = meta.get('spend', 0)
+            clicks = meta.get('clicks', 0)
             campaigns.append({
                 'campaign': r['utm_campaign'],
                 'visits': visits,
-                'avg_hour': r['avg_hour'],
+                'avg_hour': int(r['avg_hour']) if r['avg_hour'] else None,
                 'mobile_pct': round(float(r['mobile_pct'] or 0), 1),
-                'budget': budget,
-                'cpv': round(budget / visits, 2) if budget > 0 and visits > 0 else None,
                 'active': hours_since <= 48,
+                'meta_spend': spend,
+                'meta_clicks': clicks,
+                'cpv': round(spend / visits, 2) if spend > 0 and visits > 0 else None,
             })
-        overall_cpv = round(total_budget_all / total_visits_all, 2) if total_budget_all > 0 and total_visits_all > 0 else None
 
-        # Funnel overview (30 days)
+        # --- Funnel (all-time) ---
         cursor.execute('''
             SELECT event_type, COUNT(DISTINCT COALESCE(session_id, visitor_ip)) as cnt
-            FROM conversion_events
-            WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-            GROUP BY event_type
+            FROM conversion_events GROUP BY event_type
         ''')
         funnel = {r['event_type']: r['cnt'] for r in cursor.fetchall()}
 
         cursor.execute('''
-            SELECT traffic_type, COUNT(*) as visits
-            FROM page_visits
+            SELECT traffic_type, COUNT(*) as visits FROM page_visits
             WHERE page_name IN ('catalog','become-reseller')
-            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
             GROUP BY traffic_type ORDER BY visits DESC
         ''')
         traffic_types = [dict(r) for r in cursor.fetchall()]
 
         cursor.execute('''
             SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'Asia/Bangkok') as hr, COUNT(*) as cnt
-            FROM page_visits
-            WHERE page_name IN ('catalog','become-reseller')
-            AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+            FROM page_visits WHERE page_name IN ('catalog','become-reseller')
             GROUP BY hr ORDER BY cnt DESC LIMIT 5
         ''')
         peak_hours = [dict(r) for r in cursor.fetchall()]
 
+        # --- Meta campaign summary for prompt ---
+        meta_section = "ข้อมูลจาก Meta Ads API (ทั้งหมดตั้งแต่เริ่มแคมเปญ):\n"
+        if meta_camps:
+            meta_section += f"- ยอดใช้จ่ายรวม: ฿{meta_total_spend:,.2f}\n"
+            meta_section += f"- Impressions รวม: {meta_total_impressions:,}\n"
+            meta_section += f"- Clicks รวม: {meta_total_clicks:,}\n"
+            meta_section += f"- CTR รวม: {round(meta_total_clicks/meta_total_impressions*100,2) if meta_total_impressions else 0}%\n"
+            for c in meta_camps:
+                meta_section += (f"  • {c['name']} [{c['status']}]: "
+                                 f"฿{c['spend']:,.2f} spend, {c['impressions']:,} impressions, "
+                                 f"{c['clicks']} clicks, CPC=฿{c['cpc']:.2f}\n")
+        else:
+            meta_section += "- ไม่พบข้อมูลจาก Meta API\n"
+
         budget_section = f"""
-ข้อมูลงบประมาณ (30 วันล่าสุด):
-- งบรวมทุกแคมเปญ: {f'{total_budget_all:,.0f} บาท' if total_budget_all > 0 else 'ยังไม่ได้ตั้งค่างบ'}
-- Cost Per Visit รวม: {f'{overall_cpv:.2f} บาท/visit' if overall_cpv else 'ไม่มีข้อมูลงบ'}
-- Funnel: Catalog Views={funnel.get('catalog_view','?')}, Chatbot={funnel.get('chatbot_open','?')}, คลิกสมัคร={funnel.get('register_click','?')}, สมัครสำเร็จ={funnel.get('register_complete','?')}
-""" if total_budget_all > 0 else "\nหมายเหตุ: ยังไม่มีข้อมูลงบประมาณ — แนะนำให้ admin กรอก budget ในแต่ละแคมเปญเพื่อให้วิเคราะห์ ROI ได้\n"
+{meta_section}
+Funnel: Catalog Views={funnel.get('catalog_view','?')}, Chatbot={funnel.get('chatbot_open','?')}, คลิกสมัคร={funnel.get('register_click','?')}, สมัครสำเร็จ={funnel.get('register_complete','?')}
+"""
 
         prompt = f"""คุณเป็น Digital Marketing Analyst ผู้เชี่ยวชาญ e-commerce ไทย
 วิเคราะห์ข้อมูลโฆษณาร้านขายชุดพยาบาล EKG Shops นี้ และให้คำแนะนำเป็นภาษาไทยที่กระชับ ตรงประเด็น
 
-ข้อมูลแคมเปญ Facebook (30 วันล่าสุด):
+ข้อมูลแคมเปญ Facebook (ทั้งหมดตั้งแต่เริ่มแคมเปญ):
 {campaigns}
 
 การแบ่งประเภท traffic:
