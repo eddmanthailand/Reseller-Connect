@@ -1029,13 +1029,19 @@ def check_and_alert_low_stock():
 @admin_required
 def get_roles():
     """Get all available roles"""
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute('SELECT id, name FROM roles')
-    roles = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return jsonify(roles)
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT id, name FROM roles')
+        roles = [dict(row) for row in cursor.fetchall()]
+        return jsonify(roles)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @auth_bp.route('/api/reseller-tiers', methods=['GET'])
 @admin_required
@@ -1106,50 +1112,56 @@ def get_reseller_stats():
 @admin_required
 def get_users():
     """Get all users with their role information and assigned brands for Assistant Admins"""
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute('''
-        SELECT 
-            u.id,
-            u.full_name,
-            u.username,
-            r.name as role,
-            rt.name as reseller_tier
-        FROM users u
-        JOIN roles r ON u.role_id = r.id
-        LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
-        ORDER BY u.created_at DESC
-    ''')
-    users = [dict(row) for row in cursor.fetchall()]
-    
-    # Get assigned brands for Assistant Admins
-    assistant_admin_ids = [u['id'] for u in users if u['role'] == 'Assistant Admin']
-    if assistant_admin_ids:
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute('''
-            SELECT aba.user_id, b.id, b.name
-            FROM admin_brand_access aba
-            JOIN brands b ON aba.brand_id = b.id
-            WHERE aba.user_id = ANY(%s)
-            ORDER BY b.name
-        ''', (assistant_admin_ids,))
-        brand_access = cursor.fetchall()
+            SELECT 
+                u.id,
+                u.full_name,
+                u.username,
+                r.name as role,
+                rt.name as reseller_tier
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+            ORDER BY u.created_at DESC
+        ''')
+        users = [dict(row) for row in cursor.fetchall()]
         
-        # Group brands by user_id
-        user_brands = {}
-        for ba in brand_access:
-            user_id = ba['user_id']
-            if user_id not in user_brands:
-                user_brands[user_id] = []
-            user_brands[user_id].append({'id': ba['id'], 'name': ba['name']})
+        # Get assigned brands for Assistant Admins
+        assistant_admin_ids = [u['id'] for u in users if u['role'] == 'Assistant Admin']
+        if assistant_admin_ids:
+            cursor.execute('''
+                SELECT aba.user_id, b.id, b.name
+                FROM admin_brand_access aba
+                JOIN brands b ON aba.brand_id = b.id
+                WHERE aba.user_id = ANY(%s)
+                ORDER BY b.name
+            ''', (assistant_admin_ids,))
+            brand_access = cursor.fetchall()
+            
+            # Group brands by user_id
+            user_brands = {}
+            for ba in brand_access:
+                uid = ba['user_id']
+                if uid not in user_brands:
+                    user_brands[uid] = []
+                user_brands[uid].append({'id': ba['id'], 'name': ba['name']})
+            
+            # Add assigned_brands to each user
+            for user in users:
+                if user['role'] == 'Assistant Admin':
+                    user['assigned_brands'] = user_brands.get(user['id'], [])
         
-        # Add assigned_brands to each user
-        for user in users:
-            if user['role'] == 'Assistant Admin':
-                user['assigned_brands'] = user_brands.get(user['id'], [])
-    
-    cursor.close()
-    conn.close()
-    return jsonify(users)
+        return jsonify(users)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @auth_bp.route('/api/users', methods=['POST'])
 @admin_required
