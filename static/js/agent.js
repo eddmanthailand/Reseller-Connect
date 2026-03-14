@@ -523,6 +523,7 @@ async function agentApprovePlan(idx) {
     const m = _agentMessages[idx];
     if (!m || m.role !== 'plan' || m.approved) return;
     m.approved = true;
+    _agentSaveHistory();
     _agentLoading = true;
     _agentRenderMessages();
     try {
@@ -541,6 +542,7 @@ async function agentApprovePlan(idx) {
         _agentMessages.push({ role: 'ai', text: '❌ ' + e.message });
     }
     _agentLoading = false;
+    _agentSaveHistory();
     _agentRenderMessages();
 }
 
@@ -549,6 +551,7 @@ function agentRejectPlan(idx) {
     if (!m) return;
     m.approved = true;
     _agentMessages.push({ role: 'ai', text: 'ยกเลิกแล้วครับ มีอะไรอื่นให้ช่วยไหมครับ?' });
+    _agentSaveHistory();
     _agentRenderMessages();
 }
 
