@@ -2286,7 +2286,7 @@ def save_campaign_brief(campaign_id):
 @admin_required
 def campaign_smart_analysis():
     """AI analysis comparing live metrics vs. campaign brief → structured action_items JSON"""
-    import urllib.request, urllib.error
+    import urllib.request, urllib.parse, urllib.error
     raw = ''
     conn = cursor = None
     try:
@@ -2329,9 +2329,12 @@ def campaign_smart_analysis():
 
         # 4) Build date range param
         import re as _re
+        from datetime import date as _date
         if since_date and _re.match(r'^\d{4}-\d{2}-\d{2}$', since_date):
-            date_param = f'time_range[since]={since_date}&time_range[until]=today'
-            date_label = f'ตั้งแต่ {since_date} ถึงวันนี้'
+            today_str = _date.today().strftime('%Y-%m-%d')
+            time_range_json = json.dumps({'since': since_date, 'until': today_str})
+            date_param = 'time_range=' + urllib.parse.quote(time_range_json)
+            date_label = f'ตั้งแต่ {since_date} ถึง {today_str}'
         else:
             date_param = 'date_preset=maximum'
             date_label = 'ตั้งแต่เริ่มต้นแคมเปญ (all-time)'
