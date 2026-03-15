@@ -459,8 +459,9 @@ def public_chat_message():
                     pass
 
         # If prod_rows empty but history mentions product IDs → load those products for size chart
+        # Bug5 fix: extended lookback from 8 → 16 messages to catch longer conversations
         if not prod_rows and history:
-            _hist_text = ' '.join(str(h.get('text', '')) for h in history[-8:])
+            _hist_text = ' '.join(str(h.get('text', '')) for h in history[-16:])
             _hist_pids = [int(x) for x in _re.findall(r'\(#(\d+)\)', _hist_text)]
             if _hist_pids:
                 try:
@@ -479,7 +480,8 @@ def public_chat_message():
         # Load text-based size chart from size_chart_groups (guest bot)
         _guest_size_chart_section = ''
         _GUEST_SIZE_KW = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก', 'ช่วย')
-        _recent_msgs = ' '.join(str(h.get('text', '')) for h in history[-4:]) + ' ' + user_msg
+        # Bug3 fix: check last 6 messages (was 4) to catch multi-turn size conversations
+        _recent_msgs = ' '.join(str(h.get('text', '')) for h in history[-6:]) + ' ' + user_msg
         if any(kw in _recent_msgs.lower() for kw in _GUEST_SIZE_KW) and prod_rows:
             try:
                 _prod_ids = [r['id'] for r in prod_rows if r.get('id')]

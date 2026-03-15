@@ -1144,28 +1144,15 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
             return [r['name'] for r in cursor.fetchall()]
         _available_cats_str = ', '.join(_bot_cache_get('categories', 1800, _fetch_cats)) or 'ไม่มีข้อมูล'
 
-        # 9. Load size chart image for Vision (when viewing a product with size chart)
+        # 9. Size chart — text-based only (image vision removed per requirement)
         size_chart_image_bytes = None
         size_chart_mime = 'image/jpeg'
         size_chart_hint = ''
         _size_keywords = ('ไซส์', 'size', 'เอว', 'สะโพก', 'อก', 'วัด', 'ขนาด', 'ตาราง', 'เลือก')
-        _user_asks_size = any(kw in user_message_text.lower() for kw in _size_keywords)
-        if current_product_id and _user_asks_size:
-            cursor.execute('SELECT size_chart_image_url FROM products WHERE id = %s', (current_product_id,))
-            _prow = cursor.fetchone()
-            _chart_url = _prow['size_chart_image_url'] if _prow else None
-            if _chart_url and _chart_url.startswith('/storage/'):
-                try:
-                    from replit.object_storage import Client as _OSClient
-                    _storage_key = _chart_url.replace('/storage/', '')
-                    size_chart_image_bytes = _OSClient().download_as_bytes(_storage_key)
-                    if _chart_url.endswith('.png'):
-                        size_chart_mime = 'image/png'
-                    elif _chart_url.endswith('.webp'):
-                        size_chart_mime = 'image/webp'
-                    size_chart_hint = '\n[ตารางไซส์แนบเป็นรูปภาพ — ใช้ข้อมูลในรูปตอบคำถามเรื่องไซส์ได้เลยค่ะ]'
-                except Exception as _img_err:
-                    print(f'[BOT] Cannot load size chart: {_img_err}')
+        # Bug1 fix: check last 6 messages + current message (was current message only)
+        # so multi-turn size conversations ("แล้ว M ล่ะ?") still load the size chart
+        _recent_size_ctx = ' '.join(str(h.get('content', '')) for h in history_rows[-6:]) + ' ' + user_message_text
+        _user_asks_size = any(kw in _recent_size_ctx.lower() for kw in _size_keywords)
 
         # 9b. Load text-based size chart from size_chart_groups (member bot)
         _member_size_chart_section = ''
@@ -1176,6 +1163,13 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     _mchart_ids = [current_product_id]
                 elif prods:
                     _mchart_ids = [r['id'] for r in prods if r.get('id')]
+                # Bug4 fix: if context was cleared by N-gram switch and prods is also empty,
+                # recover product IDs from chat history (same pattern as guest bot)
+                if not _mchart_ids and history_rows:
+                    _mhist_text = ' '.join(str(h.get('content', '')) for h in history_rows)
+                    _mhist_pids = [int(x) for x in _re.findall(r'\bID:(\d+)\b', _mhist_text)]
+                    if _mhist_pids:
+                        _mchart_ids = list(dict.fromkeys(_mhist_pids))[:5]
                 if _mchart_ids:
                     conn.rollback()
                     _msc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
