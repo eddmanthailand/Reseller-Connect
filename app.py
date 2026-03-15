@@ -134,6 +134,10 @@ from blueprints.auth import auth_bp, oauth
 oauth.init_app(app)
 app.register_blueprint(auth_bp)
 
+@app.route('/privacy-policy')
+def privacy_policy():
+    return render_template('privacy_policy.html')
+
 @app.errorhandler(400)
 def bad_request(e):
     if request.path.startswith('/api/'):

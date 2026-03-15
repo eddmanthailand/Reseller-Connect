@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="นโยบายความเป็นส่วนตัว EKG Shops — การคุ้มครองข้อมูลส่วนบุคคลของคุณ">
+    <title>นโยบายความเป็นส่วนตัว | EKG Shops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary: #7c3aed;
+            --primary-light: #ede9fe;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f9fafb;
+            --white: #ffffff;
+        }
+        body {
+            font-family: 'Noto Sans Thai', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.8;
+        }
+
+        /* Header */
+        .site-header {
+            background: var(--primary);
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(124,58,237,0.3);
+        }
+        .site-header .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+        .site-header .logo span { opacity: 0.75; font-weight: 400; font-size: 14px; margin-left: 8px; }
+        .back-btn {
+            margin-left: auto;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: inherit;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.25); }
+
+        /* Page hero */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, #6d28d9 100%);
+            color: #fff;
+            padding: 48px 20px 40px;
+            text-align: center;
+        }
+        .hero h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .hero p { font-size: 14px; opacity: 0.8; }
+        .hero .updated { margin-top: 12px; font-size: 12px; opacity: 0.65; }
+
+        /* Content */
+        .container {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 40px 20px 80px;
+        }
+
+        .toc {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 40px;
+        }
+        .toc-title { font-size: 13px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .toc ol { padding-left: 20px; }
+        .toc li { margin-bottom: 4px; }
+        .toc a { color: var(--primary); font-size: 14px; text-decoration: none; font-weight: 500; }
+        .toc a:hover { text-decoration: underline; }
+
+        .section {
+            margin-bottom: 40px;
+            scroll-margin-top: 80px;
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section h2 .num {
+            background: var(--primary);
+            color: #fff;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .section p { font-size: 15px; color: #374151; margin-bottom: 12px; }
+        .section ul, .section ol {
+            padding-left: 22px;
+            margin-bottom: 12px;
+        }
+        .section li { font-size: 15px; color: #374151; margin-bottom: 6px; }
+
+        .info-card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+        .info-card table { width: 100%; border-collapse: collapse; }
+        .info-card table td { padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .info-card table td:first-child { font-weight: 600; color: #374151; width: 40%; color: var(--primary); }
+        .info-card table tr:last-child td { border-bottom: none; }
+
+        .highlight-box {
+            background: #fefce8;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 16px 18px;
+            font-size: 14px;
+            color: #92400e;
+            margin: 16px 0;
+            display: flex;
+            gap: 10px;
+        }
+        .highlight-box .icon { font-size: 20px; flex-shrink: 0; }
+
+        .rights-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        @media (max-width: 560px) { .rights-grid { grid-template-columns: 1fr; } }
+        .right-item {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .right-item .right-title { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+        .right-item .right-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+        /* Contact box */
+        .contact-box {
+            background: var(--primary);
+            color: #fff;
+            border-radius: 14px;
+            padding: 24px;
+            text-align: center;
+        }
+        .contact-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+        .contact-box p { font-size: 14px; opacity: 0.85; margin-bottom: 16px; }
+        .contact-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .contact-link {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .contact-link:hover { background: rgba(255,255,255,0.25); }
+
+        /* Footer */
+        .page-footer {
+            text-align: center;
+            padding: 24px 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <div class="logo">EKG Shops <span>ชุดพยาบาล & เวชภัณฑ์</span></div>
+    <a href="/" class="back-btn">← กลับหน้าหลัก</a>
+</header>
+
+<div class="hero">
+    <h1>🔒 นโยบายความเป็นส่วนตัว</h1>
+    <p>EKG Shops ให้ความสำคัญกับการคุ้มครองข้อมูลส่วนบุคคลของคุณอย่างสูงสุด</p>
+    <div class="updated">อัปเดตล่าสุด: 15 มีนาคม 2568 | มีผลบังคับใช้: 15 มีนาคม 2568</div>
+</div>
+
+<div class="container">
+
+    <!-- TOC -->
+    <div class="toc">
+        <div class="toc-title">สารบัญ</div>
+        <ol>
+            <li><a href="#s1">ผู้ควบคุมข้อมูลส่วนบุคคล</a></li>
+            <li><a href="#s2">ข้อมูลที่เราเก็บรวบรวม</a></li>
+            <li><a href="#s3">วัตถุประสงค์และฐานการประมวลผล</a></li>
+            <li><a href="#s4">การเปิดเผยข้อมูลแก่บุคคลภายนอก</a></li>
+            <li><a href="#s5">ระยะเวลาการเก็บรักษาข้อมูล</a></li>
+            <li><a href="#s6">สิทธิของเจ้าของข้อมูล</a></li>
+            <li><a href="#s7">ความปลอดภัยของข้อมูล</a></li>
+            <li><a href="#s8">คุกกี้และการติดตาม</a></li>
+            <li><a href="#s9">การเปลี่ยนแปลงนโยบาย</a></li>
+            <li><a href="#s10">ติดต่อเรา</a></li>
+        </ol>
+    </div>
+
+    <!-- S1 -->
+    <div class="section" id="s1">
+        <h2><span class="num">1</span> ผู้ควบคุมข้อมูลส่วนบุคคล</h2>
+        <div class="info-card">
+            <table>
+                <tr><td>ชื่อกิจการ</td><td>EKG Shops</td></tr>
+                <tr><td>ประเภทธุรกิจ</td><td>จำหน่ายชุดพยาบาล เวชภัณฑ์ และสินค้าสำหรับบุคลากรสาธารณสุข (ออนไลน์)</td></tr>
+                <tr><td>เว็บไซต์</td><td>ekg-shops.com</td></tr>
+                <tr><td>อีเมลติดต่อ</td><td>info@ekg-shops.com</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- S2 -->
+    <div class="section" id="s2">
+        <h2><span class="num">2</span> ข้อมูลที่เราเก็บรวบรวม</h2>
+        <p>เราเก็บรวบรวมข้อมูลส่วนบุคคลผ่านช่องทางต่างๆ ดังนี้:</p>
+
+        <p><strong>2.1 แบบฟอร์ม Lead บน Facebook/Instagram</strong></p>
+        <ul>
+            <li>ชื่อ-นามสกุล</li>
+            <li>หมายเลขโทรศัพท์</li>
+            <li>อีเมล</li>
+            <li>ข้อมูลที่คุณกรอกในคำถามเพิ่มเติม (เช่น สถานที่ทำงาน ความสนใจ)</li>
+        </ul>
+
+        <p><strong>2.2 การสมัครสมาชิกบนเว็บไซต์</strong></p>
+        <ul>
+            <li>ชื่อ-นามสกุล อีเมล รหัสผ่าน (เข้ารหัส)</li>
+            <li>ข้อมูลโปรไฟล์ Google (เมื่อล็อกอินด้วย Google)</li>
+        </ul>
+
+        <p><strong>2.3 การสั่งซื้อสินค้า</strong></p>
+        <ul>
+            <li>ที่อยู่จัดส่ง ข้อมูลการชำระเงิน ประวัติคำสั่งซื้อ</li>
+        </ul>
+
+        <p><strong>2.4 ข้อมูลการใช้งานเว็บไซต์</strong></p>
+        <ul>
+            <li>IP address, ประเภทเบราว์เซอร์, หน้าที่เยี่ยมชม, เวลาที่เยี่ยมชม ผ่าน Cookies และ Facebook Pixel</li>
+        </ul>
+    </div>
+
+    <!-- S3 -->
+    <div class="section" id="s3">
+        <h2><span class="num">3</span> วัตถุประสงค์และฐานการประมวลผล</h2>
+        <div class="info-card">
+            <table>
+                <tr>
+                    <td>ติดต่อกลับเพื่อนำเสนอสินค้า/โอกาสธุรกิจ</td>
+                    <td>ความยินยอม (Consent)</td>
+                </tr>
+                <tr>
+                    <td>ดำเนินการคำสั่งซื้อและจัดส่งสินค้า</td>
+                    <td>การปฏิบัติตามสัญญา (Contract)</td>
+                </tr>
+                <tr>
+                    <td>ส่งข้อมูลโปรโมชัน ข่าวสาร สินค้าใหม่</td>
+                    <td>ความยินยอม (สามารถยกเลิกได้)</td>
+                </tr>
+                <tr>
+                    <td>วิเคราะห์และปรับปรุงประสิทธิภาพโฆษณา</td>
+                    <td>ประโยชน์โดยชอบด้วยกฎหมาย (Legitimate Interest)</td>
+                </tr>
+                <tr>
+                    <td>ปฏิบัติตามกฎหมายและข้อบังคับที่เกี่ยวข้อง</td>
+                    <td>พันธกรณีตามกฎหมาย (Legal Obligation)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- S4 -->
+    <div class="section" id="s4">
+        <h2><span class="num">4</span> การเปิดเผยข้อมูลแก่บุคคลภายนอก</h2>
+        <p>เราอาจเปิดเผยข้อมูลของคุณแก่บุคคลภายนอกเฉพาะในกรณีจำเป็น ได้แก่:</p>
+        <ul>
+            <li><strong>Meta Platforms (Facebook/Instagram)</strong> — เพื่อการวิเคราะห์ประสิทธิภาพโฆษณาผ่าน Facebook Pixel โดยเป็นไปตาม <a href="https://www.facebook.com/policy.php" target="_blank" style="color:var(--primary);">นโยบายข้อมูลของ Meta</a></li>
+            <li><strong>ผู้ให้บริการชำระเงิน</strong> — เช่น Stripe, PromptPay เพื่อดำเนินการชำระเงิน</li>
+            <li><strong>บริษัทขนส่ง</strong> — เพื่อการจัดส่งสินค้า (ชื่อ ที่อยู่ เบอร์โทร)</li>
+            <li><strong>ผู้ให้บริการระบบคลาวด์</strong> — ที่จัดเก็บข้อมูลในฐานะผู้ประมวลผลข้อมูลภายใต้สัญญาความลับ</li>
+        </ul>
+        <div class="highlight-box">
+            <span class="icon">⚠️</span>
+            <span>เราไม่ขาย จำหน่าย หรือให้เช่าข้อมูลส่วนบุคคลของคุณแก่บุคคลภายนอกเพื่อวัตถุประสงค์เชิงพาณิชย์โดยเด็ดขาด</span>
+        </div>
+    </div>
+
+    <!-- S5 -->
+    <div class="section" id="s5">
+        <h2><span class="num">5</span> ระยะเวลาการเก็บรักษาข้อมูล</h2>
+        <div class="info-card">
+            <table>
+                <tr><td>ข้อมูล Lead Form (Facebook)</td><td>3 ปี นับจากวันที่ได้รับ หรือจนกว่าจะขอลบ</td></tr>
+                <tr><td>ข้อมูลบัญชีสมาชิก</td><td>ตลอดระยะเวลาการเป็นสมาชิก + 3 ปีหลังปิดบัญชี</td></tr>
+                <tr><td>ประวัติคำสั่งซื้อ</td><td>5 ปี ตามกฎหมายบัญชีและภาษี</td></tr>
+                <tr><td>ข้อมูลการใช้งานเว็บ (Log)</td><td>90 วัน</td></tr>
+                <tr><td>Cookies</td><td>ตามกำหนดของแต่ละ cookie (สูงสุด 2 ปี)</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- S6 -->
+    <div class="section" id="s6">
+        <h2><span class="num">6</span> สิทธิของเจ้าของข้อมูล</h2>
+        <p>ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA) คุณมีสิทธิดังต่อไปนี้:</p>
+        <div class="rights-grid">
+            <div class="right-item">
+                <div class="right-title">สิทธิ์เข้าถึงข้อมูล</div>
+                <div class="right-desc">ขอดูข้อมูลส่วนบุคคลที่เราเก็บไว้เกี่ยวกับคุณได้</div>
+            </div>
+            <div class="right-item">
+                <div class="right-title">สิทธิ์แก้ไขข้อมูล</div>
+                <div class="right-desc">ขอให้แก้ไขข้อมูลที่ไม่ถูกต้องหรือไม่ครบถ้วน</div>
+            </div>
+            <div class="right-item">
+                <div class="right-title">สิทธิ์ลบข้อมูล</div>
+                <div class="right-desc">ขอให้ลบข้อมูลเมื่อไม่มีความจำเป็นต้องเก็บอีกต่อไป</div>
+            </div>
+            <div class="right-item">
+                <div class="right-title">สิทธิ์คัดค้าน</div>
+                <div class="right-desc">คัดค้านการประมวลผลข้อมูลในบางวัตถุประสงค์</div>
+            </div>
+            <div class="right-item">
+                <div class="right-title">สิทธิ์ระงับการใช้</div>
+                <div class="right-desc">ขอให้ระงับการประมวลผลข้อมูลชั่วคราวได้</div>
+            </div>
+            <div class="right-item">
+                <div class="right-title">สิทธิ์ถอนความยินยอม</div>
+                <div class="right-desc">ถอนความยินยอมได้ทุกเมื่อโดยไม่กระทบสิทธิ์ที่มีอยู่ก่อน</div>
+            </div>
+        </div>
+        <p style="margin-top:16px;">เพื่อใช้สิทธิ์ข้างต้น ติดต่อเราได้ที่ <strong>info@ekg-shops.com</strong> เราจะดำเนินการภายใน 30 วัน</p>
+    </div>
+
+    <!-- S7 -->
+    <div class="section" id="s7">
+        <h2><span class="num">7</span> ความปลอดภัยของข้อมูล</h2>
+        <p>เราใช้มาตรการรักษาความปลอดภัยหลายชั้น ได้แก่:</p>
+        <ul>
+            <li>การเข้ารหัสข้อมูลด้วย SSL/TLS บนทุกการรับส่งข้อมูล</li>
+            <li>รหัสผ่านถูกเข้ารหัส (hashed) ด้วยอัลกอริทึมมาตรฐานอุตสาหกรรม</li>
+            <li>ฐานข้อมูลอยู่บนเซิร์ฟเวอร์ที่มีการควบคุมการเข้าถึงอย่างเข้มงวด</li>
+            <li>จำกัดสิทธิ์การเข้าถึงข้อมูลเฉพาะผู้ที่จำเป็นเท่านั้น</li>
+        </ul>
+    </div>
+
+    <!-- S8 -->
+    <div class="section" id="s8">
+        <h2><span class="num">8</span> คุกกี้และการติดตาม</h2>
+        <p>เราใช้คุกกี้และเทคโนโลยีที่คล้ายกันเพื่อวัตถุประสงค์ดังนี้:</p>
+        <ul>
+            <li><strong>คุกกี้จำเป็น</strong> — สำหรับการล็อกอินและรักษา session</li>
+            <li><strong>Facebook Pixel</strong> — วัดประสิทธิภาพโฆษณาและสร้างกลุ่มเป้าหมาย</li>
+            <li><strong>คุกกี้วิเคราะห์</strong> — ทำความเข้าใจพฤติกรรมผู้ใช้เพื่อปรับปรุงเว็บไซต์</li>
+        </ul>
+        <p>คุณสามารถตั้งค่าเบราว์เซอร์เพื่อปฏิเสธคุกกี้ได้ แต่อาจกระทบการใช้งานบางส่วนของเว็บไซต์</p>
+    </div>
+
+    <!-- S9 -->
+    <div class="section" id="s9">
+        <h2><span class="num">9</span> การเปลี่ยนแปลงนโยบาย</h2>
+        <p>เราอาจปรับปรุงนโยบายนี้เป็นครั้งคราวเพื่อให้สอดคล้องกับการเปลี่ยนแปลงทางกฎหมายหรือการดำเนินธุรกิจ การเปลี่ยนแปลงสำคัญจะแจ้งให้ทราบผ่านทางอีเมลหรือประกาศบนเว็บไซต์ก่อนมีผลบังคับใช้อย่างน้อย 7 วัน</p>
+    </div>
+
+    <!-- S10 -->
+    <div class="section" id="s10">
+        <h2><span class="num">10</span> ติดต่อเรา</h2>
+        <div class="contact-box">
+            <h3>มีคำถามหรือต้องการใช้สิทธิ์?</h3>
+            <p>ทีมงาน EKG Shops พร้อมช่วยเหลือคุณในทุกเรื่องที่เกี่ยวกับข้อมูลส่วนบุคคล</p>
+            <div class="contact-links">
+                <a href="mailto:info@ekg-shops.com" class="contact-link">📧 info@ekg-shops.com</a>
+                <a href="https://line.me/ti/p/~@ekgshops" target="_blank" class="contact-link">💬 LINE @ekgshops</a>
+                <a href="https://www.facebook.com/ekgshops" target="_blank" class="contact-link">📘 Facebook EKG Shops</a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer class="page-footer">
+    <p>© 2568 EKG Shops | นโยบายนี้เป็นไปตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA)</p>
+    <p style="margin-top:4px;"><a href="https://www.facebook.com/policy.php" target="_blank" style="color:var(--primary);">นโยบายข้อมูลของ Meta</a></p>
+</footer>
+
+</body>
+</html>
