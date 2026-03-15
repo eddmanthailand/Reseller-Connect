@@ -697,6 +697,11 @@
             const skus = data.skus || [];
             const tier1Discount = data.product?.tier1_discount || 0;
 
+            // ViewContent: user clicked to view a product
+            const _vcData = { content_ids: [String(productId)], content_name: productName, value: minPrice || 0, currency: 'THB' };
+            if (window._fbPixelTrack) window._fbPixelTrack('ViewContent', { content_ids: [String(productId)], content_name: productName, content_type: 'product', value: minPrice || 0, currency: 'THB' });
+            if (window._trackEvent) window._trackEvent('view_content', _vcData);
+
             if (skus.length === 0) { showToast('ไม่มีสินค้าในสต็อกขณะนี้'); return; }
 
             const hasOptions = skus.some(s => s.options && Object.keys(s.options).length > 0);
@@ -1055,6 +1060,11 @@
         }
         saveCart();
         showToast(`เพิ่ม "${item.name}" ลงตะกร้าแล้ว`);
+
+        // AddToCart: fire pixel + CAPI
+        const _acData = { content_ids: [String(item.productId)], content_name: item.name, value: item.price || 0, currency: 'THB' };
+        if (window._fbPixelTrack) window._fbPixelTrack('AddToCart', { content_ids: [String(item.productId)], content_name: item.name, content_type: 'product', value: item.price || 0, currency: 'THB' });
+        if (window._trackEvent) window._trackEvent('add_to_cart', _acData);
     }
 
     function closeSkuModal() {
@@ -1891,14 +1901,21 @@
         })()
     };
 
-    // Helper: track any conversion funnel event
-    window._trackEvent = async function(event_type) {
+    // Helper: track any conversion funnel event (with optional product data)
+    window._trackEvent = async function(event_type, extra) {
         try {
             await fetch('/api/track-event', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ event_type, ..._trackMeta })
+                body: JSON.stringify({ event_type, ..._trackMeta, ...(extra || {}) })
             });
+        } catch(e) {}
+    };
+
+    // Helper: fire browser-side Meta Pixel event
+    window._fbPixelTrack = function(event_name, params) {
+        try {
+            if (typeof fbq !== 'undefined') fbq('track', event_name, params || {});
         } catch(e) {}
     };
 

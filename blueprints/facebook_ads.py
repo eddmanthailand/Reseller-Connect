@@ -509,7 +509,8 @@ def track_conversion_event():
         event_type = data.get('event_type', '')
         if not event_type:
             return jsonify({'error': 'Missing event_type'}), 400
-        valid_events = {'catalog_view', 'chatbot_open', 'register_click', 'register_complete', 'first_order'}
+        valid_events = {'catalog_view', 'chatbot_open', 'register_click', 'register_complete',
+                        'first_order', 'view_content', 'add_to_cart', 'initiate_checkout'}
         if event_type not in valid_events:
             return jsonify({'error': 'Invalid event_type'}), 400
 
@@ -544,14 +545,30 @@ def track_conversion_event():
             'register_click':     'Lead',
             'register_complete':  'CompleteRegistration',
             'first_order':        'Purchase',
+            'view_content':       'ViewContent',
+            'add_to_cart':        'AddToCart',
+            'initiate_checkout':  'InitiateCheckout',
         }
         meta_event = _capi_map.get(event_type)
         if meta_event:
             fbc = data.get('fbc') or None
             fbp = data.get('fbp') or None
             event_url = data.get('event_source_url') or referrer or ''
+            # Build product custom_data if provided
+            extra_data = None
+            content_ids = data.get('content_ids')
+            if content_ids:
+                extra_data = {
+                    'content_ids':  content_ids,
+                    'content_name': data.get('content_name', ''),
+                    'content_type': 'product',
+                    'currency':     data.get('currency', 'THB'),
+                }
+                if data.get('value') is not None:
+                    extra_data['value'] = float(data['value'])
             _send_capi_event(meta_event, event_url, visitor_ip=visitor_ip,
-                             user_agent=user_agent, fbc=fbc, fbp=fbp)
+                             user_agent=user_agent, fbc=fbc, fbp=fbp,
+                             extra_data=extra_data)
 
         return jsonify({'success': True}), 200
     except Exception as e:
