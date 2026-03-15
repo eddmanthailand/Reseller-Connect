@@ -161,6 +161,10 @@
     </div>
     <div class="fb-header-right">
         <span id="fbPixelStatusBadge" class="fb-badge fb-badge-blue" style="display:none;">● Pixel Active</span>
+        <a href="/admin/facebook-ads/settings" class="fb-icon-btn" style="text-decoration:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            ตั้งค่า
+        </a>
         <button class="fb-icon-btn" onclick="loadFacebookAdsPage()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             รีเฟรช
@@ -325,92 +329,22 @@
             </div>
         </div>
 
-        <!-- ── RIGHT COLUMN: Settings ── -->
+        <!-- ── RIGHT COLUMN ── -->
         <div>
 
-            <!-- Pixel + Meta Account (รวม) -->
+            <!-- Meta API Connection Status (mini) -->
             <div class="fb-card">
-                <div class="fb-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    ตั้งค่า Facebook Pixel & Meta API
-                </div>
-
-                <!-- Pixel ID -->
-                <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Pixel ID</label>
-                    <input type="text" id="fbAdsPixelId" class="fb-input" placeholder="เช่น 1671556133839943">
-                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">หาได้จาก Facebook Events Manager</div>
-                </div>
-
-                <!-- Ad Account ID -->
-                <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Ad Account ID</label>
-                    <input type="text" id="metaAdAccountId" class="fb-input" placeholder="เช่น 955908924843880">
-                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">หาได้จาก Meta Ads Manager</div>
-                </div>
-
-                <!-- Access Token (ใช้ร่วมกัน) -->
-                <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#6e6e73;font-weight:500;display:block;margin-bottom:6px;">Access Token</label>
-                    <input type="password" id="fbAdsAccessToken" class="fb-input" placeholder="EAAxxxxxx...">
-                    <div style="font-size:11px;color:#6e6e73;margin-top:4px;">ใช้ร่วมกันทั้ง Conversions API และ Meta Ads API</div>
-                </div>
-
-                <!-- สถานะเชื่อมต่อ -->
-                <div id="metaApiStatus" style="font-size:12px;margin-bottom:10px;"></div>
-
-                <div class="fb-divider"></div>
-
-                <!-- Toggle Pixel -->
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                    <div>
-                        <div style="font-size:14px;font-weight:500;">เปิดใช้งาน Pixel</div>
-                        <div style="font-size:11px;color:#6e6e73;">PageView · Lead · CompleteRegistration</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#1d1d1f;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        Meta API
                     </div>
-                    <label class="fb-toggle">
-                        <input type="checkbox" id="fbAdsPixelActive">
-                        <span class="fb-toggle-slider"></span>
-                    </label>
+                    <a href="/admin/facebook-ads/settings" class="fb-btn-ghost" style="text-decoration:none;font-size:11px;padding:4px 10px;display:flex;align-items:center;gap:4px;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                        ตั้งค่า
+                    </a>
                 </div>
-
-                <button onclick="saveAllMetaSettings()" class="fb-btn-blue">บันทึกการตั้งค่า</button>
-
-                <!-- Meta Insights (ขยายตัวเมื่อเชื่อมต่อแล้ว) -->
-                <div id="metaInsightsCard" style="display:none;margin-top:14px;">
-                    <div class="fb-divider"></div>
-                    <div style="display:flex;gap:6px;margin-bottom:10px;">
-                        <button id="metaBtn7d" onclick="loadMetaInsights('7d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">7d</button>
-                        <button id="metaBtn30d" onclick="loadMetaInsights('30d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">30d</button>
-                        <button id="metaBtn90d" onclick="loadMetaInsights('90d')" class="fb-btn-ghost" style="flex:1;font-size:12px;padding:6px;">90d</button>
-                    </div>
-                    <div id="metaInsightsContent"></div>
-                </div>
-            </div>
-
-            <!-- Landing Page -->
-            <div class="fb-card" style="margin-top:16px;">
-                <div class="fb-section-title">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    Landing Page โฆษณา
-                </div>
-                <div style="margin-bottom:12px;">
-                    <div style="font-size:12px;color:#6e6e73;font-weight:500;margin-bottom:6px;">URL สำหรับ Facebook Ads</div>
-                    <div class="fb-url-box" id="fbLandingUrlDisplay">https://ekgshops.com/catalog</div>
-                    <input type="hidden" id="fbLandingUrl" value="https://ekgshops.com/catalog">
-                </div>
-                <div style="display:flex;gap:8px;margin-bottom:14px;">
-                    <button onclick="copyLandingUrl()" class="fb-btn-blue" style="flex:1;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                        Copy URL
-                    </button>
-                    <a href="https://ekgshops.com/catalog" target="_blank" class="fb-btn-ghost" style="text-decoration:none;display:flex;align-items:center;white-space:nowrap;">เปิดดู ↗</a>
-                </div>
-                <div class="fb-divider"></div>
-                <div style="font-size:12px;color:#6e6e73;line-height:1.7;">
-                    <strong style="color:#1d1d1f;">วิธีตั้งค่าแคมเปญแยกกัน:</strong><br>
-                    เพิ่ม utm_campaign ต่อท้าย URL เช่น:<br>
-                    <span style="font-family:'SF Mono',monospace;font-size:11px;color:#007aff;display:block;margin-top:4px;word-break:break-all;">...catalog?utm_source=facebook&amp;utm_campaign=ekg-shops</span>
-                </div>
+                <div id="metaApiMiniStatus" style="font-size:12px;color:#6e6e73;">กำลังตรวจสอบ...</div>
             </div>
 
             <!-- AI Analysis Card -->
@@ -496,22 +430,9 @@
     window.API_URL = '/api';
     window.USER_ROLE = '{{ user_role }}';
 
-    // ── Timestamp ──
     function _fbTimestamp() {
         const el = document.getElementById('fbLastUpdated');
         if (el) el.textContent = 'อัปเดต ' + new Date().toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
-    }
-
-    // ── Copy URL helper ──
-    function copyLandingUrl() {
-        const url = document.getElementById('fbLandingUrl')?.value || '';
-        navigator.clipboard.writeText(url).then(() => {
-            const btn = event.currentTarget;
-            const orig = btn.innerHTML;
-            btn.innerHTML = '✓ คัดลอกแล้ว';
-            btn.style.background = '#34c759';
-            setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#007aff'; }, 2000);
-        });
     }
 </script>
 

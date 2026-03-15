@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ตั้งค่า Facebook Ads — EKG Shops Admin</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=20260228">
+    <link rel="stylesheet" href="/static/css/global-alert.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { margin:0; background:#f2f2f7; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text',sans-serif; color:#1d1d1f; }
+
+        .fb-header {
+            position:sticky; top:0; z-index:100;
+            background:rgba(242,242,247,0.85);
+            backdrop-filter:saturate(180%) blur(20px);
+            -webkit-backdrop-filter:saturate(180%) blur(20px);
+            border-bottom:0.5px solid rgba(0,0,0,0.1);
+            padding:0 24px; height:52px;
+            display:flex; align-items:center; justify-content:space-between; gap:12px;
+        }
+        .fb-header-left { display:flex; align-items:center; gap:12px; }
+        .fb-back-btn {
+            display:flex; align-items:center; gap:5px;
+            color:#007aff; font-size:15px; font-weight:500;
+            text-decoration:none; padding:4px 0; border:none; background:none; cursor:pointer;
+        }
+        .fb-header-title { display:flex; align-items:center; gap:8px; }
+        .fb-header-title .icon { width:28px; height:28px; background:#6e6e73; border-radius:7px; display:flex; align-items:center; justify-content:center; }
+        .fb-header-title h1 { font-size:17px; font-weight:700; margin:0; }
+
+        .fb-body { padding:20px 24px; max-width:960px; margin:0 auto; }
+        @media(max-width:600px) { .fb-body { padding:16px; } }
+
+        .fb-card { background:#fff; border-radius:14px; box-shadow:0 1px 4px rgba(0,0,0,0.08),0 0 0 0.5px rgba(0,0,0,0.05); padding:20px; margin-bottom:16px; }
+        .fb-section-title { font-size:15px; font-weight:600; color:#1d1d1f; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .fb-divider { height:0.5px; background:#e5e5ea; margin:14px 0; }
+        .fb-input { width:100%; padding:10px 12px; border:0.5px solid #c7c7cc; border-radius:9px; font-size:14px; color:#1d1d1f; background:#f9f9f9; outline:none; transition:border 0.15s; }
+        .fb-input:focus { border-color:#007aff; background:#fff; box-shadow:0 0 0 3px rgba(0,122,255,0.12); }
+        .fb-btn-blue { background:#007aff; color:#fff; border:none; border-radius:9px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; width:100%; transition:opacity 0.15s; }
+        .fb-btn-blue:hover { opacity:0.85; }
+        .fb-btn-ghost { background:transparent; color:#007aff; border:1px solid #007aff; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.15s; }
+        .fb-btn-ghost:hover { background:#007aff; color:#fff; }
+        .fb-toggle { position:relative; width:48px; height:28px; display:inline-block; }
+        .fb-toggle input { opacity:0; width:0; height:0; }
+        .fb-toggle-slider { position:absolute; inset:0; background:#c7c7cc; border-radius:14px; cursor:pointer; transition:0.2s; }
+        .fb-toggle-slider:before { content:""; position:absolute; width:24px; height:24px; left:2px; top:2px; background:#fff; border-radius:50%; transition:0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+        .fb-toggle input:checked + .fb-toggle-slider { background:#34c759; }
+        .fb-toggle input:checked + .fb-toggle-slider:before { transform:translateX(20px); }
+        .fb-url-box { background:#f2f2f7; border-radius:8px; padding:10px 12px; font-family:'SF Mono',monospace; font-size:12px; color:#1d1d1f; word-break:break-all; }
+        .setting-row { margin-bottom:14px; }
+        .setting-label { font-size:12px; color:#6e6e73; font-weight:600; display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px; }
+        .setting-hint { font-size:11px; color:#8e8e93; margin-top:4px; }
+        .insight-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
+        @media(max-width:500px) { .insight-grid { grid-template-columns:1fr; } }
+        .insight-tile { background:#f2f2f7; border-radius:10px; padding:12px 14px; }
+        .insight-tile-label { font-size:10px; color:#6e6e73; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; }
+        .insight-tile-value { font-size:20px; font-weight:700; color:#1d1d1f; }
+        .insight-tile-sub { font-size:10px; color:#6e6e73; margin-top:2px; }
+    </style>
+</head>
+<body>
+
+<div class="fb-header">
+    <div class="fb-header-left">
+        <a href="/admin/facebook-ads" class="fb-back-btn">
+            <svg width="9" height="15" viewBox="0 0 9 15" fill="none"><path d="M7.5 1.5L1.5 7.5L7.5 13.5" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Facebook Ads
+        </a>
+        <div class="fb-header-title">
+            <div class="icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+            </div>
+            <h1>ตั้งค่า Pixel & Meta API</h1>
+        </div>
+    </div>
+</div>
+
+<div class="fb-body">
+
+    <!-- Section 1: Pixel & Meta API Settings -->
+    <div class="fb-card">
+        <div class="fb-section-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Facebook Pixel & Meta API
+        </div>
+
+        <div class="setting-row">
+            <label class="setting-label">Pixel ID</label>
+            <input type="text" id="fbAdsPixelId" class="fb-input" placeholder="เช่น 1671556133839943">
+            <div class="setting-hint">หาได้จาก <strong>Facebook Events Manager</strong> → Data Sources → Pixel</div>
+        </div>
+
+        <div class="setting-row">
+            <label class="setting-label">Ad Account ID</label>
+            <input type="text" id="metaAdAccountId" class="fb-input" placeholder="เช่น 955908924843880 (ไม่ต้องใส่ act_)">
+            <div class="setting-hint">หาได้จาก <strong>Meta Ads Manager</strong> → ด้านบนขวา → Account ID</div>
+        </div>
+
+        <div class="setting-row">
+            <label class="setting-label">Access Token (ใช้ร่วมกันทั้ง Pixel CAPI และ Meta Ads API)</label>
+            <input type="password" id="fbAdsAccessToken" class="fb-input" placeholder="EAAxxxxxx...">
+            <div class="setting-hint">สร้างได้จาก <strong>Meta for Developers</strong> → Tools → Graph API Explorer → Generate Token (ต้องมีสิทธิ์ ads_read + ads_management)</div>
+        </div>
+
+        <div class="fb-divider"></div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div>
+                <div style="font-size:14px;font-weight:500;">เปิดใช้งาน Facebook Pixel</div>
+                <div style="font-size:11px;color:#6e6e73;margin-top:2px;">ติดตาม PageView · AddToCart · Lead · CompleteRegistration ผ่านทั้ง Browser Pixel และ CAPI</div>
+            </div>
+            <label class="fb-toggle">
+                <input type="checkbox" id="fbAdsPixelActive">
+                <span class="fb-toggle-slider"></span>
+            </label>
+        </div>
+
+        <div id="metaApiStatus" style="font-size:12px;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+
+        <button onclick="saveAllMetaSettings()" class="fb-btn-blue">บันทึกการตั้งค่า</button>
+    </div>
+
+    <!-- Section 2: Meta Insights (account-level) -->
+    <div class="fb-card" id="metaInsightsCard" style="display:none;">
+        <div class="fb-section-title" style="justify-content:space-between;">
+            <span style="display:flex;align-items:center;gap:8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                ภาพรวมบัญชีโฆษณา (Account-level)
+            </span>
+            <div style="display:flex;gap:6px;">
+                <button id="metaBtn7d" onclick="loadMetaInsights('7d')" class="fb-btn-ghost" style="font-size:12px;padding:5px 12px;">7d</button>
+                <button id="metaBtn30d" onclick="loadMetaInsights('30d')" class="fb-btn-ghost" style="font-size:12px;padding:5px 12px;">30d</button>
+                <button id="metaBtn90d" onclick="loadMetaInsights('90d')" class="fb-btn-ghost" style="font-size:12px;padding:5px 12px;">90d</button>
+            </div>
+        </div>
+        <div id="metaInsightsContent">
+            <div style="text-align:center;color:#6e6e73;font-size:13px;padding:16px 0;">กำลังโหลด...</div>
+        </div>
+    </div>
+
+    <!-- Section 3: Landing Page URLs -->
+    <div class="fb-card">
+        <div class="fb-section-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Landing Page URLs สำหรับโฆษณา
+        </div>
+
+        <div style="background:#f2f2f7;border-radius:10px;padding:14px;margin-bottom:14px;">
+            <div style="font-size:12px;color:#6e6e73;font-weight:600;margin-bottom:6px;">เพิ่ม UTM Parameters สำหรับ tracking ต่อแคมเปญ</div>
+            <code style="font-size:11px;color:#007aff;word-break:break-all;display:block;">https://ekgshops.com/catalog?utm_source=facebook&amp;utm_medium=cpc&amp;utm_campaign=<strong>ชื่อแคมเปญ</strong></code>
+            <div style="font-size:11px;color:#8e8e93;margin-top:6px;">ตัวแปร utm_campaign ใช้แยกข้อมูล traffic ในหน้า Dashboard</div>
+        </div>
+
+        <!-- Dynamic URL list from JS -->
+        <div id="adLandingUrls" style="display:grid;gap:8px;">
+            <div style="text-align:center;color:#6e6e73;font-size:13px;padding:10px 0;">กำลังโหลด URL...</div>
+        </div>
+    </div>
+
+</div><!-- end body -->
+
+<script>
+    window.API_URL = '/api';
+    window.USER_ROLE = '{{ user_role }}';
+</script>
+
+<script src="/static/js/global-alert.js?v=20260228"></script>
+<script src="/static/js/dashboard-core.js?v=20250306"></script>
+<script src="/static/js/dashboard-facebook.js?v=20260315a"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        loadFbAdsPixelSettings();
+        loadMetaApiStatus();
+        loadAdLandingUrls();
+    });
+</script>
+
+</body>
+</html>

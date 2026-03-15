@@ -343,6 +343,14 @@ def admin_facebook_ads_page():
     return render_template('admin_facebook_ads.html', user_role=user_role)
 
 
+@facebook_ads_bp.route('/admin/facebook-ads/settings')
+@login_required
+@admin_required
+def admin_facebook_ads_settings():
+    user_role = session.get('role', 'admin')
+    return render_template('admin_facebook_ads_settings.html', user_role=user_role)
+
+
 # ==================== FACEBOOK PIXEL SETTINGS API ====================
 
 @facebook_ads_bp.route('/api/facebook-pixel-settings', methods=['GET'])

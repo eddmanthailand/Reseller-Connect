@@ -69,13 +69,9 @@ async function saveFacebookPixelSettings() {
 let fbAdsChart = null;
 
 async function loadFacebookAdsPage() {
-    const urlInput = document.getElementById('fbLandingUrl');
-    if (urlInput) urlInput.value = 'https://ekgshops.com/catalog';
-    loadFbAdsPixelSettings();
     loadFacebookAdsStats();
     loadMetaApiStatus();
     loadMetaLiveCampaigns();
-    loadAdLandingUrls();
     loadTrafficSources('total');
     loadFunnelStats('total');
 }
@@ -147,12 +143,29 @@ async function loadMetaApiStatus() {
                 el.style.background = 'rgba(74,222,128,0.1)';
                 el.style.border = '1px solid rgba(74,222,128,0.3)';
                 el.innerHTML = `✅ เชื่อมต่อแล้ว | Account: <strong>${d.meta_ad_account_id}</strong> | Token: <code style="font-size:10px;">${d.meta_access_token_masked}</code>${d.token_from_env ? ' <span style="opacity:0.6;">(env)</span>' : ''}`;
-                document.getElementById('metaInsightsCard').style.display = '';
-                loadMetaInsights('30d');
+                const insCard = document.getElementById('metaInsightsCard');
+                if (insCard) { insCard.style.display = ''; loadMetaInsights('30d'); }
+                // Update mini status badge on main dashboard if present
+                const miniStatus = document.getElementById('metaApiMiniStatus');
+                if (miniStatus) {
+                    miniStatus.innerHTML = `<span style="color:#34c759;">● เชื่อมต่อแล้ว</span> <span style="color:#6e6e73;font-size:11px;">Account: ${d.meta_ad_account_id}</span>`;
+                }
             } else {
                 el.style.background = 'rgba(251,191,36,0.1)';
                 el.style.border = '1px solid rgba(251,191,36,0.3)';
                 el.innerHTML = '⚠️ ยังไม่ได้ตั้งค่า — กรอก Access Token และ Ad Account ID แล้วกดบันทึก';
+                const miniStatus = document.getElementById('metaApiMiniStatus');
+                if (miniStatus) miniStatus.innerHTML = `<span style="color:#ff9500;">⚠️ ยังไม่ได้ตั้งค่า</span>`;
+            }
+        } else {
+            // No metaApiStatus element (main dashboard page) — only update mini badge
+            const miniStatus = document.getElementById('metaApiMiniStatus');
+            if (miniStatus) {
+                if (d.has_token && d.has_account) {
+                    miniStatus.innerHTML = `<span style="color:#34c759;">● เชื่อมต่อแล้ว</span> <span style="color:#6e6e73;font-size:11px;">Account: ${d.meta_ad_account_id}</span>`;
+                } else {
+                    miniStatus.innerHTML = `<span style="color:#ff9500;">⚠️ ยังไม่ได้ตั้งค่า</span>`;
+                }
             }
         }
         if (accountEl && d.meta_ad_account_id) accountEl.value = d.meta_ad_account_id;
