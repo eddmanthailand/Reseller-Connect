@@ -74,6 +74,7 @@ async function loadFacebookAdsPage() {
     loadFbAdsPixelSettings();
     loadFacebookAdsStats();
     loadMetaApiStatus();
+    loadMetaLiveCampaigns();
     loadAdLandingUrls();
     loadTrafficSources('total');
     loadFunnelStats('total');
@@ -381,7 +382,6 @@ async function loadFacebookAdsStats() {
         // Chart, campaign breakdown, recent regs
         renderFbAdsChart(data.chart);
         renderCampaignBreakdown(data.campaign_breakdown || []);
-        renderMetaCampaigns(data.meta_campaigns || []);
         renderFbRecentRegistrations(data.recent_registrations);
 
         // Pixel badge
@@ -852,44 +852,243 @@ function renderCampaignDetailPanel(el, d, safeId, demo) {
     }, 50);
 }
 
-function renderMetaCampaigns(campaigns) {
+// ───────────────────────────────────────────────────────────────
+// LIVE CAMPAIGN DASHBOARD (replaces old renderMetaCampaigns)
+// ───────────────────────────────────────────────────────────────
+
+async function loadMetaLiveCampaigns() {
     const wrap = document.getElementById('metaCampaignsWrap');
     if (!wrap) return;
-    if (!campaigns || campaigns.length === 0) {
-        wrap.innerHTML = '<p style="color:#6e6e73;font-size:13px;padding:12px 0">ไม่พบข้อมูลแคมเปญจาก Meta Ads API</p>';
+    const btn = document.getElementById('btnRefreshLive');
+    wrap.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:13px;padding:24px 0;">⏳ กำลังดึงข้อมูลจาก Meta API...</div>';
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังโหลด...'; }
+    try {
+        const r = await fetch('/api/facebook-ads/meta-live-campaigns', { credentials: 'include' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'โหลดไม่สำเร็จ');
+        renderMetaLiveCampaigns(data);
+    } catch (e) {
+        wrap.innerHTML = `<div style="color:#ff3b30;font-size:13px;padding:12px 0;">⚠️ ${e.message}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'รีเฟรช'; }
+    }
+}
+
+function renderMetaLiveCampaigns(data) {
+    const wrap = document.getElementById('metaCampaignsWrap');
+    if (!wrap) return;
+    const campaigns = data.campaigns || [];
+    const summary = data.summary || {};
+
+    // CPL alert banner
+    const banner = document.getElementById('cplAlertBanner');
+    const bannerText = document.getElementById('cplAlertText');
+    const highCPL = campaigns.filter(c => c.cpl && c.cpl > 300 && c.status === 'ACTIVE');
+    if (banner && bannerText) {
+        if (highCPL.length > 0) {
+            bannerText.textContent = `⚠️ แคมเปญที่กำลังรัน ${highCPL.length} รายการมี CPL สูงกว่า ฿300: ${highCPL.map(c => `"${c.name}" (฿${c.cpl.toFixed(0)})`).join(', ')} — แนะนำให้หยุดหรือปรับงบ`;
+            banner.style.display = 'flex';
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    if (campaigns.length === 0) {
+        wrap.innerHTML = '<p style="color:#6e6e73;font-size:13px;padding:12px 0;">ไม่พบแคมเปญใน Ad Account นี้</p>';
         return;
     }
-    const statusLabel = s => {
-        const map = { ACTIVE: ['เปิดใช้งาน','#34c759'], PAUSED: ['หยุดชั่วคราว','#ff9500'], DELETED: ['ลบแล้ว','#ff3b30'], ARCHIVED: ['เก็บถาวร','#8e8e93'] };
-        const [text, color] = map[s] || [s, '#8e8e93'];
-        return `<span style="background:${color}22;color:${color};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${text}</span>`;
-    };
-    const rows = campaigns.map(c => `
-        <tr>
-            <td style="padding:10px 12px;font-size:13px;font-weight:500;color:#1d1d1f">${c.name}</td>
-            <td style="padding:10px 12px;text-align:center">${statusLabel(c.status)}</td>
-            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">฿${c.spend.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">${c.impressions.toLocaleString('th-TH')}</td>
-            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#1d1d1f">${c.clicks.toLocaleString('th-TH')}</td>
-            <td style="padding:10px 12px;text-align:right;font-size:13px;color:#6e6e73">${c.cpc > 0 ? '฿'+c.cpc.toFixed(2) : '-'}</td>
-        </tr>
-    `).join('');
-    wrap.innerHTML = `
-        <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-            <thead>
-                <tr style="border-bottom:1px solid #e5e5ea">
-                    <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">ชื่อแคมเปญ</th>
-                    <th style="padding:8px 12px;text-align:center;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">สถานะ</th>
-                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">ยอดใช้จ่าย</th>
-                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Impressions</th>
-                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Clicks</th>
-                    <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:.5px">CPC</th>
-                </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
+
+    // Summary bar
+    let html = '';
+    if (summary.total_spend > 0) {
+        html += `<div style="display:flex;gap:20px;flex-wrap:wrap;background:#f2f2f7;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;">
+            <span>💰 <strong>รวมใช้จ่าย:</strong> ฿${summary.total_spend.toLocaleString('th-TH',{minimumFractionDigits:2})}</span>
+            <span>🎯 <strong>Leads รวม:</strong> ${summary.total_leads.toLocaleString('th-TH')}</span>
+            ${summary.overall_cpl ? `<span class="${summary.overall_cpl > 300 ? 'camp-metric-cpl-warn' : 'camp-metric-cpl-ok'}" style="font-weight:600;">📊 Overall CPL: ฿${summary.overall_cpl.toFixed(2)}</span>` : ''}
         </div>`;
+    }
+
+    campaigns.forEach(c => { html += _buildCampaignCard(c); });
+    wrap.innerHTML = html;
+}
+
+function _buildCampaignCard(c) {
+    const isActive = c.status === 'ACTIVE';
+    const safeId = 'camp_' + c.id;
+    const nameEsc = (c.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const fmt = n => (n || 0).toLocaleString('th-TH');
+    const thb = n => '฿' + (n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // Status badge
+    const statusBadge = isActive
+        ? `<span class="camp-live-status camp-status-active">● เปิดอยู่</span>`
+        : `<span class="camp-live-status camp-status-paused">⏸ หยุดชั่วคราว</span>`;
+
+    // CPL display
+    const cplVal = c.cpl != null
+        ? `<span class="${c.cpl > 300 ? 'camp-metric-cpl-warn' : 'camp-metric-cpl-ok'}">฿${c.cpl.toFixed(2)}</span>`
+        : `<span style="color:#c7c7cc;">—</span>`;
+
+    // Budget display
+    const budgetLine = c.is_lifetime
+        ? `ตลอดอายุแคมเปญ`
+        : c.daily_budget_thb > 0 ? `฿${c.daily_budget_thb.toLocaleString('th-TH', {minimumFractionDigits:2})} / วัน` : `—`;
+
+    // Metrics grid
+    const metrics = `
+        <div class="camp-metrics">
+            <div class="camp-metric">
+                <div class="camp-metric-label">ยอดใช้จ่าย</div>
+                <div class="camp-metric-value">${thb(c.spend)}</div>
+                <div class="camp-metric-sub">งบ ${budgetLine}</div>
+            </div>
+            <div class="camp-metric">
+                <div class="camp-metric-label">Reach / Impression</div>
+                <div class="camp-metric-value">${fmt(c.reach)}</div>
+                <div class="camp-metric-sub">${fmt(c.impressions)} impressions (Freq ${c.frequency ? c.frequency.toFixed(1) : '—'})</div>
+            </div>
+            <div class="camp-metric">
+                <div class="camp-metric-label">CTR / CPC</div>
+                <div class="camp-metric-value">${c.ctr ? c.ctr.toFixed(2) + '%' : '—'}</div>
+                <div class="camp-metric-sub">CPC ${c.cpc ? '฿'+c.cpc.toFixed(2) : '—'} | CPM ${c.cpm ? '฿'+c.cpm.toFixed(2) : '—'}</div>
+            </div>
+            <div class="camp-metric">
+                <div class="camp-metric-label">Leads / CPL</div>
+                <div class="camp-metric-value">${fmt(c.leads)} leads</div>
+                <div class="camp-metric-sub">CPL: ${cplVal}</div>
+            </div>
+        </div>`;
+
+    // Funnel
+    let funnelHtml = '';
+    if (c.funnel && c.funnel.length > 0 && c.reach > 0) {
+        const funnelColors = ['#007aff','#34c759','#ff9500','#af52de','#ff3b30'];
+        const bars = c.funnel.map((f, i) => `
+            <div class="camp-funnel-row">
+                <span class="camp-funnel-label">${f.label}</span>
+                <div class="camp-funnel-bar-wrap"><div class="camp-funnel-bar" style="width:${Math.max(f.pct,0.5)}%;background:${funnelColors[i]||'#007aff'};"></div></div>
+                <span class="camp-funnel-val">${fmt(f.value)} <small style="color:#6e6e73;">(${f.pct}%)</small></span>
+            </div>`).join('');
+        funnelHtml = `<div class="camp-funnel"><div class="camp-funnel-title">Conversion Funnel</div>${bars}</div>`;
+    }
+
+    // Demographics
+    let demoHtml = '';
+    if (c.top_demographics && c.top_demographics.length > 0) {
+        const chips = c.top_demographics.map(d => {
+            const gLabel = d.gender === 'female' ? '👩 หญิง' : d.gender === 'male' ? '👨 ชาย' : d.gender;
+            return `<span class="camp-demo-chip">${d.age} ${gLabel} CTR <strong>${d.ctr ? d.ctr.toFixed(2) : '—'}%</strong> (${fmt(d.impressions)} impr)</span>`;
+        }).join('');
+        demoHtml = `<div class="camp-demo"><div class="camp-demo-title">Top Demographics (CTR)</div><div class="camp-demo-row">${chips}</div></div>`;
+    }
+
+    // Budget editor (inline, hidden by default)
+    const budgetEditor = c.is_lifetime ? '' : `
+        <div class="camp-budget-editor" id="${safeId}_budget_editor">
+            <input type="number" class="camp-budget-input" id="${safeId}_budget_input" value="${c.daily_budget_thb || ''}" min="1" step="10" placeholder="งบ/วัน (฿)">
+            <button class="camp-btn camp-btn-budget" onclick="saveCampaignBudget('${c.id}','${safeId}','${nameEsc}')">บันทึก</button>
+            <button class="camp-btn camp-btn-dup" onclick="hideBudgetEditor('${safeId}')">ยกเลิก</button>
+        </div>`;
+
+    // Control buttons
+    const toggleLabel = isActive ? '⏸ หยุดแคมเปญ' : '▶ เริ่มแคมเปญ';
+    const toggleClass = isActive ? 'camp-btn-toggle-off' : 'camp-btn-toggle-on';
+    const nextStatus = isActive ? 'PAUSED' : 'ACTIVE';
+    const controls = `
+        <div class="camp-controls">
+            <button class="camp-btn ${toggleClass}" onclick="toggleCampaignStatus('${c.id}','${nextStatus}','${nameEsc}',this)">${toggleLabel}</button>
+            ${!c.is_lifetime ? `<button class="camp-btn camp-btn-budget" onclick="showBudgetEditor('${safeId}')">✏️ แก้ไขงบ</button>` : ''}
+            <button class="camp-btn camp-btn-dup" onclick="duplicateCampaign('${c.id}','${nameEsc}',this)">📋 Duplicate</button>
+            <span style="margin-left:auto;font-size:11px;color:#8e8e93;">ID: ${c.id}</span>
+        </div>
+        ${budgetEditor}`;
+
+    return `
+        <div class="camp-live-card" id="${safeId}">
+            <div class="camp-live-header">
+                <div class="camp-live-name">${c.name || '(ไม่มีชื่อ)'}</div>
+                ${statusBadge}
+            </div>
+            ${metrics}
+            ${funnelHtml}
+            ${demoHtml}
+            ${controls}
+        </div>`;
+}
+
+async function toggleCampaignStatus(campId, newStatus, name, btn) {
+    const label = newStatus === 'ACTIVE' ? 'เริ่มแคมเปญ' : 'หยุดแคมเปญ';
+    if (!confirm(`ยืนยันการ${label} "${name}"?`)) return;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = 'กำลังดำเนินการ...';
+    try {
+        const r = await fetch('/api/facebook-ads/meta-campaign-control', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'toggle', campaign_id: campId, new_status: newStatus })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        await loadMetaLiveCampaigns();
+    } catch (e) {
+        alert('❌ ' + e.message);
+        btn.disabled = false; btn.textContent = origText;
+    }
+}
+
+function showBudgetEditor(safeId) {
+    const el = document.getElementById(safeId + '_budget_editor');
+    if (el) { el.classList.add('show'); el.querySelector('input')?.focus(); }
+}
+
+function hideBudgetEditor(safeId) {
+    const el = document.getElementById(safeId + '_budget_editor');
+    if (el) el.classList.remove('show');
+}
+
+async function saveCampaignBudget(campId, safeId, name) {
+    const input = document.getElementById(safeId + '_budget_input');
+    if (!input) return;
+    const budget = parseFloat(input.value);
+    if (!budget || budget <= 0) { alert('กรุณากรอกงบที่ถูกต้อง'); return; }
+    if (!confirm(`ยืนยันการตั้งงบ ฿${budget} / วัน สำหรับแคมเปญ "${name}"?`)) return;
+    input.disabled = true;
+    try {
+        const r = await fetch('/api/facebook-ads/meta-campaign-control', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update_budget', campaign_id: campId, daily_budget_thb: budget })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        await loadMetaLiveCampaigns();
+    } catch (e) {
+        alert('❌ ' + e.message);
+        input.disabled = false;
+    }
+}
+
+async function duplicateCampaign(campId, name, btn) {
+    if (!confirm(`Duplicate แคมเปญ "${name}"?\nแคมเปญใหม่จะถูกสร้างในสถานะ PAUSED`)) return;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = 'กำลัง Duplicate...';
+    try {
+        const r = await fetch('/api/facebook-ads/meta-campaign-control', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'duplicate', campaign_id: campId })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        alert(`✅ Duplicate สำเร็จ! แคมเปญใหม่ ID: ${d.new_campaign_id || '(ดูใน Ads Manager)'}`);
+        await loadMetaLiveCampaigns();
+    } catch (e) {
+        alert('❌ ' + e.message);
+        btn.disabled = false; btn.textContent = origText;
+    }
 }
 
 function renderFbAdsChart(chartData) {

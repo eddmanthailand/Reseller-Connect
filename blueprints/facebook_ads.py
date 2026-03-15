@@ -1959,3 +1959,243 @@ def admin_meta_ads_insights():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+# ==================== LIVE CAMPAIGN DASHBOARD ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/meta-live-campaigns', methods=['GET'])
+@login_required
+@admin_required
+def meta_live_campaigns():
+    """Fetch all campaigns with per-campaign insights + age/gender breakdown from Meta API."""
+    import urllib.request, urllib.parse, urllib.error
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        if not token or not account_id:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token หรือ Ad Account ID'}), 400
+        if not account_id.startswith('act_'):
+            account_id = f'act_{account_id}'
+
+        def _api(url):
+            req = urllib.request.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode())
+
+        # 1) Get all campaigns (active + paused)
+        camp_fields = 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,created_time'
+        camps_url = (f'https://graph.facebook.com/v19.0/{account_id}/campaigns'
+                     f'?fields={camp_fields}&limit=50&access_token={token}')
+        camps_data = _api(camps_url).get('data', [])
+
+        # 2) For each campaign — insights + age/gender breakdown (parallel via threads)
+        import threading
+        ins_fields = 'impressions,reach,clicks,unique_clicks,ctr,cpc,cpm,spend,frequency,actions,cost_per_action_type'
+        age_fields = 'impressions,clicks,spend,ctr,reach'
+
+        results = {}
+        lock = threading.Lock()
+
+        def _fetch_campaign(c):
+            cid = c['id']
+            try:
+                ins_url = (f'https://graph.facebook.com/v19.0/{cid}/insights'
+                           f'?fields={ins_fields}&date_preset=maximum&access_token={token}')
+                ins = _api(ins_url).get('data', [{}])
+                ins_row = ins[0] if ins else {}
+
+                age_url = (f'https://graph.facebook.com/v19.0/{cid}/insights'
+                           f'?fields={age_fields}&breakdowns=age,gender'
+                           f'&date_preset=maximum&access_token={token}')
+                age_rows = _api(age_url).get('data', [])
+
+                def _actions(row, key):
+                    for a in (row.get('actions') or []):
+                        if a['action_type'] == key:
+                            return float(a['value'])
+                    return 0.0
+
+                spend = float(ins_row.get('spend', 0))
+                reach = int(ins_row.get('reach', 0))
+                impressions = int(ins_row.get('impressions', 0))
+                clicks = int(ins_row.get('clicks', 0))
+                ctr = float(ins_row.get('ctr', 0))
+                cpc = float(ins_row.get('cpc', 0))
+                cpm = float(ins_row.get('cpm', 0))
+                frequency = float(ins_row.get('frequency', 0))
+                landing_views = int(_actions(ins_row, 'landing_page_view'))
+                view_content = int(_actions(ins_row, 'view_content'))
+                leads = int(_actions(ins_row, 'lead'))
+                link_clicks = int(_actions(ins_row, 'link_click'))
+
+                cpl = round(spend / leads, 2) if leads > 0 else None
+                cpc_landing = round(spend / landing_views, 2) if landing_views > 0 else None
+
+                # Funnel drop-off rates
+                funnel = [
+                    {'label': 'Reach', 'value': reach, 'pct': 100},
+                    {'label': 'Link Clicks', 'value': link_clicks,
+                     'pct': round(link_clicks / reach * 100, 1) if reach else 0},
+                    {'label': 'Landing Page', 'value': landing_views,
+                     'pct': round(landing_views / reach * 100, 1) if reach else 0},
+                    {'label': 'ViewContent', 'value': view_content,
+                     'pct': round(view_content / reach * 100, 1) if reach else 0},
+                    {'label': 'Lead', 'value': leads,
+                     'pct': round(leads / reach * 100, 1) if reach else 0},
+                ]
+
+                # Top 5 age/gender by CTR (min 50 impressions)
+                top_demo = sorted(
+                    [r for r in age_rows if int(r.get('impressions', 0)) >= 50],
+                    key=lambda r: float(r.get('ctr', 0)), reverse=True
+                )[:5]
+
+                with lock:
+                    results[cid] = {
+                        'spend': spend, 'reach': reach, 'impressions': impressions,
+                        'clicks': clicks, 'ctr': ctr, 'cpc': cpc, 'cpm': cpm,
+                        'frequency': frequency, 'landing_views': landing_views,
+                        'view_content': view_content, 'leads': leads,
+                        'link_clicks': link_clicks, 'cpl': cpl,
+                        'cpc_landing': cpc_landing, 'funnel': funnel,
+                        'top_demographics': [
+                            {'age': r['age'], 'gender': r['gender'],
+                             'impressions': int(r['impressions']),
+                             'clicks': int(r.get('clicks', 0)),
+                             'ctr': float(r.get('ctr', 0)),
+                             'spend': float(r.get('spend', 0))}
+                            for r in top_demo
+                        ],
+                    }
+            except Exception as ex:
+                with lock:
+                    results[cid] = {'error': str(ex)}
+
+        threads = [threading.Thread(target=_fetch_campaign, args=(c,)) for c in camps_data]
+        for t in threads: t.start()
+        for t in threads: t.join(timeout=20)
+
+        # Build response
+        campaigns = []
+        for c in camps_data:
+            cid = c['id']
+            metrics = results.get(cid, {})
+            budget_satang = int(c.get('daily_budget') or c.get('lifetime_budget') or 0)
+            campaigns.append({
+                'id': cid,
+                'name': c['name'],
+                'status': c['status'],
+                'effective_status': c['effective_status'],
+                'objective': c.get('objective', ''),
+                'daily_budget': budget_satang,
+                'daily_budget_thb': round(budget_satang / 100, 2),
+                'is_lifetime': bool(c.get('lifetime_budget') and not c.get('daily_budget')),
+                'start_time': c.get('start_time', ''),
+                **metrics,
+            })
+
+        total_spend = sum(c.get('spend', 0) for c in campaigns)
+        total_leads = sum(c.get('leads', 0) for c in campaigns)
+        return jsonify({
+            'campaigns': campaigns,
+            'summary': {
+                'total_spend': round(total_spend, 2),
+                'total_leads': int(total_leads),
+                'overall_cpl': round(total_spend / total_leads, 2) if total_leads else None,
+            }
+        }), 200
+
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode()
+        try:
+            msg = json.loads(err_body).get('error', {}).get('message', err_body)
+        except Exception:
+            msg = err_body
+        return jsonify({'error': f'Meta API: {msg}'}), 400
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ==================== CAMPAIGN CONTROL (TOGGLE / BUDGET / DUPLICATE) ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/meta-campaign-control', methods=['POST'])
+@login_required
+@admin_required
+def meta_campaign_control():
+    """Toggle status, update daily budget, or duplicate a campaign via Meta API."""
+    import urllib.request, urllib.parse, urllib.error
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        if not token or not account_id:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
+        if not account_id.startswith('act_'):
+            account_id = f'act_{account_id}'
+
+        data = request.get_json(silent=True) or {}
+        action = data.get('action', '')
+        campaign_id = (data.get('campaign_id') or '').strip()
+        if not campaign_id:
+            return jsonify({'error': 'Missing campaign_id'}), 400
+
+        def _post(url, payload):
+            body = urllib.parse.urlencode(payload).encode('utf-8')
+            req = urllib.request.Request(url, data=body, method='POST',
+                                          headers={'User-Agent': 'EKGShops/1.0',
+                                                   'Content-Type': 'application/x-www-form-urlencoded'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode())
+
+        if action == 'toggle':
+            new_status = data.get('new_status', 'PAUSED')
+            if new_status not in ('ACTIVE', 'PAUSED'):
+                return jsonify({'error': 'new_status ต้องเป็น ACTIVE หรือ PAUSED'}), 400
+            url = f'https://graph.facebook.com/v19.0/{campaign_id}'
+            result = _post(url, {'status': new_status, 'access_token': token})
+            return jsonify({'success': True, 'campaign_id': campaign_id,
+                            'new_status': new_status, 'meta_response': result}), 200
+
+        elif action == 'update_budget':
+            budget_thb = float(data.get('daily_budget_thb', 0))
+            if budget_thb <= 0:
+                return jsonify({'error': 'งบต้องมากกว่า 0'}), 400
+            budget_satang = int(budget_thb * 100)
+            url = f'https://graph.facebook.com/v19.0/{campaign_id}'
+            result = _post(url, {'daily_budget': budget_satang, 'access_token': token})
+            return jsonify({'success': True, 'campaign_id': campaign_id,
+                            'daily_budget_thb': budget_thb, 'meta_response': result}), 200
+
+        elif action == 'duplicate':
+            # Use Meta /copies endpoint — creates a paused copy with all ad sets and ads
+            url = f'https://graph.facebook.com/v19.0/{campaign_id}/copies'
+            result = _post(url, {
+                'deep_copy': 'true',
+                'status_option': 'PAUSED',
+                'access_token': token
+            })
+            return jsonify({'success': True, 'original_id': campaign_id,
+                            'new_campaign_id': result.get('copied_campaign_id') or result.get('id'),
+                            'meta_response': result}), 200
+
+        else:
+            return jsonify({'error': f'Unknown action: {action}'}), 400
+
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode()
+        try:
+            msg = json.loads(err_body).get('error', {}).get('message', err_body)
+        except Exception:
+            msg = err_body
+        return jsonify({'error': f'Meta API: {msg}'}), 400
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()

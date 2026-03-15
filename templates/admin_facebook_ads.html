@@ -102,6 +102,45 @@
         .fb-table td { padding:10px 12px; border-bottom:0.5px solid #f2f2f7; color:#1d1d1f; }
         .fb-table tr:last-child td { border-bottom:none; }
         .fb-table tr:hover td { background:#f9f9f9; }
+
+        /* ─── Live Campaign Cards ─── */
+        .camp-live-card { border:0.5px solid #e5e5ea; border-radius:12px; padding:16px; margin-bottom:12px; background:#fafafa; }
+        .camp-live-card:last-child { margin-bottom:0; }
+        .camp-live-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+        .camp-live-name { font-size:14px; font-weight:600; color:#1d1d1f; flex:1; }
+        .camp-live-status { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+        .camp-status-active { background:#e8fbe8; color:#1a7f37; }
+        .camp-status-paused { background:#fff3e0; color:#c75a00; }
+        .camp-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+        @media(max-width:700px) { .camp-metrics { grid-template-columns:repeat(2,1fr); } }
+        .camp-metric { background:#fff; border:0.5px solid #e5e5ea; border-radius:8px; padding:10px 12px; }
+        .camp-metric-label { font-size:10px; color:#6e6e73; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+        .camp-metric-value { font-size:16px; font-weight:700; color:#1d1d1f; }
+        .camp-metric-sub { font-size:10px; color:#6e6e73; margin-top:2px; }
+        .camp-metric-cpl-warn { color:#ff3b30; }
+        .camp-metric-cpl-ok { color:#34c759; }
+        .camp-funnel { margin-bottom:12px; }
+        .camp-funnel-title { font-size:11px; font-weight:600; color:#6e6e73; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+        .camp-funnel-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:12px; }
+        .camp-funnel-label { width:90px; color:#6e6e73; flex-shrink:0; }
+        .camp-funnel-bar-wrap { flex:1; height:8px; background:#e5e5ea; border-radius:4px; overflow:hidden; }
+        .camp-funnel-bar { height:100%; background:#007aff; border-radius:4px; transition:width 0.4s ease; }
+        .camp-funnel-val { width:80px; text-align:right; color:#1d1d1f; font-weight:500; font-size:11px; flex-shrink:0; }
+        .camp-demo { margin-bottom:12px; }
+        .camp-demo-title { font-size:11px; font-weight:600; color:#6e6e73; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+        .camp-demo-row { display:flex; gap:6px; flex-wrap:wrap; }
+        .camp-demo-chip { background:#f2f2f7; border-radius:6px; padding:4px 8px; font-size:11px; color:#1d1d1f; }
+        .camp-demo-chip strong { color:#007aff; }
+        .camp-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:12px; border-top:0.5px solid #e5e5ea; }
+        .camp-btn { padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:none; transition:all 0.15s; }
+        .camp-btn-toggle-on  { background:#34c759; color:#fff; }
+        .camp-btn-toggle-off { background:#ff9500; color:#fff; }
+        .camp-btn-budget { background:#007aff; color:#fff; }
+        .camp-btn-dup { background:#f2f2f7; color:#1d1d1f; border:0.5px solid #c7c7cc; }
+        .camp-btn:hover { opacity:0.85; }
+        .camp-budget-editor { display:none; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+        .camp-budget-editor.show { display:flex; }
+        .camp-budget-input { padding:7px 10px; border:1px solid #007aff; border-radius:8px; font-size:13px; width:120px; }
     </style>
 </head>
 <body>
@@ -127,6 +166,12 @@
             รีเฟรช
         </button>
     </div>
+</div>
+
+<!-- ─── CPL Alert Banner (hidden by default) ─── -->
+<div id="cplAlertBanner" style="display:none;background:#fff3cd;border-bottom:2px solid #ff9500;padding:10px 24px;font-size:13px;color:#7c4a00;display:none;align-items:center;gap:10px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span id="cplAlertText"></span>
 </div>
 
 <!-- ─── Body ─── -->
@@ -204,15 +249,20 @@
                 </div>
             </div>
 
-            <!-- Meta Campaigns from Ads Manager -->
+            <!-- Live Campaign Control from Meta API -->
             <div class="fb-card" style="margin-bottom:16px;">
-                <div class="fb-section-title">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M15.5 8.5c-.8-.8-1.9-1.3-3.1-1.3-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5c1.2 0 2.3-.5 3.1-1.3"/><path d="M15 12h-7"/></svg>
-                    แคมเปญจาก Facebook Ads Manager
-                    <span style="font-size:11px;color:#34c759;font-weight:500;margin-left:auto;">● ข้อมูลจริง · ทั้งหมดตั้งแต่เริ่มแคมเปญ</span>
+                <div class="fb-section-title" style="justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        จัดการแคมเปญ (Live)
+                    </span>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:#34c759;font-weight:500;">● ข้อมูลจาก Meta API</span>
+                        <button onclick="loadMetaLiveCampaigns()" class="fb-btn-ghost" style="font-size:11px;padding:4px 10px;" id="btnRefreshLive">รีเฟรช</button>
+                    </span>
                 </div>
                 <div id="metaCampaignsWrap">
-                    <div style="text-align:center;color:#6e6e73;font-size:13px;padding:20px 0;">กำลังโหลด...</div>
+                    <div style="text-align:center;color:#6e6e73;font-size:13px;padding:20px 0;">กำลังโหลดข้อมูลแคมเปญ...</div>
                 </div>
             </div>
 
@@ -467,7 +517,7 @@
 
 <script src="/static/js/global-alert.js?v=20260228"></script>
 <script src="/static/js/dashboard-core.js?v=20250306"></script>
-<script src="/static/js/dashboard-facebook.js?v=20260313b"></script>
+<script src="/static/js/dashboard-facebook.js?v=20260315a"></script>
 <script>
     // Auto-load on page ready
     document.addEventListener('DOMContentLoaded', function() {
