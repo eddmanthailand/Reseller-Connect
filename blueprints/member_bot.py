@@ -1175,7 +1175,7 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                     _msc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                     _msc.execute('''
                         SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows,
-                               scg.fabric_type, scg.allowances
+                               scg.fabric_type, scg.fabric_composition, scg.allowances
                         FROM size_chart_groups scg
                         JOIN products p ON p.size_chart_group_id = scg.id
                         WHERE p.id = ANY(%s)
@@ -1209,7 +1209,9 @@ def _bot_chat_reply(thread_id, reseller_id, user_message_text, conn):
                             try: _malw = json.loads(_malw)
                             except: _malw = {}
                         _mfabric_label = 'ผ้าไม่ยืด (non-stretch)' if _mfabric == 'non-stretch' else 'ผ้ายืด (stretch)'
-                        _malw_line = f"ประเภทผ้า: {_mfabric_label} | ค่าเผื่อ: อก +{_malw.get('chest',1)}\" | เอว +{_malw.get('waist',1)}\" | สะโพก +{_malw.get('hip',1.5)}\""
+                        _mfabric_comp = _mc.get('fabric_composition') or ''
+                        _mcomp_part = f" | ชนิดผ้า: {_mfabric_comp}" if _mfabric_comp else ''
+                        _malw_line = f"ประเภทผ้า: {_mfabric_label}{_mcomp_part} | ค่าเผื่อ: อก +{_malw.get('chest',1)}\" | เอว +{_malw.get('waist',1)}\" | สะโพก +{_malw.get('hip',1.5)}\""
                         _member_size_chart_section += f"\n[ตารางขนาด: {_mc['name']}]\n{_malw_line}\n" + '\n'.join(_mlines) + '\n'
                     if _member_size_chart_section and not size_chart_hint:
                         size_chart_hint = '\n[มีตารางขนาดแนบในส่วน "ตารางขนาดสินค้า" — ใช้ข้อมูลนั้นตอบคำถามเรื่องขนาด/ไซส์ได้เลยค่ะ]'

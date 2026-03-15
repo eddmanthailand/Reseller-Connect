@@ -361,14 +361,16 @@ def admin_create_size_chart_group():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         fabric_type = data.get('fabric_type', 'non-stretch') or 'non-stretch'
+        fabric_composition = (data.get('fabric_composition') or '').strip()
         allowances = data.get('allowances') or {'chest': 1, 'waist': 1, 'hip': 1.5}
         cursor.execute('''
-            INSERT INTO size_chart_groups (name, description, columns, rows, fabric_type, allowances)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+            INSERT INTO size_chart_groups (name, description, columns, rows, fabric_type, fabric_composition, allowances)
+            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
         ''', (data['name'], data.get('description', ''),
               json.dumps(columns, ensure_ascii=False),
               json.dumps(rows, ensure_ascii=False),
               fabric_type,
+              fabric_composition or None,
               json.dumps(allowances)))
         row = dict(cursor.fetchone())
         conn.commit()
@@ -421,16 +423,17 @@ def admin_update_size_chart_group(group_id):
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         _ft = data.get('fabric_type', 'non-stretch') or 'non-stretch'
+        _fc = (data.get('fabric_composition') or '').strip() or None
         _al = data.get('allowances') or {'chest': 1, 'waist': 1, 'hip': 1.5}
         cursor.execute('''
             UPDATE size_chart_groups
             SET name=%s, description=%s, columns=%s, rows=%s,
-                fabric_type=%s, allowances=%s, updated_at=NOW()
+                fabric_type=%s, fabric_composition=%s, allowances=%s, updated_at=NOW()
             WHERE id=%s RETURNING *
         ''', (data['name'], data.get('description', ''),
               json.dumps(data.get('columns', []), ensure_ascii=False),
               json.dumps(data.get('rows', []), ensure_ascii=False),
-              _ft, json.dumps(_al),
+              _ft, _fc, json.dumps(_al),
               group_id))
         row = cursor.fetchone()
         if not row:

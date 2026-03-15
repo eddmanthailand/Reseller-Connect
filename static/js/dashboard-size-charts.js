@@ -10,6 +10,7 @@ const SizeCharts = (() => {
   let _selectedProductIds = new Set();
   let _filterText = '';
   let _fabricType = 'non-stretch';
+  let _fabricComposition = '';
   let _allowances = { chest: 1, waist: 1, hip: 1.5 };
 
   const UNITS = ['', 'ซม.', 'นิ้ว', 'กก.', 'ม.', 'มม.'];
@@ -79,10 +80,12 @@ const SizeCharts = (() => {
 
   function _syncAllowanceInputs() {
     const ft = document.getElementById('sc-fabric-type');
+    const fc = document.getElementById('sc-fabric-composition');
     const ac = document.getElementById('sc-allowance-chest');
     const aw = document.getElementById('sc-allowance-waist');
     const ah = document.getElementById('sc-allowance-hip');
     if (ft) ft.value = _fabricType;
+    if (fc) fc.value = _fabricComposition;
     if (ac) ac.value = _allowances.chest;
     if (aw) aw.value = _allowances.waist;
     if (ah) ah.value = _allowances.hip;
@@ -184,13 +187,17 @@ const SizeCharts = (() => {
         const fabricTag = g.fabric_type === 'stretch'
           ? `<span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">ผ้ายืด</span>`
           : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">ผ้าไม่ยืด</span>`;
+        const compositionTag = g.fabric_composition
+          ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500;">${g.fabric_composition}</span>`
+          : '';
         const allowText = `อก +${allowances.chest}" | เอว +${allowances.waist}" | สะโพก +${allowances.hip}"`;
         return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
             <div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
                 <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${g.name}</h3>
                 ${fabricTag}
+                ${compositionTag}
               </div>
               ${g.description ? `<p style="margin:0 0 4px;font-size:13px;color:#6b7280;">${g.description}</p>` : ''}
               <p style="margin:0;font-size:12px;color:#9ca3af;">เผื่อ: ${allowText}</p>
@@ -219,6 +226,7 @@ const SizeCharts = (() => {
     document.getElementById('sc-name').value = '';
     document.getElementById('sc-description').value = '';
     _fabricType = 'non-stretch';
+    _fabricComposition = '';
     _allowances = { chest: 1, waist: 1, hip: 1.5 };
     _syncAllowanceInputs();
     _columns = [
@@ -253,6 +261,7 @@ const SizeCharts = (() => {
       document.getElementById('sc-name').value = g.name;
       document.getElementById('sc-description').value = g.description || '';
       _fabricType = g.fabric_type || 'non-stretch';
+      _fabricComposition = g.fabric_composition || '';
       _allowances = g.allowances || { chest: 1, waist: 1, hip: 1.5 };
       _syncAllowanceInputs();
       const rawCols = Array.isArray(g.columns) ? g.columns : JSON.parse(g.columns || '[]');
@@ -349,10 +358,13 @@ const SizeCharts = (() => {
     if (acEl) { const v = parseFloat(acEl.value); _allowances.chest = isNaN(v) ? 1 : v; }
     if (awEl) { const v = parseFloat(awEl.value); _allowances.waist = isNaN(v) ? 1 : v; }
     if (ahEl) { const v = parseFloat(ahEl.value); _allowances.hip   = isNaN(v) ? 1.5 : v; }
+    const fcEl = document.getElementById('sc-fabric-composition');
+    _fabricComposition = fcEl ? fcEl.value.trim() : '';
     const payload = {
       name,
       description: document.getElementById('sc-description').value.trim(),
       fabric_type: _fabricType,
+      fabric_composition: _fabricComposition,
       allowances: _allowances,
       columns: _columns.map(_toColObj),
       rows: _rows,

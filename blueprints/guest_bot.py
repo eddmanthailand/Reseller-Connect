@@ -490,7 +490,7 @@ def public_chat_message():
                     _sc = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                     _sc.execute('''
                         SELECT DISTINCT scg.id, scg.name, scg.columns, scg.rows,
-                               scg.fabric_type, scg.allowances,
+                               scg.fabric_type, scg.fabric_composition, scg.allowances,
                                p.name as product_name
                         FROM size_chart_groups scg
                         JOIN products p ON p.size_chart_group_id = scg.id
@@ -528,7 +528,9 @@ def public_chat_message():
                         _alw_waist = _alw.get('waist', 1)
                         _alw_hip = _alw.get('hip', 1.5)
                         _fabric_label = 'ผ้าไม่ยืด (non-stretch)' if _fabric_type == 'non-stretch' else 'ผ้ายืด (stretch)'
-                        _alw_line = f"ประเภทผ้า: {_fabric_label} | ค่าเผื่อ: อก +{_alw_chest}\" | เอว +{_alw_waist}\" | สะโพก +{_alw_hip}\""
+                        _fabric_comp = _cr.get('fabric_composition') or ''
+                        _comp_part = f" | ชนิดผ้า: {_fabric_comp}" if _fabric_comp else ''
+                        _alw_line = f"ประเภทผ้า: {_fabric_label}{_comp_part} | ค่าเผื่อ: อก +{_alw_chest}\" | เอว +{_alw_waist}\" | สะโพก +{_alw_hip}\""
                         _guest_size_chart_section += f"\n[ตารางขนาด: {_cr['name']}]\n{_alw_line}\n" + '\n'.join(_chart_lines) + '\n'
             except Exception as _sc_err:
                 print(f'[GuestBot] size chart text error: {_sc_err}')
