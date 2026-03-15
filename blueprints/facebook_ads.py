@@ -2207,3 +2207,281 @@ def meta_campaign_control():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+# ==================== CAMPAIGN BRIEF (KPI TARGETS) ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-brief/<campaign_id>', methods=['GET'])
+@login_required
+@admin_required
+def get_campaign_brief(campaign_id):
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT * FROM campaign_briefs WHERE campaign_id = %s', (campaign_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'found': False, 'brief': None}), 200
+        brief = dict(row)
+        brief['found'] = True
+        for f in ('target_cpl', 'target_ctr', 'max_daily_budget'):
+            if brief.get(f) is not None:
+                brief[f] = float(brief[f])
+        return jsonify(brief), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-brief/<campaign_id>', methods=['POST'])
+@login_required
+@admin_required
+def save_campaign_brief(campaign_id):
+    conn = cursor = None
+    try:
+        data = request.get_json(silent=True) or {}
+        campaign_name = data.get('campaign_name', '')
+        goal_type = data.get('goal_type', 'lead')
+        target_cpl = data.get('target_cpl') or None
+        target_ctr = data.get('target_ctr') or None
+        target_reach = data.get('target_reach') or None
+        max_daily_budget = data.get('max_daily_budget') or None
+        audience_note = (data.get('audience_note') or '').strip() or None
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            INSERT INTO campaign_briefs
+                (campaign_id, campaign_name, goal_type, target_cpl, target_ctr,
+                 target_reach, max_daily_budget, audience_note, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (campaign_id) DO UPDATE SET
+                campaign_name = EXCLUDED.campaign_name,
+                goal_type = EXCLUDED.goal_type,
+                target_cpl = EXCLUDED.target_cpl,
+                target_ctr = EXCLUDED.target_ctr,
+                target_reach = EXCLUDED.target_reach,
+                max_daily_budget = EXCLUDED.max_daily_budget,
+                audience_note = EXCLUDED.audience_note,
+                updated_at = NOW()
+        ''', (campaign_id, campaign_name, goal_type, target_cpl, target_ctr,
+              target_reach, max_daily_budget, audience_note))
+        conn.commit()
+        return jsonify({'success': True, 'campaign_id': campaign_id}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ==================== AI SMART CAMPAIGN ANALYSIS ====================
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-smart-analysis', methods=['POST'])
+@login_required
+@admin_required
+def campaign_smart_analysis():
+    """AI analysis comparing live metrics vs. campaign brief → structured action_items JSON"""
+    import urllib.request, urllib.error
+    raw = ''
+    conn = cursor = None
+    try:
+        from google import genai as _g
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        if not gemini_key:
+            return jsonify({'error': 'ไม่มี Gemini API Key'}), 503
+
+        data = request.get_json(silent=True) or {}
+        campaign_id = (data.get('campaign_id') or '').strip()
+        if not campaign_id:
+            return jsonify({'error': 'Missing campaign_id'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # 1) Load brief from DB
+        cursor.execute('SELECT * FROM campaign_briefs WHERE campaign_id = %s', (campaign_id,))
+        brief_row = cursor.fetchone()
+        brief = dict(brief_row) if brief_row else {}
+
+        # 2) Fetch credentials
+        token, account_id = _get_meta_credentials(cursor)
+        if not token:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
+        if not account_id.startswith('act_'):
+            account_id = f'act_{account_id}'
+
+        def _api(url):
+            req = urllib.request.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode())
+
+        # 3) Campaign base info
+        camp_url = (f'https://graph.facebook.com/v19.0/{campaign_id}'
+                    f'?fields=name,status,effective_status,objective,daily_budget,lifetime_budget'
+                    f'&access_token={token}')
+        camp_info = _api(camp_url)
+
+        # 4) Campaign insights (all-time)
+        ins_fields = 'impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
+        ins_url = (f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
+                   f'?fields={ins_fields}&date_preset=maximum&access_token={token}')
+        ins_data = _api(ins_url).get('data', [{}])
+        ins = ins_data[0] if ins_data else {}
+
+        # 5) Age/gender demographics
+        age_url = (f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
+                   f'?fields=impressions,clicks,spend,ctr,reach&breakdowns=age,gender'
+                   f'&date_preset=maximum&access_token={token}')
+        age_rows = _api(age_url).get('data', [])
+
+        def _act(row, key):
+            for a in (row.get('actions') or []):
+                if a['action_type'] == key:
+                    return float(a['value'])
+            return 0.0
+
+        spend = float(ins.get('spend', 0))
+        reach = int(ins.get('reach', 0))
+        impressions = int(ins.get('impressions', 0))
+        clicks = int(ins.get('clicks', 0))
+        ctr = float(ins.get('ctr', 0))
+        cpc = float(ins.get('cpc', 0))
+        cpm = float(ins.get('cpm', 0))
+        frequency = float(ins.get('frequency', 0))
+        leads = int(_act(ins, 'lead'))
+        landing_views = int(_act(ins, 'landing_page_view'))
+        cpl = round(spend / leads, 2) if leads > 0 else None
+
+        daily_budget_thb = round(int(camp_info.get('daily_budget') or 0) / 100, 2)
+        objective = camp_info.get('objective', 'ไม่ทราบ')
+        status = camp_info.get('status', '')
+        camp_name = camp_info.get('name', campaign_id)
+
+        # Top demographics by spend
+        top_demo = sorted(
+            [r for r in age_rows if int(r.get('impressions', 0)) >= 10],
+            key=lambda r: float(r.get('spend', 0)), reverse=True
+        )[:5]
+        demo_lines = []
+        for r in top_demo:
+            g = '👩 หญิง' if r['gender'] == 'female' else ('👨 ชาย' if r['gender'] == 'male' else r['gender'])
+            demo_lines.append(
+                f"  {r['age']} {g}: ใช้จ่าย ฿{float(r.get('spend',0)):.0f}, CTR {float(r.get('ctr',0)):.2f}%, Reach {r.get('reach',0)}"
+            )
+        demo_text = '\n'.join(demo_lines) if demo_lines else '  ไม่มีข้อมูล'
+
+        # 6) Brief section
+        goal_labels = {
+            'lead': 'เพิ่ม Leads / สมัครสมาชิก',
+            'registration': 'สมัครสมาชิก (Registration)',
+            'awareness': 'Brand Awareness (Reach/Impression)',
+            'purchase': 'ยอดขาย / สั่งซื้อ',
+        }
+        goal_label = goal_labels.get(brief.get('goal_type', 'lead'), 'Leads')
+        ads_manager_url = f'https://www.facebook.com/adsmanager/manage/campaigns?act={account_id.replace("act_","")}'
+
+        if brief:
+            brief_section = f"""เป้าหมายที่ตั้งไว้:
+- เป้าหมายหลัก: {goal_label}
+- CPL เป้า: {"฿" + str(brief.get("target_cpl")) if brief.get("target_cpl") else "ไม่ได้กำหนด"}
+- CTR เป้า: {str(brief.get("target_ctr")) + "%" if brief.get("target_ctr") else "ไม่ได้กำหนด"}
+- Reach เป้า: {brief.get("target_reach") or "ไม่ได้กำหนด"}
+- งบสูงสุดต่อวัน: {"฿" + str(brief.get("max_daily_budget")) if brief.get("max_daily_budget") else "ไม่ได้กำหนด"}
+- หมายเหตุ audience: {brief.get("audience_note") or "ไม่มี"}"""
+        else:
+            brief_section = "ยังไม่ได้กำหนดเป้าหมาย — วิเคราะห์เทียบ benchmark ทั่วไป Facebook Ads ไทย"
+
+        prompt = f"""คุณคือ AI ผู้เชี่ยวชาญ Facebook Ads สำหรับร้านขายชุดพยาบาลออนไลน์ EKG Shops (Reseller B2B)
+วิเคราะห์แคมเปญนี้และระบุปัญหา พร้อม action items ที่ชัดเจนและปฏิบัติได้ทันที
+
+=== ข้อมูลแคมเปญ ===
+ชื่อ: {camp_name}
+สถานะ: {status}
+Objective: {objective}
+งบปัจจุบัน: ฿{daily_budget_thb}/วัน
+
+=== ผลลัพธ์จริง (ตั้งแต่เริ่มต้น) ===
+ยอดใช้จ่าย: ฿{spend:.2f}
+Reach: {reach:,} คน | Impressions: {impressions:,} | Frequency: {frequency:.1f}
+Clicks: {clicks:,} | CTR: {ctr:.2f}% | CPC: ฿{cpc:.2f} | CPM: ฿{cpm:.2f}
+Landing Page Views: {landing_views:,}
+Leads: {leads} | CPL: {"฿" + str(cpl) if cpl else "ไม่มี Lead เลย"}
+
+=== Demographics (top 5 จาก spend) ===
+{demo_text}
+
+=== {brief_section} ===
+
+=== Actions ที่ระบบทำได้ทันที ===
+- toggle: หยุด/เริ่มแคมเปญ payload: {{"action":"toggle","new_status":"PAUSED"}} หรือ "ACTIVE"
+- update_budget: แก้งบรายวัน payload: {{"action":"update_budget","daily_budget_thb":ตัวเลข}}
+- duplicate: copy แคมเปญ payload: {{"action":"duplicate"}}
+
+=== Actions ที่ต้องทำใน Ads Manager ===
+URL: {ads_manager_url}
+(เปลี่ยน Objective, แก้ Age/Gender targeting, สร้าง Ad Set ใหม่)
+
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความนอก JSON:
+[
+  {{
+    "severity": "high|medium|low",
+    "issue": "สรุปปัญหาสั้นๆ ภาษาไทย ≤60 ตัวอักษร",
+    "detail": "อธิบายรายละเอียดและเหตุผล ภาษาไทย ≤200 ตัวอักษร",
+    "actions": [
+      {{"label": "ข้อความปุ่ม ภาษาไทย", "type": "api", "payload": {{"action": "toggle", "new_status": "PAUSED"}}}},
+      {{"label": "ไปแก้ใน Ads Manager", "type": "url", "url": "{ads_manager_url}"}}
+    ]
+  }}
+]
+กฎ: สร้าง 2-5 items, severity high=ปัญหาด่วน medium=ควรแก้ low=ข้อแนะนำ
+ถ้าแคมเปญดีให้ชมและแนะนำการขยาย"""
+
+        # 7) Call Gemini
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt
+        )
+        raw = response.text.strip()
+
+        # Strip markdown code fences
+        if raw.startswith('```'):
+            lines = raw.split('\n')
+            raw = '\n'.join(lines[1:])
+            if raw.endswith('```'):
+                raw = raw[:-3].strip()
+
+        action_items = json.loads(raw)
+        if not isinstance(action_items, list):
+            raise ValueError('Gemini did not return a JSON array')
+
+        return jsonify({
+            'success': True,
+            'campaign_id': campaign_id,
+            'campaign_name': camp_name,
+            'action_items': action_items,
+            'metrics_snapshot': {
+                'spend': spend, 'reach': reach, 'leads': leads,
+                'cpl': cpl, 'ctr': ctr, 'status': status, 'objective': objective,
+            }
+        }), 200
+
+    except json.JSONDecodeError as je:
+        return jsonify({'error': f'AI ตอบกลับรูปแบบไม่ถูกต้อง: {str(je)}', 'raw': raw}), 500
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode()
+        try:
+            msg = json.loads(err_body).get('error', {}).get('message', err_body)
+        except Exception:
+            msg = err_body
+        return jsonify({'error': f'Meta API: {msg}'}), 400
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()

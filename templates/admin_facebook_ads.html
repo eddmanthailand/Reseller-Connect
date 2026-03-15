@@ -141,6 +141,39 @@
         .camp-budget-editor { display:none; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
         .camp-budget-editor.show { display:flex; }
         .camp-budget-input { padding:7px 10px; border:1px solid #007aff; border-radius:8px; font-size:13px; width:120px; }
+
+        /* ─── Campaign Brief & Action Items ─── */
+        .camp-brief-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; background:#f0f4ff; border-radius:8px; margin-bottom:10px; font-size:12px; }
+        .camp-brief-chip { background:#fff; border:0.5px solid #c7c7cc; border-radius:6px; padding:3px 8px; color:#1d1d1f; font-size:11px; }
+        .camp-brief-chip.warn { background:#fff3e0; border-color:#ff9500; color:#c75a00; }
+        .camp-brief-chip.ok { background:#e8fbe8; border-color:#34c759; color:#1a7f37; }
+        .camp-brief-form { display:none; background:#f9f9f9; border:0.5px solid #e5e5ea; border-radius:10px; padding:14px; margin-top:10px; }
+        .camp-brief-form.show { display:block; }
+        .camp-brief-form label { font-size:11px; font-weight:600; color:#6e6e73; text-transform:uppercase; letter-spacing:0.3px; display:block; margin-bottom:4px; margin-top:10px; }
+        .camp-brief-form label:first-child { margin-top:0; }
+        .camp-brief-form input, .camp-brief-form select, .camp-brief-form textarea { width:100%; padding:7px 10px; border:0.5px solid #c7c7cc; border-radius:8px; font-size:13px; font-family:inherit; background:#fff; }
+        .camp-brief-form textarea { resize:vertical; min-height:56px; }
+        .camp-brief-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+        @media(max-width:600px) { .camp-brief-grid { grid-template-columns:1fr 1fr; } }
+        .camp-action-items { margin-top:12px; display:none; }
+        .camp-action-items.show { display:block; }
+        .camp-action-title { font-size:11px; font-weight:600; color:#6e6e73; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+        .camp-action-card { border-radius:10px; padding:12px 14px; margin-bottom:8px; border-left:3px solid; }
+        .camp-action-card:last-child { margin-bottom:0; }
+        .camp-action-card.high { background:#fff5f5; border-color:#ff3b30; }
+        .camp-action-card.medium { background:#fff9e6; border-color:#ff9500; }
+        .camp-action-card.low { background:#f0fbf0; border-color:#34c759; }
+        .camp-action-issue { font-size:13px; font-weight:600; color:#1d1d1f; margin-bottom:3px; }
+        .camp-action-detail { font-size:12px; color:#3d3d3d; margin-bottom:8px; line-height:1.5; }
+        .camp-action-btns { display:flex; gap:6px; flex-wrap:wrap; }
+        .camp-action-btn { padding:5px 12px; border-radius:7px; font-size:11px; font-weight:600; cursor:pointer; border:none; transition:opacity 0.15s; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+        .camp-action-btn-api { background:#007aff; color:#fff; }
+        .camp-action-btn-url { background:#f2f2f7; color:#1d1d1f; border:0.5px solid #c7c7cc; }
+        .camp-action-btn:hover { opacity:0.85; }
+        .camp-severity-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:4px; text-transform:uppercase; }
+        .sev-high { background:#ff3b3022; color:#ff3b30; }
+        .sev-medium { background:#ff950022; color:#c75a00; }
+        .sev-low { background:#34c75922; color:#1a7f37; }
     </style>
 </head>
 <body>
@@ -438,7 +471,7 @@
 
 <script src="/static/js/global-alert.js?v=20260228"></script>
 <script src="/static/js/dashboard-core.js?v=20250306"></script>
-<script src="/static/js/dashboard-facebook.js?v=20260315a"></script>
+<script src="/static/js/dashboard-facebook.js?v=20260315b"></script>
 <script>
     // Auto-load on page ready
     document.addEventListener('DOMContentLoaded', function() {

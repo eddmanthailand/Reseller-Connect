@@ -923,6 +923,9 @@ function renderMetaLiveCampaigns(data) {
 
     campaigns.forEach(c => { html += _buildCampaignCard(c); });
     wrap.innerHTML = html;
+
+    // Load briefs async after DOM is ready
+    campaigns.forEach(c => loadCampaignBrief(c.id, 'camp_' + c.id));
 }
 
 function _buildCampaignCard(c) {
@@ -932,22 +935,17 @@ function _buildCampaignCard(c) {
     const fmt = n => (n || 0).toLocaleString('th-TH');
     const thb = n => '฿' + (n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // Status badge
     const statusBadge = isActive
         ? `<span class="camp-live-status camp-status-active">● เปิดอยู่</span>`
         : `<span class="camp-live-status camp-status-paused">⏸ หยุดชั่วคราว</span>`;
 
-    // CPL display
     const cplVal = c.cpl != null
         ? `<span class="${c.cpl > 300 ? 'camp-metric-cpl-warn' : 'camp-metric-cpl-ok'}">฿${c.cpl.toFixed(2)}</span>`
         : `<span style="color:#c7c7cc;">—</span>`;
 
-    // Budget display
-    const budgetLine = c.is_lifetime
-        ? `ตลอดอายุแคมเปญ`
+    const budgetLine = c.is_lifetime ? `ตลอดอายุแคมเปญ`
         : c.daily_budget_thb > 0 ? `฿${c.daily_budget_thb.toLocaleString('th-TH', {minimumFractionDigits:2})} / วัน` : `—`;
 
-    // Metrics grid
     const metrics = `
         <div class="camp-metrics">
             <div class="camp-metric">
@@ -958,12 +956,12 @@ function _buildCampaignCard(c) {
             <div class="camp-metric">
                 <div class="camp-metric-label">Reach / Impression</div>
                 <div class="camp-metric-value">${fmt(c.reach)}</div>
-                <div class="camp-metric-sub">${fmt(c.impressions)} impressions (Freq ${c.frequency ? c.frequency.toFixed(1) : '—'})</div>
+                <div class="camp-metric-sub">${fmt(c.impressions)} impr · Freq ${c.frequency ? c.frequency.toFixed(1) : '—'}</div>
             </div>
             <div class="camp-metric">
                 <div class="camp-metric-label">CTR / CPC</div>
                 <div class="camp-metric-value">${c.ctr ? c.ctr.toFixed(2) + '%' : '—'}</div>
-                <div class="camp-metric-sub">CPC ${c.cpc ? '฿'+c.cpc.toFixed(2) : '—'} | CPM ${c.cpm ? '฿'+c.cpm.toFixed(2) : '—'}</div>
+                <div class="camp-metric-sub">CPC ${c.cpc ? '฿'+c.cpc.toFixed(2) : '—'} · CPM ${c.cpm ? '฿'+c.cpm.toFixed(2) : '—'}</div>
             </div>
             <div class="camp-metric">
                 <div class="camp-metric-label">Leads / CPL</div>
@@ -972,20 +970,18 @@ function _buildCampaignCard(c) {
             </div>
         </div>`;
 
-    // Funnel
     let funnelHtml = '';
     if (c.funnel && c.funnel.length > 0 && c.reach > 0) {
-        const funnelColors = ['#007aff','#34c759','#ff9500','#af52de','#ff3b30'];
+        const fColors = ['#007aff','#34c759','#ff9500','#af52de','#ff3b30'];
         const bars = c.funnel.map((f, i) => `
             <div class="camp-funnel-row">
                 <span class="camp-funnel-label">${f.label}</span>
-                <div class="camp-funnel-bar-wrap"><div class="camp-funnel-bar" style="width:${Math.max(f.pct,0.5)}%;background:${funnelColors[i]||'#007aff'};"></div></div>
+                <div class="camp-funnel-bar-wrap"><div class="camp-funnel-bar" style="width:${Math.max(f.pct,0.5)}%;background:${fColors[i]||'#007aff'};"></div></div>
                 <span class="camp-funnel-val">${fmt(f.value)} <small style="color:#6e6e73;">(${f.pct}%)</small></span>
             </div>`).join('');
         funnelHtml = `<div class="camp-funnel"><div class="camp-funnel-title">Conversion Funnel</div>${bars}</div>`;
     }
 
-    // Demographics
     let demoHtml = '';
     if (c.top_demographics && c.top_demographics.length > 0) {
         const chips = c.top_demographics.map(d => {
@@ -995,7 +991,6 @@ function _buildCampaignCard(c) {
         demoHtml = `<div class="camp-demo"><div class="camp-demo-title">Top Demographics (CTR)</div><div class="camp-demo-row">${chips}</div></div>`;
     }
 
-    // Budget editor (inline, hidden by default)
     const budgetEditor = c.is_lifetime ? '' : `
         <div class="camp-budget-editor" id="${safeId}_budget_editor">
             <input type="number" class="camp-budget-input" id="${safeId}_budget_input" value="${c.daily_budget_thb || ''}" min="1" step="10" placeholder="งบ/วัน (฿)">
@@ -1003,18 +998,73 @@ function _buildCampaignCard(c) {
             <button class="camp-btn camp-btn-dup" onclick="hideBudgetEditor('${safeId}')">ยกเลิก</button>
         </div>`;
 
-    // Control buttons
     const toggleLabel = isActive ? '⏸ หยุดแคมเปญ' : '▶ เริ่มแคมเปญ';
     const toggleClass = isActive ? 'camp-btn-toggle-off' : 'camp-btn-toggle-on';
     const nextStatus = isActive ? 'PAUSED' : 'ACTIVE';
+
     const controls = `
         <div class="camp-controls">
             <button class="camp-btn ${toggleClass}" onclick="toggleCampaignStatus('${c.id}','${nextStatus}','${nameEsc}',this)">${toggleLabel}</button>
-            ${!c.is_lifetime ? `<button class="camp-btn camp-btn-budget" onclick="showBudgetEditor('${safeId}')">✏️ แก้ไขงบ</button>` : ''}
+            ${!c.is_lifetime ? `<button class="camp-btn camp-btn-budget" onclick="showBudgetEditor('${safeId}')">✏️ งบ</button>` : ''}
             <button class="camp-btn camp-btn-dup" onclick="duplicateCampaign('${c.id}','${nameEsc}',this)">📋 Duplicate</button>
+            <button class="camp-btn" style="background:#af52de;color:#fff;" id="${safeId}_ai_btn"
+                onclick="runSmartAnalysis('${c.id}','${safeId}','${nameEsc}',this)">
+                🤖 วิเคราะห์ด้วย AI
+            </button>
+            <button class="camp-btn camp-btn-dup" onclick="showBriefForm('${safeId}')">🎯 ตั้งเป้าหมาย</button>
             <span style="margin-left:auto;font-size:11px;color:#8e8e93;">ID: ${c.id}</span>
         </div>
         ${budgetEditor}`;
+
+    // Brief form (hidden — populated after load)
+    const briefForm = `
+        <div class="camp-brief-form" id="${safeId}_brief_form">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:13px;font-weight:600;color:#1d1d1f;">🎯 กำหนดเป้าหมายแคมเปญ</span>
+                <button onclick="hideBriefForm('${safeId}')" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6e6e73;line-height:1;">×</button>
+            </div>
+            <label>เป้าหมายหลัก</label>
+            <select id="${safeId}_goal">
+                <option value="lead">Lead / สมัครสมาชิก</option>
+                <option value="registration">Registration เท่านั้น</option>
+                <option value="awareness">Brand Awareness (Reach)</option>
+                <option value="purchase">ยอดขาย / สั่งซื้อ</option>
+            </select>
+            <div class="camp-brief-grid" style="margin-top:10px;">
+                <div>
+                    <label>CPL เป้า (฿)</label>
+                    <input type="number" id="${safeId}_tcpl" placeholder="เช่น 200" min="0" step="10">
+                </div>
+                <div>
+                    <label>CTR เป้า (%)</label>
+                    <input type="number" id="${safeId}_tctr" placeholder="เช่น 2.5" min="0" step="0.1">
+                </div>
+                <div>
+                    <label>งบ/วันสูงสุด (฿)</label>
+                    <input type="number" id="${safeId}_tbudget" placeholder="เช่น 150" min="0" step="10">
+                </div>
+            </div>
+            <label style="margin-top:10px;">กลุ่มเป้าหมายที่ตั้งใจ</label>
+            <textarea id="${safeId}_audience" placeholder="เช่น หญิง 25-44 ปี พยาบาลและนักศึกษาพยาบาลทั่วไทย"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="camp-btn camp-btn-budget" style="flex:1;"
+                    onclick="saveCampaignBrief('${c.id}','${safeId}','${nameEsc}')">บันทึกเป้าหมาย</button>
+                <button class="camp-btn camp-btn-dup" onclick="hideBriefForm('${safeId}')">ยกเลิก</button>
+            </div>
+        </div>`;
+
+    // Brief summary bar (hidden — populated by loadCampaignBrief)
+    const briefBar = `<div id="${safeId}_brief_bar" style="display:none;"></div>`;
+
+    // Action items section (hidden — populated by runSmartAnalysis)
+    const actionItems = `
+        <div class="camp-action-items" id="${safeId}_actions">
+            <div class="camp-action-title">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="12" r="10"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                คำแนะนำจาก AI
+            </div>
+            <div id="${safeId}_action_cards"></div>
+        </div>`;
 
     return `
         <div class="camp-live-card" id="${safeId}">
@@ -1022,11 +1072,180 @@ function _buildCampaignCard(c) {
                 <div class="camp-live-name">${c.name || '(ไม่มีชื่อ)'}</div>
                 ${statusBadge}
             </div>
+            ${briefBar}
             ${metrics}
             ${funnelHtml}
             ${demoHtml}
             ${controls}
+            ${briefForm}
+            ${actionItems}
         </div>`;
+}
+
+// ─── Campaign Brief functions ───────────────────────────────────
+
+async function loadCampaignBrief(campId, safeId) {
+    try {
+        const r = await fetch(`/api/facebook-ads/campaign-brief/${campId}`, { credentials: 'include' });
+        const d = await r.json();
+        if (!d.found) return;
+        _renderBriefBar(safeId, d);
+        _populateBriefForm(safeId, d);
+    } catch (e) { /* silent */ }
+}
+
+function _renderBriefBar(safeId, b) {
+    const bar = document.getElementById(safeId + '_brief_bar');
+    if (!bar) return;
+    const goalMap = { lead: 'Lead/สมัคร', registration: 'Registration', awareness: 'Awareness', purchase: 'ยอดขาย' };
+    let chips = `<span style="font-size:11px;color:#4a4a8a;font-weight:600;">🎯 เป้าหมาย:</span>`;
+    chips += `<span class="camp-brief-chip">${goalMap[b.goal_type] || b.goal_type}</span>`;
+    if (b.target_cpl) chips += `<span class="camp-brief-chip">CPL ≤ ฿${b.target_cpl}</span>`;
+    if (b.target_ctr) chips += `<span class="camp-brief-chip">CTR ≥ ${b.target_ctr}%</span>`;
+    if (b.max_daily_budget) chips += `<span class="camp-brief-chip">งบ/วัน ≤ ฿${b.max_daily_budget}</span>`;
+    chips += `<button onclick="showBriefForm('${safeId}')" style="margin-left:auto;background:none;border:none;color:#007aff;font-size:11px;cursor:pointer;padding:0;">แก้ไข</button>`;
+    bar.innerHTML = `<div class="camp-brief-bar">${chips}</div>`;
+    bar.style.display = '';
+}
+
+function _populateBriefForm(safeId, b) {
+    const sel = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    sel(`${safeId}_goal`, b.goal_type);
+    sel(`${safeId}_tcpl`, b.target_cpl);
+    sel(`${safeId}_tctr`, b.target_ctr);
+    sel(`${safeId}_tbudget`, b.max_daily_budget);
+    sel(`${safeId}_audience`, b.audience_note);
+}
+
+function showBriefForm(safeId) {
+    document.getElementById(safeId + '_brief_form')?.classList.add('show');
+    document.getElementById(safeId + '_brief_form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function hideBriefForm(safeId) {
+    document.getElementById(safeId + '_brief_form')?.classList.remove('show');
+}
+
+async function saveCampaignBrief(campId, safeId, campName) {
+    const g = id => document.getElementById(safeId + '_' + id)?.value || null;
+    const body = {
+        campaign_name: campName,
+        goal_type: g('goal') || 'lead',
+        target_cpl: parseFloat(g('tcpl')) || null,
+        target_ctr: parseFloat(g('tctr')) || null,
+        max_daily_budget: parseFloat(g('tbudget')) || null,
+        audience_note: g('audience'),
+    };
+    try {
+        const r = await fetch(`/api/facebook-ads/campaign-brief/${campId}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'บันทึกไม่สำเร็จ');
+        hideBriefForm(safeId);
+        await loadCampaignBrief(campId, safeId);
+    } catch (e) { alert('❌ ' + e.message); }
+}
+
+// ─── Smart AI Analysis ──────────────────────────────────────────
+
+async function runSmartAnalysis(campId, safeId, campName, btn) {
+    const actionsDiv = document.getElementById(safeId + '_actions');
+    const cardsDiv = document.getElementById(safeId + '_action_cards');
+    if (!actionsDiv || !cardsDiv) return;
+
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังวิเคราะห์...';
+    actionsDiv.classList.add('show');
+    cardsDiv.innerHTML = '<div style="text-align:center;color:#6e6e73;font-size:13px;padding:16px 0;">AI กำลังประมวลผล...</div>';
+    actionsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    try {
+        const r = await fetch('/api/facebook-ads/campaign-smart-analysis', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaign_id: campId })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'วิเคราะห์ไม่สำเร็จ');
+        renderActionItems(safeId, d.action_items, campId);
+    } catch (e) {
+        cardsDiv.innerHTML = `<div style="color:#ff3b30;font-size:13px;padding:8px;">❌ ${e.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔄 วิเคราะห์ใหม่';
+    }
+}
+
+function renderActionItems(safeId, items, campId) {
+    const cardsDiv = document.getElementById(safeId + '_action_cards');
+    if (!cardsDiv) return;
+    if (!items || items.length === 0) {
+        cardsDiv.innerHTML = '<div style="color:#6e6e73;font-size:13px;padding:8px;">✅ ไม่พบปัญหาที่ต้องแก้ไข</div>';
+        return;
+    }
+    const sevLabel = { high: 'ด่วน', medium: 'ควรแก้', low: 'แนะนำ' };
+    cardsDiv.innerHTML = items.map((item, idx) => {
+        const sev = item.severity || 'medium';
+        const btns = (item.actions || []).map(a => {
+            if (a.type === 'api') {
+                const payload = JSON.stringify(a.payload).replace(/'/g, '&#39;');
+                return `<button class="camp-action-btn camp-action-btn-api"
+                    onclick="executeActionItem('${campId}','${safeId}',${idx},this)"
+                    data-payload='${payload}'>
+                    ⚡ ${a.label}
+                </button>`;
+            } else {
+                return `<a class="camp-action-btn camp-action-btn-url" href="${a.url}" target="_blank">
+                    ↗ ${a.label}
+                </a>`;
+            }
+        }).join('');
+        return `
+            <div class="camp-action-card ${sev}">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span class="camp-severity-badge sev-${sev}">${sevLabel[sev]||sev}</span>
+                    <span class="camp-action-issue">${item.issue || ''}</span>
+                </div>
+                <div class="camp-action-detail">${item.detail || ''}</div>
+                <div class="camp-action-btns">${btns}</div>
+            </div>`;
+    }).join('');
+}
+
+async function executeActionItem(campId, safeId, itemIdx, btn) {
+    const payload = JSON.parse(btn.getAttribute('data-payload') || '{}');
+    if (!payload.action) return;
+    const label = btn.textContent.trim();
+    if (!confirm(`ยืนยัน: ${label}?`)) return;
+
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังดำเนินการ...';
+    try {
+        const r = await fetch('/api/facebook-ads/meta-campaign-control', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, campaign_id: campId })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        btn.innerHTML = '✅ สำเร็จ';
+        btn.style.background = '#34c759';
+        // If it was a toggle or budget update, reload the live campaigns after delay
+        if (payload.action === 'toggle' || payload.action === 'update_budget') {
+            setTimeout(() => loadMetaLiveCampaigns(), 1500);
+        }
+    } catch (e) {
+        alert('❌ ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+    }
 }
 
 async function toggleCampaignStatus(campId, newStatus, name, btn) {
