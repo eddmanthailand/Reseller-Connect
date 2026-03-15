@@ -1012,6 +1012,11 @@ function _buildCampaignCard(c) {
                 🤖 วิเคราะห์ด้วย AI
             </button>
             <button class="camp-btn camp-btn-dup" onclick="showBriefForm('${safeId}')">🎯 ตั้งเป้าหมาย</button>
+            <label style="font-size:11px;color:#6e6e73;display:flex;align-items:center;gap:4px;margin-left:4px;">
+                📅<input type="date" id="${safeId}_since_date"
+                    style="border:0.5px solid #c7c7cc;border-radius:6px;padding:3px 6px;font-size:11px;color:#1d1d1f;background:#fff;"
+                    title="วิเคราะห์ตั้งแต่วันที่ (ปล่อยว่าง = all-time)">
+            </label>
             <span style="margin-left:auto;font-size:11px;color:#8e8e93;">ID: ${c.id}</span>
         </div>
         ${budgetEditor}`;
@@ -1156,6 +1161,8 @@ async function runSmartAnalysis(campId, safeId, campName, btn) {
     const cardsDiv = document.getElementById(safeId + '_action_cards');
     if (!actionsDiv || !cardsDiv) return;
 
+    const sinceDate = document.getElementById(safeId + '_since_date')?.value || '';
+
     const origText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '⏳ กำลังวิเคราะห์...';
@@ -1164,15 +1171,18 @@ async function runSmartAnalysis(campId, safeId, campName, btn) {
     actionsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
+        const body = { campaign_id: campId };
+        if (sinceDate) body.since_date = sinceDate;
+
         const r = await fetch('/api/facebook-ads/campaign-smart-analysis', {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ campaign_id: campId })
+            body: JSON.stringify(body)
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'วิเคราะห์ไม่สำเร็จ');
-        renderActionItems(safeId, d.action_items, campId);
+        renderActionItems(safeId, d.action_items, campId, d.date_label);
     } catch (e) {
         cardsDiv.innerHTML = `<div style="color:#ff3b30;font-size:13px;padding:8px;">❌ ${e.message}</div>`;
     } finally {
@@ -1181,9 +1191,19 @@ async function runSmartAnalysis(campId, safeId, campName, btn) {
     }
 }
 
-function renderActionItems(safeId, items, campId) {
+function renderActionItems(safeId, items, campId, dateLabel) {
     const cardsDiv = document.getElementById(safeId + '_action_cards');
     if (!cardsDiv) return;
+
+    // Show period label
+    const titleEl = document.querySelector(`#${safeId}_actions .camp-action-title`);
+    if (titleEl && dateLabel) {
+        titleEl.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="12" r="10"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            คำแนะนำจาก AI
+            <span style="margin-left:auto;font-size:10px;color:#8e8e93;font-weight:400;font-style:italic;">📅 ${dateLabel}</span>`;
+    }
+
     if (!items || items.length === 0) {
         cardsDiv.innerHTML = '<div style="color:#6e6e73;font-size:13px;padding:8px;">✅ ไม่พบปัญหาที่ต้องแก้ไข</div>';
         return;

@@ -2299,6 +2299,7 @@ def campaign_smart_analysis():
         campaign_id = (data.get('campaign_id') or '').strip()
         if not campaign_id:
             return jsonify({'error': 'Missing campaign_id'}), 400
+        since_date = (data.get('since_date') or '').strip()  # optional YYYY-MM-DD
 
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -2326,17 +2327,26 @@ def campaign_smart_analysis():
                     f'&access_token={token}')
         camp_info = _api(camp_url)
 
-        # 4) Campaign insights (all-time)
+        # 4) Build date range param
+        import re as _re
+        if since_date and _re.match(r'^\d{4}-\d{2}-\d{2}$', since_date):
+            date_param = f'time_range[since]={since_date}&time_range[until]=today'
+            date_label = f'ตั้งแต่ {since_date} ถึงวันนี้'
+        else:
+            date_param = 'date_preset=maximum'
+            date_label = 'ตั้งแต่เริ่มต้นแคมเปญ (all-time)'
+
+        # 5) Campaign insights
         ins_fields = 'impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
         ins_url = (f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
-                   f'?fields={ins_fields}&date_preset=maximum&access_token={token}')
+                   f'?fields={ins_fields}&{date_param}&access_token={token}')
         ins_data = _api(ins_url).get('data', [{}])
         ins = ins_data[0] if ins_data else {}
 
-        # 5) Age/gender demographics
+        # 6) Age/gender demographics (same period)
         age_url = (f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
                    f'?fields=impressions,clicks,spend,ctr,reach&breakdowns=age,gender'
-                   f'&date_preset=maximum&access_token={token}')
+                   f'&{date_param}&access_token={token}')
         age_rows = _api(age_url).get('data', [])
 
         def _act(row, key):
@@ -2396,8 +2406,10 @@ def campaign_smart_analysis():
         else:
             brief_section = "ยังไม่ได้กำหนดเป้าหมาย — วิเคราะห์เทียบ benchmark ทั่วไป Facebook Ads ไทย"
 
+        period_note = '' if date_param == 'date_preset=maximum' else f'\n⚠️ หมายเหตุ: ข้อมูลนี้เป็นเฉพาะช่วง {date_label} (หลังแก้ไข targeting) ไม่ใช่ all-time ให้วิเคราะห์เฉพาะช่วงนี้'
+
         prompt = f"""คุณคือ AI ผู้เชี่ยวชาญ Facebook Ads สำหรับร้านขายชุดพยาบาลออนไลน์ EKG Shops (Reseller B2B)
-วิเคราะห์แคมเปญนี้และระบุปัญหา พร้อม action items ที่ชัดเจนและปฏิบัติได้ทันที
+วิเคราะห์แคมเปญนี้และระบุปัญหา พร้อม action items ที่ชัดเจนและปฏิบัติได้ทันที{period_note}
 
 === ข้อมูลแคมเปญ ===
 ชื่อ: {camp_name}
@@ -2405,7 +2417,7 @@ def campaign_smart_analysis():
 Objective: {objective}
 งบปัจจุบัน: ฿{daily_budget_thb}/วัน
 
-=== ผลลัพธ์จริง (ตั้งแต่เริ่มต้น) ===
+=== ผลลัพธ์จริง ({date_label}) ===
 ยอดใช้จ่าย: ฿{spend:.2f}
 Reach: {reach:,} คน | Impressions: {impressions:,} | Frequency: {frequency:.1f}
 Clicks: {clicks:,} | CTR: {ctr:.2f}% | CPC: ฿{cpc:.2f} | CPM: ฿{cpm:.2f}
@@ -2465,6 +2477,8 @@ URL: {ads_manager_url}
             'campaign_id': campaign_id,
             'campaign_name': camp_name,
             'action_items': action_items,
+            'date_label': date_label,
+            'since_date': since_date or None,
             'metrics_snapshot': {
                 'spend': spend, 'reach': reach, 'leads': leads,
                 'cpl': cpl, 'ctr': ctr, 'status': status, 'objective': objective,
