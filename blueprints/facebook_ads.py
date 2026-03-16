@@ -2888,12 +2888,111 @@ def advisor_chat():
     if not gemini_key:
         return jsonify({'error': 'ไม่มี GEMINI_API_KEY'}), 503
 
+    # ── Helper: safe JSON object extractor (handles greedy/nested braces) ──
+    def _extract_json_obj(text):
+        """Find and return the first complete JSON object in text."""
+        start = text.find('{')
+        if start == -1:
+            return None
+        depth = 0
+        in_str = False
+        escaped = False
+        for i, ch in enumerate(text[start:], start):
+            if escaped:
+                escaped = False
+                continue
+            if ch == '\\' and in_str:
+                escaped = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return None
+
+    # ── Pre-fetch live Meta API metrics (avoids wasting a tool-call round) ──
+    live_meta_ctx = ''
+    if campaign_id and not is_auto:
+        try:
+            import urllib.request as _pf_req
+            _c_pf = _cur_pf = None
+            try:
+                _c_pf = get_db()
+                _cur_pf = _c_pf.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                _tok_pf, _ = _get_meta_credentials(_cur_pf)
+            finally:
+                if _cur_pf: _cur_pf.close()
+                if _c_pf: _c_pf.close()
+
+            if _tok_pf:
+                def _pf_api(url):
+                    req = _pf_req.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+                    with _pf_req.urlopen(req, timeout=12) as rr:
+                        return json.loads(rr.read().decode())
+
+                _ins_url = (
+                    f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
+                    f'?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
+                    f'&date_preset=last_30d&access_token={_tok_pf}'
+                )
+                _camp_url = (
+                    f'https://graph.facebook.com/v19.0/{campaign_id}'
+                    f'?fields=name,status,effective_status,objective,daily_budget,lifetime_budget'
+                    f'&access_token={_tok_pf}'
+                )
+                _ins = _pf_api(_ins_url).get('data', [{}])
+                _ins = _ins[0] if _ins else {}
+                _ci  = _pf_api(_camp_url)
+                _ci.pop('access_token', None)
+
+                def _act_v(row, key):
+                    for a in (row.get('actions') or []):
+                        if a['action_type'] == key:
+                            return float(a['value'])
+                    return 0.0
+
+                _sp  = float(_ins.get('spend', 0))
+                _rc  = int(_ins.get('reach', 0))
+                _cl  = int(_ins.get('clicks', 0))
+                _ctr = float(_ins.get('ctr', 0))
+                _cpc = float(_ins.get('cpc', 0))
+                _cpm = float(_ins.get('cpm', 0))
+                _frq = float(_ins.get('frequency', 0))
+                _imp = int(_ins.get('impressions', 0))
+                _lds = int(_act_v(_ins, 'lead'))
+                _lpv = int(_act_v(_ins, 'landing_page_view'))
+                _cpl = round(_sp / _lds, 2) if _lds > 0 else None
+                _bud = round(int(_ci.get('daily_budget') or 0) / 100, 2)
+
+                live_meta_ctx = (
+                    f'\n=== ข้อมูลแคมเปญสดจาก Meta API (30 วันล่าสุด) — ไม่ต้องดึงซ้ำ ===\n'
+                    f'Campaign ID: {campaign_id}\n'
+                    f'ชื่อ: {_ci.get("name", "ไม่ทราบ")}\n'
+                    f'สถานะ: {_ci.get("status","?")} | Objective: {_ci.get("objective","?")}\n'
+                    f'งบปัจจุบัน: ฿{_bud}/วัน\n'
+                    f'ยอดใช้จ่าย: ฿{_sp:.2f} | Reach: {_rc:,} | Impressions: {_imp:,}\n'
+                    f'Clicks: {_cl:,} | CTR: {_ctr:.2f}% | CPC: ฿{_cpc:.2f} | CPM: ฿{_cpm:.2f}\n'
+                    f'Frequency: {_frq:.1f} | Landing Page Views: {_lpv:,}\n'
+                    f'Leads: {_lds} | CPL: {"฿" + str(_cpl) if _cpl else "ยังไม่มี Lead"}\n'
+                )
+        except Exception:
+            live_meta_ctx = ''  # silently fail — bot can still use on-demand tool
+
     goal_map = {
         'lead': 'Lead/สมัครสมาชิก', 'registration': 'Registration',
         'awareness': 'Brand Awareness (Reach)', 'purchase': 'ยอดขาย/สั่งซื้อ',
     }
     camp_name = ctx.get('campaign_name') or campaign_id
     camp_lines = [f"- ชื่อแคมเปญที่กำลังดูอยู่: {camp_name}"]
+    if campaign_id:
+        camp_lines.append(f"- Campaign ID (ใช้ได้เลย ไม่ต้องค้นหา): {campaign_id}")
     if ctx.get('goal_type'):
         camp_lines.append(f"- เป้าหมาย: {goal_map.get(ctx['goal_type'], ctx['goal_type'])}")
     if ctx.get('target_cpl'):
@@ -2919,19 +3018,22 @@ def advisor_chat():
     ) if is_auto else ''
 
     _cid = campaign_id or '<campaign_id>'
+    _has_live = bool(live_meta_ctx)
     on_demand_note = (
-        '\n\n=== เครื่องมือดึงข้อมูลเพิ่มเติม (เลือกใช้ได้ 1 อย่าง ต่อ 1 รอบ) ===\n\n'
+        '\n\n=== เครื่องมือดึงข้อมูลเพิ่มเติม ===\n'
+        + (f'⚠️ ข้อมูล Insights 30 วันถูก pre-load ไว้แล้วข้างต้น — ห้ามดึง insights ซ้ำ\n'
+           f'ห้ามดึง /campaigns หรือค้นหา Campaign ID — Campaign ID คือ {_cid} (รู้แล้ว)\n'
+           f'ใช้เครื่องมือนี้เฉพาะเมื่อต้องการข้อมูล เพิ่มเติม ที่ยังไม่มีในบริบทด้านบน\n\n'
+           if _has_live else '') +
         'วิธีที่ 1 — ดึงข้อมูลจาก DB ภายใน:\n'
         '{"need_query":true,"sql":"SELECT ...","reason":"เหตุผล"}\n'
         '(ห้ามใช้ INSERT/UPDATE/DELETE)\n\n'
         'วิธีที่ 2 — ดึงข้อมูลสดจาก Meta/Facebook Ads API:\n'
         '{"need_meta_api":true,"path":"<path>","reason":"เหตุผล"}\n'
-        'ตัวอย่าง path ที่ใช้บ่อย (ระบบใส่ access_token ให้อัตโนมัติ):\n'
-        f'  /{_cid}/insights?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions&date_preset=last_30d\n'
+        'path ที่มีประโยชน์เพิ่มเติม (access_token ใส่ให้อัตโนมัติ):\n'
         f'  /{_cid}/insights?fields=impressions,clicks,spend,reach&breakdowns=age,gender&date_preset=last_30d\n'
-        f'  /{_cid}/adsets?fields=name,status,daily_budget,targeting,bid_strategy,optimization_goal,reach_estimate\n'
+        f'  /{_cid}/adsets?fields=name,status,daily_budget,targeting,bid_strategy,optimization_goal\n'
         f'  /{_cid}/ads?fields=name,status,adcreatives{{body,title,image_url,call_to_action_type}}\n'
-        f'  /{_cid}?fields=name,status,objective,daily_budget,lifetime_budget,effective_status\n'
         '\nถ้าไม่ต้องการข้อมูลเพิ่ม ตอบตามปกติ ห้าม wrap ด้วย JSON'
     ) if not is_auto else ''
 
@@ -3017,6 +3119,7 @@ def advisor_chat():
         '- Messenger: ไม่แนะนำสำหรับ B2B nurse uniforms\n\n'
 
         '[แคมเปญที่กำลังดูอยู่]\n' + '\n'.join(camp_lines)
+        + live_meta_ctx
         + (('\n' + db_context_text) if db_context_text else '')
         + auto_note + on_demand_note
     )
@@ -3104,11 +3207,14 @@ def advisor_chat():
             return None
 
         if not is_auto:
-            for _round in range(3):
+            for _round in range(4):
                 if not (('need_query' in reply or 'need_meta_api' in reply) and '{' in reply):
                     break
                 try:
-                    _tool_req = json.loads(_re.search(r'\{.*\}', reply, _re.DOTALL).group(0))
+                    _raw_json = _extract_json_obj(reply)
+                    if not _raw_json:
+                        break
+                    _tool_req = json.loads(_raw_json)
                     _ft = _run_tool(_tool_req)
                     if not _ft:
                         break
@@ -3119,6 +3225,10 @@ def advisor_chat():
                     reply = (_r2.text or '').strip()
                 except Exception:
                     break
+
+        # Strip any residual JSON tool-request comments from the final reply
+        reply = _re.sub(r'<!--\s*\{[^}]*(?:\{[^}]*\}[^}]*)?\}\s*-->', '', reply).strip()
+        reply = _re.sub(r'\n{3,}', '\n\n', reply).strip()
 
         _trivial_ok = {'ok', 'ok.', '✓', 'ไม่มีอะไรใหม่', 'ปกติ', 'ปกติครับ', 'ปกติค่ะ'}
         is_trivial = is_auto and reply.lower() in _trivial_ok
