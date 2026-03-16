@@ -2977,6 +2977,7 @@ def advisor_chat():
     is_auto        = bool(data.get('is_auto', False))
     ctx            = data.get('campaign_context') or {}
     db_context_text = (data.get('db_context_text') or '').strip()
+    vdo_duration   = data.get('vdo_duration')    # e.g. 15, 30, 60 (seconds)
 
     gemini_key = os.environ.get('GEMINI_API_KEY', '')
     if not gemini_key:
@@ -3106,6 +3107,41 @@ def advisor_chat():
     if ctx.get('leads') is not None:
         camp_lines.append(f"- Leads: {ctx['leads']}")
 
+    def _build_vdo_note(dur):
+        dur = int(dur) if str(dur).isdigit() else 15
+        # Calculate scene breakdown based on duration
+        if dur <= 15:
+            scenes = '0–3s: Hook / 3–10s: Core Message / 10–15s: CTA'
+        elif dur <= 30:
+            scenes = '0–3s: Hook / 3–7s: Problem / 7–20s: Solution+Value / 20–28s: Proof / 28–30s: CTA'
+        elif dur <= 60:
+            scenes = '0–3s: Hook / 3–8s: Problem / 8–25s: Solution+Value / 25–40s: Social Proof / 40–55s: Offer / 55–60s: CTA'
+        else:
+            scenes = '0–5s: Hook / 5–15s: Problem / 15–40s: Solution+Features / 40–65s: Social Proof / 65–85s: Offer / 85–90s: CTA'
+        return (
+            f'\n\n=== 🎬 VDO SCRIPT MODE (ความยาว {dur} วินาที) ===\n'
+            f'ผู้ใช้ขอให้เขียน Script VDO โฆษณา Facebook ความยาว {dur} วินาที จากภาพที่แนบมา\n\n'
+            f'โครงสร้างแนะนำ: {scenes}\n\n'
+            f'กฎการเขียน VDO Script ระดับ Agency:\n'
+            f'1. แบ่งเป็น scenes พร้อม timestamp [0:00–0:03] ชัดเจน\n'
+            f'2. แต่ละ scene มี 3 องค์ประกอบ:\n'
+            f'   • 🎥 Visual — บรรยายภาพ/action ที่เห็นบนจอ\n'
+            f'   • 🎙️ Voiceover — ข้อความที่พูด (ถ้ามี)\n'
+            f'   • 📝 Caption/Text Overlay — ข้อความที่แสดงบนภาพ\n'
+            f'3. Hook ใน 3 วินาทีแรกต้องทำให้หยุดนิ้วทันที\n'
+            f'4. ใช้ภาพที่แนบมาเป็น reference สำหรับ Visual direction\n'
+            f'5. ปิดท้ายด้วย Production Notes (เช่น Mood, Music Genre, Color Grading, Pacing)\n'
+            f'6. เพิ่ม B-roll suggestions ถ้าจำเป็น\n\n'
+            f'Format ที่ต้องตอบ:\n'
+            f'**[ชื่อ Script + Concept สั้น]**\n'
+            f'**[0:00–0:XX] ชื่อ Scene**\n'
+            f'- 🎥 Visual: ...\n'
+            f'- 🎙️ Voiceover: "..."\n'
+            f'- 📝 Caption: "..."\n'
+            f'...\n'
+            f'**Production Notes:** Mood | Music | Color | Pacing\n'
+        )
+
     auto_note = (
         '\n\nสำหรับการตรวจสอบอัตโนมัติ: ดูภาพและแจ้งเฉพาะสิ่งที่น่ากังวลหรือควรแก้ไขเร่งด่วน'
         '\nถ้าไม่มีอะไรใหม่หรือน่ากังวล ให้ตอบแค่คำว่า "OK" เพียงคำเดียว ห้ามอธิบายเพิ่ม'
@@ -3216,6 +3252,7 @@ def advisor_chat():
         + live_meta_ctx
         + (('\n' + db_context_text) if db_context_text else '')
         + auto_note + on_demand_note
+        + (_build_vdo_note(vdo_duration) if vdo_duration else '')
     )
 
     try:
@@ -3231,12 +3268,26 @@ def advisor_chat():
             _parts = []
             if screenshot_b64:
                 try:
-                    img_bytes = base64.b64decode(screenshot_b64)
-                    _parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
+                    # Detect mime type from data URI prefix if present
+                    _raw_b64 = screenshot_b64
+                    _mime = 'image/jpeg'
+                    if screenshot_b64.startswith('data:'):
+                        _header, _raw_b64 = screenshot_b64.split(',', 1)
+                        if 'image/png' in _header:
+                            _mime = 'image/png'
+                        elif 'image/webp' in _header:
+                            _mime = 'image/webp'
+                        elif 'image/gif' in _header:
+                            _mime = 'image/gif'
+                    img_bytes = base64.b64decode(_raw_b64)
+                    _parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type=_mime))
                 except Exception:
                     pass
+            # Build user text — if vdo_duration is set, inject structured request
             if is_auto and not message:
                 _user_text = extra_user_text or 'ดูภาพหน้าจอนี้ มีอะไรน่าสังเกตหรือควรแจ้งเตือนไหม?'
+            elif vdo_duration and screenshot_b64 and not message:
+                _user_text = f'ดูภาพที่แนบมาและเขียน VDO Script โฆษณา Facebook ความยาว {vdo_duration} วินาที'
             elif extra_user_text:
                 _user_text = extra_user_text
             elif message:

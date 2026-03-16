@@ -357,6 +357,62 @@
         .adv-sug-btn:last-child:hover { background: var(--gm-primary-dark); }
 
         /* ══════════════════════════════════════
+           IMAGE PREVIEW + VDO CONTROLS
+        ══════════════════════════════════════ */
+        .adv-img-preview {
+            flex-shrink: 0; display: none; align-items: flex-start; gap: 10px;
+            padding: 8px 12px 0; background: var(--gm-surface);
+        }
+        .adv-img-preview.show { display: flex; }
+        .adv-img-thumb-wrap { position: relative; flex-shrink: 0; }
+        .adv-img-thumb {
+            width: 64px; height: 64px; object-fit: cover; border-radius: 10px;
+            border: 1.5px solid var(--gm-outline); display: block;
+        }
+        .adv-img-remove {
+            position: absolute; top: -6px; right: -6px;
+            width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--gm-outline);
+            background: var(--gm-surface); color: var(--gm-on-surface-2);
+            font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background .15s;
+        }
+        .adv-img-remove:hover { background: var(--gm-error-bg); color: var(--gm-error); border-color: var(--gm-error); }
+        .adv-vdo-panel {
+            flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+        }
+        .adv-vdo-label { font-size: 11px; font-weight: 600; color: var(--gm-primary); }
+        .adv-vdo-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .adv-vdo-chip {
+            padding: 4px 12px; border-radius: 20px; border: 1.5px solid var(--gm-outline);
+            background: var(--gm-surface); color: var(--gm-on-surface-2);
+            font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: all .15s;
+        }
+        .adv-vdo-chip:hover { border-color: var(--gm-primary); color: var(--gm-primary); }
+        .adv-vdo-chip.active {
+            background: var(--gm-primary); color: #fff; border-color: var(--gm-primary);
+        }
+        .adv-vdo-row { display: flex; align-items: center; gap: 8px; }
+        .adv-vdo-send-btn {
+            flex: 1; padding: 8px 14px; border-radius: 20px; border: none;
+            background: var(--gm-primary); color: #fff; font-family: var(--font);
+            font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
+            display: flex; align-items: center; gap: 6px; justify-content: center;
+        }
+        .adv-vdo-send-btn:hover { background: var(--gm-primary-dark); }
+        .adv-img-only-btn {
+            padding: 8px 14px; border-radius: 20px; border: 1.5px solid var(--gm-outline);
+            background: transparent; color: var(--gm-on-surface-2); font-family: var(--font);
+            font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s;
+            white-space: nowrap;
+        }
+        .adv-img-only-btn:hover { border-color: var(--gm-primary); color: var(--gm-primary); background: var(--gm-primary-container); }
+        .adv-paste-hint {
+            font-size: 11px; color: var(--gm-on-surface-3); text-align: center;
+            padding: 4px 0 2px; background: var(--gm-surface);
+        }
+
+        /* ══════════════════════════════════════
            INPUT BAR
         ══════════════════════════════════════ */
         .adv-input-wrap {
@@ -603,13 +659,45 @@
 </div>
 
 <!-- ═══════════════════════════════════
+     IMAGE PREVIEW + VDO PANEL
+═══════════════════════════════════ -->
+<div class="adv-img-preview" id="advImgPreview">
+    <div class="adv-img-thumb-wrap">
+        <img class="adv-img-thumb" id="advImgThumb" src="" alt="Preview">
+        <button class="adv-img-remove" onclick="clearAttachedImg()" title="ลบภาพ">✕</button>
+    </div>
+    <div class="adv-vdo-panel">
+        <div class="adv-vdo-label">🎬 สร้าง Script VDO — เลือกความยาว:</div>
+        <div class="adv-vdo-chips">
+            <button class="adv-vdo-chip" data-sec="7"  onclick="selectVdoDur(this)">7s</button>
+            <button class="adv-vdo-chip active" data-sec="15" onclick="selectVdoDur(this)">15s</button>
+            <button class="adv-vdo-chip" data-sec="30" onclick="selectVdoDur(this)">30s</button>
+            <button class="adv-vdo-chip" data-sec="60" onclick="selectVdoDur(this)">60s</button>
+            <button class="adv-vdo-chip" data-sec="90" onclick="selectVdoDur(this)">90s</button>
+        </div>
+        <div class="adv-vdo-row">
+            <button class="adv-vdo-send-btn" onclick="sendVdoScript()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                สร้าง Script VDO
+            </button>
+            <button class="adv-img-only-btn" onclick="sendWithImage()">วิเคราะห์ภาพ</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════
      INPUT BAR
 ═══════════════════════════════════ -->
+<input type="file" id="advFileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(event)">
 <div class="adv-input-wrap">
     <div class="adv-input-row">
-        <textarea id="advInput" rows="1" placeholder="พิมพ์คำถาม... (Enter ส่ง)"
-            onkeydown="onInputKey(event)" oninput="autoResize(this)"></textarea>
+        <textarea id="advInput" rows="1" placeholder="พิมพ์คำถาม หรือ Ctrl+V วางภาพ... (Enter ส่ง)"
+            onkeydown="onInputKey(event)" oninput="autoResize(this)"
+            onpaste="handleImgPaste(event)"></textarea>
         <div class="adv-input-actions">
+            <button class="adv-icon-btn" onclick="document.getElementById('advFileInput').click()" title="แนบรูปภาพ">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </button>
             <button class="adv-icon-btn" onclick="sendWithSnap()" title="ถ่ายภาพหน้าจอ">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
             </button>
@@ -960,7 +1048,86 @@ function quickAsk(txt) {
     appendUserMsg(txt); chatHistory.push({ role: 'user', text: txt }); callAI(txt, null, false);
 }
 
+// ══════════════════════════════════
+// IMAGE ATTACH + VDO SCRIPT STATE
+// ══════════════════════════════════
+let _attachedImg = null;   // base64 data URL of attached image
+let _selectedVdoDur = 15;  // default VDO duration in seconds
+
+function handleImgPaste(e) {
+    const items = (e.clipboardData || window.clipboardData || {}).items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = ev => setAttachedImg(ev.target.result);
+            reader.readAsDataURL(file);
+            return;
+        }
+    }
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setAttachedImg(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+}
+
+function setAttachedImg(dataUrl) {
+    _attachedImg = dataUrl;
+    const thumb = document.getElementById('advImgThumb');
+    const panel = document.getElementById('advImgPreview');
+    thumb.src = dataUrl;
+    panel.classList.add('show');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearAttachedImg() {
+    _attachedImg = null;
+    document.getElementById('advImgThumb').src = '';
+    document.getElementById('advImgPreview').classList.remove('show');
+}
+
+function selectVdoDur(btn) {
+    document.querySelectorAll('.adv-vdo-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    _selectedVdoDur = parseInt(btn.dataset.sec);
+}
+
+async function sendVdoScript() {
+    if (isRequesting || !_attachedImg) return;
+    const inp = document.getElementById('advInput');
+    const extra = inp.value.trim();
+    inp.value = ''; autoResize(inp);
+    const msg = extra || `สร้าง VDO Script ${_selectedVdoDur} วินาที`;
+    const imgSnap = _attachedImg;
+    clearAttachedImg();
+    appendUserMsg(`🎬 ${msg} (${_selectedVdoDur}s)`);
+    chatHistory.push({ role: 'user', text: msg });
+    await callAI(msg, imgSnap, false, null, _selectedVdoDur);
+}
+
+async function sendWithImage() {
+    if (isRequesting || !_attachedImg) return;
+    const inp = document.getElementById('advInput');
+    const extra = inp.value.trim();
+    inp.value = ''; autoResize(inp);
+    const msg = extra || 'วิเคราะห์ภาพนี้และให้คำแนะนำ';
+    const imgSnap = _attachedImg;
+    clearAttachedImg();
+    appendUserMsg(msg + ' 🖼️');
+    chatHistory.push({ role: 'user', text: msg });
+    await callAI(msg, imgSnap, false);
+}
+
 async function sendMsg() {
+    // If there's an attached image and user presses send, use sendWithImage
+    if (_attachedImg) { await sendWithImage(); return; }
     const inp = document.getElementById('advInput');
     const txt = inp.value.trim();
     if (!txt || isRequesting) return;
@@ -980,31 +1147,35 @@ async function sendWithSnap() {
     await callAI(txt, shot, false);
 }
 
-async function callAI(msg, screenshot, isAuto, creativeImgUrl = null) {
+async function callAI(msg, screenshot, isAuto, creativeImgUrl = null, vdoDuration = null) {
     isRequesting = true;
     document.getElementById('advSendBtn').disabled = true;
     let thinkEl = null;
     if (!isAuto) {
         thinkEl = document.createElement('div');
         thinkEl.className = 'adv-thinking';
-        thinkEl.innerHTML = `<div class="adv-thinking-dots"><span></span><span></span><span></span></div><span>${screenshot ? 'วิเคราะห์ภาพ' : 'กำลังคิด'}...</span>`;
+        const label = vdoDuration ? `เขียน VDO Script ${vdoDuration}s` : (screenshot ? 'วิเคราะห์ภาพ' : 'กำลังคิด');
+        thinkEl.innerHTML = `<div class="adv-thinking-dots"><span></span><span></span><span></span></div><span>${label}...</span>`;
         document.getElementById('advMessages').appendChild(thinkEl);
         thinkEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
     }
     try {
+        const body = {
+            campaign_id: CAMPAIGN_ID, message: msg,
+            screenshot: screenshot || undefined, history: chatHistory.slice(-12),
+            is_auto: isAuto, campaign_context: campaignCtx, db_context_text: advisorDbContext
+        };
+        if (vdoDuration) body.vdo_duration = vdoDuration;
         const r = await fetch('/api/facebook-ads/advisor-chat', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ campaign_id: CAMPAIGN_ID, message: msg,
-                screenshot: screenshot || undefined, history: chatHistory.slice(-12),
-                is_auto: isAuto, campaign_context: campaignCtx, db_context_text: advisorDbContext })
+            body: JSON.stringify(body)
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
         if (thinkEl) thinkEl.remove();
 
         const rawReply = d.reply || '';
-        // Parse action cards
         const { text: cleanReply, actions } = parseActions(rawReply);
 
         if (isAuto) {
