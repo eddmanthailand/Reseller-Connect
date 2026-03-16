@@ -2,357 +2,535 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="facebook-domain-verification" content="ednx6kokr0rzerxji8jjcywyy65w8l" />
-    <title>สมัครเป็นสมาชิก EKG Shops - รับส่วนลดสูงสุด 50%</title>
-    <meta name="description" content="สมัครเป็นสมาชิก EKG Shops ไม่ต้องสต็อกสินค้า รับกำไร 30-50% มีระบบจัดการออเดอร์ให้ ส่งตรงถึงลูกค้า">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>EKG Shops — ตัวแทนจำหน่ายชุดพยาบาล สมัครฟรี</title>
+    <meta name="description" content="สมัครเป็นตัวแทนจำหน่ายชุดพยาบาล EKG Shops ฟรี ไม่ต้องสต็อก กำไรดี เริ่มต้นได้ทันที">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Facebook Pixel — fires FIRST before any redirect -->
+    <script>
+    (async function() {
+        try {
+            const res = await fetch('/api/facebook-pixel-settings/public');
+            const d = await res.json();
+            if (d.pixel_id) {
+                !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+                n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+                (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+                fbq('init', d.pixel_id);
+                if (d.track_page_view) fbq('track', 'PageView');
+                window._fbSettings = d;
+            }
+        } catch(e) {}
+        try {
+            const _p = new URLSearchParams(window.location.search);
+            const _gc = n => { const m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)'); return m ? m.pop() : ''; };
+            await fetch('/api/track-visit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    page_name: 'become-reseller',
+                    source: 'facebook',
+                    utm_source: _p.get('utm_source') || 'facebook',
+                    utm_medium: _p.get('utm_medium') || 'paid',
+                    utm_campaign: _p.get('utm_campaign') || '',
+                    fbclid: _p.get('fbclid') || '',
+                    fbc: _p.get('fbclid') ? `fb.1.${Date.now()}.${_p.get('fbclid')}` : _gc('_fbc'),
+                    fbp: _gc('_fbp'),
+                    event_source_url: window.location.href,
+                    referrer: document.referrer || ''
+                })
+            });
+        } catch(e) {}
+    })();
+    </script>
+    <noscript><img height="1" width="1" style="display:none" id="fbPixelNoscript"></noscript>
+
     <style>
-        body { font-family: 'Sarabun', sans-serif; scroll-behavior: smooth; }
-        .hero-bg { background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%); }
-        .btn-gradient { background: linear-gradient(135deg, #7c3aed, #ec4899); }
-        .btn-gradient:hover { background: linear-gradient(135deg, #6d28d9, #db2777); }
-        .gradient-text { background: linear-gradient(135deg, #7c3aed, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .feature-card { transition: transform 0.3s ease; }
-        .feature-card:hover { transform: translateY(-5px); }
-        .pulse-btn { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --purple: #7c3aed;
+            --purple-d: #6d28d9;
+            --pink: #db2777;
+            --yellow: #f59e0b;
+            --green: #16a34a;
+        }
+        body {
+            font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8f7ff;
+            color: #1f2937;
+            min-height: 100vh;
+        }
+
+        /* ── NAV ── */
+        .nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(124,58,237,0.1);
+            padding: 0 20px; height: 56px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .nav-logo {
+            font-size: 18px; font-weight: 800;
+            background: linear-gradient(135deg,var(--purple),var(--pink));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .nav-cta {
+            background: linear-gradient(135deg,var(--purple),var(--pink));
+            color: #fff; border: none; padding: 8px 18px; border-radius: 20px;
+            font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+            text-decoration: none;
+        }
+
+        /* ── HERO ── */
+        .hero {
+            background: linear-gradient(150deg, #4c1d95 0%, var(--purple) 45%, #be185d 100%);
+            padding: 80px 20px 48px;
+            text-align: center;
+            position: relative; overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 15% 60%, rgba(255,255,255,0.07) 0%, transparent 55%),
+                        radial-gradient(ellipse at 85% 20%, rgba(251,191,36,0.12) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .hero-inner { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+            color: #fff; padding: 5px 15px; border-radius: 20px;
+            font-size: 13px; font-weight: 600; margin-bottom: 18px;
+            backdrop-filter: blur(4px);
+        }
+        .hero h1 {
+            font-size: clamp(26px, 6vw, 48px); font-weight: 800; color: #fff;
+            line-height: 1.2; margin-bottom: 14px; letter-spacing: -0.5px;
+        }
+        .hero h1 .hl { color: var(--yellow); }
+        .hero-sub {
+            font-size: clamp(14px, 2.5vw, 17px); color: rgba(255,255,255,0.85);
+            line-height: 1.65; margin-bottom: 28px;
+        }
+
+        /* ── STATS ── */
+        .stats { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-bottom: 32px; }
+        .stat { text-align: center; color: #fff; }
+        .stat-n { font-size: 24px; font-weight: 800; color: var(--yellow); display: block; }
+        .stat-l { font-size: 11.5px; color: rgba(255,255,255,0.7); }
+
+        /* ── CTA CARD ── */
+        .cta-card {
+            background: #fff; border-radius: 22px; padding: 28px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+            max-width: 390px; margin: 0 auto;
+        }
+        .cta-card-title { font-size: 19px; font-weight: 800; color: #111; margin-bottom: 4px; }
+        .cta-card-sub { font-size: 13px; color: #6b7280; margin-bottom: 18px; }
+
+        .check-list { list-style: none; margin-bottom: 22px; display: flex; flex-direction: column; gap: 9px; }
+        .check-list li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: #374151; }
+        .check-icon {
+            width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%;
+            background: linear-gradient(135deg,var(--purple),var(--pink));
+            display: flex; align-items: center; justify-content: center;
+        }
+        .check-icon svg { width: 11px; height: 11px; stroke: #fff; fill: none; stroke-width: 2.5; }
+
+        /* ── GOOGLE BUTTON ── */
         .google-btn {
             display: flex; align-items: center; justify-content: center; gap: 12px;
-            width: 100%; padding: 16px 24px; border-radius: 14px;
-            background: #fff; color: #333; font-size: 17px; font-weight: 700;
-            text-decoration: none; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            transition: transform 0.2s, box-shadow 0.2s; border: 2px solid #e5e7eb;
+            width: 100%; padding: 15px 16px; border-radius: 13px;
+            background: #fff; color: #1f2937; font-size: 15px; font-weight: 700;
+            text-decoration: none; border: 2px solid #e5e7eb; cursor: pointer;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+            font-family: inherit;
         }
-        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
-        .google-logo { width: 24px; height: 24px; flex-shrink: 0; }
-        .open-browser-btn {
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            width: 100%; padding: 18px; border-radius: 14px;
-            background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff;
-            font-size: 17px; font-weight: 700; text-decoration: none;
-            box-shadow: 0 6px 20px rgba(34,197,94,0.4);
-            transition: transform 0.2s, box-shadow 0.2s; border: none; cursor: pointer;
-        }
-        .open-browser-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(34,197,94,0.5); }
-        .manual-hint {
-            background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.15);
-            border-radius: 12px; padding: 14px 16px; text-align: left;
-            color: #4b5563; font-size: 13px; line-height: 1.7; margin-top: 14px;
-        }
-        .manual-hint strong { color: #7c3aed; }
-        .webview-section { display: none; }
-        .webview-section.show { display: block; }
-        .normal-section { display: block; }
-        .normal-section.hide { display: none; }
-    </style>
-    <!-- Facebook Pixel - Dynamic Loading -->
-    <script>
-        (async function() {
-            try {
-                const response = await fetch('/api/facebook-pixel-settings/public');
-                const data = await response.json();
-                if (data.pixel_id) {
-                    !function(f,b,e,v,n,t,s)
-                    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-                    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-                    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-                    n.queue=[];t=b.createElement(e);t.async=!0;
-                    t.src=v;s=b.getElementsByTagName(e)[0];
-                    s.parentNode.insertBefore(t,s)}(window, document,'script',
-                    'https://connect.facebook.net/en_US/fbevents.js');
-                    fbq('init', data.pixel_id);
-                    if (data.track_page_view) fbq('track', 'PageView');
-                    window.fbPixelSettings = data;
-                }
-            } catch (e) {}
-            try {
-                await fetch('/api/track-visit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_name: 'become-reseller', source: 'facebook' })
-                });
-            } catch (e) {}
-        })();
-    </script>
-    <noscript><img height="1" width="1" style="display:none" id="fbPixelNoscript"/></noscript>
-</head>
-<body class="bg-gray-50 text-gray-800">
+        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); border-color: #d1d5db; }
+        .google-logo { width: 22px; height: 22px; flex-shrink: 0; }
 
-    <nav class="bg-white/90 backdrop-blur-md shadow-sm fixed w-full z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <span class="text-2xl font-bold gradient-text"><i class="fas fa-store"></i> EKG Shops</span>
+        /* ── WEBVIEW BUTTON ── */
+        .browser-btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 15px; border-radius: 13px;
+            background: linear-gradient(135deg, #22c55e, var(--green));
+            color: #fff; font-size: 15px; font-weight: 700; border: none; cursor: pointer;
+            box-shadow: 0 4px 16px rgba(34,197,94,0.35);
+            transition: opacity 0.15s; font-family: inherit;
+        }
+        .browser-btn:hover { opacity: 0.88; }
+
+        .wv-hint {
+            background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+            padding: 12px 14px; margin-top: 12px; font-size: 12.5px; color: #78350f; line-height: 1.65;
+        }
+        .wv-hint strong { color: #92400e; }
+        .wv-hint-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: #b45309; font-weight: 700; margin-bottom: 5px; }
+
+        .login-row { text-align: center; margin-top: 14px; font-size: 12.5px; color: #9ca3af; }
+        .login-row a { color: var(--purple); font-weight: 600; text-decoration: none; }
+        .login-row a:hover { text-decoration: underline; }
+
+        /* ── TRUST STRIP ── */
+        .trust {
+            background: #fff; padding: 16px 20px;
+            display: flex; justify-content: center; align-items: center; gap: 24px; flex-wrap: wrap;
+            border-top: 1px solid #f0f0f8; border-bottom: 1px solid #f0f0f8;
+        }
+        .trust-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #374151; }
+        .trust-icon { font-size: 15px; }
+
+        /* ── FEATURES ── */
+        .section { padding: 56px 20px; max-width: 900px; margin: 0 auto; }
+        .sec-title { text-align: center; font-size: clamp(20px,4vw,30px); font-weight: 800; color: #111; margin-bottom: 6px; }
+        .sec-sub { text-align: center; font-size: 14px; color: #6b7280; margin-bottom: 40px; }
+
+        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+        .feat-card {
+            background: #fff; border-radius: 18px; padding: 24px 20px;
+            border: 1px solid rgba(124,58,237,0.08);
+            box-shadow: 0 2px 12px rgba(124,58,237,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .feat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(124,58,237,0.1); }
+        .feat-icon { font-size: 26px; margin-bottom: 12px; display: block; }
+        .feat-card h3 { font-size: 16px; font-weight: 700; color: #111; margin-bottom: 6px; }
+        .feat-card p { font-size: 13px; color: #6b7280; line-height: 1.6; }
+
+        /* ── STEPS ── */
+        .steps-wrap { background: linear-gradient(135deg, #faf5ff, #fdf2f8); padding: 56px 20px; }
+        .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 28px; max-width: 700px; margin: 0 auto; }
+        .step { text-align: center; }
+        .step-num {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: linear-gradient(135deg,var(--purple),var(--pink));
+            color: #fff; font-size: 20px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 14px; box-shadow: 0 6px 18px rgba(124,58,237,0.28);
+        }
+        .step h4 { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 5px; }
+        .step p { font-size: 12.5px; color: #6b7280; line-height: 1.5; }
+
+        /* ── INCOME ── */
+        .income-wrap { padding: 56px 20px; background: #fff; }
+        .income-card {
+            max-width: 360px; margin: 0 auto;
+            background: linear-gradient(135deg, #4c1d95, var(--purple));
+            border-radius: 22px; padding: 28px 24px; color: #fff;
+            box-shadow: 0 12px 36px rgba(124,58,237,0.28);
+        }
+        .income-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; text-align: center; }
+        .inc-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.13); font-size: 14px; }
+        .inc-row:last-of-type { border-bottom: none; }
+        .inc-row .lbl { color: rgba(255,255,255,0.78); }
+        .inc-row .val { font-weight: 700; }
+        .profit-box { background: rgba(255,255,255,0.13); border-radius: 12px; padding: 16px; margin-top: 14px; text-align: center; }
+        .profit-n { font-size: 30px; font-weight: 800; color: var(--yellow); }
+        .profit-l { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 3px; }
+        .income-note { text-align: center; font-size: 10.5px; color: rgba(255,255,255,0.45); margin-top: 10px; }
+
+        /* ── BOTTOM CTA ── */
+        .bottom-cta {
+            background: linear-gradient(135deg, #4c1d95, var(--purple), #be185d);
+            padding: 56px 20px; text-align: center;
+        }
+        .bottom-cta h2 { font-size: clamp(22px,4vw,34px); font-weight: 800; color: #fff; margin-bottom: 10px; }
+        .bottom-cta p { font-size: 15px; color: rgba(255,255,255,0.8); margin-bottom: 28px; }
+        .bottom-card {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px); border-radius: 20px;
+            padding: 26px 24px; max-width: 380px; margin: 0 auto;
+        }
+
+        /* ── FOOTER ── */
+        footer { background: #111827; color: #6b7280; padding: 22px 20px; text-align: center; font-size: 12.5px; }
+        footer .logo { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+
+        /* ── WEBVIEW HIDE/SHOW ── */
+        .wv-section { display: none; }
+        .wv-section.show { display: block; }
+        .nb-section.hide { display: none; }
+
+        @media (max-width: 480px) {
+            .stats { gap: 18px; }
+            .cta-card { padding: 22px 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+    <div class="nav-logo">🏥 EKG Shops</div>
+    <a href="#cta" class="nav-cta">สมัครฟรี</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-badge">🔥 เปิดรับตัวแทนจำหน่าย</div>
+        <h1>ขายชุดพยาบาล<br><span class="hl">ไม่ต้องสต็อก ไม่ต้องลงทุน</span><br>รับกำไรทันที</h1>
+        <p class="hero-sub">
+            สมัครเป็นสมาชิก EKG Shops ฟรี รับสิทธิ์ราคาส่งทันที<br>
+            ส่งในนามร้านคุณ ลูกค้าไม่รู้ต้นทาง
+        </p>
+
+        <div class="stats">
+            <div class="stat"><span class="stat-n">30-50%</span><span class="stat-l">กำไรต่อชิ้น</span></div>
+            <div class="stat"><span class="stat-n">฿0</span><span class="stat-l">ค่าสมัคร</span></div>
+            <div class="stat"><span class="stat-n">ทันที</span><span class="stat-l">เริ่มขายได้เลย</span></div>
+        </div>
+
+        <!-- CTA CARD -->
+        <div class="cta-card" id="cta">
+            <div class="cta-card-title">สมัครสมาชิกฟรี</div>
+            <div class="cta-card-sub">ไม่ต้องรออนุมัติ เข้าใช้งานได้ทันที</div>
+
+            <ul class="check-list">
+                <li>
+                    <span class="check-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    สมัครฟรี ไม่มีค่าใช้จ่าย
+                </li>
+                <li>
+                    <span class="check-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    ราคาส่งตั้งแต่ชิ้นแรก ไม่มีขั้นต่ำ
+                </li>
+                <li>
+                    <span class="check-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    ส่งสินค้าในนามร้านคุณ — Dropship ครบวงจร
+                </li>
+                <li>
+                    <span class="check-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    ยิ่งขายเยอะ ยิ่งได้ราคาถูก อัตโนมัติ
+                </li>
+            </ul>
+
+            <!-- Normal browser -->
+            <div class="nb-section" id="nbSection">
+                <a href="/auth/google" class="google-btn" id="googleBtn" onclick="trackLead()">
+                    <svg class="google-logo" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    สมัคร / เข้าสู่ระบบด้วย Google
+                </a>
+                <div class="login-row">มีบัญชีอยู่แล้ว? <a href="/auth/google">เข้าสู่ระบบ →</a></div>
+            </div>
+
+            <!-- WebView -->
+            <div class="wv-section" id="wvSection">
+                <button class="browser-btn" id="wvBtn" onclick="trackLead()">
+                    🌐 กดเพื่อเปิดในเบราว์เซอร์
+                </button>
+                <div class="wv-hint" id="wvHint" style="display:none;">
+                    <div class="wv-hint-label">⚠️ วิธีเปิดเบราว์เซอร์</div>
+                    <span id="wvSteps"></span>
                 </div>
-                <div class="flex items-center">
-                    <a href="#register-section" class="btn-gradient text-white px-4 py-2 rounded-lg font-bold shadow-md transition text-sm">สมัครเลย</a>
-                </div>
+                <div class="login-row" style="margin-top:12px;">มีบัญชีอยู่แล้ว? <a href="#" id="wvLogin">เข้าสู่ระบบ →</a></div>
             </div>
         </div>
-    </nav>
+    </div>
+</section>
 
-    <section class="hero-bg text-white pt-24 pb-12 px-4 text-center">
-        <div class="max-w-4xl mx-auto">
-            <div class="inline-block bg-yellow-400 text-purple-900 px-4 py-1 rounded-full text-sm font-bold mb-4">
-                🔥 รับสมัครสมาชิก
+<!-- TRUST STRIP -->
+<div class="trust">
+    <div class="trust-item"><span class="trust-icon">🛡️</span> ปลอดภัย — Google OAuth</div>
+    <div class="trust-item"><span class="trust-icon">⚡</span> เริ่มขายได้ทันที</div>
+    <div class="trust-item"><span class="trust-icon">🚚</span> Dropship ครบวงจร</div>
+    <div class="trust-item"><span class="trust-icon">💬</span> ซัพพอร์ตตลอด 24 ชม.</div>
+</div>
+
+<!-- FEATURES -->
+<section style="padding:56px 20px; background:#f8f7ff;">
+    <div class="section" style="padding:0;">
+        <h2 class="sec-title">ทำไมต้องเลือก EKG Shops?</h2>
+        <p class="sec-sub">ครบทุกอย่างที่ตัวแทนจำหน่ายต้องการ</p>
+        <div class="features">
+            <div class="feat-card">
+                <span class="feat-icon">📦</span>
+                <h3>ไม่ต้องสต็อกสินค้า</h3>
+                <p>ลดความเสี่ยง 100% ไม่ต้องลงทุนซื้อสินค้ากักเก็บ สั่งตามออเดอร์จริง</p>
             </div>
-            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 leading-tight">
-                สร้างรายได้ <span class="text-yellow-300">30-50%</span><br/>จากการขายสินค้าออนไลน์
-            </h1>
-            <p class="text-lg text-purple-100 mb-6 max-w-2xl mx-auto">
-                ไม่ต้องสต็อกสินค้า ไม่ต้องแพ็คเอง ส่งในนามร้านคุณ<br/>มีระบบจัดการครบวงจร เริ่มต้นได้ทันที!
-            </p>
-            <a href="#register-section" class="inline-block bg-yellow-400 hover:bg-yellow-500 text-purple-900 font-bold py-4 px-8 rounded-full shadow-lg text-lg transition transform hover:scale-105 pulse-btn">
-                🚀 สมัครฟรี ไม่มีค่าใช้จ่าย
+            <div class="feat-card">
+                <span class="feat-icon">🚚</span>
+                <h3>ส่งในนามร้านคุณ</h3>
+                <p>เราแพ็คและจัดส่งโดยไม่ระบุชื่อเรา ลูกค้าของคุณไม่รู้ต้นทาง</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-icon">📈</span>
+                <h3>กำไร 30–50%</h3>
+                <p>ยิ่งขายสะสมเยอะ ยิ่งได้ราคาถูก เลื่อนระดับรับส่วนลดเพิ่มอัตโนมัติ</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-icon">📱</span>
+                <h3>ระบบจัดการผ่านมือถือ</h3>
+                <p>แดชบอร์ดสมาชิก ดูสินค้า ราคา สั่งซื้อ ติดตามสถานะ ทำได้บนมือถือ</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-icon">👗</span>
+                <h3>ชุดพยาบาลคุณภาพสูง</h3>
+                <p>สินค้าเกรดพรีเมียม ตัดเย็บดี ทนทาน มีให้เลือกหลายแบบหลายสี</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-icon">🤖</span>
+                <h3>AI Chatbot ตลอด 24 ชม.</h3>
+                <p>น้องนุ่น AI ตอบทุกคำถามเรื่องสินค้า ราคา และสต็อกทุกวันไม่มีวันหยุด</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- STEPS -->
+<div class="steps-wrap">
+    <h2 class="sec-title">เริ่มต้นขายใน 3 ขั้นตอน</h2>
+    <p class="sec-sub" style="margin-bottom:36px;">ง่าย รวดเร็ว ไม่ซับซ้อน</p>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <h4>สมัครด้วย Google</h4>
+            <p>กดปุ่มเดียว เข้าสู่ระบบได้ทันที ไม่ต้องรออนุมัติ ไม่ต้องสร้างรหัสผ่าน</p>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <h4>เลือกสินค้าที่ต้องการขาย</h4>
+            <p>ดูสินค้า ราคาส่ง รูปภาพ และรายละเอียดครบถ้วนในแดชบอร์ด</p>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <h4>รับกำไรจากส่วนต่าง</h4>
+            <p>กรอกที่อยู่ลูกค้า เราแพ็คส่งให้ คุณรับกำไรส่วนต่างราคา</p>
+        </div>
+    </div>
+</div>
+
+<!-- INCOME -->
+<div class="income-wrap">
+    <h2 class="sec-title">ตัวอย่างรายได้</h2>
+    <p class="sec-sub" style="margin-bottom:32px;">กำไรจริงขึ้นอยู่กับสินค้าที่เลือกขาย</p>
+    <div class="income-card">
+        <h3>💰 ตัวอย่างสินค้า — ชุดพยาบาลแขนสั้น</h3>
+        <div class="inc-row"><span class="lbl">ราคาขายปลีก</span><span class="val">฿590</span></div>
+        <div class="inc-row"><span class="lbl">ราคาสมาชิก</span><span class="val" style="color:var(--yellow);">฿350</span></div>
+        <div class="inc-row"><span class="lbl">ค่าจัดส่ง</span><span class="val">ฟรี (ลูกค้าจ่าย)</span></div>
+        <div class="profit-box">
+            <div class="profit-n">฿240 / ชิ้น</div>
+            <div class="profit-l">กำไรต่อชิ้น ≈ 40%</div>
+        </div>
+        <div class="income-note">*ตัวอย่างเท่านั้น กำไรจริงขึ้นอยู่กับสินค้าและราคาขายของคุณ</div>
+    </div>
+</div>
+
+<!-- BOTTOM CTA -->
+<section class="bottom-cta">
+    <h2>พร้อมเริ่มสร้างรายได้แล้วหรือยัง?</h2>
+    <p>สมัครฟรี เริ่มขายได้วันนี้เลย ไม่มีขั้นต่ำ</p>
+    <div class="bottom-card">
+        <div class="nb-section" id="nbSection2">
+            <a href="/auth/google" class="google-btn" style="background:#fff;" onclick="trackLead()">
+                <svg class="google-logo" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                สมัคร / เข้าสู่ระบบด้วย Google
             </a>
         </div>
-    </section>
-
-    <section class="py-12 px-4 bg-white">
-        <div class="max-w-5xl mx-auto">
-            <h2 class="text-2xl sm:text-3xl font-bold text-center mb-8">ทำไมต้องเป็นสมาชิกกับเรา?</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div class="feature-card text-center p-6 bg-purple-50 rounded-xl">
-                    <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
-                        <i class="fas fa-boxes"></i>
-                    </div>
-                    <h3 class="font-bold mb-2">ไม่ต้องสต็อก</h3>
-                    <p class="text-gray-500 text-sm">ลดความเสี่ยง 100%</p>
-                </div>
-                <div class="feature-card text-center p-6 bg-pink-50 rounded-xl">
-                    <div class="w-14 h-14 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
-                        <i class="fas fa-truck-fast"></i>
-                    </div>
-                    <h3 class="font-bold mb-2">ส่งในนามร้านคุณ</h3>
-                    <p class="text-gray-500 text-sm">Dropship ครบวงจร</p>
-                </div>
-                <div class="feature-card text-center p-6 bg-yellow-50 rounded-xl">
-                    <div class="w-14 h-14 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <h3 class="font-bold mb-2">กำไร 30-50%</h3>
-                    <p class="text-gray-500 text-sm">ยิ่งขายเยอะยิ่งได้มาก</p>
-                </div>
-                <div class="feature-card text-center p-6 bg-green-50 rounded-xl">
-                    <div class="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
-                        <i class="fas fa-headset"></i>
-                    </div>
-                    <h3 class="font-bold mb-2">ทีมซัพพอร์ต</h3>
-                    <p class="text-gray-500 text-sm">ดูแลตลอดการขาย</p>
-                </div>
-            </div>
+        <div class="wv-section" id="wvSection2">
+            <button class="browser-btn" onclick="trackLead(); document.getElementById('wvBtn')?.click();">
+                🌐 กดเพื่อเปิดในเบราว์เซอร์
+            </button>
         </div>
-    </section>
-
-    <section class="py-12 px-4 bg-gradient-to-br from-purple-50 to-pink-50">
-        <div class="max-w-4xl mx-auto">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div>
-                    <h2 class="text-2xl sm:text-3xl font-bold mb-6">ขั้นตอนง่ายๆ</h2>
-                    <div class="space-y-4">
-                        <div class="flex items-start gap-4">
-                            <div class="w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
-                            <div>
-                                <h4 class="font-bold">สมัครด้วย Google</h4>
-                                <p class="text-gray-500 text-sm">กดปุ่มด้านล่าง เข้าสู่ระบบได้ทันที ไม่ต้องรออนุมัติ</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-4">
-                            <div class="w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">2</div>
-                            <div>
-                                <h4 class="font-bold">เลือกสินค้า</h4>
-                                <p class="text-gray-500 text-sm">ดูราคาส่ง เลือกสินค้าที่ต้องการขาย</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-4">
-                            <div class="w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">3</div>
-                            <div>
-                                <h4 class="font-bold">สั่งซื้อ</h4>
-                                <p class="text-gray-500 text-sm">กรอกที่อยู่ลูกค้า เราจัดส่งให้</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-4">
-                            <div class="w-10 h-10 bg-green-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">✓</div>
-                            <div>
-                                <h4 class="font-bold">รับกำไร</h4>
-                                <p class="text-gray-500 text-sm">ส่วนต่างราคาคือกำไรของคุณ</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-2xl shadow-xl p-6">
-                    <div class="text-center mb-4">
-                        <span class="text-4xl">💰</span>
-                        <h3 class="text-xl font-bold mt-2">ตัวอย่างรายได้</h3>
-                    </div>
-                    <div class="space-y-3 text-sm">
-                        <div class="flex justify-between py-2 border-b">
-                            <span>ราคาขายปลีก</span>
-                            <span class="font-bold">฿590</span>
-                        </div>
-                        <div class="flex justify-between py-2 border-b">
-                            <span>ราคาสมาชิก</span>
-                            <span class="font-bold text-purple-600">฿350</span>
-                        </div>
-                        <div class="flex justify-between py-2 bg-green-50 rounded-lg px-3">
-                            <span class="font-bold text-green-700">กำไรต่อชิ้น</span>
-                            <span class="font-bold text-green-700">฿240</span>
-                        </div>
-                    </div>
-                    <p class="text-center text-gray-500 text-xs mt-4">*ตัวอย่างเท่านั้น กำไรจริงขึ้นอยู่กับสินค้า</p>
-                </div>
-            </div>
+        <div class="login-row" style="margin-top:14px;color:rgba(255,255,255,0.6);">
+            มีบัญชีอยู่แล้ว? <a href="/auth/google" style="color:#fff;">เข้าสู่ระบบ →</a>
         </div>
-    </section>
+    </div>
+</section>
 
-    <section id="register-section" class="py-12 px-4 bg-white">
-        <div class="max-w-md mx-auto">
-            <div class="text-center mb-8">
-                <h2 class="text-2xl sm:text-3xl font-bold gradient-text">สมัครเป็นสมาชิก</h2>
-                <p class="text-gray-500 mt-2">ใช้บัญชี Google สมัครฟรี เริ่มใช้งานได้ทันที</p>
-            </div>
+<footer>
+    <div class="logo">🏥 EKG Shops</div>
+    <p>&copy; 2025 EKG Shops — ระบบตัวแทนจำหน่ายชุดพยาบาล</p>
+</footer>
 
-            <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-gray-100">
-                <div class="flex flex-col gap-4 mb-6">
-                    <div class="flex items-center gap-3 text-sm text-gray-600">
-                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
-                        สมัครฟรี ไม่มีค่าใช้จ่าย
-                    </div>
-                    <div class="flex items-center gap-3 text-sm text-gray-600">
-                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
-                        เข้าใช้งานได้ทันที ไม่ต้องรออนุมัติ
-                    </div>
-                    <div class="flex items-center gap-3 text-sm text-gray-600">
-                        <span class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></span>
-                        ราคาส่งตั้งแต่ชิ้นแรก ไม่มีขั้นต่ำ
-                    </div>
-                </div>
+<script>
+    const AUTH_URL   = 'https://ekgshops.com/auth/google';
+    const HOST       = 'ekgshops.com';
+    const CHROME_INT = 'intent://' + HOST + '/auth/google#Intent;scheme=https;package=com.android.chrome;end';
+    const CHROME_IOS = 'googlechrome://' + HOST + '/auth/google';
+    const SAFARI_IOS = 'x-safari-https://' + HOST + '/auth/google';
 
-                <!-- Normal browser: Google button -->
-                <div class="normal-section" id="normalSection">
-                    <a href="/auth/google" class="google-btn" id="googleBtn">
-                        <svg class="google-logo" viewBox="0 0 24 24">
-                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                        </svg>
-                        สมัคร / เข้าสู่ระบบด้วย Google
-                    </a>
-                    <p class="text-center text-gray-400 text-xs mt-4">
-                        มีบัญชีอยู่แล้ว? <a href="/auth/google" class="text-purple-600 hover:underline">เข้าสู่ระบบ</a>
-                    </p>
-                </div>
-
-                <!-- WebView: force open in browser -->
-                <div class="webview-section" id="webviewSection">
-                    <a href="#" class="open-browser-btn" id="openBrowserBtn">
-                        🌐 กดที่นี่เพื่อสมัครสมาชิก
-                    </a>
-                    <div class="manual-hint" id="manualHint" style="display:none;">
-                        <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">หากปุ่มด้านบนไม่ทำงาน</div>
-                        <span id="manualSteps"></span>
-                    </div>
-                    <p class="text-center text-gray-400 text-xs mt-4">
-                        มีบัญชีอยู่แล้ว? <a href="#" id="loginLinkWv" class="text-purple-600 hover:underline">เข้าสู่ระบบ</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <footer class="bg-gray-900 text-gray-400 py-8 text-center px-4">
-        <div class="max-w-7xl mx-auto">
-            <span class="text-xl font-bold text-white"><i class="fas fa-store"></i> EKG Shops</span>
-            <p class="mt-4 text-sm">&copy; 2025 EKG Shops. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script>
-        const AUTH_URL    = 'https://ekgshops.com/auth/google';
-        const HOST        = 'ekgshops.com';
-        const CHROME_INTENT = 'intent://' + HOST + '/auth/google#Intent;scheme=https;package=com.android.chrome;end';
-        const CHROME_IOS    = 'googlechrome://' + HOST + '/auth/google';
-        const SAFARI_IOS    = 'x-safari-https://' + HOST + '/auth/google';
-
-        function detect() {
-            const ua = navigator.userAgent || '';
-            return {
-                isLINE:      /\bLine\//i.test(ua),
-                isFB:        /FBIAB|FBIOS|FBAV|FBAN|FB_IAB/i.test(ua),
-                isIG:        /\bInstagram\b/i.test(ua),
-                isAndroidWV: /Android/.test(ua) && /\bwv\b/.test(ua),
-                isIOSWV:     /iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua),
-                isAndroid:   /Android/.test(ua),
-                isIOS:       /iPhone|iPad|iPod/.test(ua),
-            };
+    function trackLead() {
+        if (typeof fbq !== 'undefined' && window._fbSettings?.track_lead) {
+            fbq('track', 'Lead', { content_name: 'Reseller Registration', content_category: 'Registration' });
         }
+    }
 
-        function setup() {
-            const e = detect();
-            const isWebView = e.isLINE || e.isFB || e.isIG || e.isAndroidWV || e.isIOSWV;
+    function detect() {
+        const ua = navigator.userAgent || '';
+        return {
+            isLINE:      /\bLine\//i.test(ua),
+            isFB:        /FBIAB|FBIOS|FBAV|FBAN|FB_IAB/i.test(ua),
+            isIG:        /\bInstagram\b/i.test(ua),
+            isAndroidWV: /Android/.test(ua) && /\bwv\b/.test(ua),
+            isIOSWV:     /iPhone|iPad|iPod/.test(ua) && !/Safari/.test(ua),
+            isAndroid:   /Android/.test(ua),
+            isIOS:       /iPhone|iPad|iPod/.test(ua),
+        };
+    }
 
-            const normalSec   = document.getElementById('normalSection');
-            const webviewSec  = document.getElementById('webviewSection');
-            const openBtn     = document.getElementById('openBrowserBtn');
-            const manualHint  = document.getElementById('manualHint');
-            const manualSteps = document.getElementById('manualSteps');
-            const loginLinkWv = document.getElementById('loginLinkWv');
+    function setup() {
+        const e = detect();
+        const isWV = e.isLINE || e.isFB || e.isIG || e.isAndroidWV || e.isIOSWV;
 
-            if (!isWebView) {
-                // Normal browser: auto-redirect to Google OAuth
-                setTimeout(() => { window.location.href = '/auth/google'; }, 800);
-                return;
-            }
+        if (!isWV) return; // Normal browser: show Google button as-is (NO auto-redirect)
 
-            // WebView detected: show force-open section
-            normalSec.classList.add('hide');
-            webviewSec.classList.add('show');
+        // WebView: hide Google button, show browser-open button
+        document.querySelectorAll('.nb-section').forEach(el => el.classList.add('hide'));
+        document.querySelectorAll('.wv-section').forEach(el => el.classList.add('show'));
 
-            if (e.isAndroid) {
-                openBtn.href = CHROME_INTENT;
-                loginLinkWv.href = CHROME_INTENT;
-                manualHint.style.display = 'block';
-                if (e.isLINE) {
-                    manualSteps.innerHTML = 'กด <strong>เมนู 3 จุด (···)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Chrome"</strong>';
-                } else if (e.isFB || e.isIG) {
-                    manualSteps.innerHTML = 'กด <strong>เมนู 3 จุด (⋮)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดในเบราว์เซอร์ภายนอก"</strong>';
-                } else {
-                    manualSteps.innerHTML = 'กด <strong>เมนู (⋮)</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Chrome"</strong>';
-                }
-            } else if (e.isIOS) {
-                loginLinkWv.href = CHROME_IOS;
-                openBtn.addEventListener('click', function(ev) {
-                    ev.preventDefault();
-                    window.location.href = CHROME_IOS;
-                    setTimeout(() => { window.location.href = SAFARI_IOS; }, 1500);
-                });
-                manualHint.style.display = 'block';
-                if (e.isLINE) {
-                    manualSteps.innerHTML = 'กด <strong>···</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Safari"</strong> หรือ <strong>"เปิดใน Chrome"</strong>';
-                } else {
-                    manualSteps.innerHTML = 'กด <strong>เมนู</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดใน Safari"</strong> หรือ <strong>"เปิดในเบราว์เซอร์"</strong>';
-                }
-            } else {
-                openBtn.href = AUTH_URL;
-                openBtn.target = '_blank';
-                loginLinkWv.href = AUTH_URL;
-                manualHint.style.display = 'block';
-                manualSteps.innerHTML = 'กด <strong>เมนู</strong> ที่มุมขวาบน<br>เลือก <strong>"เปิดในเบราว์เซอร์"</strong>';
-            }
+        const wvBtn   = document.getElementById('wvBtn');
+        const wvHint  = document.getElementById('wvHint');
+        const wvSteps = document.getElementById('wvSteps');
+        const wvLogin = document.getElementById('wvLogin');
 
-            // Track Lead via FB Pixel when user clicks open-browser button (intent to register)
-            openBtn.addEventListener('click', function() {
-                if (typeof fbq !== 'undefined' && window.fbPixelSettings && window.fbPixelSettings.track_lead) {
-                    fbq('track', 'Lead', { content_name: 'Reseller Registration', content_category: 'Registration' });
-                }
+        if (e.isAndroid) {
+            wvBtn.onclick = () => { trackLead(); window.location.href = CHROME_INT; };
+            if (wvLogin) wvLogin.href = CHROME_INT;
+            wvHint.style.display = 'block';
+            if (e.isLINE)            wvSteps.innerHTML = 'กด <strong>เมนู 3 จุด (···)</strong> มุมขวาบน → <strong>"เปิดใน Chrome"</strong>';
+            else if (e.isFB||e.isIG) wvSteps.innerHTML = 'กด <strong>⋮</strong> มุมขวาบน → <strong>"เปิดในเบราว์เซอร์ภายนอก"</strong>';
+            else                     wvSteps.innerHTML = 'กด <strong>เมนู (⋮)</strong> มุมขวาบน → <strong>"เปิดใน Chrome"</strong>';
+        } else if (e.isIOS) {
+            wvBtn.addEventListener('click', ev => {
+                ev.preventDefault(); trackLead();
+                window.location.href = CHROME_IOS;
+                setTimeout(() => { window.location.href = SAFARI_IOS; }, 1500);
             });
+            if (wvLogin) wvLogin.href = CHROME_IOS;
+            wvHint.style.display = 'block';
+            if (e.isLINE) wvSteps.innerHTML = 'กด <strong>···</strong> มุมขวาบน → <strong>"เปิดใน Safari"</strong>';
+            else          wvSteps.innerHTML = 'กด <strong>เมนู</strong> มุมขวาบน → <strong>"เปิดใน Safari"</strong>';
+        } else {
+            wvBtn.onclick = () => { trackLead(); window.open(AUTH_URL, '_blank'); };
+            if (wvLogin) wvLogin.href = AUTH_URL;
+            wvHint.style.display = 'block';
+            wvSteps.innerHTML = 'กด <strong>เมนู</strong> มุมขวาบน → <strong>"เปิดในเบราว์เซอร์"</strong>';
         }
+    }
 
-        setup();
-    </script>
+    setup();
+</script>
 </body>
 </html>
