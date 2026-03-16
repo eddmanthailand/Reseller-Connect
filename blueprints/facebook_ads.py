@@ -3618,57 +3618,135 @@ def generate_content_suggestions():
     }
     goal_label = goal_label_map.get(goal_type, goal_type)
 
-    tone_map = {
-        'urgent':   'เร่งด่วน/โอกาสพิเศษ — สร้างความรู้สึกต้องการทันที',
-        'emotion':  'อารมณ์/ความภูมิใจ — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล',
-        'benefit':  'ประโยชน์/เหตุผล — ข้อเท็จจริงและสิ่งที่ได้รับ',
+    TONE_PROFILES = {
+        'urgent': {
+            'name': 'เร่งด่วน / FOMO',
+            'framework': 'FOMO + Scarcity',
+            'direction': (
+                'สร้างความรู้สึกเร่งด่วน — มีจำนวนจำกัด หรือโอกาสพิเศษชั่วคราว\n'
+                'Hook ต้องทำให้รู้สึกว่าถ้าไม่รีบจะพลาด\n'
+                'ใช้คำ: "วันนี้เท่านั้น", "รับไปก่อน", "ที่นั่งจำกัด", "โอกาสสุดท้าย"\n'
+                'Offer line: ระบุสิ่งที่ได้พิเศษถ้าสมัครเดี๋ยวนี้'
+            )
+        },
+        'emotion': {
+            'name': 'อารมณ์ / ภาคภูมิใจ',
+            'framework': 'Emotional Appeal + Identity',
+            'direction': (
+                'เชื่อมโยงกับความเป็นวิชาชีพและความภูมิใจของพยาบาล\n'
+                'Hook พูดถึงความสำเร็จ การดูแลผู้ป่วย ความมั่นใจในการทำงาน\n'
+                'ชุดพยาบาลไม่ใช่แค่เครื่องแบบ แต่คือตัวตนและวิชาชีพ\n'
+                'ภาษาอบอุ่น จริงใจ ไม่ขายของ — เหมือนพูดกับเพื่อนร่วมวิชาชีพ'
+            )
+        },
+        'benefit': {
+            'name': 'ประโยชน์ / เหตุผล',
+            'framework': 'Rational + Feature-Benefit',
+            'direction': (
+                'นำเสนอข้อดีที่จับต้องได้ เป็นตัวเลขหรือข้อเท็จจริง\n'
+                'Hook ต้องบอกประโยชน์ชัดเจนใน 5 วินาทีแรก\n'
+                'เน้น: รายได้เสริม, ไม่ต้องสต็อก, ส่งตรงถึงลูกค้า, มีทีมซัพพอร์ต\n'
+                'ใช้ตัวเลขจริง เช่น "ค่าคอม XX%" หรือ "กว่า X,000 ตัวแทน"'
+            )
+        },
+        'social_proof': {
+            'name': 'Social Proof',
+            'framework': 'Social Proof + Credibility',
+            'direction': (
+                'สร้างความน่าเชื่อถือด้วยหลักฐานทางสังคม\n'
+                'Hook: อ้างจำนวนคนที่เข้าร่วม หรือ quote จากตัวแทนจริง\n'
+                'ใช้: "พยาบาลกว่า X,000 คนเลือก", "รีวิวจากตัวแทนจริง", "เป็นที่ 1 ใน..."\n'
+                'Primary text: ยืนยันว่าคนอื่นทำสำเร็จแล้ว คุณก็ทำได้\n'
+                'สร้างความรู้สึก "ฉันไม่อยากเป็นคนเดียวที่ยังไม่รู้เรื่องนี้"'
+            )
+        },
+        'story': {
+            'name': 'เล่าเรื่อง',
+            'framework': 'Storytelling + Hero Journey',
+            'direction': (
+                'เปิดด้วยเรื่องราวสั้นๆ ของพยาบาลที่เจอปัญหา แล้วค้นพบทางออก\n'
+                'Hook: "คุณรู้ไหม พยาบาลคนหนึ่งใน X จังหวัด..."\n'
+                'เล่าปัญหา (pain) → ค้นพบ EKG Shops → ชีวิตเปลี่ยนไป\n'
+                'ห้ามขายตรง — เล่าเหมือน Facebook post ที่เพื่อนแชร์ให้อ่าน\n'
+                'ปิดด้วย soft CTA ที่เป็นธรรมชาติ'
+            )
+        },
     }
+
     requested_tone = (data.get('tone') or 'all').strip()
 
-    if requested_tone in tone_map:
-        tone_instruction = f'สร้าง Content โฆษณา 1 แบบ ตามแนวทาง: {tone_map[requested_tone]}'
-    else:
+    if requested_tone in TONE_PROFILES:
+        tp = TONE_PROFILES[requested_tone]
         tone_instruction = (
-            'สร้าง Content โฆษณา Facebook 3 แบบ ที่แตกต่างกัน:\n'
-            '1. แบบ "เร่งด่วน/โอกาสพิเศษ" — สร้างความรู้สึกต้องการทันที\n'
-            '2. แบบ "อารมณ์/ความภูมิใจ" — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล\n'
-            '3. แบบ "ประโยชน์/เหตุผล" — ข้อเท็จจริงและประโยชน์ที่ได้รับ'
+            f'สร้าง Content โฆษณา Facebook 1 แบบ\n'
+            f'แนวทาง: {tp["name"]} (Framework: {tp["framework"]})\n'
+            f'คำแนะนำเฉพาะ:\n{tp["direction"]}'
         )
+        num_items = 1
+    else:
+        # All 5 tones
+        lines = []
+        for i, (key, tp) in enumerate(TONE_PROFILES.items(), 1):
+            lines.append(f'{i}. {tp["name"]} (Framework: {tp["framework"]})\n   {tp["direction"].split(chr(10))[0]}')
+        tone_instruction = (
+            'สร้าง Content โฆษณา Facebook 5 แบบ แต่ละแบบใช้ framework ที่แตกต่างกันอย่างชัดเจน:\n'
+            + '\n'.join(lines)
+        )
+        num_items = 5
 
-    prompt = f"""คุณคือ Copywriter ผู้เชี่ยวชาญโฆษณา Facebook สำหรับแบรนด์ชุดพยาบาล B2B ในไทย
+    prompt = f"""คุณคือ Senior Copywriter และ Creative Strategist จากบริษัทโฆษณาชั้นนำในไทย
+เชี่ยวชาญ Facebook Ads สำหรับตลาดบุคลากรทางการแพทย์และโมเดล B2B Reseller
 
-ข้อมูลแคมเปญ:
-- ชื่อแคมเปญ: {campaign_name}
+═══ CAMPAIGN BRIEF ═══
+- แคมเปญ: {campaign_name}
+- สินค้า: {product_name}
 - เป้าหมาย: {goal_label}
-- สินค้าหลัก: {product_name}
-- กลุ่มเป้าหมาย: {audience_note or 'พยาบาล นักศึกษาพยาบาล และบุคลากรทางการแพทย์ทั่วไทย'}
+- กลุ่มเป้าหมาย: {audience_note or 'พยาบาล นักศึกษาพยาบาล บุคลากรสาธารณสุขทั่วไทย ที่ต้องการรายได้เสริมหรือเริ่มธุรกิจ'}
+- Platform: Facebook Feed + Reels Ad
 
+═══ TASK ═══
 {tone_instruction}
 
-สำหรับแต่ละแบบ ต้องมีครบทุก field ดังนี้:
-- style_name: ชื่อแนวทาง ≤10 ตัวอักษร
-- style_icon: emoji 1 ตัว
-- hook: ประโยคแรกที่ดึงดูดใจ 1-2 บรรทัด ≤60 ตัวอักษร (สำคัญมาก! คนส่วนใหญ่อ่านแค่บรรทัดแรก)
-- primary_text: ข้อความหลัก body copy เต็มรูปแบบ 100-150 ตัวอักษร เล่าเรื่อง+ประโยชน์+กระตุ้นให้คลิก
-- headline: ข้อความ headline ใต้รูป ≤40 ตัวอักษร กระชับ ตรงจุด
-- description: ข้อความ link description ≤30 ตัวอักษร เสริม headline
-- cta: ข้อความปุ่ม ≤10 ตัวอักษร
-- hashtags: array ของ hashtag ภาษาไทย 4-5 อัน ไม่ต้องมี # (จะเติมเอง) เกี่ยวกับพยาบาล/ชุด/Reseller
+═══ OUTPUT FORMAT ═══
+สำหรับแต่ละแบบ ต้องมีครบทุก field:
 
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความนอก JSON:
+- tone: key ของ tone (urgent/emotion/benefit/social_proof/story)
+- style_name: ชื่อแนวทาง เช่น "FOMO" / "ภาคภูมิใจ" / "ข้อเท็จจริง" / "Social Proof" / "เล่าเรื่อง"
+- style_icon: emoji 1 ตัวที่สื่อ tone นั้น
+- framework: ชื่อ copywriting framework ที่ใช้
+- hook: ประโยคเปิด 1-2 บรรทัด ≤70 ตัวอักษร — สำคัญที่สุด! ต้องทำให้หยุดนิ้วทันที
+- secondary_hook: hook ทางเลือก อีก 1 แบบ ≤70 ตัวอักษร (แนวทางต่างออกไปจาก hook แรก)
+- primary_text: body copy เต็มรูปแบบ 150-250 ตัวอักษร — เล่าเรื่อง + ประโยชน์ + กระตุ้น
+- offer_line: value proposition หรือ offer สั้นๆ ≤50 ตัวอักษร (ถ้าไม่มี offer ให้เขียน unique value แทน)
+- headline: headline ใต้รูปโฆษณา ≤40 ตัวอักษร — กระชับ ตรงจุด
+- description: link description ≤30 ตัวอักษร — เสริม headline
+- cta: ข้อความปุ่ม ≤10 ตัวอักษร (เช่น "สมัครเลย" "ดูรายละเอียด" "สอบถาม")
+- hashtags: array hashtag ภาษาไทย 5-6 อัน ไม่มี # (เกี่ยวกับพยาบาล ชุดพยาบาล EKG และการเป็นตัวแทน)
+
+═══ QUALITY RULES ═══
+1. ภาษาไทยสมบูรณ์ ห้ามแซมภาษาอังกฤษในเนื้อหา (ยกเว้น brand name หรือ term ที่จำเป็น)
+2. แต่ละแบบต้องแตกต่างกันอย่างชัดเจน — ห้ามคล้ายกัน
+3. hook ต้องไม่ขึ้นต้นด้วย "คุณ" ทุกแบบ — สร้างความหลากหลาย
+4. ภาษาต้องเป็นธรรมชาติ ไม่ฟังดู robot หรือ AI-generated
+5. primary_text ต้องสร้าง emotion หรือ logic ที่ทำให้คลิกจริงๆ ไม่ใช่แค่บรรยายสินค้า
+
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่นนอก JSON:
 [
   {{
+    "tone": "...",
     "style_name": "...",
     "style_icon": "...",
+    "framework": "...",
     "hook": "...",
+    "secondary_hook": "...",
     "primary_text": "...",
+    "offer_line": "...",
     "headline": "...",
     "description": "...",
     "cta": "...",
-    "hashtags": ["...", "..."]
+    "hashtags": ["...", "...", "...", "...", "..."]
   }}
-]
-กฎ: ภาษาไทยทั้งหมด, ห้ามใช้ภาษาอังกฤษในเนื้อหา, ตรง target กลุ่มพยาบาล/Reseller, เป็นธรรมชาติ ไม่ฟังดู AI"""
+]"""
 
     try:
         client = _g.Client(api_key=gemini_key)
@@ -3685,7 +3763,7 @@ def generate_content_suggestions():
         suggestions = json.loads(raw)
         if not isinstance(suggestions, list):
             raise ValueError('ไม่ได้รับ array')
-        return jsonify({'suggestions': suggestions[:5]}), 200
+        return jsonify({'suggestions': suggestions[:num_items]}), 200
     except json.JSONDecodeError as je:
         return jsonify({'error': f'AI ตอบกลับรูปแบบไม่ถูกต้อง: {str(je)}'}), 500
     except Exception as e:

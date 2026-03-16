@@ -438,7 +438,8 @@
         }
         .studio-tone-opt:hover { border-color: var(--gm-primary); background: var(--gm-primary-container); color: var(--gm-primary-dark); }
         .studio-tone-opt.active { border-color: var(--gm-primary); background: var(--gm-primary-container); color: var(--gm-primary-dark); }
-        .studio-tone-all { grid-column: 1 / -1; text-align: center; }
+        .studio-tone-all  { grid-column: 1 / -1; text-align: center; }
+        .studio-tone-story{ grid-column: 1 / -1; }
         .studio-tone-all.active { background: var(--gm-primary); color: #fff; border-color: var(--gm-primary); }
         .studio-gen-btn {
             width: 100%; padding: 14px; border-radius: 28px; border: none; cursor: pointer;
@@ -579,7 +580,7 @@
         <div class="adv-welcome-desc">
             ถามหรือกดปุ่มด้านล่างเพื่อเริ่ม<br>
             AI จะแนะนำ <strong>Action Cards</strong> ที่กดแล้วทำงานได้จริงทันที<br>
-            รวมถึง <strong>🎨 สร้างภาพโฆษณาใหม่</strong> ด้วย AI
+            รวมถึง <strong>✍️ Content Studio</strong> สำหรับสร้าง Copy โฆษณาระดับมืออาชีพ
         </div>
     </div>
 </div>
@@ -598,7 +599,7 @@
     <button class="adv-sug-btn" onclick="quickAsk('ดู Ad Sets และ targeting ว่าเหมาะสมกับพยาบาลไหม')">👥 Ad Sets</button>
     <button class="adv-sug-btn" onclick="quickAsk('แนะนำ copy โฆษณาใหม่ให้เหมาะกับพยาบาลและบุคลากรสาธารณสุข')">✍️ Copy</button>
     <button class="adv-sug-btn" onclick="quickAsk('ดู demographics ว่ากลุ่มไหนให้ผลดี ควรเพิ่มงบไปที่ไหน')">📈 Demographics</button>
-    <button class="adv-sug-btn" onclick="openStudio(null)">🎨 สร้างภาพโฆษณา</button>
+    <button class="adv-sug-btn" onclick="openStudio(null)">✍️ Content Studio</button>
 </div>
 
 <!-- ═══════════════════════════════════
@@ -641,10 +642,12 @@
         <div>
             <div class="studio-section-label">🎯 เลือก Tone โฆษณา</div>
             <div class="studio-tone-grid" id="studioToneGrid">
-                <div class="studio-tone-opt" data-tone="urgent" onclick="selectTone(this)">⚡ เร่งด่วน<br><span style="font-size:11px;font-weight:400;color:#5f6368;">สร้างความรีบ</span></div>
-                <div class="studio-tone-opt" data-tone="emotion" onclick="selectTone(this)">💛 อารมณ์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ความภูมิใจ</span></div>
-                <div class="studio-tone-opt" data-tone="benefit" onclick="selectTone(this)">📊 ประโยชน์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ข้อเท็จจริง</span></div>
-                <div class="studio-tone-opt studio-tone-all active" data-tone="all" onclick="selectTone(this)">✨ สร้างทั้ง 3 แบบพร้อมกัน</div>
+                <div class="studio-tone-opt" data-tone="urgent" onclick="selectTone(this)">⚡ เร่งด่วน<br><span style="font-size:11px;font-weight:400;color:#5f6368;">FOMO / โอกาสพิเศษ</span></div>
+                <div class="studio-tone-opt" data-tone="emotion" onclick="selectTone(this)">💛 อารมณ์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ความภูมิใจในวิชาชีพ</span></div>
+                <div class="studio-tone-opt" data-tone="benefit" onclick="selectTone(this)">📊 ประโยชน์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">Rational / ข้อเท็จจริง</span></div>
+                <div class="studio-tone-opt" data-tone="social_proof" onclick="selectTone(this)">🌟 Social Proof<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ความน่าเชื่อถือ</span></div>
+                <div class="studio-tone-opt studio-tone-story" data-tone="story" onclick="selectTone(this)">📖 เล่าเรื่อง<br><span style="font-size:11px;font-weight:400;color:#5f6368;">Storytelling</span></div>
+                <div class="studio-tone-opt studio-tone-all active" data-tone="all" onclick="selectTone(this)">✨ สร้างทั้ง 5 แบบพร้อมกัน</div>
             </div>
         </div>
 
@@ -1157,35 +1160,58 @@ async function generateContent() {
 }
 
 function renderStudioCards(suggestions) {
-    const toneNames = { urgent:'⚡ เร่งด่วน', emotion:'💛 อารมณ์', benefit:'📊 ประโยชน์' };
+    const toneIcons = { urgent:'⚡', emotion:'💛', benefit:'📊', social_proof:'🌟', story:'📖' };
     const cards = document.getElementById('studioContentCards');
     cards.innerHTML = suggestions.map((s, i) => {
-        const toneName = toneNames[s.tone] || s.tone || `แบบที่ ${i+1}`;
+        const icon = s.style_icon || toneIcons[s.tone] || '✍️';
+        const name = s.style_name || s.tone || `แบบที่ ${i+1}`;
+        const fwk  = s.framework ? `<span style="font-size:10px;color:var(--gm-on-surface-3);font-weight:500;background:var(--gm-surface-3);padding:2px 8px;border-radius:10px;">${esc(s.framework)}</span>` : '';
+
+        // Define display fields — only show if value exists
         const fields = [
-            { key:'hook',         label:'Hook / หัวข้อ',    cls:'hook' },
-            { key:'primary_text', label:'Primary Text',      cls:'' },
-            { key:'headline',     label:'Headline',          cls:'' },
-            { key:'description',  label:'Description',       cls:'' },
-            { key:'cta',          label:'CTA',               cls:'' },
+            { key:'hook',           label:'🎣 Hook (เปิดตัว)',         cls:'hook',  char:70  },
+            { key:'secondary_hook', label:'🎣 Hook ทางเลือก',          cls:'hook',  char:70  },
+            { key:'offer_line',     label:'🎁 Offer / Value Prop',     cls:'',      char:50  },
+            { key:'primary_text',   label:'📝 Primary Text (Body)',    cls:'',      char:250 },
+            { key:'headline',       label:'📌 Headline',               cls:'',      char:40  },
+            { key:'description',    label:'💬 Description',            cls:'',      char:30  },
+            { key:'cta',            label:'👆 CTA Button',             cls:'',      char:10  },
         ];
-        const fieldHtml = fields.map(f => s[f.key] ? `
-            <div class="studio-field-row">
+
+        const fieldHtml = fields.map(f => {
+            if (!s[f.key]) return '';
+            const val = s[f.key];
+            const charLen = val.length;
+            const overLimit = charLen > f.char;
+            const charHint = `<span style="font-size:9px;color:${overLimit ? 'var(--gm-error)' : 'var(--gm-on-surface-3)'};">${charLen}/${f.char}</span>`;
+            return `<div class="studio-field-row">
                 <div class="studio-field-label">
-                    ${esc(f.label)}
-                    <button class="studio-field-copy" onclick="copyField(this,'${escAttr(s[f.key])}')">คัดลอก</button>
+                    <span>${esc(f.label)} ${charHint}</span>
+                    <button class="studio-field-copy" onclick="copyField(this,'${escAttr(val)}')">คัดลอก</button>
                 </div>
-                <div class="studio-field-val ${f.cls}">${esc(s[f.key])}</div>
-            </div>` : '').join('');
-        const tags = (s.hashtags || []).map(t => `<span class="studio-hashtag">${esc(t)}</span>`).join('');
-        const allText = fields.filter(f=>s[f.key]).map(f=>`${f.label}: ${s[f.key]}`).join('\n') + (tags ? '\n' + (s.hashtags||[]).join(' ') : '');
+                <div class="studio-field-val ${f.cls}">${esc(val)}</div>
+            </div>`;
+        }).join('');
+
+        const tags = (s.hashtags || []).map(t => `<span class="studio-hashtag">#${esc(t)}</span>`).join('');
+
+        // Build full copy text
+        const allParts = [];
+        fields.forEach(f => { if (s[f.key]) allParts.push(`${f.label.replace(/^[^\s]+ /,'')}: ${s[f.key]}`); });
+        if (s.hashtags?.length) allParts.push((s.hashtags.map(t => '#'+t).join(' ')));
+        const allText = allParts.join('\n\n');
+
         return `<div class="studio-content-card">
             <div class="studio-card-header">
-                <div class="studio-card-title">${esc(toneName)}</div>
+                <div class="studio-card-title">${icon} ${esc(name)} ${fwk}</div>
                 <button class="studio-copy-all-btn" onclick="copyAll(this,'${escAttr(allText)}')">คัดลอกทั้งหมด</button>
             </div>
             <div class="studio-card-body">
                 ${fieldHtml}
-                ${tags ? `<div class="studio-field-row"><div class="studio-field-label">Hashtags</div><div class="studio-hashtags">${tags}</div></div>` : ''}
+                ${tags ? `<div class="studio-field-row">
+                    <div class="studio-field-label">🏷️ Hashtags</div>
+                    <div class="studio-hashtags">${tags}</div>
+                </div>` : ''}
             </div>
         </div>`;
     }).join('');
