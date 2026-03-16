@@ -1187,7 +1187,7 @@ async function runSmartAnalysis(campId, safeId, campName, btn) {
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'วิเคราะห์ไม่สำเร็จ');
-        renderActionItems(safeId, d.action_items, campId, d.date_label);
+        renderActionItems(safeId, d.action_items, campId, d.date_label, d.audience_description || '');
     } catch (e) {
         cardsDiv.innerHTML = `<div style="color:#ff3b30;font-size:13px;padding:8px;">❌ ${e.message}</div>`;
     } finally {
@@ -1196,7 +1196,7 @@ async function runSmartAnalysis(campId, safeId, campName, btn) {
     }
 }
 
-function renderActionItems(safeId, items, campId, dateLabel) {
+function renderActionItems(safeId, items, campId, dateLabel, audienceDesc) {
     const cardsDiv = document.getElementById(safeId + '_action_cards');
     if (!cardsDiv) return;
 
@@ -1209,12 +1209,40 @@ function renderActionItems(safeId, items, campId, dateLabel) {
             <span style="margin-left:auto;font-size:10px;color:#8e8e93;font-weight:400;font-style:italic;">📅 ${dateLabel}</span>`;
     }
 
+    // Audience description box
+    let audienceHtml = '';
+    if (audienceDesc && audienceDesc.trim()) {
+        const boxId = `${safeId}_aud_box`;
+        const len = audienceDesc.length;
+        const warnClass = len > 1800 ? ' warn' : '';
+        audienceHtml = `
+        <div class="camp-audience-box">
+            <div class="camp-audience-header">
+                <span class="camp-audience-title">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    กลุ่มเป้าหมาย Advantage+
+                </span>
+                <span class="camp-audience-counter${warnClass}" id="${boxId}_cnt">${len.toLocaleString()} / 2,000</span>
+                <button class="camp-copy-btn" id="${boxId}_btn" onclick="copyAudienceDesc('${boxId}')">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy
+                </button>
+            </div>
+            <textarea
+                class="camp-audience-textarea"
+                id="${boxId}"
+                maxlength="2000"
+                oninput="updateAudienceCounter('${boxId}')"
+            >${escForHtml(audienceDesc)}</textarea>
+        </div>`;
+    }
+
     if (!items || items.length === 0) {
-        cardsDiv.innerHTML = '<div style="color:#6e6e73;font-size:13px;padding:8px;">✅ ไม่พบปัญหาที่ต้องแก้ไข</div>';
+        cardsDiv.innerHTML = audienceHtml + '<div style="color:#6e6e73;font-size:13px;padding:8px;">✅ ไม่พบปัญหาที่ต้องแก้ไข</div>';
         return;
     }
     const sevLabel = { high: 'ด่วน', medium: 'ควรแก้', low: 'แนะนำ' };
-    cardsDiv.innerHTML = items.map((item, idx) => {
+    cardsDiv.innerHTML = audienceHtml + items.map((item, idx) => {
         const sev = item.severity || 'medium';
         const btns = (item.actions || []).map(a => {
             if (a.type === 'api') {
@@ -1240,6 +1268,35 @@ function renderActionItems(safeId, items, campId, dateLabel) {
                 <div class="camp-action-btns">${btns}</div>
             </div>`;
     }).join('');
+}
+
+function escForHtml(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateAudienceCounter(boxId) {
+    const ta  = document.getElementById(boxId);
+    const cnt = document.getElementById(boxId + '_cnt');
+    if (!ta || !cnt) return;
+    const len = ta.value.length;
+    cnt.textContent = `${len.toLocaleString()} / 2,000`;
+    cnt.className = 'camp-audience-counter' + (len > 1800 ? ' warn' : '');
+}
+
+async function copyAudienceDesc(boxId) {
+    const ta  = document.getElementById(boxId);
+    const btn = document.getElementById(boxId + '_btn');
+    if (!ta || !btn) return;
+    try {
+        await navigator.clipboard.writeText(ta.value);
+    } catch(e) {
+        ta.select();
+        document.execCommand('copy');
+    }
+    const orig = btn.innerHTML;
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> คัดลอกแล้ว!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2200);
 }
 
 async function executeActionItem(campId, safeId, itemIdx, btn) {

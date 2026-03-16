@@ -2441,20 +2441,24 @@ Leads: {leads} | CPL: {"฿" + str(cpl) if cpl else "ไม่มี Lead เล
 URL: {ads_manager_url}
 (เปลี่ยน Objective, แก้ Age/Gender targeting, สร้าง Ad Set ใหม่)
 
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความนอก JSON:
-[
-  {{
-    "severity": "high|medium|low",
-    "issue": "สรุปปัญหาสั้นๆ ภาษาไทย ≤60 ตัวอักษร",
-    "detail": "อธิบายรายละเอียดและเหตุผล ภาษาไทย ≤200 ตัวอักษร",
-    "actions": [
-      {{"label": "ข้อความปุ่ม ภาษาไทย", "type": "api", "payload": {{"action": "toggle", "new_status": "PAUSED"}}}},
-      {{"label": "ไปแก้ใน Ads Manager", "type": "url", "url": "{ads_manager_url}"}}
-    ]
-  }}
-]
-กฎ: สร้าง 2-5 items, severity high=ปัญหาด่วน medium=ควรแก้ low=ข้อแนะนำ
-ถ้าแคมเปญดีให้ชมและแนะนำการขยาย"""
+ตอบเป็น JSON object เท่านั้น ห้ามมีข้อความนอก JSON:
+{{
+  "action_items": [
+    {{
+      "severity": "high|medium|low",
+      "issue": "สรุปปัญหาสั้นๆ ภาษาไทย ≤60 ตัวอักษร",
+      "detail": "อธิบายรายละเอียดและเหตุผล ภาษาไทย ≤200 ตัวอักษร",
+      "actions": [
+        {{"label": "ข้อความปุ่ม ภาษาไทย", "type": "api", "payload": {{"action": "toggle", "new_status": "PAUSED"}}}},
+        {{"label": "ไปแก้ใน Ads Manager", "type": "url", "url": "{ads_manager_url}"}}
+      ]
+    }}
+  ],
+  "audience_description": "คำอธิบายกลุ่มเป้าหมายโดยละเอียด พร้อม copy ไปวางใน Advantage+ Audience Description ≤1800 ตัวอักษร ภาษาไทย วิเคราะห์จาก demographics จริงและ audience_note ของแคมเปญนี้ ให้ระบุ: เพศ อายุ อาชีพ/ไลฟ์สไตล์ ความสนใจ พฤติกรรมออนไลน์ และ pain points ที่สินค้าแก้ได้"
+}}
+กฎ action_items: สร้าง 2-5 items, severity high=ปัญหาด่วน medium=ควรแก้ low=ข้อแนะนำ
+ถ้าแคมเปญดีให้ชมและแนะนำการขยาย
+กฎ audience_description: เขียนเป็นย่อหน้าต่อเนื่อง ไม่ใช่ bullet list รวมทุก insight จาก demographics data และ audience_note"""
 
         # 7) Call Gemini
         client = _g.Client(api_key=gemini_key)
@@ -2471,15 +2475,26 @@ URL: {ads_manager_url}
             if raw.endswith('```'):
                 raw = raw[:-3].strip()
 
-        action_items = json.loads(raw)
-        if not isinstance(action_items, list):
-            raise ValueError('Gemini did not return a JSON array')
+        parsed = json.loads(raw)
+        # Support both old (array) and new (object with action_items key) format
+        if isinstance(parsed, list):
+            action_items = parsed
+            audience_description = ''
+        elif isinstance(parsed, dict):
+            action_items = parsed.get('action_items', [])
+            audience_description = (parsed.get('audience_description') or '').strip()
+            # Enforce 2000 char limit
+            if len(audience_description) > 2000:
+                audience_description = audience_description[:2000]
+        else:
+            raise ValueError('Gemini did not return a valid JSON response')
 
         return jsonify({
             'success': True,
             'campaign_id': campaign_id,
             'campaign_name': camp_name,
             'action_items': action_items,
+            'audience_description': audience_description,
             'date_label': date_label,
             'since_date': since_date or None,
             'metrics_snapshot': {

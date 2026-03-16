@@ -174,6 +174,61 @@
         .sev-high { background:#ff3b3022; color:#ff3b30; }
         .sev-medium { background:#ff950022; color:#c75a00; }
         .sev-low { background:#34c75922; color:#1a7f37; }
+
+        /* ── Audience Description Box ── */
+        .camp-audience-box {
+            background: linear-gradient(135deg, #f0f4ff, #f5f0ff);
+            border: 0.5px solid #c7c0f0;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+        }
+        .camp-audience-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .camp-audience-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #5856d6;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            flex: 1;
+        }
+        .camp-audience-counter {
+            font-size: 10.5px;
+            color: #8e8e93;
+            font-variant-numeric: tabular-nums;
+        }
+        .camp-audience-counter.warn { color: #ff9500; font-weight: 700; }
+        .camp-copy-btn {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 6px;
+            background: #5856d6; color: #fff;
+            font-size: 11px; font-weight: 600;
+            border: none; cursor: pointer; font-family: inherit;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+        }
+        .camp-copy-btn:hover { opacity: 0.85; }
+        .camp-copy-btn.copied { background: #34c759; }
+        .camp-audience-textarea {
+            width: 100%;
+            min-height: 100px;
+            max-height: 200px;
+            padding: 8px 10px;
+            border: 0.5px solid #c7c0f0;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-family: inherit;
+            color: #1d1d1f;
+            background: #fff;
+            resize: vertical;
+            line-height: 1.55;
+        }
+        .camp-audience-textarea:focus { outline: none; border-color: #5856d6; }
     </style>
 </head>
 <body>
