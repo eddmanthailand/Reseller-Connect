@@ -2592,6 +2592,43 @@ def _advisor_load_db_context(cursor):
     except Exception:
         ctx['products_by_brand'] = []
 
+    # 7. UTM parameter values actually tracked in system
+    try:
+        cursor.execute("""
+            SELECT DISTINCT source FROM page_visits
+            WHERE source IS NOT NULL ORDER BY source
+        """)
+        ctx['utm_sources'] = [r[0] for r in cursor.fetchall()]
+    except Exception:
+        ctx['utm_sources'] = []
+
+    try:
+        cursor.execute("""
+            SELECT DISTINCT utm_medium FROM page_visits
+            WHERE utm_medium IS NOT NULL ORDER BY utm_medium
+        """)
+        ctx['utm_mediums'] = [r[0] for r in cursor.fetchall()]
+    except Exception:
+        ctx['utm_mediums'] = []
+
+    try:
+        cursor.execute("""
+            SELECT DISTINCT utm_campaign FROM page_visits
+            WHERE utm_campaign IS NOT NULL ORDER BY utm_campaign LIMIT 30
+        """)
+        ctx['utm_campaigns'] = [r[0] for r in cursor.fetchall()]
+    except Exception:
+        ctx['utm_campaigns'] = []
+
+    try:
+        cursor.execute("""
+            SELECT DISTINCT page_name FROM page_visits
+            WHERE page_name IS NOT NULL ORDER BY page_name
+        """)
+        ctx['landing_pages'] = [r[0] for r in cursor.fetchall()]
+    except Exception:
+        ctx['landing_pages'] = []
+
     return ctx
 
 
@@ -2652,6 +2689,25 @@ def _advisor_format_db_context(ctx):
     if prods:
         brands_str = ', '.join(f"{r.get('brand','?')}({r.get('products',0)})" for r in prods)
         lines.append(f"\n[สินค้า Active] {brands_str}")
+
+    # UTM Parameters
+    utm_sources  = ctx.get('utm_sources', [])
+    utm_mediums  = ctx.get('utm_mediums', [])
+    utm_campaigns = ctx.get('utm_campaigns', [])
+    landing_pages = ctx.get('landing_pages', [])
+    if utm_sources or utm_mediums or utm_campaigns or landing_pages:
+        lines.append('\n[URL Tracking Parameters ที่ระบบ EKG Shops รับรู้]')
+        lines.append('รูปแบบ URL: https://ekg-shops.com/<page>?utm_source=<source>&utm_medium=<medium>&utm_campaign=<campaign>')
+        if utm_sources:
+            lines.append(f"  utm_source ที่พบ: {', '.join(utm_sources)}")
+        if utm_mediums:
+            lines.append(f"  utm_medium ที่พบ: {', '.join(utm_mediums)}")
+        if landing_pages:
+            lines.append(f"  Landing pages: {', '.join(landing_pages)}")
+            lines.append('  ตัวอย่าง URL ที่ใช้: /join (สมัครสมาชิก), /become-reseller (สมัคร reseller), /catalog (ดูสินค้า)')
+        if utm_campaigns:
+            lines.append(f"  utm_campaign ที่พบใน DB ({len(utm_campaigns)} แคมเปญ): {', '.join(utm_campaigns[:15])}")
+            lines.append('  หมายเหตุ: utm_campaign ควรตรงกับชื่อหรือ ID แคมเปญใน Facebook Ads Manager')
 
     lines.append('\n=== (จบข้อมูล DB) ===')
     return '\n'.join(lines)
@@ -2769,6 +2825,13 @@ def advisor_chat():
         'คุณคือ AI ผู้ช่วยวิเคราะห์ Facebook Ads ของ EKG Shops (ร้านขายชุดพยาบาล B2B)\n'
         'คุณมองเห็นหน้าจอของผู้ใช้แบบ real-time และมีข้อมูล DB ทั้งหมดที่เกี่ยวข้อง\n'
         'ตอบภาษาไทย กระชับ ตรงประเด็น ใช้ bullet points เมื่อเหมาะสม\n\n'
+        '[URL Tracking Convention]\n'
+        'EKG Shops ใช้ URL parameters ดังนี้:\n'
+        '  ?utm_source=facebook|instagram|google|paid|referral|direct\n'
+        '  &utm_medium=cpc|paid\n'
+        '  &utm_campaign=<ชื่อแคมเปญหรือ Facebook Campaign ID>\n'
+        'Landing pages หลัก: /join (สมัครสมาชิก), /become-reseller (reseller), /catalog\n'
+        'เมื่อเห็น URL ใน Ad ควรตรวจสอบว่า utm_source/medium/campaign ถูกต้องและตรงกับ campaign\n\n'
         '[แคมเปญที่กำลังดูอยู่]\n' + '\n'.join(camp_lines)
         + (('\n' + db_context_text) if db_context_text else '')
         + auto_note + on_demand_note
