@@ -2972,9 +2972,22 @@ def advisor_chat():
         '- Ad Set ที่ overlap audience กัน → เพิ่ม CPL\n'
         '- Landing page ไม่ match กับ ad copy → Bounce rate สูง\n'
         '- Bid strategy เปลี่ยนบ่อย → Reset learning phase\n'
-        '- Ad หยุดทำงาน (Paused/Error) → ตรวจ payment method หรือ policy\n'
-        '- Lookalike audience ขนาดเล็กเกินไป (<50,000 คน ใน TH)\n'
-        '- Creative ใช้มา >2 สัปดาห์โดยไม่ refresh → CTR ตก\n\n'
+        '\n\n=== ACTION CARDS (เครื่องมือเชิงรุก) ===\n\n'
+        'นอกจากการตอบข้อความแล้ว คุณสามารถแนบ Action Cards ท้ายคำตอบได้\n'
+        'โดยใส่ JSON block นี้ที่ท้ายสุดของคำตอบ (ไม่ต้องใส่ทุกครั้ง — ใส่เมื่อมีประโยชน์จริงๆ):\n\n'
+        '<!--ACTIONS:[...array of action objects...]-->\n\n'
+        'รูปแบบ Action Object:\n\n'
+        '1. สร้างภาพโฆษณาใหม่ (generate_image):\n'
+        '{"type":"generate_image","label":"🎨 สร้างภาพโฆษณา","headline":"ข้อความหลัก","body":"ข้อความรอง","cta":"สมัครเลย","style":"professional","reason":"เพราะอะไร"}\n'
+        'style ที่ใช้ได้: professional | vibrant | warm | dark_luxury | hospital_clean\n\n'
+        '2. หยุด Ad Set (pause_adset):\n'
+        '{"type":"pause_adset","label":"⏸ หยุด Ad Set","adset_id":"ID_HERE","adset_name":"ชื่อ Ad Set","reason":"เพราะอะไร"}\n\n'
+        '3. Copy ข้อความ (copy_text):\n'
+        '{"type":"copy_text","label":"📋 Copy ข้อความ","text":"ข้อความที่แนะนำ","reason":"เพราะอะไร"}\n\n'
+        'ตัวอย่างการใช้: เมื่อ Frequency >4 → แนะนำ generate_image ใหม่\n'
+        'เมื่อ CPL สูงมาก → แนะนำ pause_adset + generate_image\n'
+        'เมื่อถาม copy → แนะนำ copy_text หลายตัวเลือก\n'
+        'เมื่อ creative เดิมใช้มา >2 สัปดาห์ → แนะนำ generate_image อัตโนมัติ\n'
 
         '[Bid Strategies ที่ควรรู้]\n'
         '- Lowest Cost (ค่าเริ่มต้น): FB หา lead ถูกสุดเท่าที่ทำได้\n'
@@ -3165,3 +3178,195 @@ def proxy_image():
                         headers={'Cache-Control': 'max-age=3600'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 502
+
+
+# ─────────────────────────────────────────────────────────────────
+#  CREATIVE STUDIO — Product Images, Generate, Saved List
+# ─────────────────────────────────────────────────────────────────
+
+@facebook_ads_bp.route('/api/facebook-ads/product-images', methods=['GET'])
+@login_required
+@admin_required
+def get_product_images():
+    """Return product images from the store for use in ad creative generation."""
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT pi.id, pi.image_url, pi.sort_order,
+                   p.name AS product_name, p.id AS product_id, p.status AS product_status
+            FROM product_images pi
+            JOIN products p ON p.id = pi.product_id
+            WHERE p.status = 'active'
+            ORDER BY pi.sort_order ASC, pi.id DESC
+            LIMIT 60
+        ''')
+        rows = cursor.fetchall()
+        images = []
+        for r in rows:
+            img_url = r['image_url'] or ''
+            if img_url and not img_url.startswith('http'):
+                img_url = '/' + img_url.lstrip('/')
+            images.append({
+                'id':           r['id'],
+                'image_url':    img_url,
+                'product_id':   r['product_id'],
+                'product_name': r['product_name'],
+            })
+        return jsonify({'images': images}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@facebook_ads_bp.route('/api/facebook-ads/generate-ad-image', methods=['POST'])
+@login_required
+@admin_required
+def generate_ad_image():
+    """Generate an ad creative image using Gemini image generation."""
+    import base64, uuid as _uuid
+    from google import genai as _g
+    from google.genai import types as _gt
+
+    data           = request.get_json(silent=True) or {}
+    campaign_id    = (data.get('campaign_id') or '').strip()
+    headline       = (data.get('headline') or '').strip()
+    body_text      = (data.get('body_text') or '').strip()
+    cta            = (data.get('cta') or 'สมัครเลย').strip()
+    style          = (data.get('style') or 'professional').strip()
+    product_img_b64 = data.get('product_image_b64')  # base64 of selected product image
+    product_image_url = (data.get('product_image_url') or '').strip()
+    extra_instruction = (data.get('extra_instruction') or '').strip()
+
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if not gemini_key:
+        return jsonify({'error': 'ไม่มี GEMINI_API_KEY'}), 503
+
+    style_map = {
+        'professional':   'clean white background, professional photography, minimalist layout',
+        'vibrant':        'vibrant colorful background, energetic, bold typography, eye-catching',
+        'warm':           'warm pastel tones, friendly and approachable, soft lighting',
+        'dark_luxury':    'dark premium background, luxury feel, gold accents, high-end look',
+        'hospital_clean': 'clinical white and blue tones, hospital-clean aesthetic, trustworthy',
+    }
+    style_desc = style_map.get(style, style_map['professional'])
+
+    prompt = (
+        f'Create a professional Facebook advertisement image for a Thai nurse uniform reseller brand called EKG Shops.\n'
+        f'The ad targets nurses, nursing students, and healthcare workers in Thailand.\n\n'
+        f'Ad content:\n'
+        f'- Headline (large bold text): "{headline}"\n'
+        f'- Body text (smaller): "{body_text}"\n'
+        f'- CTA button text: "{cta}"\n\n'
+        f'Visual style: {style_desc}\n'
+        f'{"Additional instruction: " + extra_instruction if extra_instruction else ""}\n\n'
+        f'Requirements:\n'
+        f'- Square 1:1 format suitable for Facebook/Instagram feed\n'
+        f'- Thai text must be rendered clearly and correctly\n'
+        f'- Include the nurse uniform product prominently\n'
+        f'- Professional layout with clear visual hierarchy: image → headline → body → CTA\n'
+        f'- EKG Shops brand feel: trustworthy, quality, modern\n'
+        f'- If a product image is provided, feature it as the hero element\n'
+    )
+
+    try:
+        client = _g.Client(api_key=gemini_key)
+        parts = []
+
+        if product_img_b64:
+            try:
+                img_bytes = base64.b64decode(product_img_b64)
+                parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
+                parts.append(_gt.Part(text='Product image above — use this as the main product hero in the ad.'))
+            except Exception:
+                pass
+
+        parts.append(_gt.Part(text=prompt))
+
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-preview-image-generation',
+            contents=[_gt.Content(role='user', parts=parts)],
+            config=_gt.GenerateContentConfig(
+                response_modalities=['TEXT', 'IMAGE']
+            )
+        )
+
+        img_b64_out = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                img_b64_out = base64.b64encode(part.inline_data.data).decode('utf-8')
+                break
+
+        if not img_b64_out:
+            return jsonify({'error': 'AI ไม่ได้สร้างภาพ กรุณาลองใหม่'}), 500
+
+        # Save file
+        filename  = f'creative_{_uuid.uuid4().hex[:12]}.jpg'
+        save_dir  = os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'creatives')
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, filename)
+        with open(save_path, 'wb') as f:
+            f.write(base64.b64decode(img_b64_out))
+
+        image_url = f'/static/uploads/creatives/{filename}'
+
+        # Persist to DB
+        conn = cursor = None
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO generated_creatives
+                    (campaign_id, product_image_url, headline, body_text, cta, style, prompt_used, image_path, image_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (campaign_id or None, product_image_url or None,
+                  headline, body_text, cta, style, prompt[:500], save_path, image_url))
+            creative_id = cursor.fetchone()[0]
+            conn.commit()
+        except Exception:
+            creative_id = None
+        finally:
+            if cursor: cursor.close()
+            if conn: conn.close()
+
+        return jsonify({
+            'success':     True,
+            'image_url':   image_url,
+            'image_b64':   img_b64_out,
+            'creative_id': creative_id,
+        }), 200
+
+    except Exception as e:
+        return handle_error(e)
+
+
+@facebook_ads_bp.route('/api/facebook-ads/saved-creatives-list/<campaign_id>', methods=['GET'])
+@login_required
+@admin_required
+def saved_creatives_list(campaign_id):
+    """List all generated ad creatives for a campaign."""
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT id, campaign_id, headline, body_text, cta, style, image_url, created_at
+            FROM generated_creatives
+            WHERE campaign_id = %s
+            ORDER BY created_at DESC
+            LIMIT 20
+        ''', (campaign_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            if r.get('created_at'):
+                r['created_at'] = r['created_at'].strftime('%d/%m/%y %H:%M')
+        return jsonify({'creatives': rows}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
