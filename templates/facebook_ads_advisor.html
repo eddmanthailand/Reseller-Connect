@@ -381,17 +381,19 @@
             flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0;
         }
         .adv-vdo-label { font-size: 11px; font-weight: 600; color: var(--gm-primary); }
-        .adv-vdo-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-        .adv-vdo-chip {
-            padding: 4px 12px; border-radius: 20px; border: 1.5px solid var(--gm-outline);
-            background: var(--gm-surface); color: var(--gm-on-surface-2);
-            font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer;
-            transition: all .15s;
+        .adv-vdo-dur-row { display: flex; align-items: center; gap: 8px; }
+        .adv-vdo-dur-input {
+            width: 72px; padding: 5px 10px; border-radius: 20px;
+            border: 1.5px solid var(--gm-outline); background: var(--gm-surface-2);
+            font-family: var(--font); font-size: 13px; font-weight: 700;
+            color: var(--gm-on-surface); text-align: center; outline: none;
+            transition: border-color .2s, box-shadow .2s;
         }
-        .adv-vdo-chip:hover { border-color: var(--gm-primary); color: var(--gm-primary); }
-        .adv-vdo-chip.active {
-            background: var(--gm-primary); color: #fff; border-color: var(--gm-primary);
+        .adv-vdo-dur-input:focus {
+            border-color: var(--gm-primary);
+            box-shadow: 0 0 0 3px rgba(26,115,232,.12);
         }
+        .adv-vdo-dur-unit { font-size: 12px; color: var(--gm-on-surface-2); }
         .adv-vdo-row { display: flex; align-items: center; gap: 8px; }
         .adv-vdo-send-btn {
             flex: 1; padding: 8px 14px; border-radius: 20px; border: none;
@@ -667,13 +669,11 @@
         <button class="adv-img-remove" onclick="clearAttachedImg()" title="ลบภาพ">✕</button>
     </div>
     <div class="adv-vdo-panel">
-        <div class="adv-vdo-label">🎬 สร้าง Script VDO — เลือกความยาว:</div>
-        <div class="adv-vdo-chips">
-            <button class="adv-vdo-chip" data-sec="7"  onclick="selectVdoDur(this)">7s</button>
-            <button class="adv-vdo-chip active" data-sec="15" onclick="selectVdoDur(this)">15s</button>
-            <button class="adv-vdo-chip" data-sec="30" onclick="selectVdoDur(this)">30s</button>
-            <button class="adv-vdo-chip" data-sec="60" onclick="selectVdoDur(this)">60s</button>
-            <button class="adv-vdo-chip" data-sec="90" onclick="selectVdoDur(this)">90s</button>
+        <div class="adv-vdo-label">🎬 สร้าง Script VDO</div>
+        <div class="adv-vdo-dur-row">
+            <input class="adv-vdo-dur-input" id="advVdoDurInput" type="number"
+                   min="5" max="300" value="15" placeholder="15">
+            <span class="adv-vdo-dur-unit">วินาที</span>
         </div>
         <div class="adv-vdo-row">
             <button class="adv-vdo-send-btn" onclick="sendVdoScript()">
@@ -1052,7 +1052,6 @@ function quickAsk(txt) {
 // IMAGE ATTACH + VDO SCRIPT STATE
 // ══════════════════════════════════
 let _attachedImg = null;   // base64 data URL of attached image
-let _selectedVdoDur = 15;  // default VDO duration in seconds
 
 function handleImgPaste(e) {
     const items = (e.clipboardData || window.clipboardData || {}).items;
@@ -1093,23 +1092,23 @@ function clearAttachedImg() {
     document.getElementById('advImgPreview').classList.remove('show');
 }
 
-function selectVdoDur(btn) {
-    document.querySelectorAll('.adv-vdo-chip').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    _selectedVdoDur = parseInt(btn.dataset.sec);
+function getVdoDur() {
+    const v = parseInt(document.getElementById('advVdoDurInput').value) || 15;
+    return Math.min(Math.max(v, 5), 300);
 }
 
 async function sendVdoScript() {
     if (isRequesting || !_attachedImg) return;
+    const dur = getVdoDur();
     const inp = document.getElementById('advInput');
     const extra = inp.value.trim();
     inp.value = ''; autoResize(inp);
-    const msg = extra || `สร้าง VDO Script ${_selectedVdoDur} วินาที`;
+    const msg = extra || `สร้าง VDO Script ${dur} วินาที`;
     const imgSnap = _attachedImg;
     clearAttachedImg();
-    appendUserMsg(`🎬 ${msg} (${_selectedVdoDur}s)`);
+    appendUserMsg(`🎬 ${msg} (${dur}s)`);
     chatHistory.push({ role: 'user', text: msg });
-    await callAI(msg, imgSnap, false, null, _selectedVdoDur);
+    await callAI(msg, imgSnap, false, null, dur);
 }
 
 async function sendWithImage() {
