@@ -3274,34 +3274,56 @@ def generate_ad_image():
 
     try:
         client = _g.Client(api_key=gemini_key)
-        parts = []
 
+        # Step 1: If product image provided, ask Gemini to describe it for a richer prompt
+        product_desc = ''
         if product_img_b64:
             try:
-                img_bytes = base64.b64decode(product_img_b64)
-                parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
-                parts.append(_gt.Part(text='Product image above — use this as the main product hero in the ad.'))
+                img_bytes_raw = base64.b64decode(product_img_b64)
+                desc_resp = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[_gt.Content(role='user', parts=[
+                        _gt.Part.from_bytes(data=img_bytes_raw, mime_type='image/jpeg'),
+                        _gt.Part(text='Describe this nurse uniform product image in 2-3 sentences for use in an ad prompt. Focus on: garment style, color, design details, and model presentation. Be concise and descriptive.'),
+                    ])]
+                )
+                product_desc = (desc_resp.text or '').strip()
             except Exception:
-                pass
+                product_desc = ''
 
-        parts.append(_gt.Part(text=prompt))
+        # Build final Imagen prompt
+        full_prompt = prompt
+        if product_desc:
+            full_prompt = (
+                f'Create a professional Facebook advertisement image.\n'
+                f'Product description: {product_desc}\n\n'
+                f'Ad content:\n'
+                f'- Main headline (large bold text): "{headline}"\n'
+                f'- Body text: "{body_text}"\n'
+                f'- CTA button: "{cta}"\n\n'
+                f'Visual style: {style_map.get(style, style_map["professional"])}\n'
+                f'{"Additional instruction: " + extra_instruction if extra_instruction else ""}\n\n'
+                f'Requirements: Square 1:1 format for Facebook/Instagram feed. '
+                f'The nurse uniform must be the hero product. Thai B2B brand feel: trustworthy, quality, modern. '
+                f'Clear visual hierarchy: product image → headline → body text → CTA button.'
+            )
 
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-preview-image-generation',
-            contents=[_gt.Content(role='user', parts=parts)],
-            config=_gt.GenerateContentConfig(
-                response_modalities=['TEXT', 'IMAGE']
+        # Step 2: Generate image with Imagen 3
+        img_response = client.models.generate_images(
+            model='imagen-3.0-generate-002',
+            prompt=full_prompt,
+            config=_gt.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio='1:1',
+                safety_filter_level='BLOCK_ONLY_HIGH',
+                person_generation='ALLOW_ADULT',
             )
         )
 
-        img_b64_out = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                img_b64_out = base64.b64encode(part.inline_data.data).decode('utf-8')
-                break
+        if not img_response.generated_images:
+            return jsonify({'error': 'AI ไม่ได้สร้างภาพ อาจถูกบล็อกโดย safety filter กรุณาปรับ prompt แล้วลองใหม่'}), 500
 
-        if not img_b64_out:
-            return jsonify({'error': 'AI ไม่ได้สร้างภาพ กรุณาลองใหม่'}), 500
+        img_b64_out = base64.b64encode(img_response.generated_images[0].image.image_bytes).decode('utf-8')
 
         # Save file
         filename  = f'creative_{_uuid.uuid4().hex[:12]}.jpg'
