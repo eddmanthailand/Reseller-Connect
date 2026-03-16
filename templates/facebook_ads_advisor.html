@@ -597,6 +597,8 @@ async function loadGallery() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
         galleryAds = d.ads || [];
+        console.log('[Gallery] ads loaded:', galleryAds.length, 'with images:', galleryAds.filter(a=>a.image_url).length);
+        galleryAds.forEach((a,i)=>console.log(`  ad[${i}] status=${a.status} image_url=${a.image_url||'(none)'}`));
         document.getElementById('advGalleryCount').textContent = galleryAds.length ? `(${galleryAds.length})` : '';
         if (!galleryAds.length) { body.innerHTML = '<div class="adv-gallery-info">ไม่พบโฆษณา</div>'; return; }
         body.innerHTML = galleryAds.map((ad, i) => {

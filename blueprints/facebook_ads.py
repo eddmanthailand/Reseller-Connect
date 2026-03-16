@@ -3266,10 +3266,11 @@ def campaign_creatives(campaign_id):
         if not token:
             return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
 
+        # Use `creative` (singular) — Facebook generates thumbnail_url for ALL ad types
         fields = ('name,status,effective_status,'
-                  'adcreatives{id,name,body,title,image_url,thumbnail_url,'
+                  'creative{id,name,body,title,thumbnail_url,image_url,'
                   'call_to_action_type,object_story_spec}')
-        url = (f'https://graph.facebook.com/v19.0/{campaign_id}/ads'
+        url = (f'https://graph.facebook.com/v21.0/{campaign_id}/ads'
                f'?fields={fields}&limit=15&access_token={token}')
         req = _ur.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
         with _ur.urlopen(req, timeout=15) as r:
@@ -3277,18 +3278,24 @@ def campaign_creatives(campaign_id):
 
         ads = []
         for ad in data.get('data', []):
-            creatives = ad.get('adcreatives', {}).get('data', [])
-            c = creatives[0] if creatives else {}
+            c = ad.get('creative', {})   # single object (not list)
+            oss = c.get('object_story_spec') or {}
+            link_data = oss.get('link_data') or {}
+            video_data = oss.get('video_data') or {}
+            image_url = (
+                c.get('thumbnail_url')
+                or c.get('image_url')
+                or link_data.get('picture')
+                or video_data.get('image_url')
+            )
             ads.append({
-                'id':          ad.get('id'),
-                'name':        ad.get('name', ''),
-                'status':      ad.get('effective_status') or ad.get('status', ''),
-                'body':        c.get('body') or c.get('object_story_spec', {}).get('link_data', {}).get('message', ''),
-                'title':       c.get('title') or c.get('object_story_spec', {}).get('link_data', {}).get('name', ''),
-                'image_url':   (c.get('image_url') or c.get('thumbnail_url')
-                               or c.get('object_story_spec', {}).get('link_data', {}).get('picture')
-                               or c.get('object_story_spec', {}).get('video_data', {}).get('image_url')),
-                'cta':         c.get('call_to_action_type', ''),
+                'id':        ad.get('id'),
+                'name':      ad.get('name', ''),
+                'status':    ad.get('effective_status') or ad.get('status', ''),
+                'body':      c.get('body') or link_data.get('message', ''),
+                'title':     c.get('title') or link_data.get('name', ''),
+                'image_url': image_url,
+                'cta':       c.get('call_to_action_type', ''),
             })
         return jsonify({'ads': ads, 'total': len(ads)}), 200
 
