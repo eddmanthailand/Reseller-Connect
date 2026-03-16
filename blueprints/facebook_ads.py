@@ -2502,3 +2502,119 @@ URL: {ads_manager_url}
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+# ==================== AI SCREEN ADVISOR ====================
+
+@facebook_ads_bp.route('/admin/facebook-ads/advisor/<campaign_id>')
+@login_required
+@admin_required
+def facebook_ads_advisor_page(campaign_id):
+    return render_template(
+        'facebook_ads_advisor.html',
+        campaign_id=campaign_id,
+        user_role=session.get('role', '')
+    )
+
+
+@facebook_ads_bp.route('/api/facebook-ads/advisor-chat', methods=['POST'])
+@login_required
+@admin_required
+def advisor_chat():
+    import base64
+    from google import genai as _g
+    from google.genai import types as _gt
+
+    data           = request.get_json(silent=True) or {}
+    campaign_id    = (data.get('campaign_id') or '').strip()
+    message        = (data.get('message') or '').strip()
+    screenshot_b64 = data.get('screenshot')
+    history        = data.get('history') or []
+    is_auto        = bool(data.get('is_auto', False))
+    ctx            = data.get('campaign_context') or {}
+
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if not gemini_key:
+        return jsonify({'error': 'ไม่มี GEMINI_API_KEY'}), 503
+
+    goal_map = {
+        'lead': 'Lead/สมัครสมาชิก', 'registration': 'Registration',
+        'awareness': 'Brand Awareness (Reach)', 'purchase': 'ยอดขาย/สั่งซื้อ',
+    }
+    camp_name = ctx.get('campaign_name') or campaign_id
+    ctx_lines = [f"- ชื่อแคมเปญ: {camp_name}"]
+    if ctx.get('goal_type'):
+        ctx_lines.append(f"- เป้าหมาย: {goal_map.get(ctx['goal_type'], ctx['goal_type'])}")
+    if ctx.get('target_cpl'):
+        ctx_lines.append(f"- CPL เป้า: ≤ ฿{ctx['target_cpl']}")
+    if ctx.get('target_ctr'):
+        ctx_lines.append(f"- CTR เป้า: ≥ {ctx['target_ctr']}%")
+    if ctx.get('max_daily_budget'):
+        ctx_lines.append(f"- งบ/วันสูงสุด: ฿{ctx['max_daily_budget']}")
+    if ctx.get('audience_note'):
+        ctx_lines.append(f"- กลุ่มเป้าหมาย: {ctx['audience_note']}")
+    if ctx.get('spend') is not None:
+        ctx_lines.append(f"- ยอดใช้จ่าย: ฿{float(ctx['spend']):.2f}")
+    if ctx.get('cpl') is not None:
+        ctx_lines.append(f"- CPL จริง: ฿{float(ctx['cpl']):.2f}")
+    if ctx.get('ctr') is not None:
+        ctx_lines.append(f"- CTR จริง: {float(ctx['ctr']):.2f}%")
+    if ctx.get('leads') is not None:
+        ctx_lines.append(f"- Leads: {ctx['leads']}")
+
+    auto_note = (
+        '\n\nสำหรับการตรวจสอบอัตโนมัติ: ดูภาพและแจ้งเฉพาะสิ่งที่น่ากังวลหรือควรแก้ไขเร่งด่วน'
+        '\nถ้าไม่มีอะไรใหม่หรือน่ากังวล ให้ตอบแค่คำว่า "OK" เพียงคำเดียว ห้ามอธิบายเพิ่ม'
+    ) if is_auto else ''
+
+    system_prompt = (
+        'คุณคือ AI ผู้ช่วยวิเคราะห์ Facebook Ads ของ EKG Shops (ร้านขายชุดพยาบาล B2B)\n'
+        'คุณมองเห็นหน้าจอของผู้ใช้แบบ real-time และช่วยวิเคราะห์การตั้งค่าโฆษณา\n'
+        'ตอบภาษาไทย กระชับ ตรงประเด็น ใช้ bullet points เมื่อเหมาะสม\n\n'
+        'ข้อมูลแคมเปญ:\n' + '\n'.join(ctx_lines) + auto_note
+    )
+
+    try:
+        client = _g.Client(api_key=gemini_key)
+
+        contents = []
+        for h in history[-10:]:
+            role = h.get('role', 'user')
+            if role not in ('user', 'model'):
+                role = 'user'
+            contents.append(_gt.Content(role=role, parts=[_gt.Part(text=h.get('text', ''))]))
+
+        parts = []
+        if screenshot_b64:
+            try:
+                img_bytes = base64.b64decode(screenshot_b64)
+                parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
+            except Exception:
+                pass
+
+        if is_auto and not message:
+            user_text = 'ดูภาพหน้าจอนี้ มีอะไรน่าสังเกตหรือควรแจ้งเตือนไหม?'
+        elif message:
+            user_text = message
+        elif screenshot_b64:
+            user_text = 'ดูภาพหน้าจอและอธิบายสิ่งที่เห็นเกี่ยวกับ Facebook Ads'
+        else:
+            return jsonify({'error': 'กรุณาส่ง message หรือ screenshot'}), 400
+
+        parts.append(_gt.Part(text=user_text))
+        contents.append(_gt.Content(role='user', parts=parts))
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents,
+            config=_gt.GenerateContentConfig(system_instruction=system_prompt)
+        )
+        reply = (response.text or '').strip()
+
+        _trivial_ok = {'ok', 'ok.', '✓', 'ไม่มีอะไรใหม่', 'ปกติ', 'ปกติครับ', 'ปกติค่ะ'}
+        is_trivial = is_auto and reply.lower() in _trivial_ok
+
+        return jsonify({'reply': reply, 'is_trivial': is_trivial}), 200
+
+    except Exception as e:
+        return handle_error(e)

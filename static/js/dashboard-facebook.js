@@ -1011,6 +1011,11 @@ function _buildCampaignCard(c) {
                 onclick="runSmartAnalysis('${c.id}','${safeId}','${nameEsc}',this)">
                 🤖 วิเคราะห์ด้วย AI
             </button>
+            <button class="camp-btn" style="background:#5856d6;color:#fff;"
+                onclick="window.open('/admin/facebook-ads/advisor/${c.id}','_blank','width=480,height=760,resizable=yes,scrollbars=no')"
+                title="เปิด AI ผู้ช่วยดูหน้าจออัตโนมัติ">
+                👁 AI ดูหน้าจอ
+            </button>
             <button class="camp-btn camp-btn-dup" onclick="showBriefForm('${safeId}')">🎯 ตั้งเป้าหมาย</button>
             <label style="font-size:11px;color:#6e6e73;display:flex;align-items:center;gap:4px;margin-left:4px;">
                 📅<input type="date" id="${safeId}_since_date"
