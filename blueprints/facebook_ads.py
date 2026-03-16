@@ -2861,6 +2861,87 @@ def facebook_ads_advisor_page(campaign_id):
     )
 
 
+@facebook_ads_bp.route('/api/facebook-ads/campaign-info/<campaign_id>', methods=['GET'])
+@login_required
+@admin_required
+def campaign_info(campaign_id):
+    """Fetch live campaign summary from Meta API for Advisor page header."""
+    import urllib.request as _ur
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, _ = _get_meta_credentials(cursor)
+        if not token:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
+
+        def _fetch(url):
+            req = _ur.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+            with _ur.urlopen(req, timeout=12) as r:
+                return json.loads(r.read().decode())
+
+        camp = _fetch(
+            f'https://graph.facebook.com/v21.0/{campaign_id}'
+            f'?fields=name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time'
+            f'&access_token={token}'
+        )
+        ins_data = _fetch(
+            f'https://graph.facebook.com/v21.0/{campaign_id}/insights'
+            f'?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
+            f'&date_preset=last_30d&access_token={token}'
+        ).get('data', [])
+        ins = ins_data[0] if ins_data else {}
+
+        def _act(row, key):
+            for a in (row.get('actions') or []):
+                if a['action_type'] == key:
+                    return float(a['value'])
+            return 0.0
+
+        sp  = float(ins.get('spend', 0))
+        rc  = int(ins.get('reach', 0))
+        cl  = int(ins.get('clicks', 0))
+        ctr = float(ins.get('ctr', 0))
+        cpc = float(ins.get('cpc', 0))
+        cpm = float(ins.get('cpm', 0))
+        frq = float(ins.get('frequency', 0))
+        imp = int(ins.get('impressions', 0))
+        lds = int(_act(ins, 'lead'))
+        lpv = int(_act(ins, 'landing_page_view'))
+        cpl = round(sp / lds, 2) if lds > 0 else None
+        bud = round(int(camp.get('daily_budget') or 0) / 100, 2)
+
+        # Also check campaign brief for name override
+        cursor.execute('SELECT campaign_name FROM campaign_briefs WHERE campaign_id=%s', (campaign_id,))
+        brief_row = cursor.fetchone()
+        display_name = (brief_row['campaign_name'] if brief_row and brief_row['campaign_name']
+                        else camp.get('name', campaign_id))
+
+        return jsonify({
+            'name':       display_name,
+            'api_name':   camp.get('name', ''),
+            'status':     camp.get('effective_status') or camp.get('status', ''),
+            'objective':  camp.get('objective', ''),
+            'daily_budget': bud,
+            'spend':      sp,
+            'reach':      rc,
+            'impressions': imp,
+            'clicks':     cl,
+            'ctr':        ctr,
+            'cpc':        cpc,
+            'cpm':        cpm,
+            'frequency':  frq,
+            'leads':      lds,
+            'landing_page_views': lpv,
+            'cpl':        cpl,
+        }), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @facebook_ads_bp.route('/api/facebook-ads/advisor-context', methods=['GET'])
 @login_required
 @admin_required

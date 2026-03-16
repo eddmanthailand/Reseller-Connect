@@ -75,6 +75,29 @@
             font-size: 11px; padding: 2px 8px; border-radius: 20px;
             background: #f0f0ff; color: #4338ca; border: 1px solid #e0e7ff;
         }
+
+        /* ══ CAMPAIGN METRICS BAR ══ */
+        .adv-metrics-bar {
+            flex-shrink: 0; display: none;
+            padding: 7px 16px; background: #f8f7ff;
+            border-bottom: 1px solid #e9e6ff;
+            overflow-x: auto; scrollbar-width: none; gap: 12px; align-items: center;
+        }
+        .adv-metrics-bar::-webkit-scrollbar { display: none; }
+        .adv-metrics-bar.show { display: flex; }
+        .adv-metric-item { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 1px; }
+        .adv-metric-val { font-size: 13px; font-weight: 700; color: #1e1b4b; line-height: 1.2; }
+        .adv-metric-lbl { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+        .adv-metric-div { width: 1px; height: 24px; background: #ddd6fe; flex-shrink: 0; }
+        .adv-status-pill {
+            font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
+        }
+        .adv-status-pill.active { background: #dcfce7; color: #16a34a; }
+        .adv-status-pill.paused { background: #fef9c3; color: #854d0e; }
+        .adv-status-pill.other  { background: #f3f4f6; color: #6b7280; }
+        .adv-metric-warn { color: #dc2626 !important; }
+        .adv-metrics-loading { font-size: 11px; color: #9ca3af; }
+
         .adv-preview-wrap { width: 100%; display: none; margin-top: 6px; }
         .adv-preview-wrap.show { display: block; }
         #advPreviewVideo {
@@ -407,6 +430,11 @@
     <span class="adv-db-badge err" id="advDbBadge" style="display:none;"></span>
 </div>
 
+<!-- Campaign Metrics Bar -->
+<div class="adv-metrics-bar" id="advMetricsBar">
+    <span class="adv-metrics-loading">⏳ กำลังโหลดข้อมูลแคมเปญ…</span>
+</div>
+
 <!-- Control Bar -->
 <div class="adv-ctrl-bar">
     <div class="adv-dot" id="advDot"></div>
@@ -538,10 +566,17 @@ let studioSuggestions = [];
 // INIT
 // ══════════════════════════════════
 async function init() {
-    const [briefR, ctxR] = await Promise.allSettled([
+    // Show loading state on metrics bar
+    const metricsBar = document.getElementById('advMetricsBar');
+    metricsBar.classList.add('show');
+
+    const [briefR, ctxR, infoR] = await Promise.allSettled([
         fetch(`/api/facebook-ads/campaign-brief/${CAMPAIGN_ID}`, { credentials: 'include' }),
-        fetch('/api/facebook-ads/advisor-context', { credentials: 'include' })
+        fetch('/api/facebook-ads/advisor-context', { credentials: 'include' }),
+        fetch(`/api/facebook-ads/campaign-info/${CAMPAIGN_ID}`, { credentials: 'include' })
     ]);
+
+    // Brief chips (goal, CPL target, etc.)
     try {
         const d = await briefR.value.json();
         if (d.found) {
@@ -552,6 +587,8 @@ async function init() {
             renderBriefChips(d);
         }
     } catch(e) {}
+
+    // DB context badge
     try {
         const cd = await ctxR.value.json();
         if (cd.db_context) {
@@ -559,6 +596,63 @@ async function init() {
             showDbBadge('● DB โหลดแล้ว', false);
         }
     } catch(e) { showDbBadge('● DB ไม่พร้อม', true); }
+
+    // Live campaign metrics from Meta API
+    try {
+        const info = await infoR.value.json();
+        if (!info.error) {
+            renderMetricsBar(info);
+            // Update header name with live Meta API name if no brief override
+            if (!document.getElementById('advCampName').textContent || 
+                document.getElementById('advCampName').textContent === 'AI ผู้ช่วย Ads') {
+                document.getElementById('advCampName').textContent = info.name || 'AI ผู้ช่วย Ads';
+            }
+        } else {
+            metricsBar.classList.remove('show');
+        }
+    } catch(e) { metricsBar.classList.remove('show'); }
+}
+
+function renderMetricsBar(info) {
+    const bar = document.getElementById('advMetricsBar');
+    const statusClass = info.status === 'ACTIVE' ? 'active' :
+                        (info.status === 'PAUSED' ? 'paused' : 'other');
+    const statusLabel = info.status === 'ACTIVE' ? '● ACTIVE' :
+                        (info.status === 'PAUSED' ? '⏸ PAUSED' : info.status || '—');
+    const fmt = (n, dec=0) => n == null ? '—' : Number(n).toLocaleString('th-TH', {maximumFractionDigits: dec});
+    const fmtB = n => n == null ? '—' : '฿' + fmt(n, 0);
+
+    function metric(val, label, warn) {
+        return `<div class="adv-metric-item">
+            <span class="adv-metric-val${warn ? ' adv-metric-warn' : ''}">${val}</span>
+            <span class="adv-metric-lbl">${label}</span>
+        </div>`;
+    }
+    const div = `<span class="adv-metric-div"></span>`;
+
+    let cplWarn = info.cpl != null && campaignCtx.target_cpl && info.cpl > campaignCtx.target_cpl;
+    let ctrWarn = info.ctr != null && campaignCtx.target_ctr && info.ctr < campaignCtx.target_ctr;
+
+    bar.innerHTML = `
+        <span class="adv-status-pill ${statusClass}">${statusLabel}</span>
+        ${div}
+        ${metric(fmtB(info.spend), 'ใช้ไป (30d)')}
+        ${div}
+        ${metric(fmt(info.reach), 'Reach')}
+        ${div}
+        ${metric(fmt(info.impressions), 'Impressions')}
+        ${div}
+        ${metric((info.ctr != null ? info.ctr.toFixed(2) + '%' : '—'), 'CTR', ctrWarn)}
+        ${div}
+        ${metric((info.cpc != null ? '฿' + info.cpc.toFixed(2) : '—'), 'CPC')}
+        ${div}
+        ${metric(fmt(info.leads), 'Leads')}
+        ${div}
+        ${metric((info.cpl != null ? '฿' + info.cpl.toFixed(2) : '—'), 'CPL', cplWarn)}
+        ${div}
+        ${metric((info.daily_budget > 0 ? fmtB(info.daily_budget) : '—'), 'งบ/วัน')}
+    `;
+    bar.classList.add('show');
 }
 
 function showDbBadge(txt, isErr) {
