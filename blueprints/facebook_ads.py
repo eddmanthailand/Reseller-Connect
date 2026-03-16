@@ -3032,69 +3032,65 @@ def advisor_chat():
         response = client.models.generate_content(model='gemini-2.5-flash', contents=contents, config=cfg)
         reply = (response.text or '').strip()
 
-        # On-demand tool loop (max 1 round) — DB query OR Meta API fetch
-        _has_tool = not is_auto and (
-            ('need_query' in reply or 'need_meta_api' in reply) and '{' in reply
-        )
-        if _has_tool:
-            try:
-                import urllib.request as _urllib_req, urllib.parse as _urllib_parse
-                tool_req = json.loads(_re.search(r'\{.*\}', reply, _re.DOTALL).group(0))
-                followup_text = None
+        # On-demand tool loop (max 3 rounds) — DB query OR Meta API fetch
+        import urllib.request as _urllib_req
 
-                if tool_req.get('need_query') and tool_req.get('sql'):
-                    conn2 = cursor2 = None
-                    try:
-                        conn2 = get_db()
-                        cursor2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                        qresult = _advisor_safe_query(cursor2, tool_req['sql'])
-                    finally:
-                        if cursor2: cursor2.close()
-                        if conn2: conn2.close()
-                    followup_text = (
-                        f"[ผลจาก DB query: {tool_req.get('reason','')}\n"
-                        f"SQL: {tool_req['sql']}\n"
-                        f"ผลลัพธ์: {json.dumps(qresult, ensure_ascii=False, default=str)}]\n\n"
-                        f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลนี้ประกอบ"
-                    )
+        def _run_tool(tool_req_obj):
+            """Execute one tool call; returns followup_text or None."""
+            if tool_req_obj.get('need_query') and tool_req_obj.get('sql'):
+                c2 = cur2 = None
+                try:
+                    c2 = get_db(); cur2 = c2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    qr = _advisor_safe_query(cur2, tool_req_obj['sql'])
+                finally:
+                    if cur2: cur2.close()
+                    if c2: c2.close()
+                return (f"[DB query — {tool_req_obj.get('reason','')}\n"
+                        f"SQL: {tool_req_obj['sql']}\n"
+                        f"ผลลัพธ์: {json.dumps(qr, ensure_ascii=False, default=str)}]\n\n"
+                        f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลนี้ประกอบ")
 
-                elif tool_req.get('need_meta_api') and tool_req.get('path'):
-                    raw_path = tool_req['path'].lstrip('/')
-                    # Security: block non-GET-safe chars and access_token injection
-                    if 'access_token' not in raw_path and _re.match(r'^[\w\-\/\?\=\&\,\.\{\}]+$', raw_path):
-                        conn2 = cursor2 = None
-                        try:
-                            conn2 = get_db()
-                            cursor2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                            meta_token, _ = _get_meta_credentials(cursor2)
-                        finally:
-                            if cursor2: cursor2.close()
-                            if conn2: conn2.close()
+            elif tool_req_obj.get('need_meta_api') and tool_req_obj.get('path'):
+                raw = tool_req_obj['path'].lstrip('/')
+                if 'access_token' in raw or not _re.match(r'^[\w\-\/\?\=\&\,\.\{\}]+$', raw):
+                    return None
+                c2 = cur2 = None
+                try:
+                    c2 = get_db(); cur2 = c2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    tok, _ = _get_meta_credentials(cur2)
+                finally:
+                    if cur2: cur2.close()
+                    if c2: c2.close()
+                if not tok:
+                    return "[Meta API: ไม่พบ Access Token]"
+                sep = '&' if '?' in raw else '?'
+                url = f'https://graph.facebook.com/v19.0/{raw}{sep}access_token={tok}'
+                req2 = _urllib_req.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+                with _urllib_req.urlopen(req2, timeout=15) as _rr:
+                    mr = json.loads(_rr.read().decode())
+                mr.pop('access_token', None)
+                return (f"[Meta API — {tool_req_obj.get('reason','')}\n"
+                        f"path: /{raw.split('?')[0]}\n"
+                        f"ผลลัพธ์: {json.dumps(mr, ensure_ascii=False, default=str)[:4000]}]\n\n"
+                        f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลสดนี้ประกอบ")
+            return None
 
-                        if meta_token:
-                            sep = '&' if '?' in raw_path else '?'
-                            api_url = (f'https://graph.facebook.com/v19.0/{raw_path}'
-                                       f'{sep}access_token={meta_token}')
-                            req = _urllib_req.Request(api_url, headers={'User-Agent': 'EKGShops/1.0'})
-                            with _urllib_req.urlopen(req, timeout=15) as _r:
-                                meta_result = json.loads(_r.read().decode())
-                            meta_result.pop('access_token', None)
-                            followup_text = (
-                                f"[ผลจาก Meta API: {tool_req.get('reason','')}\n"
-                                f"path: /{raw_path.split('?')[0]}  (params: {raw_path.split('?')[1] if '?' in raw_path else '-'})\n"
-                                f"ผลลัพธ์: {json.dumps(meta_result, ensure_ascii=False, default=str)[:4000]}]\n\n"
-                                f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลสดจาก Facebook Ads API นี้ประกอบ"
-                            )
-                        else:
-                            followup_text = "[Meta API: ไม่พบ Access Token กรุณาตั้งค่า Meta Access Token ก่อน]"
-
-                if followup_text:
-                    contents2 = _build_contents(extra_user_text=followup_text)
-                    if contents2:
-                        r2 = client.models.generate_content(model='gemini-2.5-flash', contents=contents2, config=cfg)
-                        reply = (r2.text or '').strip()
-            except Exception:
-                pass
+        if not is_auto:
+            for _round in range(3):
+                if not (('need_query' in reply or 'need_meta_api' in reply) and '{' in reply):
+                    break
+                try:
+                    _tool_req = json.loads(_re.search(r'\{.*\}', reply, _re.DOTALL).group(0))
+                    _ft = _run_tool(_tool_req)
+                    if not _ft:
+                        break
+                    _c2 = _build_contents(extra_user_text=_ft)
+                    if not _c2:
+                        break
+                    _r2 = client.models.generate_content(model='gemini-2.5-flash', contents=_c2, config=cfg)
+                    reply = (_r2.text or '').strip()
+                except Exception:
+                    break
 
         _trivial_ok = {'ok', 'ok.', '✓', 'ไม่มีอะไรใหม่', 'ปกติ', 'ปกติครับ', 'ปกติค่ะ'}
         is_trivial = is_auto and reply.lower() in _trivial_ok
@@ -3103,3 +3099,69 @@ def advisor_chat():
 
     except Exception as e:
         return handle_error(e)
+
+
+@facebook_ads_bp.route('/api/facebook-ads/campaign-creatives/<campaign_id>', methods=['GET'])
+@login_required
+@admin_required
+def campaign_creatives(campaign_id):
+    """Fetch ads + creative images for a campaign from Meta API."""
+    import urllib.request as _ur
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        token, account_id = _get_meta_credentials(cursor)
+        if not token:
+            return jsonify({'error': 'ยังไม่ได้ตั้งค่า Meta Access Token'}), 400
+
+        fields = ('name,status,effective_status,'
+                  'adcreatives{id,name,body,title,image_url,thumbnail_url,'
+                  'call_to_action_type,object_story_spec}')
+        url = (f'https://graph.facebook.com/v19.0/{campaign_id}/ads'
+               f'?fields={fields}&limit=15&access_token={token}')
+        req = _ur.Request(url, headers={'User-Agent': 'EKGShops/1.0'})
+        with _ur.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+
+        ads = []
+        for ad in data.get('data', []):
+            creatives = ad.get('adcreatives', {}).get('data', [])
+            c = creatives[0] if creatives else {}
+            ads.append({
+                'id':          ad.get('id'),
+                'name':        ad.get('name', ''),
+                'status':      ad.get('effective_status') or ad.get('status', ''),
+                'body':        c.get('body') or c.get('object_story_spec', {}).get('link_data', {}).get('message', ''),
+                'title':       c.get('title') or c.get('object_story_spec', {}).get('link_data', {}).get('name', ''),
+                'image_url':   c.get('image_url') or c.get('thumbnail_url'),
+                'cta':         c.get('call_to_action_type', ''),
+            })
+        return jsonify({'ads': ads, 'total': len(ads)}), 200
+
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@facebook_ads_bp.route('/api/facebook-ads/proxy-image', methods=['GET'])
+@login_required
+@admin_required
+def proxy_image():
+    """Proxy Facebook CDN images to bypass CORS for Gemini Vision analysis."""
+    import urllib.request as _ur
+    url = request.args.get('url', '').strip()
+    if not url or not any(d in url for d in ('fbcdn.net', 'facebook.com', 'fbsbx.com')):
+        return jsonify({'error': 'invalid url'}), 400
+    try:
+        req = _ur.Request(url, headers={'User-Agent': 'Mozilla/5.0 EKGShops/1.0'})
+        with _ur.urlopen(req, timeout=12) as r:
+            img_bytes = r.read()
+            content_type = r.headers.get('Content-Type', 'image/jpeg').split(';')[0]
+        from flask import Response
+        return Response(img_bytes, content_type=content_type,
+                        headers={'Cache-Control': 'max-age=3600'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502

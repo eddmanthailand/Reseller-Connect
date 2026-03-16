@@ -25,20 +25,16 @@
             gap: 10px;
             padding: 0 14px;
             height: 48px;
-            background: rgba(242,242,247,0.92);
+            background: rgba(242,242,247,0.95);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-bottom: 0.5px solid rgba(0,0,0,0.12);
-            position: sticky;
-            top: 0;
             z-index: 50;
         }
         .adv-back {
             display: flex; align-items: center; gap: 4px;
             color: #007aff; font-size: 14px; font-weight: 500;
-            text-decoration: none;
-            padding: 4px 0;
-            flex-shrink: 0;
+            text-decoration: none; padding: 4px 0; flex-shrink: 0;
         }
         .adv-back svg { flex-shrink: 0; }
         .adv-title {
@@ -51,9 +47,7 @@
         /* ─── Capture Bar ─── */
         .adv-capture-bar {
             flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            display: flex; align-items: center; gap: 8px;
             padding: 8px 14px;
             background: #fff;
             border-bottom: 0.5px solid #e5e5ea;
@@ -61,14 +55,10 @@
         }
         .adv-status-dot {
             width: 7px; height: 7px; border-radius: 50%;
-            background: #c7c7cc;
-            flex-shrink: 0;
-            transition: background 0.3s;
+            background: #c7c7cc; flex-shrink: 0; transition: background 0.3s;
         }
         .adv-status-dot.live { background: #34c759; animation: pulse-dot 2s infinite; }
-        @keyframes pulse-dot {
-            0%,100% { opacity: 1; } 50% { opacity: 0.5; }
-        }
+        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
         .adv-status-label { font-size: 12px; color: #6e6e73; }
         .adv-status-label.live { color: #1d1d1f; font-weight: 500; }
         .adv-capture-btn {
@@ -82,35 +72,19 @@
             padding: 4px 8px; border-radius: 7px; border: 0.5px solid #c7c7cc;
             font-size: 12px; background: #f2f2f7; color: #1d1d1f;
         }
-        .adv-last-check {
-            margin-left: auto;
-            font-size: 11px; color: #8e8e93;
-            white-space: nowrap;
-        }
-        .adv-preview-wrap {
-            width: 100%;
-            display: none;
-        }
+        .adv-last-check { margin-left: auto; font-size: 11px; color: #8e8e93; white-space: nowrap; }
+        .adv-preview-wrap { width: 100%; display: none; }
         .adv-preview-wrap.show { display: block; }
         #advPreviewVideo {
-            width: 100%; max-height: 120px;
-            object-fit: contain;
-            border-radius: 8px;
-            background: #000;
-            margin-top: 6px;
+            width: 100%; max-height: 110px; object-fit: contain;
+            border-radius: 8px; background: #000; margin-top: 6px;
         }
 
         /* ─── Brief bar ─── */
         .adv-brief-bar {
-            flex-shrink: 0;
-            display: none;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            padding: 6px 14px;
-            background: #f0f4ff;
-            border-bottom: 0.5px solid #dce6ff;
-            font-size: 11px;
+            flex-shrink: 0; display: none; align-items: center; gap: 6px;
+            flex-wrap: wrap; padding: 6px 14px;
+            background: #f0f4ff; border-bottom: 0.5px solid #dce6ff; font-size: 11px;
         }
         .adv-brief-bar.show { display: flex; }
         .adv-brief-chip {
@@ -119,114 +93,207 @@
         }
         .adv-brief-label { font-size: 11px; color: #4a4a8a; font-weight: 600; }
 
+        /* ─── Creative Gallery ─── */
+        .adv-gallery {
+            flex-shrink: 0;
+            background: #fff;
+            border-bottom: 0.5px solid #e5e5ea;
+        }
+        .adv-gallery-header {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 14px; cursor: pointer;
+            font-size: 12px; font-weight: 600; color: #3d3d3d;
+            user-select: none;
+        }
+        .adv-gallery-header:hover { background: #f9f9f9; }
+        .adv-gallery-toggle { margin-left: auto; font-size: 11px; color: #8e8e93; transition: transform 0.2s; }
+        .adv-gallery.open .adv-gallery-toggle { transform: rotate(180deg); }
+        .adv-gallery-body {
+            display: none;
+            overflow-x: auto;
+            padding: 0 10px 10px;
+            gap: 10px;
+            scrollbar-width: thin;
+        }
+        .adv-gallery.open .adv-gallery-body { display: flex; }
+        .adv-gallery-body::-webkit-scrollbar { height: 4px; }
+        .adv-gallery-body::-webkit-scrollbar-thumb { background: #c7c7cc; border-radius: 2px; }
+        .adv-ad-card {
+            flex-shrink: 0;
+            width: 140px;
+            border: 0.5px solid #e5e5ea;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fafafa;
+            cursor: pointer;
+            transition: box-shadow 0.15s, transform 0.15s;
+        }
+        .adv-ad-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); transform: translateY(-1px); }
+        .adv-ad-card.active-ad { border-color: #af52de; box-shadow: 0 0 0 2px #af52de33; }
+        .adv-ad-img {
+            width: 100%; height: 80px;
+            object-fit: cover; background: #e5e5ea;
+            display: block;
+        }
+        .adv-ad-img-placeholder {
+            width: 100%; height: 80px;
+            background: linear-gradient(135deg, #e5e5ea, #f2f2f7);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: #c7c7cc;
+        }
+        .adv-ad-info {
+            padding: 6px 8px;
+        }
+        .adv-ad-name {
+            font-size: 11px; font-weight: 600; color: #1d1d1f;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        .adv-ad-status {
+            font-size: 10px; font-weight: 600; margin-bottom: 4px;
+        }
+        .adv-ad-status.active { color: #34c759; }
+        .adv-ad-status.paused { color: #ff9500; }
+        .adv-ad-status.other  { color: #8e8e93; }
+        .adv-ad-analyze-btn {
+            width: 100%; padding: 4px 0;
+            background: #af52de; color: #fff;
+            border: none; border-radius: 6px;
+            font-size: 11px; font-weight: 600;
+            cursor: pointer; transition: opacity 0.15s;
+        }
+        .adv-ad-analyze-btn:hover { opacity: 0.85; }
+        .adv-ad-analyze-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+        .adv-gallery-empty {
+            padding: 12px 4px;
+            font-size: 12px; color: #8e8e93;
+            white-space: nowrap;
+        }
+        .adv-gallery-loading {
+            padding: 12px 4px;
+            font-size: 12px; color: #8e8e93;
+            animation: adv-pulse 1.2s infinite;
+        }
+        @keyframes adv-pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+        /* ─── Quick Actions ─── */
+        .adv-quick-bar {
+            flex-shrink: 0;
+            display: flex; gap: 6px; padding: 6px 14px;
+            overflow-x: auto; background: #f9f9f9;
+            border-bottom: 0.5px solid #e5e5ea;
+            scrollbar-width: none;
+        }
+        .adv-quick-bar::-webkit-scrollbar { display: none; }
+        .adv-quick-btn {
+            flex-shrink: 0;
+            padding: 5px 12px; border-radius: 20px;
+            border: 0.5px solid #c7c7cc;
+            background: #fff; color: #1d1d1f;
+            font-size: 12px; font-weight: 500;
+            cursor: pointer; transition: background 0.12s, border-color 0.12s;
+            white-space: nowrap;
+        }
+        .adv-quick-btn:hover { background: #f2f2f7; border-color: #007aff; color: #007aff; }
+
         /* ─── Messages ─── */
         #advMessages {
-            flex: 1;
-            overflow-y: auto;
+            flex: 1; overflow-y: auto;
             padding: 12px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            display: flex; flex-direction: column; gap: 10px;
             scroll-behavior: smooth;
         }
         .adv-msg {
-            max-width: 86%;
-            padding: 9px 12px;
-            border-radius: 14px;
-            font-size: 13px;
-            line-height: 1.55;
-            word-break: break-word;
-            white-space: pre-wrap;
+            max-width: 88%; padding: 9px 12px;
+            border-radius: 14px; font-size: 13px;
+            line-height: 1.6; word-break: break-word;
         }
         .adv-msg.user {
             align-self: flex-end;
-            background: #007aff;
-            color: #fff;
+            background: #007aff; color: #fff;
             border-bottom-right-radius: 4px;
+            white-space: pre-wrap;
         }
         .adv-msg.ai {
             align-self: flex-start;
-            background: #fff;
-            color: #1d1d1f;
+            background: #fff; color: #1d1d1f;
             border: 0.5px solid #e5e5ea;
             border-bottom-left-radius: 4px;
         }
-        .adv-msg.ai.auto-flag {
-            border-color: #ff9500;
-            background: #fffbf0;
-        }
-        .adv-msg-badge {
-            display: inline-block;
-            font-size: 10px; font-weight: 700;
-            padding: 1px 5px; border-radius: 4px;
-            background: #ff950022; color: #c75a00;
-            margin-bottom: 4px;
-        }
+        .adv-msg.ai.auto-flag { border-color: #ff9500; background: #fffbf0; }
         .adv-msg.thinking {
             align-self: flex-start;
-            background: #f2f2f7;
-            color: #6e6e73;
-            font-size: 12px;
+            background: #f2f2f7; color: #6e6e73; font-size: 12px;
+        }
+        .adv-msg-badge {
+            display: inline-block; font-size: 10px; font-weight: 700;
+            padding: 1px 5px; border-radius: 4px;
+            background: #ff950022; color: #c75a00; margin-bottom: 4px;
         }
         .adv-welcome {
             align-self: flex-start;
-            background: #f0f4ff;
-            border: 0.5px solid #c0cdff;
-            border-radius: 14px;
-            border-bottom-left-radius: 4px;
-            padding: 10px 13px;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #1d1d1f;
-            max-width: 90%;
+            background: #f0f4ff; border: 0.5px solid #c0cdff;
+            border-radius: 14px; border-bottom-left-radius: 4px;
+            padding: 10px 13px; font-size: 13px; line-height: 1.6;
+            color: #1d1d1f; max-width: 92%;
+        }
+
+        /* ─── Markdown rendered AI messages ─── */
+        .adv-msg.ai p { margin-bottom: 8px; }
+        .adv-msg.ai p:last-child { margin-bottom: 0; }
+        .adv-msg.ai strong { font-weight: 700; }
+        .adv-msg.ai em { font-style: italic; }
+        .adv-msg.ai h4 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; color: #1d1d1f; }
+        .adv-msg.ai ul { padding-left: 16px; margin: 4px 0; }
+        .adv-msg.ai li { margin-bottom: 3px; }
+        .adv-msg.ai code {
+            background: #f2f2f7; border-radius: 4px;
+            padding: 1px 5px; font-family: 'SF Mono', monospace; font-size: 12px;
+        }
+        .adv-msg.ai a { color: #007aff; }
+        .adv-msg.ai hr { border: none; border-top: 0.5px solid #e5e5ea; margin: 8px 0; }
+        .adv-msg-creative-img {
+            max-width: 100%; border-radius: 8px;
+            margin-bottom: 8px; display: block;
+            border: 0.5px solid #e5e5ea;
+        }
+
+        /* Tool use indicator */
+        .adv-tool-indicator {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 11px; color: #8e8e93; margin-bottom: 6px;
+        }
+        .adv-tool-dot {
+            width: 5px; height: 5px; border-radius: 50%;
+            background: #007aff; animation: adv-pulse 0.8s infinite;
         }
 
         /* ─── Input Bar ─── */
         .adv-input-bar {
-            flex-shrink: 0;
-            display: flex;
-            align-items: flex-end;
-            gap: 8px;
-            padding: 10px 14px;
-            background: #fff;
-            border-top: 0.5px solid #e5e5ea;
+            flex-shrink: 0; display: flex; align-items: flex-end; gap: 8px;
+            padding: 10px 14px; background: #fff; border-top: 0.5px solid #e5e5ea;
         }
         #advInput {
-            flex: 1;
-            resize: none;
-            border: 0.5px solid #c7c7cc;
-            border-radius: 12px;
-            padding: 9px 12px;
-            font-size: 14px;
-            font-family: inherit;
-            line-height: 1.4;
-            max-height: 120px;
-            overflow-y: auto;
-            background: #f9f9f9;
-            color: #1d1d1f;
+            flex: 1; resize: none;
+            border: 0.5px solid #c7c7cc; border-radius: 12px;
+            padding: 9px 12px; font-size: 14px; font-family: inherit;
+            line-height: 1.4; max-height: 120px; overflow-y: auto;
+            background: #f9f9f9; color: #1d1d1f;
         }
         #advInput:focus { outline: none; border-color: #007aff; background: #fff; }
         #advInput::placeholder { color: #c7c7cc; }
         .adv-snap-btn {
-            flex-shrink: 0;
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            border: none; cursor: pointer;
-            background: #f2f2f7;
+            flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+            border: none; cursor: pointer; background: #f2f2f7;
             display: flex; align-items: center; justify-content: center;
-            color: #3d3d3d;
-            transition: opacity 0.15s;
+            color: #3d3d3d; transition: opacity 0.15s;
         }
         .adv-snap-btn:hover { opacity: 0.75; }
         .adv-send-btn {
-            flex-shrink: 0;
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            border: none; cursor: pointer;
-            background: #007aff;
+            flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+            border: none; cursor: pointer; background: #007aff;
             display: flex; align-items: center; justify-content: center;
-            color: #fff;
-            transition: opacity 0.15s;
+            color: #fff; transition: opacity 0.15s;
         }
         .adv-send-btn:hover { opacity: 0.82; }
         .adv-send-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
@@ -241,7 +308,7 @@
         กลับ
     </a>
     <div class="adv-title">
-        <span id="advCampName">AI ผู้ช่วย Ads</span>
+        <span id="advCampName">🤖 AI ผู้ช่วย Ads</span>
         <div class="adv-title-sub" id="advCampId">Campaign ID: {{ campaign_id }}</div>
     </div>
 </div>
@@ -267,18 +334,42 @@
 <!-- Brief bar -->
 <div class="adv-brief-bar" id="advBriefBar"></div>
 
-<!-- Messages -->
-<div id="advMessages">
-    <div class="adv-welcome" id="advWelcome">
-        👋 สวัสดีครับ พร้อมช่วยวิเคราะห์แคมเปญแล้ว<br><br>
-        <strong>เปิดดูหน้าจอ</strong> เพื่อให้ AI มองเห็น Facebook Ads Manager ของคุณแบบอัตโนมัติ<br>
-        หรือ <strong>พิมพ์คำถาม</strong> เพื่อถามโดยตรงได้เลยครับ
+<!-- Creative Gallery -->
+<div class="adv-gallery" id="advGallery">
+    <div class="adv-gallery-header" onclick="toggleGallery()">
+        <span>🖼️ ภาพโฆษณา</span>
+        <span id="advGalleryCount" style="font-size:11px;color:#8e8e93;font-weight:400;"></span>
+        <span class="adv-gallery-toggle" id="advGalleryToggle">▼</span>
+    </div>
+    <div class="adv-gallery-body" id="advGalleryBody">
+        <div class="adv-gallery-loading" id="advGalleryLoading">⏳ กำลังโหลดภาพโฆษณา...</div>
     </div>
 </div>
 
-<!-- Hidden canvas for frame capture -->
+<!-- Quick Actions -->
+<div class="adv-quick-bar">
+    <button class="adv-quick-btn" onclick="quickAsk('วิเคราะห์ภาพรวมทั้งหมดของแคมเปญนี้ ผลลัพธ์เป็นอย่างไร ดีหรือมีปัญหาอะไร')">📊 ภาพรวม</button>
+    <button class="adv-quick-btn" onclick="quickAsk('ดู Ad Sets ทั้งหมดในแคมเปญนี้ ช่วยดู targeting audience ว่าตั้งค่าถูกต้องสำหรับพยาบาลไหม')">👥 Ad Sets</button>
+    <button class="adv-quick-btn" onclick="quickAsk('ตรวจสอบ CPL และ CTR ปัจจุบัน เทียบกับเป้าหมายที่ตั้งไว้ และ benchmark B2B ไทย ควรทำอะไร')">💰 CPL/CTR</button>
+    <button class="adv-quick-btn" onclick="quickAsk('Frequency สูงเกินไปไหม? ถ้า audience เริ่ม fatigue ควรทำอะไร')">🔄 Frequency</button>
+    <button class="adv-quick-btn" onclick="quickAsk('ดู demographic breakdown ว่า age/gender ไหนให้ผลดีที่สุด และควรเพิ่มงบให้กลุ่มไหน')">👁 Demographics</button>
+    <button class="adv-quick-btn" onclick="quickAsk('แนะนำ copy โฆษณาใหม่สำหรับแคมเปญนี้ ให้เหมาะกับพยาบาลและบุคลากรสาธารณสุข ทั้ง headline และ body text')">✍️ Copy</button>
+    <button class="adv-quick-btn" onclick="quickAsk('ตรวจสอบว่าแคมเปญนี้พร้อม scale budget ได้ไหม ถ้าเพิ่มงบจะกระทบ CPL อย่างไร')">📈 Scale</button>
+    <button class="adv-quick-btn" onclick="quickAsk('วิเคราะห์ ad creative ทั้งหมดในแคมเปญ ตัวไหนน่าจะ perform ดีที่สุดและทำไม')">🎨 Creative</button>
+</div>
+
+<!-- Messages -->
+<div id="advMessages">
+    <div class="adv-welcome" id="advWelcome">
+        👋 พร้อมช่วยวิเคราะห์แคมเปญแล้วค่ะ<br><br>
+        ✨ <strong>ใหม่:</strong> ดูภาพโฆษณาด้านบน แล้วกด <strong>🔬 วิเคราะห์</strong> เพื่อให้ AI วิเคราะห์ภาพจริงๆ<br>
+        📷 <strong>เปิดดูหน้าจอ</strong> เพื่อให้ AI ตรวจสอบ Ads Manager อัตโนมัติ<br>
+        💬 หรือ <strong>พิมพ์คำถาม</strong> / กดปุ่ม Quick Action ด้านบน
+    </div>
+</div>
+
+<!-- Hidden canvas & video -->
 <canvas id="advCanvas" style="display:none;"></canvas>
-<!-- Hidden video source -->
 <video id="advSourceVideo" style="display:none;" autoplay muted playsinline></video>
 
 <!-- Input Bar -->
@@ -298,47 +389,48 @@ const CAMPAIGN_ID = {{ campaign_id | tojson }};
 
 let captureStream    = null;
 let autoTimer        = null;
-let chatHistory      = [];   // [{role:'user'|'model', text:'...'}]
-let campaignCtx      = {};   // brief + metrics loaded from API
-let advisorDbContext = '';   // pre-loaded DB context text (Hybrid A-layer)
+let chatHistory      = [];
+let campaignCtx      = {};
+let advisorDbContext = '';
 let isRequesting     = false;
+let galleryOpen      = true;
+let galleryAds       = [];
 
 // ─── Init ────────────────────────────────────────────────────────
 
 async function initAdvisor() {
-    // Load brief + DB context in parallel
     const [briefRes, ctxRes] = await Promise.allSettled([
         fetch(`/api/facebook-ads/campaign-brief/${CAMPAIGN_ID}`, { credentials: 'include' }),
         fetch('/api/facebook-ads/advisor-context', { credentials: 'include' })
     ]);
 
-    // Brief
     try {
         const d = await briefRes.value.json();
         if (d.found) {
             campaignCtx = {
-                campaign_name:    d.campaign_name || '',
-                goal_type:        d.goal_type,
-                target_cpl:       d.target_cpl,
-                target_ctr:       d.target_ctr,
+                campaign_name: d.campaign_name || '',
+                goal_type: d.goal_type,
+                target_cpl: d.target_cpl,
+                target_ctr: d.target_ctr,
                 max_daily_budget: d.max_daily_budget,
-                audience_note:    d.audience_note,
+                audience_note: d.audience_note,
             };
             if (d.campaign_name) {
-                document.getElementById('advCampName').textContent = '🤖 AI ผู้ช่วย — ' + d.campaign_name;
+                document.getElementById('advCampName').textContent = '🤖 ' + d.campaign_name;
             }
             _renderBrief(d);
         }
-    } catch(e) { /* silent */ }
+    } catch(e) {}
 
-    // DB context (pre-load)
     try {
         const cd = await ctxRes.value.json();
         if (cd.db_context) {
             advisorDbContext = cd.db_context;
             _showDbContextBadge(true);
         }
-    } catch(e) { /* silent */ }
+    } catch(e) { _showDbContextBadge(false); }
+
+    loadGallery();
 }
 
 function _showDbContextBadge(ok) {
@@ -353,9 +445,9 @@ function _showDbContextBadge(ok) {
 function _renderBrief(b) {
     const bar = document.getElementById('advBriefBar');
     if (!b || !b.found) return;
-    const goalMap = { lead:'Lead/สมัคร', registration:'Registration', awareness:'Awareness', purchase:'ยอดขาย' };
+    const gm = { lead:'Lead/สมัคร', registration:'Registration', awareness:'Awareness', purchase:'ยอดขาย' };
     let html = `<span class="adv-brief-label">🎯 เป้าหมาย:</span>`;
-    html += `<span class="adv-brief-chip">${goalMap[b.goal_type] || b.goal_type || 'Lead'}</span>`;
+    html += `<span class="adv-brief-chip">${gm[b.goal_type] || b.goal_type || 'Lead'}</span>`;
     if (b.target_cpl)       html += `<span class="adv-brief-chip">CPL ≤ ฿${b.target_cpl}</span>`;
     if (b.target_ctr)       html += `<span class="adv-brief-chip">CTR ≥ ${b.target_ctr}%</span>`;
     if (b.max_daily_budget) html += `<span class="adv-brief-chip">งบ/วัน ≤ ฿${b.max_daily_budget}</span>`;
@@ -364,44 +456,145 @@ function _renderBrief(b) {
     bar.classList.add('show');
 }
 
+// ─── Creative Gallery ────────────────────────────────────────────
+
+function toggleGallery() {
+    galleryOpen = !galleryOpen;
+    const el = document.getElementById('advGallery');
+    el.classList.toggle('open', galleryOpen);
+}
+
+async function loadGallery() {
+    const body = document.getElementById('advGalleryBody');
+    body.innerHTML = '<div class="adv-gallery-loading">⏳ กำลังโหลดภาพโฆษณา...</div>';
+    document.getElementById('advGallery').classList.add('open');
+
+    try {
+        const r = await fetch(`/api/facebook-ads/campaign-creatives/${CAMPAIGN_ID}`, { credentials: 'include' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
+
+        galleryAds = d.ads || [];
+        renderGallery(galleryAds);
+        const cnt = document.getElementById('advGalleryCount');
+        cnt.textContent = galleryAds.length ? `(${galleryAds.length} ads)` : '';
+    } catch(e) {
+        body.innerHTML = `<div class="adv-gallery-empty">⚠️ ${e.message}</div>`;
+    }
+}
+
+function renderGallery(ads) {
+    const body = document.getElementById('advGalleryBody');
+    if (!ads || !ads.length) {
+        body.innerHTML = '<div class="adv-gallery-empty">ไม่พบ Ads ในแคมเปญนี้</div>';
+        return;
+    }
+    body.innerHTML = ads.map((ad, idx) => {
+        const statusCls = ad.status === 'ACTIVE' ? 'active' : (ad.status === 'PAUSED' ? 'paused' : 'other');
+        const statusTh  = ad.status === 'ACTIVE' ? '● เปิดอยู่' : (ad.status === 'PAUSED' ? '⏸ หยุด' : ad.status);
+        const imgHtml   = ad.image_url
+            ? `<img class="adv-ad-img" src="${_escAttr(ad.image_url)}" alt="${_escAttr(ad.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+               <div class="adv-ad-img-placeholder" style="display:none;">🖼️</div>`
+            : `<div class="adv-ad-img-placeholder">🖼️</div>`;
+        return `
+        <div class="adv-ad-card" id="adcard_${idx}" onclick="selectAd(${idx})">
+            ${imgHtml}
+            <div class="adv-ad-info">
+                <div class="adv-ad-name" title="${_escAttr(ad.name)}">${_escHtml(ad.name) || 'Ad ' + (idx+1)}</div>
+                <div class="adv-ad-status ${statusCls}">${statusTh}</div>
+                <button class="adv-ad-analyze-btn" id="adanalyze_${idx}"
+                    onclick="event.stopPropagation();analyzeCreative(${idx})">🔬 วิเคราะห์</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function selectAd(idx) {
+    document.querySelectorAll('.adv-ad-card').forEach(c => c.classList.remove('active-ad'));
+    document.getElementById('adcard_' + idx)?.classList.add('active-ad');
+}
+
+async function analyzeCreative(idx) {
+    const ad = galleryAds[idx];
+    if (!ad) return;
+    const btn = document.getElementById('adanalyze_' + idx);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังโหลด...'; }
+    selectAd(idx);
+
+    let imgBase64 = null;
+    if (ad.image_url) {
+        try {
+            const proxyUrl = `/api/facebook-ads/proxy-image?url=${encodeURIComponent(ad.image_url)}`;
+            const imgRes = await fetch(proxyUrl, { credentials: 'include' });
+            if (imgRes.ok) {
+                const blob = await imgRes.blob();
+                imgBase64 = await _blobToBase64(blob);
+                imgBase64 = imgBase64.split(',')[1];
+            }
+        } catch(e) { imgBase64 = null; }
+    }
+
+    const adBody  = ad.body  ? `\nข้อความโฆษณา: "${ad.body.substring(0, 200)}"` : '';
+    const adTitle = ad.title ? `\nTitle: "${ad.title}"` : '';
+    const adCta   = ad.cta   ? `\nCTA: ${ad.cta}` : '';
+    const msg = `วิเคราะห์ Ad Creative นี้ให้ละเอียด:\nAd Name: "${ad.name}"${adTitle}${adBody}${adCta}
+${imgBase64 ? '\n[ภาพ ad แนบมาด้านล่าง — วิเคราะห์ visual design, ข้อความ, CTA, และความน่าดึงดูด]' : ''}
+ประเมิน: 1) คุณภาพภาพและ visual hierarchy 2) Copy text ดึงดูดใจพยาบาลไหม 3) CTA ชัดเจนไหม 4) คะแนน 1-10 และข้อแนะนำปรับปรุง`;
+
+    appendMsg('user', `🔬 วิเคราะห์ Ad: ${ad.name}${imgBase64 ? ' (พร้อมภาพ)' : ''}`);
+    chatHistory.push({ role: 'user', text: msg });
+
+    if (btn) { btn.disabled = false; btn.textContent = '🔬 วิเคราะห์'; }
+    await callAdvisor(msg, imgBase64, false, ad.image_url);
+}
+
+function _blobToBase64(blob) {
+    return new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// ─── Quick Actions ────────────────────────────────────────────────
+
+function quickAsk(text) {
+    if (isRequesting) return;
+    const input = document.getElementById('advInput');
+    input.value = text;
+    advAutoResize(input);
+    sendMessage();
+}
+
 // ─── Screen Capture ──────────────────────────────────────────────
 
 async function startCapture() {
     try {
         captureStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 2, max: 5 } },
-            audio: false
+            video: { frameRate: { ideal: 2, max: 5 } }, audio: false
         });
         const srcVid = document.getElementById('advSourceVideo');
         const prvVid = document.getElementById('advPreviewVideo');
         srcVid.srcObject = captureStream;
         prvVid.srcObject = captureStream;
-
         captureStream.getVideoTracks()[0].addEventListener('ended', stopCapture);
-
         document.getElementById('advDot').classList.add('live');
         document.getElementById('advStatusLabel').textContent = 'กำลังดูหน้าจออยู่';
         document.getElementById('advStatusLabel').classList.add('live');
         document.getElementById('advStartBtn').style.display = 'none';
         document.getElementById('advStopBtn').style.display = '';
         document.getElementById('advPreviewWrap').classList.add('show');
-
         startAutoInterval();
-        appendMsg('ai', '✅ เริ่มดูหน้าจอแล้วครับ จะแจ้งเตือนเมื่อพบสิ่งที่น่าสังเกต');
+        appendMsg('ai', '✅ เริ่มดูหน้าจอแล้วค่ะ จะแจ้งเตือนเมื่อพบสิ่งที่น่าสังเกต');
     } catch(e) {
-        if (e.name !== 'NotAllowedError') {
-            appendMsg('ai', '❌ ไม่สามารถเปิดดูหน้าจอได้: ' + e.message);
-        }
+        if (e.name !== 'NotAllowedError') appendMsg('ai', '❌ ไม่สามารถเปิดดูหน้าจอได้: ' + e.message);
     }
 }
 
 function stopCapture() {
-    if (captureStream) {
-        captureStream.getTracks().forEach(t => t.stop());
-        captureStream = null;
-    }
+    if (captureStream) { captureStream.getTracks().forEach(t => t.stop()); captureStream = null; }
     clearInterval(autoTimer); autoTimer = null;
-
     document.getElementById('advSourceVideo').srcObject = null;
     document.getElementById('advPreviewVideo').srcObject = null;
     document.getElementById('advDot').classList.remove('live');
@@ -412,43 +605,32 @@ function stopCapture() {
     document.getElementById('advPreviewWrap').classList.remove('show');
 }
 
-function changeInterval() {
-    if (captureStream) startAutoInterval();
-}
+function changeInterval() { if (captureStream) startAutoInterval(); }
 
-function _isBlackFrame(canvas, sampleCount = 64) {
-    // Sample random pixels — if all near-black, frame hasn't painted yet
+function _isBlackFrame(canvas, n = 64) {
     try {
         const ctx = canvas.getContext('2d');
         const w = canvas.width, h = canvas.height;
         if (!w || !h) return true;
-        let darkPx = 0;
-        for (let i = 0; i < sampleCount; i++) {
-            const px = ctx.getImageData(
-                Math.floor(Math.random() * w),
-                Math.floor(Math.random() * h),
-                1, 1
-            ).data;
-            // pixel is "dark" if R+G+B < 30
-            if (px[0] + px[1] + px[2] < 30) darkPx++;
+        let dark = 0;
+        for (let i = 0; i < n; i++) {
+            const px = ctx.getImageData(Math.floor(Math.random()*w), Math.floor(Math.random()*h), 1, 1).data;
+            if (px[0]+px[1]+px[2] < 30) dark++;
         }
-        // >90% dark pixels → black frame
-        return darkPx / sampleCount > 0.9;
+        return dark/n > 0.9;
     } catch(e) { return false; }
 }
 
 function captureFrame() {
     const vid = document.getElementById('advSourceVideo');
-    // Must have dimensions AND enough data decoded (readyState 2 = HAVE_CURRENT_DATA)
     if (!vid.videoWidth || !vid.videoHeight || vid.readyState < 2) return null;
     const canvas = document.getElementById('advCanvas');
     let w = vid.videoWidth, h = vid.videoHeight;
     const maxW = 1280, maxH = 720;
-    if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-    if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+    if (w > maxW) { h = Math.round(h*maxW/w); w = maxW; }
+    if (h > maxH) { w = Math.round(w*maxH/h); h = maxH; }
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(vid, 0, 0, w, h);
-    // Reject black frames silently
     if (_isBlackFrame(canvas)) return null;
     return canvas.toDataURL('image/jpeg', 0.65).split(',')[1];
 }
@@ -456,17 +638,16 @@ function captureFrame() {
 async function autoCapture() {
     if (isRequesting || !captureStream) return;
     const screenshot = captureFrame();
-    if (!screenshot) return;   // null = black frame or not ready, skip silently
+    if (!screenshot) return;
     await callAdvisor('', screenshot, true);
 }
 
 function startAutoInterval() {
     clearInterval(autoTimer);
     const secs = parseInt(document.getElementById('advIntervalSel').value || '15', 10);
-    // Wait 2 s for stream to stabilize before first auto-capture
     setTimeout(() => {
         if (!captureStream) return;
-        autoCapture();  // first capture right after wait
+        autoCapture();
         autoTimer = setInterval(autoCapture, secs * 1000);
     }, 2000);
 }
@@ -496,14 +677,15 @@ async function sendWithSnapshot() {
     await callAdvisor(text, screenshot, false);
 }
 
-async function callAdvisor(message, screenshot, isAuto) {
+async function callAdvisor(message, screenshot, isAuto, creativeImageUrl = null) {
     isRequesting = true;
     const btn = document.getElementById('advSendBtn');
     btn.disabled = true;
 
     let thinkingEl = null;
     if (!isAuto) {
-        thinkingEl = appendMsg('ai', '⏳ กำลังคิด...', 'thinking');
+        thinkingEl = appendMsg('ai', '', 'thinking');
+        thinkingEl.innerHTML = `<div class="adv-tool-indicator"><div class="adv-tool-dot"></div>AI กำลังประมวลผล${screenshot ? ' (พร้อมภาพ)' : ''}...</div>`;
     }
 
     try {
@@ -511,14 +693,13 @@ async function callAdvisor(message, screenshot, isAuto) {
             campaign_id:      CAMPAIGN_ID,
             message:          message,
             screenshot:       screenshot || undefined,
-            history:          chatHistory.slice(-10),
+            history:          chatHistory.slice(-12),
             is_auto:          isAuto,
             campaign_context: campaignCtx,
             db_context_text:  advisorDbContext,
         };
         const r = await fetch('/api/facebook-ads/advisor-chat', {
-            method: 'POST',
-            credentials: 'include',
+            method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
@@ -530,7 +711,7 @@ async function callAdvisor(message, screenshot, isAuto) {
         const reply = d.reply || '';
         if (isAuto) {
             if (!d.is_trivial && reply) {
-                const el = appendMsg('ai', reply, 'auto-flag');
+                const el = appendMsgHtml('ai', mdToHtml(reply), 'auto-flag');
                 el.insertAdjacentHTML('afterbegin', '<div class="adv-msg-badge">🔄 auto</div>');
                 chatHistory.push({ role: 'model', text: reply });
                 document.getElementById('advLastCheck').textContent = '⚠️ แจ้งเตือน ' + _timeNow();
@@ -538,7 +719,12 @@ async function callAdvisor(message, screenshot, isAuto) {
                 document.getElementById('advLastCheck').textContent = '✓ ตรวจสอบแล้ว ' + _timeNow();
             }
         } else {
-            appendMsg('ai', reply);
+            // If this was a creative analysis, prepend the image
+            let prefix = '';
+            if (creativeImageUrl) {
+                prefix = `<img class="adv-msg-creative-img" src="${_escAttr(creativeImageUrl)}" alt="Ad Creative" onerror="this.style.display='none'">`;
+            }
+            appendMsgHtml('ai', prefix + mdToHtml(reply));
             chatHistory.push({ role: 'model', text: reply });
         }
     } catch(e) {
@@ -548,6 +734,56 @@ async function callAdvisor(message, screenshot, isAuto) {
         isRequesting = false;
         btn.disabled = false;
     }
+}
+
+// ─── Markdown → HTML ─────────────────────────────────────────────
+
+function mdToHtml(text) {
+    if (!text) return '';
+    let h = _escHtml(text);
+
+    // Headers
+    h = h.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    h = h.replace(/^## (.+)$/gm, '<h4>$1</h4>');
+
+    // Bold + italic
+    h = h.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+    // Inline code
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Horizontal rule
+    h = h.replace(/^---+$/gm, '<hr>');
+
+    // Unordered lists (collect consecutive - lines into <ul>)
+    h = h.replace(/((?:^[-•] .+\n?)+)/gm, (match) => {
+        const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-•] /, '')}</li>`).join('');
+        return `<ul>${items}</ul>`;
+    });
+
+    // Numbered lists
+    h = h.replace(/((?:^\d+\. .+\n?)+)/gm, (match) => {
+        const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+        return `<ol style="padding-left:16px;margin:4px 0;">${items}</ol>`;
+    });
+
+    // Paragraphs (double newline)
+    h = h.replace(/\n{2,}/g, '</p><p>');
+    h = `<p>${h}</p>`;
+
+    // Single newlines inside paragraphs
+    h = h.replace(/<\/p><p>/g, '</p><p>');
+    h = h.replace(/\n/g, '<br>');
+
+    // Clean up empty paragraphs
+    h = h.replace(/<p>\s*<\/p>/g, '');
+    h = h.replace(/<p>(<(?:ul|ol|h4|hr))/g, '$1');
+    h = h.replace(/(<\/(?:ul|ol|h4|hr)>)<\/p>/g, '$1');
+
+    return h;
 }
 
 // ─── UI Helpers ──────────────────────────────────────────────────
@@ -562,15 +798,29 @@ function appendMsg(role, text, extraClass = '') {
     return el;
 }
 
+function appendMsgHtml(role, html, extraClass = '') {
+    const wrap = document.getElementById('advMessages');
+    const el = document.createElement('div');
+    el.className = `adv-msg ${role}${extraClass ? ' ' + extraClass : ''}`;
+    el.innerHTML = html;
+    wrap.appendChild(el);
+    wrap.scrollTop = wrap.scrollHeight;
+    return el;
+}
+
+function _escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escAttr(s) {
+    return String(s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function _timeNow() {
     return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 }
 
 function advInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 function advAutoResize(el) {
