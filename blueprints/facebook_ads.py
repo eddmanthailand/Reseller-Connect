@@ -291,8 +291,12 @@ def _get_pixel_settings():
 
 
 def _send_capi_event(event_name, event_source_url, visitor_ip=None, user_agent=None,
-                     fbc=None, fbp=None, extra_data=None):
-    """Send server-side event to Meta Conversions API asynchronously."""
+                     fbc=None, fbp=None, extra_data=None, email=None, event_id=None):
+    """Send server-side event to Meta Conversions API asynchronously.
+
+    - email: plain-text email; will be SHA-256 hashed before sending (never stored/logged)
+    - event_id: deduplication ID matching the browser Pixel eventID so Meta won't double-count
+    """
     import threading, hashlib, time, urllib.request
 
     def _fire():
@@ -307,6 +311,9 @@ def _send_capi_event(event_name, event_source_url, visitor_ip=None, user_agent=N
             user_data = {'client_ip_address': visitor_ip or '', 'client_user_agent': user_agent or ''}
             if fbc: user_data['fbc'] = fbc
             if fbp: user_data['fbp'] = fbp
+            if email:
+                _em = email.strip().lower()
+                user_data['em'] = hashlib.sha256(_em.encode('utf-8')).hexdigest()
 
             event = {
                 'event_name': event_name,
@@ -315,6 +322,8 @@ def _send_capi_event(event_name, event_source_url, visitor_ip=None, user_agent=N
                 'event_source_url': event_source_url or '',
                 'user_data': user_data,
             }
+            if event_id:
+                event['event_id'] = event_id
             if extra_data:
                 event['custom_data'] = extra_data
 
@@ -326,7 +335,7 @@ def _send_capi_event(event_name, event_source_url, visitor_ip=None, user_agent=N
             body = json.dumps(payload).encode('utf-8')
             req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
             with urllib.request.urlopen(req, timeout=5) as resp:
-                logging.info(f'[CAPI] {event_name} sent → {resp.status}')
+                logging.info(f'[CAPI] {event_name} (id={event_id}) sent → {resp.status}')
         except Exception as ex:
             logging.warning(f'[CAPI] Failed to send {event_name}: {ex}')
 
@@ -496,7 +505,9 @@ def track_page_visit():
         fbp = data.get('fbp') or None
         event_url = data.get('event_source_url') or referrer or ''
         _send_capi_event('PageView', event_url, visitor_ip=visitor_ip,
-                         user_agent=user_agent, fbc=fbc, fbp=fbp)
+                         user_agent=user_agent, fbc=fbc, fbp=fbp,
+                         email=data.get('email') or None,
+                         event_id=data.get('event_id') or None)
 
         return jsonify({'success': True}), 200
     except Exception as e:
@@ -576,7 +587,9 @@ def track_conversion_event():
                     extra_data['value'] = float(data['value'])
             _send_capi_event(meta_event, event_url, visitor_ip=visitor_ip,
                              user_agent=user_agent, fbc=fbc, fbp=fbp,
-                             extra_data=extra_data)
+                             extra_data=extra_data,
+                             email=data.get('email') or None,
+                             event_id=data.get('event_id') or None)
 
         return jsonify({'success': True}), 200
     except Exception as e:

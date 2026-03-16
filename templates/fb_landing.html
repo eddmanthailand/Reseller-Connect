@@ -12,6 +12,12 @@
 
     <!-- Facebook Pixel — fires FIRST before any redirect -->
     <script>
+    (function() {
+        const _gc = n => { const m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)'); return m ? m.pop() : ''; };
+        const _genEvId = () => 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+        window._fbGc = _gc;
+        window._fbGenEvId = _genEvId;
+    })();
     (async function() {
         try {
             const res = await fetch('/api/facebook-pixel-settings/public');
@@ -23,13 +29,20 @@
                 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
                 (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
                 fbq('init', d.pixel_id);
-                if (d.track_page_view) fbq('track', 'PageView');
+                if (d.track_page_view) {
+                    const _pvId = window._fbGenEvId();
+                    window._fbPageViewId = _pvId;
+                    fbq('track', 'PageView', {}, {eventID: _pvId});
+                }
                 window._fbSettings = d;
             }
         } catch(e) {}
         try {
             const _p = new URLSearchParams(window.location.search);
-            const _gc = n => { const m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)'); return m ? m.pop() : ''; };
+            const _gc = window._fbGc;
+            const _fbc = _p.get('fbclid') ? `fb.1.${Date.now()}.${_p.get('fbclid')}` : _gc('_fbc');
+            window._fbFbc = _fbc;
+            window._fbFbp = _gc('_fbp');
             await fetch('/api/track-visit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -40,10 +53,11 @@
                     utm_medium: _p.get('utm_medium') || 'paid',
                     utm_campaign: _p.get('utm_campaign') || '',
                     fbclid: _p.get('fbclid') || '',
-                    fbc: _p.get('fbclid') ? `fb.1.${Date.now()}.${_p.get('fbclid')}` : _gc('_fbc'),
-                    fbp: _gc('_fbp'),
+                    fbc: _fbc,
+                    fbp: window._fbFbp,
                     event_source_url: window.location.href,
-                    referrer: document.referrer || ''
+                    referrer: document.referrer || '',
+                    event_id: window._fbPageViewId || ''
                 })
             });
         } catch(e) {}
@@ -472,9 +486,24 @@
     const SAFARI_IOS = 'x-safari-https://' + HOST + '/auth/google';
 
     function trackLead() {
+        const _evId = window._fbGenEvId ? window._fbGenEvId() : ('ev_' + Date.now());
         if (typeof fbq !== 'undefined' && window._fbSettings?.track_lead) {
-            fbq('track', 'Lead', { content_name: 'Reseller Registration', content_category: 'Registration' });
+            fbq('track', 'Lead', { content_name: 'Reseller Registration', content_category: 'Registration' }, {eventID: _evId});
         }
+        try {
+            fetch('/api/track-event', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    event_type: 'register_click',
+                    event_id: _evId,
+                    fbc: window._fbFbc || '',
+                    fbp: window._fbFbp || '',
+                    event_source_url: window.location.href,
+                    referrer: document.referrer || ''
+                })
+            }).catch(() => {});
+        } catch(e) {}
     }
 
     function detect() {
