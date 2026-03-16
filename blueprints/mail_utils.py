@@ -1,4 +1,4 @@
-import os, json, smtplib
+import os, json, smtplib, threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from flask import session, request
@@ -190,6 +190,112 @@ def send_password_reset_email(to_email, full_name, reset_token, reset_link):
     </div>
     '''
     send_email(to_email, 'รีเซ็ตรหัสผ่าน - ระบบสมาชิก', html)
+
+def send_welcome_bot_chat(user_id, user_name):
+    """Send welcome message from bot to new reseller's chat thread (non-blocking)."""
+    def _run():
+        conn = cursor = None
+        try:
+            conn = get_db()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+            # Get bot name from agent_settings
+            cursor.execute('SELECT bot_chat_name FROM agent_settings LIMIT 1')
+            row = cursor.fetchone()
+            bot_name = row['bot_chat_name'] if row and row['bot_chat_name'] else 'น้องนุ่น'
+
+            # Get Super Admin id for sender_id
+            cursor.execute("SELECT id FROM users WHERE role_id=(SELECT id FROM roles WHERE name='Super Admin') LIMIT 1")
+            admin = cursor.fetchone()
+            admin_id = admin['id'] if admin else 1
+
+            # Get or create chat thread
+            cursor.execute('SELECT id FROM chat_threads WHERE reseller_id=%s', (user_id,))
+            thread = cursor.fetchone()
+            if not thread:
+                cursor.execute('INSERT INTO chat_threads (reseller_id) VALUES (%s) RETURNING id', (user_id,))
+                thread = cursor.fetchone()
+            thread_id = thread['id']
+
+            welcome = (
+                f'🎉 ยินดีต้อนรับสู่ครอบครัว EKG Shops นะคะ คุณพี่{user_name}!\n'
+                f'บัญชี Reseller ของคุณพี่พร้อมใช้งานแล้วค่ะ 🎊\n'
+                f'ตอนนี้คุณพี่สามารถเข้าดูสินค้าและสั่งซื้อในราคา Reseller ได้ทันทีเลยนะคะ\n'
+                f'หากมีข้อสงสัยหรือต้องการความช่วยเหลืออะไร ทักหา{bot_name}ได้เลยค่ะ 😊'
+            )
+
+            cursor.execute('''
+                INSERT INTO chat_messages (thread_id, sender_id, sender_type, content, is_bot)
+                VALUES (%s, %s, 'admin', %s, TRUE) RETURNING id
+            ''', (thread_id, admin_id, welcome))
+
+            cursor.execute('''
+                UPDATE chat_threads
+                SET last_message_at=CURRENT_TIMESTAMP, last_message_preview=%s, is_archived=FALSE
+                WHERE id=%s
+            ''', (welcome[:100], thread_id))
+
+            conn.commit()
+
+            send_push_notification(
+                user_id, f'🎉 ยินดีต้อนรับ!',
+                f'{bot_name}: ยินดีต้อนรับสู่ครอบครัว EKG Shops ค่ะ คุณพี่{user_name}',
+                url='/reseller#chat', tag=f'welcome-{user_id}'
+            )
+        except Exception as e:
+            print(f'[WELCOME_CHAT] Error: {e}')
+        finally:
+            if cursor: cursor.close()
+            if conn: conn.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def send_welcome_reseller_email(to_email, full_name):
+    """Send welcome email to newly registered reseller (non-blocking)."""
+    if not to_email:
+        return
+    def _run():
+        try:
+            domain = os.environ.get('REPLIT_DEV_DOMAIN') or 'ekg-shops.com'
+            login_url = f'https://{domain}/login'
+            html = f'''
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fff;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h1 style="color:#8b5cf6;margin:0;">🎉 ยินดีต้อนรับสู่ EKG Shops!</h1>
+    <p style="color:#6b7280;margin-top:8px;">Reseller Family</p>
+  </div>
+  <div style="background:linear-gradient(135deg,#8b5cf6,#ec4899);border-radius:12px;padding:24px;color:#fff;margin-bottom:24px;">
+    <p style="margin:0;font-size:18px;">สวัสดี คุณพี่{full_name} 👋</p>
+    <p style="margin:8px 0 0;opacity:0.9;">บัญชี Reseller ของคุณพี่พร้อมใช้งานแล้วค่ะ</p>
+  </div>
+  <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:20px;">
+    <h3 style="margin-top:0;color:#374151;">สิทธิ์ที่คุณพี่ได้รับ</h3>
+    <ul style="color:#6b7280;padding-left:20px;line-height:1.8;">
+      <li>ราคา Reseller พิเศษสำหรับสมาชิก</li>
+      <li>สั่งซื้อชุดพยาบาล / สครับ ได้ทันที</li>
+      <li>ระบบติดตามออเดอร์ real-time</li>
+      <li>แชทสอบถามข้อมูลกับทีมงานได้ตลอด</li>
+    </ul>
+  </div>
+  <div style="text-align:center;margin:28px 0;">
+    <a href="{login_url}"
+       style="background:linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff;padding:14px 32px;
+              text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;display:inline-block;">
+      เข้าสู่ระบบ
+    </a>
+  </div>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+  <p style="color:#9ca3af;font-size:13px;text-align:center;">
+    หากมีข้อสงสัยติดต่อ Line: @ekgshops<br>
+    ขอบคุณที่เลือกร่วมงานกับ EKG Shops ค่ะ 🙏
+  </p>
+</div>'''
+            send_email(to_email, f'🎉 ยินดีต้อนรับสู่ EKG Shops Reseller — คุณพี่{full_name}', html)
+        except Exception as e:
+            print(f'[WELCOME_EMAIL] Error: {e}')
+    threading.Thread(target=_run, daemon=True).start()
+
 
 def log_activity(action_type, action_category, description, target_type=None, target_id=None, target_name=None, extra_data=None):
     """Log user activity to activity_logs table"""

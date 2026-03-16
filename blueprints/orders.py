@@ -767,6 +767,12 @@ def update_shipment(order_id, shipment_id):
                                 if t:
                                     create_notification(u['id'], 'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
                                         f'คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}', 'success', 'tier', u['new_tier_id'])
+                                    try:
+                                        send_push_notification(u['id'], '🎉 อัพเกรดระดับสำเร็จ!',
+                                            f'ยินดีด้วย! คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}',
+                                            url='/reseller', tag=f'tier-upgrade-{u["id"]}')
+                                    except Exception:
+                                        pass
         
         # Check if any shipment is shipped -> update order status to shipped
         elif data.get('status') == 'shipped':
@@ -808,6 +814,12 @@ def update_shipment(order_id, shipment_id):
                             send_order_status_chat(reseller_info['user_id'], reseller_info['order_number'] or f'#{order_id}', 'shipped', tracking_info, order_id=order_id)
                         except Exception as chat_err:
                             print(f"Chat notification error: {chat_err}")
+                        try:
+                            create_notification(reseller_info['user_id'], 'จัดส่งสินค้าแล้ว',
+                                f'คำสั่งซื้อ {reseller_info["order_number"] or "#" + str(order_id)} กำลังจัดส่ง',
+                                'info', 'order', order_id)
+                        except Exception:
+                            pass
                     elif data['status'] == 'delivered':
                         send_order_status_email(
                             reseller_info['email'],
@@ -2887,6 +2899,12 @@ def admin_ship_order(order_id):
             send_order_status_chat(order['user_id'], order['order_number'] or f'#{order_id}', 'shipped', f'เลข Tracking: {tracking_number}', order_id=order_id)
         except Exception as chat_err:
             print(f"[SHIP] Chat error: {chat_err}")
+        try:
+            create_notification(order['user_id'], 'จัดส่งสินค้าแล้ว',
+                f'คำสั่งซื้อ {order["order_number"] or "#" + str(order_id)} กำลังจัดส่ง',
+                'info', 'order', order_id)
+        except Exception:
+            pass
         return jsonify({'message': 'อัปเดตสถานะจัดส่งสำเร็จ', 'tracking_number': tracking_number}), 200
     except Exception as e:
         try:
@@ -3467,6 +3485,12 @@ def mark_order_delivered(order_id):
                 if t:
                     create_notification(u['id'], 'ยินดีด้วย! คุณได้รับการอัพเกรดระดับ',
                         f'คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}', 'success', 'tier', u['new_tier_id'])
+                    try:
+                        send_push_notification(u['id'], '🎉 อัพเกรดระดับสำเร็จ!',
+                            f'ยินดีด้วย! คุณได้รับการอัพเกรดเป็นระดับ {t["name"]}',
+                            url='/reseller', tag=f'tier-upgrade-{u["id"]}')
+                    except Exception:
+                        pass
         
         # Update all shipments to delivered
         cursor.execute('''

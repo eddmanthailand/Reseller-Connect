@@ -3,8 +3,9 @@ from authlib.integrations.flask_client import OAuth
 from database import get_db
 from utils import (login_required, admin_required, handle_error,
                    generate_csrf_token, validate_csrf_token, csrf_protect)
-from blueprints.mail_utils import send_email, send_password_reset_email, log_activity
-from blueprints.push_utils import send_push_notification, create_notification
+from blueprints.mail_utils import (send_email, send_password_reset_email, log_activity,
+                                    send_welcome_bot_chat, send_welcome_reseller_email)
+from blueprints.push_utils import send_push_notification, create_notification, notify_admins_guest_lead
 import psycopg2.extras
 import psycopg2
 import bcrypt
@@ -115,6 +116,21 @@ def google_callback():
 
         new_user_id = cursor.fetchone()['id']
         conn.commit()
+
+        # Notify admins + send welcome to new reseller (background, non-blocking)
+        try:
+            notify_admins_guest_lead(
+                '🙋 Reseller ใหม่สมัครเข้าระบบ',
+                f'{display_name} สมัครสมาชิกใหม่',
+                notification_type='lead',
+                push_url='/admin',
+                push_tag=f'new-reseller-{new_user_id}'
+            )
+            send_welcome_bot_chat(new_user_id, display_name)
+            if email:
+                send_welcome_reseller_email(email, display_name)
+        except Exception:
+            pass
 
         # Track register_complete conversion event
         try:
