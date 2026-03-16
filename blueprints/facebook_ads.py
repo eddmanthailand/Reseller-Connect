@@ -3107,17 +3107,17 @@ def advisor_chat():
         'โดยใส่ JSON block นี้ที่ท้ายสุดของคำตอบ (ไม่ต้องใส่ทุกครั้ง — ใส่เมื่อมีประโยชน์จริงๆ):\n\n'
         '<!--ACTIONS:[...array of action objects...]-->\n\n'
         'รูปแบบ Action Object:\n\n'
-        '1. สร้างภาพโฆษณาใหม่ (generate_image):\n'
-        '{"type":"generate_image","label":"🎨 สร้างภาพโฆษณา","headline":"ข้อความหลัก","body":"ข้อความรอง","cta":"สมัครเลย","style":"professional","reason":"เพราะอะไร"}\n'
-        'style ที่ใช้ได้: professional | vibrant | warm | dark_luxury | hospital_clean\n\n'
+        '1. สร้าง Content โฆษณา (suggest_content):\n'
+        '{"type":"suggest_content","label":"✍️ สร้าง Content โฆษณา","tone":"urgent|emotion|benefit|all","reason":"เพราะอะไร"}\n'
+        'tone: urgent=เร่งด่วน, emotion=อารมณ์, benefit=ประโยชน์, all=ทั้ง3แบบ\n\n'
         '2. หยุด Ad Set (pause_adset):\n'
         '{"type":"pause_adset","label":"⏸ หยุด Ad Set","adset_id":"ID_HERE","adset_name":"ชื่อ Ad Set","reason":"เพราะอะไร"}\n\n'
         '3. Copy ข้อความ (copy_text):\n'
         '{"type":"copy_text","label":"📋 Copy ข้อความ","text":"ข้อความที่แนะนำ","reason":"เพราะอะไร"}\n\n'
-        'ตัวอย่างการใช้: เมื่อ Frequency >4 → แนะนำ generate_image ใหม่\n'
-        'เมื่อ CPL สูงมาก → แนะนำ pause_adset + generate_image\n'
+        'ตัวอย่างการใช้: เมื่อ Frequency >4 → แนะนำ suggest_content ใหม่\n'
+        'เมื่อ CPL สูงมาก → แนะนำ pause_adset + suggest_content\n'
         'เมื่อถาม copy → แนะนำ copy_text หลายตัวเลือก\n'
-        'เมื่อ creative เดิมใช้มา >2 สัปดาห์ → แนะนำ generate_image อัตโนมัติ\n'
+        'เมื่อ creative เดิมใช้มา >2 สัปดาห์ → แนะนำ suggest_content อัตโนมัติ\n'
 
         '[Bid Strategies ที่ควรรู้]\n'
         '- Lowest Cost (ค่าเริ่มต้น): FB หา lead ถูกสุดเท่าที่ทำได้\n'
@@ -3528,6 +3528,23 @@ def generate_content_suggestions():
     }
     goal_label = goal_label_map.get(goal_type, goal_type)
 
+    tone_map = {
+        'urgent':   'เร่งด่วน/โอกาสพิเศษ — สร้างความรู้สึกต้องการทันที',
+        'emotion':  'อารมณ์/ความภูมิใจ — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล',
+        'benefit':  'ประโยชน์/เหตุผล — ข้อเท็จจริงและสิ่งที่ได้รับ',
+    }
+    requested_tone = (data.get('tone') or 'all').strip()
+
+    if requested_tone in tone_map:
+        tone_instruction = f'สร้าง Content โฆษณา 1 แบบ ตามแนวทาง: {tone_map[requested_tone]}'
+    else:
+        tone_instruction = (
+            'สร้าง Content โฆษณา Facebook 3 แบบ ที่แตกต่างกัน:\n'
+            '1. แบบ "เร่งด่วน/โอกาสพิเศษ" — สร้างความรู้สึกต้องการทันที\n'
+            '2. แบบ "อารมณ์/ความภูมิใจ" — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล\n'
+            '3. แบบ "ประโยชน์/เหตุผล" — ข้อเท็จจริงและประโยชน์ที่ได้รับ'
+        )
+
     prompt = f"""คุณคือ Copywriter ผู้เชี่ยวชาญโฆษณา Facebook สำหรับแบรนด์ชุดพยาบาล B2B ในไทย
 
 ข้อมูลแคมเปญ:
@@ -3536,22 +3553,32 @@ def generate_content_suggestions():
 - สินค้าหลัก: {product_name}
 - กลุ่มเป้าหมาย: {audience_note or 'พยาบาล นักศึกษาพยาบาล และบุคลากรทางการแพทย์ทั่วไทย'}
 
-สร้าง Content โฆษณา Facebook 3 แบบ ที่แตกต่างกันในแนวทาง:
-1. แบบ "เร่งด่วน/โอกาสพิเศษ" — สร้างความรู้สึกต้องการทันที
-2. แบบ "อารมณ์/ความภูมิใจ" — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล
-3. แบบ "ประโยชน์/เหตุผล" — ข้อเท็จจริงและประโยชน์ที่ได้รับ
+{tone_instruction}
+
+สำหรับแต่ละแบบ ต้องมีครบทุก field ดังนี้:
+- style_name: ชื่อแนวทาง ≤10 ตัวอักษร
+- style_icon: emoji 1 ตัว
+- hook: ประโยคแรกที่ดึงดูดใจ 1-2 บรรทัด ≤60 ตัวอักษร (สำคัญมาก! คนส่วนใหญ่อ่านแค่บรรทัดแรก)
+- primary_text: ข้อความหลัก body copy เต็มรูปแบบ 100-150 ตัวอักษร เล่าเรื่อง+ประโยชน์+กระตุ้นให้คลิก
+- headline: ข้อความ headline ใต้รูป ≤40 ตัวอักษร กระชับ ตรงจุด
+- description: ข้อความ link description ≤30 ตัวอักษร เสริม headline
+- cta: ข้อความปุ่ม ≤10 ตัวอักษร
+- hashtags: array ของ hashtag ภาษาไทย 4-5 อัน ไม่ต้องมี # (จะเติมเอง) เกี่ยวกับพยาบาล/ชุด/Reseller
 
 ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความนอก JSON:
 [
   {{
-    "style_name": "ชื่อแนวทาง (ภาษาไทย ≤10 ตัว)",
-    "style_icon": "emoji 1 ตัว",
-    "headline": "ข้อความหลัก ภาษาไทย ≤40 ตัวอักษร พลัง กระตุ้น",
-    "body": "ข้อความรอง ภาษาไทย ≤80 ตัวอักษร อธิบายประโยชน์",
-    "cta": "ข้อความปุ่ม ≤10 ตัวอักษร"
+    "style_name": "...",
+    "style_icon": "...",
+    "hook": "...",
+    "primary_text": "...",
+    "headline": "...",
+    "description": "...",
+    "cta": "...",
+    "hashtags": ["...", "..."]
   }}
 ]
-กฎ: ภาษาไทยทั้งหมด, ห้ามใช้ภาษาอังกฤษในเนื้อหา, ตรง target กลุ่มพยาบาล/Reseller"""
+กฎ: ภาษาไทยทั้งหมด, ห้ามใช้ภาษาอังกฤษในเนื้อหา, ตรง target กลุ่มพยาบาล/Reseller, เป็นธรรมชาติ ไม่ฟังดู AI"""
 
     try:
         client = _g.Client(api_key=gemini_key)

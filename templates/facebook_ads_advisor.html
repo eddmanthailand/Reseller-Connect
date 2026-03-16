@@ -296,7 +296,7 @@
         .adv-send-btn:disabled { background: #e5e7eb; cursor: not-allowed; }
 
         /* ══════════════════════════════════════════════════
-           CREATIVE STUDIO MODAL
+           CONTENT STUDIO MODAL
         ══════════════════════════════════════════════════ */
         .studio-overlay {
             position: fixed; inset: 0; z-index: 200;
@@ -325,83 +325,22 @@
             background: #f3f4f6; color: #374151; font-size: 16px; line-height: 30px; text-align: center;
         }
         .studio-close:hover { background: #e5e7eb; }
-        .studio-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 18px; }
-
-        /* Steps */
-        .studio-section { display: flex; flex-direction: column; gap: 10px; }
-        .studio-section-title {
-            font-size: 13px; font-weight: 700; color: #111;
-            display: flex; align-items: center; gap: 6px;
+        .studio-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+        .studio-section-label { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 2px; }
+        .studio-tone-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+        .studio-tone-opt {
+            border: 1.5px solid #e5e7eb; border-radius: 10px;
+            padding: 9px 8px; text-align: center; cursor: pointer;
+            font-size: 12px; font-weight: 600; color: #374151;
+            transition: all 0.15s; background: #fafafa; line-height: 1.4;
         }
-        .studio-section-badge {
-            width: 20px; height: 20px; border-radius: 50%;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff; font-size: 11px; font-weight: 700;
-            display: flex; align-items: center; justify-content: center;
+        .studio-tone-opt:hover { border-color: #a5b4fc; background: #f5f3ff; }
+        .studio-tone-opt.active { border-color: #6366f1; background: #ede9fe; color: #4f46e5; }
+        .studio-tone-all {
+            grid-column: 1/-1; border-color: #6366f1;
+            background: linear-gradient(135deg,#f5f3ff,#ede9fe); color:#4f46e5;
         }
-
-        /* Product picker */
-        .studio-product-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-        }
-        .studio-prod-item {
-            border: 2px solid #f0f0f0; border-radius: 10px; overflow: hidden;
-            cursor: pointer; transition: all 0.15s; aspect-ratio: 1;
-            display: flex; flex-direction: column;
-        }
-        .studio-prod-item:hover { border-color: #a5b4fc; }
-        .studio-prod-item.selected { border-color: #6366f1; box-shadow: 0 0 0 2px #6366f133; }
-        .studio-prod-img { width: 100%; flex: 1; object-fit: cover; display: block; background: #e5e7eb; }
-        .studio-prod-name {
-            font-size: 9px; padding: 3px 4px; text-align: center;
-            color: #374151; line-height: 1.2;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .studio-prod-no-img {
-            width: 100%; flex: 1;
-            background: linear-gradient(135deg, #e0e7ff, #f0f0ff);
-            display: flex; align-items: center; justify-content: center; font-size: 20px;
-        }
-        .studio-prod-loading { font-size: 12px; color: #9ca3af; padding: 8px 0; }
-        .studio-upload-btn {
-            border: 2px dashed #c4b5fd; border-radius: 10px;
-            cursor: pointer; transition: all 0.15s;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 4px; padding: 8px; color: #8b5cf6; font-size: 11px; font-weight: 600;
-            background: #fdf4ff; min-height: 70px;
-        }
-        .studio-upload-btn:hover { background: #f5f0ff; border-color: #8b5cf6; }
-        .studio-upload-btn span { font-size: 20px; }
-        .studio-selected-img {
-            width: 80px; height: 80px; border-radius: 10px; object-fit: cover;
-            border: 2px solid #6366f1;
-        }
-        .studio-no-img-note { font-size: 11px; color: #9ca3af; }
-
-        /* Content form */
-        .studio-field { display: flex; flex-direction: column; gap: 4px; }
-        .studio-label { font-size: 12px; font-weight: 600; color: #374151; }
-        .studio-input,
-        .studio-textarea {
-            border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 9px 12px;
-            font-size: 13px; font-family: inherit; color: #111; background: #f9fafb;
-            transition: border-color 0.15s;
-        }
-        .studio-input:focus,
-        .studio-textarea:focus { outline: none; border-color: #6366f1; background: #fff; }
-        .studio-textarea { resize: vertical; min-height: 70px; }
-        .studio-style-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-        }
-        .studio-style-opt {
-            border: 1.5px solid #e5e7eb; border-radius: 9px; padding: 7px 6px;
-            cursor: pointer; text-align: center; transition: all 0.15s;
-            font-size: 11px; font-weight: 600; color: #374151; background: #f9fafb;
-        }
-        .studio-style-opt:hover { border-color: #a5b4fc; }
-        .studio-style-opt.active { border-color: #6366f1; background: #f0f0ff; color: #4f46e5; }
-
-        /* Generate button */
+        .studio-tone-all.active { background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border-color:transparent; }
         .studio-gen-btn {
             width: 100%; padding: 14px; border-radius: 14px; border: none; cursor: pointer;
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
@@ -410,60 +349,47 @@
         }
         .studio-gen-btn:hover { opacity: 0.9; }
         .studio-gen-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
-
-        /* Result */
-        .studio-result {
-            display: none; flex-direction: column; gap: 12px;
+        .studio-content-cards { display: flex; flex-direction: column; gap: 14px; }
+        .studio-content-card {
+            border: 1.5px solid #e5e7eb; border-radius: 14px;
+            background: #fafafa; overflow: hidden; transition: border-color 0.15s;
         }
-        .studio-result.show { display: flex; }
-        .studio-result-img {
-            width: 100%; border-radius: 14px; border: 1px solid #f0f0f0;
-            display: block; box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        .studio-content-card:hover { border-color: #a5b4fc; }
+        .studio-card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 13px; background: linear-gradient(135deg,#f5f3ff,#ede9fe);
+            border-bottom: 1px solid #e5e7eb;
         }
-        .studio-result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .studio-result-btn {
-            flex: 1; padding: 10px; border-radius: 10px;
-            border: none; cursor: pointer; font-size: 13px; font-weight: 700;
-            transition: all 0.15s; text-align: center;
+        .studio-card-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #4f46e5; }
+        .studio-copy-all-btn {
+            font-size: 11px; font-weight: 700; color: #4f46e5; background: #fff;
+            border: 1px solid #c4b5fd; border-radius: 6px; padding: 3px 9px; cursor: pointer;
+            font-family: inherit; transition: all 0.15s;
         }
-        .studio-result-btn.save { background: #22c55e; color: #fff; }
-        .studio-result-btn.save:hover { background: #16a34a; }
-        .studio-result-btn.regen { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
-        .studio-result-btn.regen:hover { background: #e5e7eb; }
-
-        /* Content suggestions */
-        .studio-suggest-btn {
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-            width: 100%; padding: 9px 12px; border-radius: 10px;
-            border: 1.5px dashed #a5b4fc; background: #f5f3ff; color: #4f46e5;
-            font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
-            transition: all 0.15s;
+        .studio-copy-all-btn:hover { background: #ede9fe; }
+        .studio-copy-all-btn.copied { color: #16a34a; border-color: #86efac; background: #f0fdf4; }
+        .studio-card-body { padding: 10px 13px; display: flex; flex-direction: column; gap: 9px; }
+        .studio-field-row { display: flex; flex-direction: column; gap: 3px; }
+        .studio-field-label {
+            font-size: 9.5px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.4px;
+            display: flex; align-items: center; justify-content: space-between;
         }
-        .studio-suggest-btn:hover { background: #ede9fe; border-color: #6366f1; }
-        .studio-suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .studio-suggest-cards { display: none; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .studio-suggest-cards.show { display: flex; }
-        .studio-sug-card {
-            border: 1.5px solid #e5e7eb; border-radius: 12px;
-            padding: 12px 13px; background: #fafafa; transition: border-color 0.15s;
+        .studio-field-copy {
+            font-size: 10px; color: #6366f1; cursor: pointer; font-weight: 700;
+            background: none; border: none; font-family: inherit; padding: 0; transition: color 0.15s;
         }
-        .studio-sug-card:hover { border-color: #a5b4fc; }
-        .studio-sug-header {
-            display: flex; align-items: center; gap: 6px;
-            font-size: 12px; font-weight: 700; color: #4f46e5; margin-bottom: 8px;
+        .studio-field-copy:hover { color: #4f46e5; }
+        .studio-field-copy.copied { color: #16a34a; }
+        .studio-field-val {
+            font-size: 12.5px; color: #111; line-height: 1.55;
+            background: #fff; border: 1px solid #f0f0f0; border-radius: 7px; padding: 7px 10px;
         }
-        .studio-sug-icon { font-size: 16px; }
-        .studio-sug-row { margin-bottom: 5px; }
-        .studio-sug-key { font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; }
-        .studio-sug-val { font-size: 12.5px; color: #111; line-height: 1.5; margin-top: 1px; }
-        .studio-sug-apply {
-            display: flex; align-items: center; justify-content: center; gap: 5px;
-            width: 100%; margin-top: 10px; padding: 8px 10px; border-radius: 8px;
-            border: none; background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
-            font-family: inherit; transition: opacity 0.15s;
+        .studio-field-val.hook { font-weight: 700; color: #1e1b4b; font-size: 13.5px; }
+        .studio-hashtags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .studio-hashtag {
+            background: #ede9fe; color: #4f46e5; border-radius: 20px;
+            padding: 2px 9px; font-size: 11px; font-weight: 600;
         }
-        .studio-sug-apply:hover { opacity: 0.88; }
     </style>
 </head>
 <body>
@@ -556,100 +482,40 @@
 </div>
 
 <!-- ════════════════════════════════════════
-     CREATIVE STUDIO MODAL
+     CONTENT STUDIO MODAL
 ════════════════════════════════════════ -->
 <div class="studio-overlay" id="studioOverlay" onclick="overlayClick(event)">
 <div class="studio-panel" id="studioPanel">
     <div class="studio-handle"></div>
     <div class="studio-header">
-        <div style="font-size:20px;">🎨</div>
-        <div class="studio-title">Creative Studio</div>
+        <div style="font-size:20px;">✍️</div>
+        <div class="studio-title">Content Studio</div>
         <button class="studio-close" onclick="closeStudio()">✕</button>
     </div>
-    <div class="studio-body" id="studioBody">
+    <div class="studio-body" id="studioBodyScroll">
 
-        <!-- Step 1: Product Image -->
-        <div class="studio-section">
-            <div class="studio-section-title">
-                <div class="studio-section-badge">1</div>
-                เลือกภาพสินค้า
-            </div>
-            <div id="studioSelectedPreview" style="display:none;margin-bottom:6px;">
-                <img id="studioSelectedImg" class="studio-selected-img" src="" alt="">
-                <span id="studioSelectedName" style="font-size:11px;color:#6366f1;margin-left:8px;font-weight:600;"></span>
-                <button onclick="clearSelectedProduct()" style="margin-left:8px;font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;">✕ เปลี่ยน</button>
-            </div>
-            <div class="studio-product-grid" id="studioProductGrid">
-                <div class="studio-prod-loading adv-loading">⏳ กำลังโหลดสินค้า...</div>
-            </div>
-            <!-- Upload option -->
-            <input type="file" id="studioFileInput" accept="image/*" style="display:none;" onchange="handleFileUpload(event)">
-            <div class="studio-upload-btn" onclick="document.getElementById('studioFileInput').click()">
-                <span>📤</span>อัปโหลดภาพเพิ่มเติม
-            </div>
-        </div>
+        <!-- Context chips (auto-filled from campaign brief) -->
+        <div id="studioContextChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
 
-        <!-- Step 2: Content -->
-        <div class="studio-section">
-            <div class="studio-section-title">
-                <div class="studio-section-badge">2</div>
-                ข้อความในภาพโฆษณา
-            </div>
-            <div class="studio-field">
-                <label class="studio-label">Headline (ข้อความหลัก) *</label>
-                <input class="studio-input" id="studioHeadline" placeholder="เช่น สมัคร Reseller ฟรี! ชุดพยาบาลคุณภาพดี">
-            </div>
-            <div class="studio-field">
-                <label class="studio-label">Body Text (ข้อความรอง)</label>
-                <textarea class="studio-textarea" id="studioBody" placeholder="เช่น ราคาพิเศษสำหรับสมาชิก เริ่มต้นที่ Bronze Tier"></textarea>
-            </div>
-            <div class="studio-field">
-                <label class="studio-label">CTA Button</label>
-                <input class="studio-input" id="studioCta" value="สมัครเลย">
-            </div>
-
-            <!-- AI Content Suggestions -->
-            <button class="studio-suggest-btn" id="suggestBtn" onclick="fetchContentSuggestions()">
-                ✨ ให้ AI แนะนำ Content 3 แบบ
-            </button>
-            <div class="studio-suggest-cards" id="suggestCards"></div>
-        </div>
-
-        <!-- Step 3: Style -->
-        <div class="studio-section">
-            <div class="studio-section-title">
-                <div class="studio-section-badge">3</div>
-                สไตล์ภาพ
-            </div>
-            <div class="studio-style-grid">
-                <div class="studio-style-opt active" data-style="professional" onclick="selectStyle(this)">🏥 Professional</div>
-                <div class="studio-style-opt" data-style="vibrant" onclick="selectStyle(this)">✨ Vibrant</div>
-                <div class="studio-style-opt" data-style="warm" onclick="selectStyle(this)">🌸 Warm</div>
-                <div class="studio-style-opt" data-style="dark_luxury" onclick="selectStyle(this)">💎 Luxury</div>
-                <div class="studio-style-opt" data-style="hospital_clean" onclick="selectStyle(this)">🤍 Hospital</div>
-            </div>
-            <div class="studio-field" style="margin-top:6px;">
-                <label class="studio-label">คำแนะนำเพิ่มเติมให้ AI (ไม่บังคับ)</label>
-                <input class="studio-input" id="studioExtra" placeholder="เช่น เน้นสีขาว-น้ำเงิน, มีโลโก้มุมขวา...">
+        <!-- Tone selector -->
+        <div>
+            <div class="studio-section-label">🎯 เลือก Tone โฆษณา</div>
+            <div class="studio-tone-grid" id="studioToneGrid">
+                <div class="studio-tone-opt" data-tone="urgent" onclick="selectTone(this)">⚡ เร่งด่วน<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">สร้างความรีบ</span></div>
+                <div class="studio-tone-opt" data-tone="emotion" onclick="selectTone(this)">💛 อารมณ์<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">ความภูมิใจ</span></div>
+                <div class="studio-tone-opt" data-tone="benefit" onclick="selectTone(this)">📊 ประโยชน์<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">ข้อเท็จจริง</span></div>
+                <div class="studio-tone-opt studio-tone-all active" data-tone="all" onclick="selectTone(this)">✨ สร้างทั้ง 3 แบบพร้อมกัน</div>
             </div>
         </div>
 
         <!-- Generate button -->
-        <button class="studio-gen-btn" id="studioGenBtn" onclick="generateImage()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            สร้างภาพโฆษณา
+        <button class="studio-gen-btn" id="studioGenBtn" onclick="generateContent()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            สร้าง Content โฆษณา
         </button>
 
-        <!-- Result -->
-        <div class="studio-result" id="studioResult">
-            <div style="font-size:13px;font-weight:700;color:#111;">✅ ภาพโฆษณาที่สร้างได้</div>
-            <img id="studioResultImg" class="studio-result-img" src="" alt="Generated Ad">
-            <div class="studio-result-actions">
-                <button class="studio-result-btn save" onclick="saveCreative()">💾 บันทึก</button>
-                <a id="studioDownloadBtn" class="studio-result-btn regen" download="ad_creative.jpg" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">⬇️ ดาวน์โหลด</a>
-                <button class="studio-result-btn regen" onclick="generateImage()">🔄 สร้างใหม่</button>
-            </div>
-        </div>
+        <!-- Result cards -->
+        <div class="studio-content-cards" id="studioContentCards" style="display:none;"></div>
 
     </div>
 </div>
@@ -665,10 +531,8 @@ let galleryAds = [], galleryLoaded = false;
 let ttsUtterance = null, ttsSpeaking = false, ttsActiveBtn = null;
 
 // Studio state
-let studioSelectedProduct = null;  // { image_url, product_name, b64? }
-let studioStyle = 'professional';
-let studioResultB64 = null;
-let studioResultUrl = null;
+let studioTone = 'all';
+let studioSuggestions = [];
 
 // ══════════════════════════════════
 // INIT
@@ -961,17 +825,11 @@ function renderActionCards(actions) {
     actions.forEach(a => {
         const card = document.createElement('div');
         card.className = `adv-action-card type-${a.type}`;
-        if (a.type === 'generate_image') {
+        if (a.type === 'suggest_content' || a.type === 'generate_image') {
             card.innerHTML = `
-                <div class="adv-action-card-label">🎨 ${esc(a.label || 'สร้างภาพโฆษณาใหม่')}</div>
+                <div class="adv-action-card-label">✍️ ${esc(a.label || 'สร้าง Content โฆษณา')}</div>
                 <div class="adv-action-card-reason">${esc(a.reason || '')}</div>
-                <div class="adv-action-card-preview">
-                    ${a.headline ? `<div class="adv-action-preview-item"><span>Headline</span><span>${esc(a.headline)}</span></div>` : ''}
-                    ${a.body     ? `<div class="adv-action-preview-item"><span>Body</span><span>${esc(a.body.substring(0,60))}${a.body.length>60?'…':''}</span></div>` : ''}
-                    ${a.cta      ? `<div class="adv-action-preview-item"><span>CTA</span><span>${esc(a.cta)}</span></div>` : ''}
-                </div>
-                <button class="adv-action-btn primary" onclick='openStudioWithData(${JSON.stringify(a)})'>🚀 สร้างภาพเลย</button>
-                <button class="adv-action-btn secondary" onclick='openStudio(null)'>✏️ แก้ไขก่อน</button>`;
+                <button class="adv-action-btn primary" onclick='openStudio(${JSON.stringify(a.tone||"all")})'>✨ เปิด Content Studio</button>`;
         } else if (a.type === 'pause_adset') {
             card.innerHTML = `
                 <div class="adv-action-card-label">⏸ ${esc(a.label || 'หยุด Ad Set')}</div>
@@ -1019,30 +877,23 @@ async function copyToClipboard(text, btn) {
 // ══════════════════════════════════
 // CREATIVE STUDIO
 // ══════════════════════════════════
-async function openStudio(prefill) {
-    document.getElementById('studioOverlay').classList.add('open');
-    if (prefill) applyStudioPrefill(prefill);
-    await loadProductImages();
-}
-
-function openStudioWithData(action) {
-    applyStudioPrefill(action);
-    document.getElementById('studioOverlay').classList.add('open');
-    loadProductImages();
-    // Auto-trigger generate
-    setTimeout(() => generateImage(), 400);
-}
-
-function applyStudioPrefill(a) {
-    if (a.headline) document.getElementById('studioHeadline').value = a.headline;
-    if (a.body)     document.getElementById('studioBody').value = a.body;
-    if (a.cta)      document.getElementById('studioCta').value = a.cta;
-    if (a.style) {
-        studioStyle = a.style;
-        document.querySelectorAll('.studio-style-opt').forEach(o => {
-            o.classList.toggle('active', o.dataset.style === a.style);
-        });
+async function openStudio(tone) {
+    studioTone = tone || 'all';
+    document.querySelectorAll('.studio-tone-opt').forEach(el => {
+        el.classList.toggle('active', el.dataset.tone === studioTone);
+    });
+    const chips = document.getElementById('studioContextChips');
+    if (chips) {
+        const parts = [];
+        if (campaignCtx.campaign_name) parts.push('📢 ' + campaignCtx.campaign_name);
+        if (campaignCtx.goal_type)     parts.push('🎯 ' + campaignCtx.goal_type);
+        if (campaignCtx.audience_note) parts.push('👥 ' + campaignCtx.audience_note.substring(0,40));
+        chips.innerHTML = parts.map(p => `<span style="background:#ede9fe;color:#4f46e5;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">${escHtml(p)}</span>`).join('');
     }
+    const cards = document.getElementById('studioContentCards');
+    cards.style.display = 'none';
+    cards.innerHTML = '';
+    document.getElementById('studioOverlay').classList.add('open');
 }
 
 function closeStudio() {
@@ -1053,219 +904,128 @@ function overlayClick(e) {
     if (e.target === document.getElementById('studioOverlay')) closeStudio();
 }
 
-async function loadProductImages() {
-    const grid = document.getElementById('studioProductGrid');
-    if (grid.querySelector('.studio-prod-item')) return; // already loaded
-    grid.innerHTML = '<div class="studio-prod-loading adv-loading">⏳ กำลังโหลดสินค้า...</div>';
-    try {
-        const r = await fetch('/api/facebook-ads/product-images', { credentials: 'include' });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
-        const imgs = d.images || [];
-        if (!imgs.length) { grid.innerHTML = '<div class="studio-prod-loading">ไม่พบภาพสินค้า</div>'; return; }
-        grid.innerHTML = imgs.map((img, i) => {
-            const src = img.image_url || '';
-            const imgEl = src
-                ? `<img class="studio-prod-img" src="${escAttr(src)}" alt="${escAttr(img.product_name)}" loading="lazy">`
-                : `<div class="studio-prod-no-img">🏥</div>`;
-            return `<div class="studio-prod-item" id="sprod${i}" onclick="selectProduct(${i}, ${JSON.stringify(img).replace(/"/g,'&quot;')})"
-                data-url="${escAttr(src)}" data-name="${escAttr(img.product_name)}">
-                ${imgEl}
-                <div class="studio-prod-name">${esc(img.product_name)}</div>
-            </div>`;
-        }).join('');
-    } catch(e) { grid.innerHTML = `<div class="studio-prod-loading">⚠️ ${esc(e.message)}</div>`; }
-}
-
-function selectProduct(i, imgData) {
-    document.querySelectorAll('.studio-prod-item').forEach(el => el.classList.remove('selected'));
-    document.getElementById('sprod' + i)?.classList.add('selected');
-    studioSelectedProduct = { image_url: imgData.image_url, product_name: imgData.product_name };
-    const prev = document.getElementById('studioSelectedPreview');
-    const img  = document.getElementById('studioSelectedImg');
-    const name = document.getElementById('studioSelectedName');
-    img.src = imgData.image_url || ''; name.textContent = imgData.product_name;
-    prev.style.display = imgData.image_url ? 'flex' : 'none';
-    prev.style.alignItems = 'center';
-}
-
-function clearSelectedProduct() {
-    studioSelectedProduct = null;
-    document.getElementById('studioSelectedPreview').style.display = 'none';
-    document.querySelectorAll('.studio-prod-item').forEach(el => el.classList.remove('selected'));
-}
-
-function handleFileUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-        const b64full = ev.target.result;
-        const b64 = b64full.split(',')[1];
-        studioSelectedProduct = { image_url: b64full, product_name: file.name, b64: b64 };
-        const prev = document.getElementById('studioSelectedPreview');
-        document.getElementById('studioSelectedImg').src = b64full;
-        document.getElementById('studioSelectedName').textContent = file.name;
-        prev.style.display = 'flex'; prev.style.alignItems = 'center';
-    };
-    reader.readAsDataURL(file);
-}
-
-function selectStyle(el) {
-    document.querySelectorAll('.studio-style-opt').forEach(o => o.classList.remove('active'));
+function selectTone(el) {
+    document.querySelectorAll('.studio-tone-opt').forEach(o => o.classList.remove('active'));
     el.classList.add('active');
-    studioStyle = el.dataset.style;
+    studioTone = el.dataset.tone;
 }
 
-async function generateImage() {
-    const headline = document.getElementById('studioHeadline').value.trim();
-    const body     = document.getElementById('studioBody').value.trim();
-    const cta      = document.getElementById('studioCta').value.trim() || 'สมัครเลย';
-    const extra    = document.getElementById('studioExtra').value.trim();
-
-    if (!headline) { alert('กรุณากรอก Headline ก่อน'); document.getElementById('studioHeadline').focus(); return; }
-
+async function generateContent() {
     const btn = document.getElementById('studioGenBtn');
     btn.disabled = true;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> กำลังสร้าง AI...`;
-
-    // Get product image b64
-    let productB64 = null, productUrl = '';
-    if (studioSelectedProduct) {
-        productUrl = studioSelectedProduct.image_url || '';
-        if (studioSelectedProduct.b64) {
-            productB64 = studioSelectedProduct.b64;
-        } else if (productUrl) {
-            try {
-                const imgEl = new Image(); imgEl.crossOrigin = 'anonymous';
-                await new Promise((res, rej) => { imgEl.onload = res; imgEl.onerror = rej; imgEl.src = productUrl; setTimeout(rej, 5000); });
-                const c = document.createElement('canvas');
-                c.width = imgEl.naturalWidth; c.height = imgEl.naturalHeight;
-                c.getContext('2d').drawImage(imgEl, 0, 0);
-                productB64 = c.toDataURL('image/jpeg', 0.85).split(',')[1];
-            } catch(e) { productB64 = null; }
-        }
-    }
-
-    try {
-        const r = await fetch('/api/facebook-ads/generate-ad-image', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                campaign_id: CAMPAIGN_ID,
-                headline, body_text: body, cta, style: studioStyle,
-                extra_instruction: extra,
-                product_image_b64: productB64 || undefined,
-                product_image_url: productUrl || undefined,
-            })
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'สร้างไม่สำเร็จ');
-
-        studioResultB64  = d.image_b64;
-        studioResultUrl  = d.image_url;
-        const imgSrc = `data:image/jpeg;base64,${d.image_b64}`;
-        document.getElementById('studioResultImg').src = imgSrc;
-        const dlBtn = document.getElementById('studioDownloadBtn');
-        dlBtn.href = imgSrc; dlBtn.download = `ad_${CAMPAIGN_ID}_${Date.now()}.jpg`;
-        document.getElementById('studioResult').classList.add('show');
-        document.getElementById('studioResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        // Post result back to chat
-        appendAiMsg(`🎨 สร้างภาพโฆษณาสำเร็จ!\n**Headline:** ${headline}\n**Body:** ${body || '—'}\n**CTA:** ${cta}`, false, false, studioResultUrl);
-    } catch(e) { alert('❌ ' + e.message); }
-    finally {
-        btn.disabled = false;
-        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> สร้างภาพโฆษณา`;
-    }
-}
-
-async function saveCreative() {
-    if (!studioResultUrl) { alert('ยังไม่มีภาพที่สร้าง'); return; }
-    appendAiMsg('✅ บันทึกภาพโฆษณาเรียบร้อยแล้ว — ดูได้ที่ Gallery ด้านบน', false, false);
-    closeStudio();
-}
-
-// ── AI Content Suggestions ──────────────────────────────────
-async function fetchContentSuggestions() {
-    const btn   = document.getElementById('suggestBtn');
-    const cards = document.getElementById('suggestCards');
-    btn.disabled = true;
-    btn.textContent = '⏳ AI กำลังคิด Content...';
-    cards.classList.remove('show');
-    cards.innerHTML = '';
-
-    // Gather product name from selected product (if any)
-    const productName = studioSelectedProduct?.product_name || 'ชุดพยาบาล';
-
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> กำลังสร้าง...';
+    const cards = document.getElementById('studioContentCards');
+    cards.style.display = 'none';
     try {
         const r = await fetch('/api/facebook-ads/generate-content-suggestions', {
             method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
+                campaign_id:   CAMPAIGN_ID,
                 campaign_name: campaignCtx.campaign_name || '',
                 goal_type:     campaignCtx.goal_type     || 'lead',
                 audience_note: campaignCtx.audience_note || '',
-                product_name:  productName,
+                product_name:  'ชุดพยาบาล EKG',
+                tone:          studioTone,
             })
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'ไม่สำเร็จ');
-        renderContentSuggestions(d.suggestions || []);
+        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        studioSuggestions = d.suggestions || [];
+        renderContentCards(studioSuggestions);
     } catch(e) {
-        cards.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:6px;">❌ ${e.message}</div>`;
-        cards.classList.add('show');
+        alert('สร้าง Content ไม่สำเร็จ: ' + e.message);
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '🔄 สร้างใหม่อีกครั้ง';
+        btn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> สร้าง Content โฆษณา';
     }
 }
 
-function renderContentSuggestions(suggestions) {
-    const cards = document.getElementById('suggestCards');
+function renderContentCards(suggestions) {
+    const wrap = document.getElementById('studioContentCards');
     if (!suggestions.length) {
-        cards.innerHTML = '<div style="color:#9ca3af;font-size:12px;padding:4px;">ไม่พบ Content</div>';
-        cards.classList.add('show');
+        wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px;">ไม่พบ Content</div>';
+        wrap.style.display = 'flex';
         return;
     }
-    cards.innerHTML = suggestions.map((s, i) => `
-        <div class="studio-sug-card">
-            <div class="studio-sug-header">
-                <span class="studio-sug-icon">${s.style_icon || '✦'}</span>
-                <span>แบบที่ ${i + 1}: ${escHtml(s.style_name || '')}</span>
+    wrap.innerHTML = suggestions.map((s, i) => {
+        const tags = (s.hashtags || []).map(h => `<span class="studio-hashtag">${escHtml('#'+h)}</span>`).join('');
+        return `
+        <div class="studio-content-card">
+            <div class="studio-card-header">
+                <div class="studio-card-title"><span>${s.style_icon||'✦'}</span> แบบที่ ${i+1}: ${escHtml(s.style_name||'')}</div>
+                <button class="studio-copy-all-btn" id="copyAllBtn${i}" onclick="copyAllContent(${i})">📋 Copy ทั้งหมด</button>
             </div>
-            <div class="studio-sug-row">
-                <div class="studio-sug-key">Headline</div>
-                <div class="studio-sug-val">${escHtml(s.headline || '')}</div>
+            <div class="studio-card-body">
+                <div class="studio-field-row">
+                    <div class="studio-field-label">
+                        <span>🪝 Hook (บรรทัดแรก)</span>
+                        <button class="studio-field-copy" onclick="copyField(${i},'hook',this)">Copy</button>
+                    </div>
+                    <div class="studio-field-val hook">${escHtml(s.hook||'')}</div>
+                </div>
+                <div class="studio-field-row">
+                    <div class="studio-field-label">
+                        <span>📝 Primary Text</span>
+                        <button class="studio-field-copy" onclick="copyField(${i},'primary_text',this)">Copy</button>
+                    </div>
+                    <div class="studio-field-val">${escHtml(s.primary_text||'')}</div>
+                </div>
+                <div class="studio-field-row">
+                    <div class="studio-field-label">
+                        <span>🔤 Headline</span>
+                        <button class="studio-field-copy" onclick="copyField(${i},'headline',this)">Copy</button>
+                    </div>
+                    <div class="studio-field-val">${escHtml(s.headline||'')}</div>
+                </div>
+                <div class="studio-field-row">
+                    <div class="studio-field-label">
+                        <span>💬 Description</span>
+                        <button class="studio-field-copy" onclick="copyField(${i},'description',this)">Copy</button>
+                    </div>
+                    <div class="studio-field-val">${escHtml(s.description||'')}</div>
+                </div>
+                <div class="studio-field-row">
+                    <div class="studio-field-label"><span>🖱️ CTA Button</span></div>
+                    <div class="studio-field-val" style="font-weight:700;color:#6366f1;">${escHtml(s.cta||'')}</div>
+                </div>
+                ${tags ? '<div class="studio-field-row"><div class="studio-field-label"><span>#️⃣ Hashtags</span><button class="studio-field-copy" onclick="copyField('+i+',\'hashtags\',this)">Copy</button></div><div class="studio-hashtags">'+tags+'</div></div>' : ''}
             </div>
-            <div class="studio-sug-row">
-                <div class="studio-sug-key">Body</div>
-                <div class="studio-sug-val">${escHtml(s.body || '')}</div>
-            </div>
-            <div class="studio-sug-row">
-                <div class="studio-sug-key">CTA</div>
-                <div class="studio-sug-val">${escHtml(s.cta || '')}</div>
-            </div>
-            <button class="studio-sug-apply" onclick="applyContentSuggestion(${i})">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                สร้างภาพโฆษณาด้วย Content นี้
-            </button>
-        </div>`).join('');
-    cards.classList.add('show');
-    // Store suggestions for apply
-    cards._suggestions = suggestions;
+        </div>`;
+    }).join('');
+    wrap.style.display = 'flex';
+    wrap.scrollIntoView({behavior: 'smooth', block: 'nearest'});
 }
 
-function applyContentSuggestion(idx) {
-    const cards = document.getElementById('suggestCards');
-    const s = (cards._suggestions || [])[idx];
+function copyField(idx, field, btn) {
+    const s = studioSuggestions[idx];
     if (!s) return;
-    document.getElementById('studioHeadline').value = s.headline || '';
-    document.getElementById('studioBody').value     = s.body     || '';
-    document.getElementById('studioCta').value      = s.cta      || 'สมัครเลย';
-    // Scroll to generate button and trigger generation
-    const genBtn = document.getElementById('studioGenBtn');
-    genBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    setTimeout(() => generateImage(), 300);
+    const text = field === 'hashtags' ? (s.hashtags||[]).map(h=>'#'+h).join(' ') : (s[field]||'');
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '✓'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    }).catch(()=>{});
+}
+
+function copyAllContent(idx) {
+    const s = studioSuggestions[idx];
+    if (!s) return;
+    const parts = [
+        s.hook         ? '🪝 Hook:
+'+s.hook                                  : '',
+        s.primary_text ? '📝 Primary Text:
+'+s.primary_text                  : '',
+        s.headline     ? '🔤 Headline: '+s.headline                            : '',
+        s.description  ? '💬 Description: '+s.description                      : '',
+        s.cta          ? '🖱️ CTA: '+s.cta                                     : '',
+        s.hashtags?.length ? '#️⃣ Hashtags: '+s.hashtags.map(h=>'#'+h).join(' '): '',
+    ].filter(Boolean);
+    navigator.clipboard.writeText(parts.join('
+
+')).then(() => {
+        const btn = document.getElementById('copyAllBtn'+idx);
+        if (btn) { btn.textContent='✅ Copied!'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent='📋 Copy ทั้งหมด';btn.classList.remove('copied');},2000); }
+    }).catch(()=>{});
 }
 
 function escHtml(str) {
