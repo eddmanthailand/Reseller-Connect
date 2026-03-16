@@ -484,7 +484,7 @@
 <!-- ════════════════════════════════════════
      CONTENT STUDIO MODAL
 ════════════════════════════════════════ -->
-<div class="studio-overlay" id="studioOverlay" onclick="overlayClick(event)">
+<div class="studio-overlay" id="studioOverlay" onclick="overlayClick(event)" style="display:none;">
 <div class="studio-panel" id="studioPanel">
     <div class="studio-handle"></div>
     <div class="studio-header">
@@ -898,11 +898,15 @@ async function openStudio(tone) {
     const cards = document.getElementById('studioContentCards');
     cards.style.display = 'none';
     cards.innerHTML = '';
-    document.getElementById('studioOverlay').classList.add('open');
+    const ov = document.getElementById('studioOverlay');
+    ov.style.display = 'flex';
+    ov.classList.add('open');
 }
 
 function closeStudio() {
-    document.getElementById('studioOverlay').classList.remove('open');
+    const ov = document.getElementById('studioOverlay');
+    ov.style.display = 'none';
+    ov.classList.remove('open');
 }
 
 function overlayClick(e) {
