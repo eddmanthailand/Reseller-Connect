@@ -2629,6 +2629,64 @@ def _advisor_load_db_context(cursor):
     except Exception:
         ctx['landing_pages'] = []
 
+    # 8. Campaign budgets (total budget per campaign name)
+    try:
+        cursor.execute("""
+            SELECT campaign_name, total_budget, notes
+            FROM campaign_budgets
+            WHERE is_hidden IS NOT TRUE
+            ORDER BY total_budget DESC
+        """)
+        ctx['campaign_budgets'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['campaign_budgets'] = []
+
+    # 9. Conversion funnel snapshot (leads, applications, customers)
+    try:
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM guest_leads
+                 WHERE created_at >= NOW() - INTERVAL '30 days') AS leads_30d,
+                (SELECT COUNT(*) FROM guest_leads) AS leads_total,
+                (SELECT COUNT(*) FROM reseller_applications
+                 WHERE created_at >= NOW() - INTERVAL '30 days') AS applications_30d,
+                (SELECT COUNT(*) FROM reseller_applications
+                 WHERE status = 'approved'
+                   AND reviewed_at >= NOW() - INTERVAL '30 days') AS approved_30d,
+                (SELECT COUNT(*) FROM customers
+                 WHERE created_at >= NOW() - INTERVAL '30 days') AS new_customers_30d,
+                (SELECT COUNT(*) FROM customers) AS customers_total
+        """)
+        row = cursor.fetchone()
+        ctx['funnel_snapshot'] = dict(row) if row else {}
+    except Exception:
+        ctx['funnel_snapshot'] = {}
+
+    # 10. Reseller tiers definition (for audience context)
+    try:
+        cursor.execute("""
+            SELECT name, level_rank, upgrade_threshold, description, is_manual_only
+            FROM reseller_tiers ORDER BY level_rank
+        """)
+        ctx['reseller_tiers'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['reseller_tiers'] = []
+
+    # 11. Top converting UTM campaigns (lead or registration events)
+    try:
+        cursor.execute("""
+            SELECT utm_campaign, event_type, COUNT(*) as cnt
+            FROM conversion_events
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+              AND utm_campaign IS NOT NULL
+              AND event_type IN ('Lead', 'CompleteRegistration', 'lead', 'complete_registration')
+            GROUP BY utm_campaign, event_type
+            ORDER BY cnt DESC LIMIT 15
+        """)
+        ctx['top_converting_campaigns'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['top_converting_campaigns'] = []
+
     return ctx
 
 
@@ -2691,8 +2749,8 @@ def _advisor_format_db_context(ctx):
         lines.append(f"\n[สินค้า Active] {brands_str}")
 
     # UTM Parameters
-    utm_sources  = ctx.get('utm_sources', [])
-    utm_mediums  = ctx.get('utm_mediums', [])
+    utm_sources   = ctx.get('utm_sources', [])
+    utm_mediums   = ctx.get('utm_mediums', [])
     utm_campaigns = ctx.get('utm_campaigns', [])
     landing_pages = ctx.get('landing_pages', [])
     if utm_sources or utm_mediums or utm_campaigns or landing_pages:
@@ -2704,10 +2762,42 @@ def _advisor_format_db_context(ctx):
             lines.append(f"  utm_medium ที่พบ: {', '.join(utm_mediums)}")
         if landing_pages:
             lines.append(f"  Landing pages: {', '.join(landing_pages)}")
-            lines.append('  ตัวอย่าง URL ที่ใช้: /join (สมัครสมาชิก), /become-reseller (สมัคร reseller), /catalog (ดูสินค้า)')
+            lines.append('  URL หลัก: /join=สมัครสมาชิก, /become-reseller=สมัคร reseller, /catalog=ดูสินค้า')
         if utm_campaigns:
-            lines.append(f"  utm_campaign ที่พบใน DB ({len(utm_campaigns)} แคมเปญ): {', '.join(utm_campaigns[:15])}")
-            lines.append('  หมายเหตุ: utm_campaign ควรตรงกับชื่อหรือ ID แคมเปญใน Facebook Ads Manager')
+            lines.append(f"  utm_campaign ใน DB ({len(utm_campaigns)} ค่า): {', '.join(utm_campaigns[:15])}")
+            lines.append('  utm_campaign ควรตรงกับชื่อหรือ Campaign ID ใน Facebook Ads Manager')
+
+    # Campaign budgets
+    budgets = ctx.get('campaign_budgets', [])
+    if budgets:
+        lines.append('\n[งบประมาณแคมเปญ (campaign_budgets table)]')
+        for b in budgets:
+            note = f" — {b.get('notes','')}" if b.get('notes') else ''
+            lines.append(f"  • {b.get('campaign_name','?')}: ฿{float(b.get('total_budget') or 0):,.0f} รวม{note}")
+
+    # Conversion funnel snapshot
+    f = ctx.get('funnel_snapshot', {})
+    if f:
+        lines.append('\n[Conversion Funnel Snapshot]')
+        lines.append(f"  Guest leads 30d: {f.get('leads_30d',0)} | รวมทั้งหมด: {f.get('leads_total',0)}")
+        lines.append(f"  Reseller applications 30d: {f.get('applications_30d',0)} | approved 30d: {f.get('approved_30d',0)}")
+        lines.append(f"  ลูกค้าใหม่ 30d: {f.get('new_customers_30d',0)} | รวมทั้งหมด: {f.get('customers_total',0)}")
+
+    # Top converting campaigns
+    top_conv = ctx.get('top_converting_campaigns', [])
+    if top_conv:
+        lines.append('\n[UTM Campaign ที่ generate Lead/Registration 30 วัน]')
+        for t in top_conv:
+            lines.append(f"  • utm_campaign={t.get('utm_campaign','?')} → {t.get('event_type','?')}: {t.get('cnt',0)} ครั้ง")
+
+    # Reseller tiers
+    tiers = ctx.get('reseller_tiers', [])
+    if tiers:
+        lines.append('\n[Reseller Tiers (เป้าหมายกลุ่มลูกค้า)]')
+        for t in tiers:
+            manual = ' (Manual เท่านั้น)' if t.get('is_manual_only') else ''
+            lines.append(f"  • {t.get('name','?')} (Rank {t.get('level_rank','?')}): "
+                         f"ยอดซื้อสะสม ≥ ฿{float(t.get('upgrade_threshold') or 0):,.0f}{manual}")
 
     lines.append('\n=== (จบข้อมูล DB) ===')
     return '\n'.join(lines)
@@ -2825,13 +2915,70 @@ def advisor_chat():
         'คุณคือ AI ผู้ช่วยวิเคราะห์ Facebook Ads ของ EKG Shops (ร้านขายชุดพยาบาล B2B)\n'
         'คุณมองเห็นหน้าจอของผู้ใช้แบบ real-time และมีข้อมูล DB ทั้งหมดที่เกี่ยวข้อง\n'
         'ตอบภาษาไทย กระชับ ตรงประเด็น ใช้ bullet points เมื่อเหมาะสม\n\n'
+
+        '=== STATIC KNOWLEDGE: EKG Shops + Facebook Ads ===\n\n'
+
+        '[ธุรกิจ EKG Shops]\n'
+        '- ประเภท: B2B ขายชุดพยาบาลและชุดสครับให้ Reseller (ตัวแทนจำหน่าย)\n'
+        '- ลูกค้าเป้าหมาย: พยาบาล นักศึกษาพยาบาล บุคลากรสาธารณสุข ทั่วประเทศไทย\n'
+        '- โมเดล: สมัครเป็น Reseller ก่อน → ซื้อในราคา Tier → ขายต่อ\n'
+        '- Tier ระบบ: Bronze (เริ่มต้น) → Silver (฿5,000) → Gold (฿10,000) → Platinum (Manual)\n'
+        '- แบรนด์สินค้า: ดูจาก DB context ด้านล่าง\n\n'
+
+        '[Conversion Funnel EKG Shops]\n'
+        '- PageView → Lead (กรอกฟอร์มสมัคร /join หรือ /become-reseller)\n'
+        '  → CompleteRegistration (admin อนุมัติ) → ลูกค้าสั่งซื้อ → Order\n'
+        '- Pixel events ที่ track: PageView, Lead, CompleteRegistration\n'
+        '- เป้าหมายหลักของ FB Ads: ดึง Lead (สมัครสมาชิก/reseller) ให้ได้ CPL ต่ำ\n\n'
+
+        '[Facebook Ads Structure]\n'
+        '- Campaign → Ad Set → Ad (3 ชั้น)\n'
+        '- Campaign level: กำหนดเป้าหมาย (Objective) เช่น Leads, Traffic, Awareness\n'
+        '- Ad Set level: กำหนด audience, placement, budget, schedule, bid strategy\n'
+        '- Ad level: creative (รูป/วิดีโอ), headline, primary text, CTA, URL\n'
+        '- Ad Account ID: 955908924843880\n'
+        '- Pixel ID: 1671556133839943\n\n'
+
+        '[Key Metrics & Benchmarks (Thailand B2B Nurse Uniforms)]\n'
+        '- CTR: ดี ≥1.5%, ต่ำ <0.8% (B2B niche ต่ำกว่า B2C ได้)\n'
+        '- CPM: ปกติ ฿30–200 (ขึ้นกับ audience ขนาดและ competition)\n'
+        '- CPL (Cost per Lead): เป้า ≤฿150, อันตราย >฿300\n'
+        '- CPC (Cost per Click): ดี ≤฿10, สูง >฿30\n'
+        '- Frequency: ≤3 ปกติ, >4 ควร refresh creative, >6 ad fatigue\n'
+        '- ROAS: B2B มักต่ำในระยะสั้น เพราะ funnel ยาว (approval process)\n'
+        '- Budget ขั้นต่ำ: ≥฿100/วัน/Ad Set ถึงจะมีข้อมูลเพียงพอให้ ML optimize\n\n'
+
         '[URL Tracking Convention]\n'
-        'EKG Shops ใช้ URL parameters ดังนี้:\n'
-        '  ?utm_source=facebook|instagram|google|paid|referral|direct\n'
-        '  &utm_medium=cpc|paid\n'
-        '  &utm_campaign=<ชื่อแคมเปญหรือ Facebook Campaign ID>\n'
-        'Landing pages หลัก: /join (สมัครสมาชิก), /become-reseller (reseller), /catalog\n'
-        'เมื่อเห็น URL ใน Ad ควรตรวจสอบว่า utm_source/medium/campaign ถูกต้องและตรงกับ campaign\n\n'
+        'รูปแบบ: ?utm_source=facebook&utm_medium=cpc&utm_campaign=<campaign_id_or_name>\n'
+        '- utm_source ที่ใช้: facebook, instagram, google, paid, referral, direct\n'
+        '- utm_medium ที่ใช้: cpc, paid\n'
+        '- Landing pages: /join (สมัครสมาชิก), /become-reseller (reseller), /catalog\n'
+        '- เมื่อเห็น Website URL ใน Ad ควรตรวจว่า utm_source=facebook และ campaign ตรง\n\n'
+
+        '[Facebook Ads ปัญหาที่พบบ่อย — ตรวจสอบเมื่อเห็นในหน้าจอ]\n'
+        '- URL ไม่มี utm_campaign หรือ utm_source ผิด → tracking ไม่ครบ\n'
+        '- Pixel ไม่ได้เปิด (is_active=False) → ไม่มี conversion data\n'
+        '- Frequency สูง (>4) → ควรเปลี่ยน creative หรือขยาย audience\n'
+        '- Budget ต่ำมาก (<฿50/วัน) → ML ไม่มีข้อมูลพอ ผลลัพธ์ไม่ stable\n'
+        '- Ad Set ที่ overlap audience กัน → เพิ่ม CPL\n'
+        '- Landing page ไม่ match กับ ad copy → Bounce rate สูง\n'
+        '- Bid strategy เปลี่ยนบ่อย → Reset learning phase\n'
+        '- Ad หยุดทำงาน (Paused/Error) → ตรวจ payment method หรือ policy\n'
+        '- Lookalike audience ขนาดเล็กเกินไป (<50,000 คน ใน TH)\n'
+        '- Creative ใช้มา >2 สัปดาห์โดยไม่ refresh → CTR ตก\n\n'
+
+        '[Bid Strategies ที่ควรรู้]\n'
+        '- Lowest Cost (ค่าเริ่มต้น): FB หา lead ถูกสุดเท่าที่ทำได้\n'
+        '- Cost Cap: กำหนด CPL สูงสุด (ใช้เมื่อรู้ target CPL)\n'
+        '- Bid Cap: กำหนด bid สูงสุดต่อ auction\n'
+        '- Value Optimization: สำหรับ purchase objective เท่านั้น\n\n'
+
+        '[Placements ที่เกี่ยวข้อง]\n'
+        '- Facebook Feed, Instagram Feed: ประสิทธิภาพดีสุดสำหรับ B2B\n'
+        '- Facebook/Instagram Stories: CTR ดี แต่ต้องมี vertical creative\n'
+        '- Audience Network: CPM ต่ำ แต่ quality ต่ำ — ควร exclude สำหรับ B2B\n'
+        '- Messenger: ไม่แนะนำสำหรับ B2B nurse uniforms\n\n'
+
         '[แคมเปญที่กำลังดูอยู่]\n' + '\n'.join(camp_lines)
         + (('\n' + db_context_text) if db_context_text else '')
         + auto_note + on_demand_note
