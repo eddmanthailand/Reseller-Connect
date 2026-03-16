@@ -247,7 +247,7 @@
 </div>
 
 <!-- Capture Bar -->
-<div class="adv-capture-bar">
+<div class="adv-capture-bar" id="advCaptureBar">
     <div class="adv-status-dot" id="advDot"></div>
     <span class="adv-status-label" id="advStatusLabel">ยังไม่ได้เปิดดูหน้าจอ</span>
     <button class="adv-capture-btn adv-btn-start" id="advStartBtn" onclick="startCapture()">📷 เปิดดูหน้าจอ</button>
@@ -296,18 +296,25 @@
 <script>
 const CAMPAIGN_ID = {{ campaign_id | tojson }};
 
-let captureStream   = null;
-let autoTimer       = null;
-let chatHistory     = [];   // [{role:'user'|'model', text:'...'}]
-let campaignCtx     = {};   // brief + metrics loaded from API
-let isRequesting    = false;
+let captureStream    = null;
+let autoTimer        = null;
+let chatHistory      = [];   // [{role:'user'|'model', text:'...'}]
+let campaignCtx      = {};   // brief + metrics loaded from API
+let advisorDbContext = '';   // pre-loaded DB context text (Hybrid A-layer)
+let isRequesting     = false;
 
 // ─── Init ────────────────────────────────────────────────────────
 
 async function initAdvisor() {
+    // Load brief + DB context in parallel
+    const [briefRes, ctxRes] = await Promise.allSettled([
+        fetch(`/api/facebook-ads/campaign-brief/${CAMPAIGN_ID}`, { credentials: 'include' }),
+        fetch('/api/facebook-ads/advisor-context', { credentials: 'include' })
+    ]);
+
+    // Brief
     try {
-        const r = await fetch(`/api/facebook-ads/campaign-brief/${CAMPAIGN_ID}`, { credentials: 'include' });
-        const d = await r.json();
+        const d = await briefRes.value.json();
         if (d.found) {
             campaignCtx = {
                 campaign_name:    d.campaign_name || '',
@@ -323,6 +330,24 @@ async function initAdvisor() {
             _renderBrief(d);
         }
     } catch(e) { /* silent */ }
+
+    // DB context (pre-load)
+    try {
+        const cd = await ctxRes.value.json();
+        if (cd.db_context) {
+            advisorDbContext = cd.db_context;
+            _showDbContextBadge(true);
+        }
+    } catch(e) { /* silent */ }
+}
+
+function _showDbContextBadge(ok) {
+    const bar = document.getElementById('advCaptureBar');
+    if (!bar) return;
+    const badge = document.createElement('span');
+    badge.style.cssText = 'font-size:11px;color:' + (ok ? '#34c759' : '#ff9500') + ';';
+    badge.textContent = ok ? '● DB โหลดแล้ว' : '● DB ไม่พร้อม';
+    bar.appendChild(badge);
 }
 
 function _renderBrief(b) {
@@ -460,6 +485,7 @@ async function callAdvisor(message, screenshot, isAuto) {
             history:          chatHistory.slice(-10),
             is_auto:          isAuto,
             campaign_context: campaignCtx,
+            db_context_text:  advisorDbContext,
         };
         const r = await fetch('/api/facebook-ads/advisor-chat', {
             method: 'POST',

@@ -2506,6 +2506,176 @@ URL: {ads_manager_url}
 
 # ==================== AI SCREEN ADVISOR ====================
 
+def _advisor_load_db_context(cursor):
+    """Load read-only DB snapshot for Advisor system prompt (pre-load layer)."""
+    ctx = {}
+
+    # 1. Facebook pixel / ad account settings
+    try:
+        cursor.execute("""
+            SELECT pixel_id, meta_ad_account_id, is_active,
+                   track_page_view, track_lead, track_complete_registration
+            FROM facebook_pixel_settings LIMIT 1
+        """)
+        row = cursor.fetchone()
+        ctx['pixel'] = dict(row) if row else {}
+    except Exception:
+        ctx['pixel'] = {}
+
+    # 2. All campaign briefs
+    try:
+        cursor.execute("""
+            SELECT campaign_id, campaign_name, goal_type,
+                   target_cpl, target_ctr, target_reach,
+                   max_daily_budget, audience_note, updated_at
+            FROM campaign_briefs ORDER BY updated_at DESC
+        """)
+        ctx['campaign_briefs'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['campaign_briefs'] = []
+
+    # 3. 30-day traffic summary (top UTM campaigns + sources)
+    try:
+        cursor.execute("""
+            SELECT COALESCE(utm_campaign,'(ไม่ระบุ)') as campaign,
+                   source, traffic_type,
+                   COUNT(*) as visits,
+                   COUNT(DISTINCT visitor_ip) as uniq
+            FROM page_visits
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY utm_campaign, source, traffic_type
+            ORDER BY visits DESC LIMIT 12
+        """)
+        ctx['traffic_30d'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['traffic_30d'] = []
+
+    # 4. 30-day conversion events summary
+    try:
+        cursor.execute("""
+            SELECT event_type, source, traffic_type,
+                   COUNT(*) as cnt
+            FROM conversion_events
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY event_type, source, traffic_type
+            ORDER BY cnt DESC LIMIT 15
+        """)
+        ctx['conversions_30d'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['conversions_30d'] = []
+
+    # 5. Orders summary last 30 days
+    try:
+        cursor.execute("""
+            SELECT COUNT(*) as order_count,
+                   COALESCE(SUM(final_amount),0) as revenue,
+                   COALESCE(AVG(final_amount),0) as avg_value,
+                   platform
+            FROM orders
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+              AND status NOT IN ('cancelled','failed','deleted')
+            GROUP BY platform ORDER BY order_count DESC LIMIT 5
+        """)
+        ctx['orders_30d'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['orders_30d'] = []
+
+    # 6. Active products by brand (summary)
+    try:
+        cursor.execute("""
+            SELECT b.name as brand, COUNT(p.id) as products
+            FROM products p LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE p.status = 'active'
+            GROUP BY b.name ORDER BY products DESC
+        """)
+        ctx['products_by_brand'] = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        ctx['products_by_brand'] = []
+
+    return ctx
+
+
+def _advisor_format_db_context(ctx):
+    """Format DB context dict into human-readable text for Gemini system prompt."""
+    lines = ['\n=== ข้อมูลระบบ EKG Shops (อ่านจาก DB — read-only) ===']
+
+    # Pixel
+    p = ctx.get('pixel', {})
+    if p:
+        lines.append(f"\n[Facebook Pixel]\n- Pixel ID: {p.get('pixel_id','—')}"
+                     f"\n- Ad Account: {p.get('meta_ad_account_id','—')}"
+                     f"\n- Active: {p.get('is_active','—')}"
+                     f"\n- Track Lead: {p.get('track_lead','—')}"
+                     f"\n- Track PageView: {p.get('track_page_view','—')}")
+
+    # Campaign briefs
+    briefs = ctx.get('campaign_briefs', [])
+    if briefs:
+        lines.append(f"\n[Campaign Briefs ทั้งหมด ({len(briefs)} แคมเปญ)]")
+        goal_map = {'lead':'Lead/สมัคร','registration':'Registration',
+                    'awareness':'Awareness','purchase':'ยอดขาย'}
+        for b in briefs:
+            name = b.get('campaign_name') or b.get('campaign_id','?')
+            goal = goal_map.get(b.get('goal_type',''), b.get('goal_type','—'))
+            extras = []
+            if b.get('target_cpl'):    extras.append(f"CPL≤฿{b['target_cpl']}")
+            if b.get('target_ctr'):    extras.append(f"CTR≥{b['target_ctr']}%")
+            if b.get('max_daily_budget'): extras.append(f"งบ/วัน≤฿{b['max_daily_budget']}")
+            lines.append(f"  • {name} | {goal}" + (f" | {', '.join(extras)}" if extras else ''))
+            if b.get('audience_note'):
+                lines.append(f"    กลุ่มเป้าหมาย: {b['audience_note']}")
+
+    # Traffic
+    traffic = ctx.get('traffic_30d', [])
+    if traffic:
+        lines.append(f"\n[Traffic 30 วันล่าสุด]")
+        for t in traffic[:8]:
+            lines.append(f"  • {t.get('campaign','?')} / {t.get('source','?')} — {t.get('visits',0)} visits ({t.get('uniq',0)} unique)")
+
+    # Conversions
+    convs = ctx.get('conversions_30d', [])
+    if convs:
+        lines.append(f"\n[Conversion Events 30 วันล่าสุด]")
+        for c in convs[:8]:
+            lines.append(f"  • {c.get('event_type','?')} / {c.get('source','?')} — {c.get('cnt',0)} ครั้ง")
+
+    # Orders
+    orders = ctx.get('orders_30d', [])
+    if orders:
+        lines.append(f"\n[Orders 30 วันล่าสุด]")
+        for o in orders:
+            lines.append(f"  • Platform: {o.get('platform','?')} — {o.get('order_count',0)} orders, "
+                         f"฿{float(o.get('revenue',0)):,.0f} รวม, avg ฿{float(o.get('avg_value',0)):,.0f}")
+
+    # Products
+    prods = ctx.get('products_by_brand', [])
+    if prods:
+        brands_str = ', '.join(f"{r.get('brand','?')}({r.get('products',0)})" for r in prods)
+        lines.append(f"\n[สินค้า Active] {brands_str}")
+
+    lines.append('\n=== (จบข้อมูล DB) ===')
+    return '\n'.join(lines)
+
+
+def _advisor_safe_query(cursor, sql):
+    """Execute a read-only SELECT query from Gemini on-demand. Returns list of dicts or error string."""
+    sql_stripped = sql.strip().rstrip(';')
+    lower = sql_stripped.lower()
+    forbidden = ('insert', 'update', 'delete', 'drop', 'alter', 'truncate',
+                 'create', 'replace', 'grant', 'revoke', 'exec', 'execute')
+    if not lower.startswith('select'):
+        return 'ERROR: อนุญาตเฉพาะ SELECT เท่านั้น'
+    for kw in forbidden:
+        if f' {kw} ' in f' {lower} ':
+            return f'ERROR: คำสั่ง {kw.upper()} ไม่ได้รับอนุญาต'
+    try:
+        cursor.execute(sql_stripped)
+        rows = cursor.fetchmany(30)
+        return [dict(r) for r in rows]
+    except Exception as e:
+        return f'ERROR: {e}'
+
+
 @facebook_ads_bp.route('/admin/facebook-ads/advisor/<campaign_id>')
 @login_required
 @admin_required
@@ -2517,11 +2687,30 @@ def facebook_ads_advisor_page(campaign_id):
     )
 
 
+@facebook_ads_bp.route('/api/facebook-ads/advisor-context', methods=['GET'])
+@login_required
+@admin_required
+def advisor_context():
+    """Pre-load DB context for the Advisor page (called once on page init)."""
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        ctx = _advisor_load_db_context(cursor)
+        formatted = _advisor_format_db_context(ctx)
+        return jsonify({'db_context': formatted}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @facebook_ads_bp.route('/api/facebook-ads/advisor-chat', methods=['POST'])
 @login_required
 @admin_required
 def advisor_chat():
-    import base64
+    import base64, re as _re
     from google import genai as _g
     from google.genai import types as _gt
 
@@ -2532,6 +2721,7 @@ def advisor_chat():
     history        = data.get('history') or []
     is_auto        = bool(data.get('is_auto', False))
     ctx            = data.get('campaign_context') or {}
+    db_context_text = (data.get('db_context_text') or '').strip()
 
     gemini_key = os.environ.get('GEMINI_API_KEY', '')
     if not gemini_key:
@@ -2542,74 +2732,112 @@ def advisor_chat():
         'awareness': 'Brand Awareness (Reach)', 'purchase': 'ยอดขาย/สั่งซื้อ',
     }
     camp_name = ctx.get('campaign_name') or campaign_id
-    ctx_lines = [f"- ชื่อแคมเปญ: {camp_name}"]
+    camp_lines = [f"- ชื่อแคมเปญที่กำลังดูอยู่: {camp_name}"]
     if ctx.get('goal_type'):
-        ctx_lines.append(f"- เป้าหมาย: {goal_map.get(ctx['goal_type'], ctx['goal_type'])}")
+        camp_lines.append(f"- เป้าหมาย: {goal_map.get(ctx['goal_type'], ctx['goal_type'])}")
     if ctx.get('target_cpl'):
-        ctx_lines.append(f"- CPL เป้า: ≤ ฿{ctx['target_cpl']}")
+        camp_lines.append(f"- CPL เป้า: ≤ ฿{ctx['target_cpl']}")
     if ctx.get('target_ctr'):
-        ctx_lines.append(f"- CTR เป้า: ≥ {ctx['target_ctr']}%")
+        camp_lines.append(f"- CTR เป้า: ≥ {ctx['target_ctr']}%")
     if ctx.get('max_daily_budget'):
-        ctx_lines.append(f"- งบ/วันสูงสุด: ฿{ctx['max_daily_budget']}")
+        camp_lines.append(f"- งบ/วันสูงสุด: ฿{ctx['max_daily_budget']}")
     if ctx.get('audience_note'):
-        ctx_lines.append(f"- กลุ่มเป้าหมาย: {ctx['audience_note']}")
+        camp_lines.append(f"- กลุ่มเป้าหมาย: {ctx['audience_note']}")
     if ctx.get('spend') is not None:
-        ctx_lines.append(f"- ยอดใช้จ่าย: ฿{float(ctx['spend']):.2f}")
+        camp_lines.append(f"- ยอดใช้จ่าย: ฿{float(ctx['spend']):.2f}")
     if ctx.get('cpl') is not None:
-        ctx_lines.append(f"- CPL จริง: ฿{float(ctx['cpl']):.2f}")
+        camp_lines.append(f"- CPL จริง: ฿{float(ctx['cpl']):.2f}")
     if ctx.get('ctr') is not None:
-        ctx_lines.append(f"- CTR จริง: {float(ctx['ctr']):.2f}%")
+        camp_lines.append(f"- CTR จริง: {float(ctx['ctr']):.2f}%")
     if ctx.get('leads') is not None:
-        ctx_lines.append(f"- Leads: {ctx['leads']}")
+        camp_lines.append(f"- Leads: {ctx['leads']}")
 
     auto_note = (
         '\n\nสำหรับการตรวจสอบอัตโนมัติ: ดูภาพและแจ้งเฉพาะสิ่งที่น่ากังวลหรือควรแก้ไขเร่งด่วน'
         '\nถ้าไม่มีอะไรใหม่หรือน่ากังวล ให้ตอบแค่คำว่า "OK" เพียงคำเดียว ห้ามอธิบายเพิ่ม'
     ) if is_auto else ''
 
+    on_demand_note = (
+        '\n\n=== On-demand DB Query ===\n'
+        'ถ้าต้องการข้อมูลเพิ่มเติมจาก DB ที่ไม่มีใน context ด้านบน ให้ตอบกลับด้วย JSON นี้เท่านั้น:\n'
+        '{"need_query":true,"sql":"SELECT ...","reason":"เหตุผล"}\n'
+        'ระบบจะ execute SELECT query แล้วส่งผลลัพธ์กลับมาให้ ห้ามใช้ INSERT/UPDATE/DELETE\n'
+        'ถ้าไม่ต้องการ query เพิ่ม ตอบตามปกติ ห้าม wrap ด้วย JSON'
+    ) if not is_auto else ''
+
     system_prompt = (
         'คุณคือ AI ผู้ช่วยวิเคราะห์ Facebook Ads ของ EKG Shops (ร้านขายชุดพยาบาล B2B)\n'
-        'คุณมองเห็นหน้าจอของผู้ใช้แบบ real-time และช่วยวิเคราะห์การตั้งค่าโฆษณา\n'
+        'คุณมองเห็นหน้าจอของผู้ใช้แบบ real-time และมีข้อมูล DB ทั้งหมดที่เกี่ยวข้อง\n'
         'ตอบภาษาไทย กระชับ ตรงประเด็น ใช้ bullet points เมื่อเหมาะสม\n\n'
-        'ข้อมูลแคมเปญ:\n' + '\n'.join(ctx_lines) + auto_note
+        '[แคมเปญที่กำลังดูอยู่]\n' + '\n'.join(camp_lines)
+        + (('\n' + db_context_text) if db_context_text else '')
+        + auto_note + on_demand_note
     )
 
     try:
         client = _g.Client(api_key=gemini_key)
 
-        contents = []
-        for h in history[-10:]:
-            role = h.get('role', 'user')
-            if role not in ('user', 'model'):
-                role = 'user'
-            contents.append(_gt.Content(role=role, parts=[_gt.Part(text=h.get('text', ''))]))
+        def _build_contents(extra_user_text=None):
+            _contents = []
+            for h in history[-10:]:
+                role = h.get('role', 'user')
+                if role not in ('user', 'model'):
+                    role = 'user'
+                _contents.append(_gt.Content(role=role, parts=[_gt.Part(text=h.get('text', ''))]))
+            _parts = []
+            if screenshot_b64:
+                try:
+                    img_bytes = base64.b64decode(screenshot_b64)
+                    _parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
+                except Exception:
+                    pass
+            if is_auto and not message:
+                _user_text = extra_user_text or 'ดูภาพหน้าจอนี้ มีอะไรน่าสังเกตหรือควรแจ้งเตือนไหม?'
+            elif extra_user_text:
+                _user_text = extra_user_text
+            elif message:
+                _user_text = message
+            elif screenshot_b64:
+                _user_text = 'ดูภาพหน้าจอและอธิบายสิ่งที่เห็นเกี่ยวกับ Facebook Ads'
+            else:
+                return None
+            _parts.append(_gt.Part(text=_user_text))
+            _contents.append(_gt.Content(role='user', parts=_parts))
+            return _contents
 
-        parts = []
-        if screenshot_b64:
-            try:
-                img_bytes = base64.b64decode(screenshot_b64)
-                parts.append(_gt.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'))
-            except Exception:
-                pass
-
-        if is_auto and not message:
-            user_text = 'ดูภาพหน้าจอนี้ มีอะไรน่าสังเกตหรือควรแจ้งเตือนไหม?'
-        elif message:
-            user_text = message
-        elif screenshot_b64:
-            user_text = 'ดูภาพหน้าจอและอธิบายสิ่งที่เห็นเกี่ยวกับ Facebook Ads'
-        else:
+        contents = _build_contents()
+        if contents is None:
             return jsonify({'error': 'กรุณาส่ง message หรือ screenshot'}), 400
 
-        parts.append(_gt.Part(text=user_text))
-        contents.append(_gt.Content(role='user', parts=parts))
-
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=contents,
-            config=_gt.GenerateContentConfig(system_instruction=system_prompt)
-        )
+        cfg = _gt.GenerateContentConfig(system_instruction=system_prompt)
+        response = client.models.generate_content(model='gemini-2.5-flash', contents=contents, config=cfg)
         reply = (response.text or '').strip()
+
+        # On-demand query tool loop (max 1 round)
+        if not is_auto and reply.startswith('{') and 'need_query' in reply:
+            try:
+                tool_req = json.loads(_re.search(r'\{.*\}', reply, _re.DOTALL).group(0))
+                if tool_req.get('need_query') and tool_req.get('sql'):
+                    conn2 = cursor2 = None
+                    try:
+                        conn2 = get_db()
+                        cursor2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                        qresult = _advisor_safe_query(cursor2, tool_req['sql'])
+                    finally:
+                        if cursor2: cursor2.close()
+                        if conn2: conn2.close()
+                    followup_text = (
+                        f"[ผลจาก DB query: {tool_req.get('reason','')}\n"
+                        f"SQL: {tool_req['sql']}\n"
+                        f"ผลลัพธ์: {json.dumps(qresult, ensure_ascii=False, default=str)}]\n\n"
+                        f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลนี้ประกอบ"
+                    )
+                    contents2 = _build_contents(extra_user_text=followup_text)
+                    if contents2:
+                        r2 = client.models.generate_content(model='gemini-2.5-flash', contents=contents2, config=cfg)
+                        reply = (r2.text or '').strip()
+            except Exception:
+                pass
 
         _trivial_ok = {'ok', 'ok.', '✓', 'ไม่มีอะไรใหม่', 'ปกติ', 'ปกติครับ', 'ปกติค่ะ'}
         is_trivial = is_auto and reply.lower() in _trivial_ok
