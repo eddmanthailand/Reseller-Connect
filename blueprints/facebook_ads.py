@@ -3308,9 +3308,9 @@ def generate_ad_image():
                 f'Clear visual hierarchy: product image → headline → body text → CTA button.'
             )
 
-        # Step 2: Generate image with Imagen 3
+        # Step 2: Generate image with Imagen 4
         img_response = client.models.generate_images(
-            model='imagen-3.0-generate-002',
+            model='imagen-4.0-generate-001',
             prompt=full_prompt,
             config=_gt.GenerateImagesConfig(
                 number_of_images=1,
@@ -3362,6 +3362,77 @@ def generate_ad_image():
             'creative_id': creative_id,
         }), 200
 
+    except Exception as e:
+        return handle_error(e)
+
+
+@facebook_ads_bp.route('/api/facebook-ads/generate-content-suggestions', methods=['POST'])
+@login_required
+@admin_required
+def generate_content_suggestions():
+    """Use Gemini to generate 3+ ad content variations (headline/body/cta) for a campaign."""
+    from google import genai as _g
+    data = request.get_json(silent=True) or {}
+    campaign_name = (data.get('campaign_name') or 'แคมเปญ').strip()
+    goal_type     = (data.get('goal_type') or 'lead').strip()
+    audience_note = (data.get('audience_note') or '').strip()
+    product_name  = (data.get('product_name') or 'ชุดพยาบาล').strip()
+
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if not gemini_key:
+        return jsonify({'error': 'ไม่มี GEMINI_API_KEY'}), 503
+
+    goal_label_map = {
+        'lead': 'หา Lead / สมัครสมาชิก Reseller',
+        'registration': 'สมัครสมาชิก Registration',
+        'awareness': 'Brand Awareness — สร้างการรับรู้',
+        'purchase': 'ยอดขาย / สั่งซื้อสินค้า',
+    }
+    goal_label = goal_label_map.get(goal_type, goal_type)
+
+    prompt = f"""คุณคือ Copywriter ผู้เชี่ยวชาญโฆษณา Facebook สำหรับแบรนด์ชุดพยาบาล B2B ในไทย
+
+ข้อมูลแคมเปญ:
+- ชื่อแคมเปญ: {campaign_name}
+- เป้าหมาย: {goal_label}
+- สินค้าหลัก: {product_name}
+- กลุ่มเป้าหมาย: {audience_note or 'พยาบาล นักศึกษาพยาบาล และบุคลากรทางการแพทย์ทั่วไทย'}
+
+สร้าง Content โฆษณา Facebook 3 แบบ ที่แตกต่างกันในแนวทาง:
+1. แบบ "เร่งด่วน/โอกาสพิเศษ" — สร้างความรู้สึกต้องการทันที
+2. แบบ "อารมณ์/ความภูมิใจ" — เชื่อมโยงกับความเป็นวิชาชีพพยาบาล
+3. แบบ "ประโยชน์/เหตุผล" — ข้อเท็จจริงและประโยชน์ที่ได้รับ
+
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความนอก JSON:
+[
+  {{
+    "style_name": "ชื่อแนวทาง (ภาษาไทย ≤10 ตัว)",
+    "style_icon": "emoji 1 ตัว",
+    "headline": "ข้อความหลัก ภาษาไทย ≤40 ตัวอักษร พลัง กระตุ้น",
+    "body": "ข้อความรอง ภาษาไทย ≤80 ตัวอักษร อธิบายประโยชน์",
+    "cta": "ข้อความปุ่ม ≤10 ตัวอักษร"
+  }}
+]
+กฎ: ภาษาไทยทั้งหมด, ห้ามใช้ภาษาอังกฤษในเนื้อหา, ตรง target กลุ่มพยาบาล/Reseller"""
+
+    try:
+        client = _g.Client(api_key=gemini_key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        raw = (response.text or '').strip()
+        if raw.startswith('```'):
+            lines = raw.split('\n')
+            raw = '\n'.join(lines[1:])
+            if raw.endswith('```'):
+                raw = raw[:-3].strip()
+        suggestions = json.loads(raw)
+        if not isinstance(suggestions, list):
+            raise ValueError('ไม่ได้รับ array')
+        return jsonify({'suggestions': suggestions[:5]}), 200
+    except json.JSONDecodeError as je:
+        return jsonify({'error': f'AI ตอบกลับรูปแบบไม่ถูกต้อง: {str(je)}'}), 500
     except Exception as e:
         return handle_error(e)
 

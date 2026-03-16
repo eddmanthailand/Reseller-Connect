@@ -430,6 +430,40 @@
         .studio-result-btn.save:hover { background: #16a34a; }
         .studio-result-btn.regen { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
         .studio-result-btn.regen:hover { background: #e5e7eb; }
+
+        /* Content suggestions */
+        .studio-suggest-btn {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            width: 100%; padding: 9px 12px; border-radius: 10px;
+            border: 1.5px dashed #a5b4fc; background: #f5f3ff; color: #4f46e5;
+            font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+            transition: all 0.15s;
+        }
+        .studio-suggest-btn:hover { background: #ede9fe; border-color: #6366f1; }
+        .studio-suggest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .studio-suggest-cards { display: none; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .studio-suggest-cards.show { display: flex; }
+        .studio-sug-card {
+            border: 1.5px solid #e5e7eb; border-radius: 12px;
+            padding: 12px 13px; background: #fafafa; transition: border-color 0.15s;
+        }
+        .studio-sug-card:hover { border-color: #a5b4fc; }
+        .studio-sug-header {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; font-weight: 700; color: #4f46e5; margin-bottom: 8px;
+        }
+        .studio-sug-icon { font-size: 16px; }
+        .studio-sug-row { margin-bottom: 5px; }
+        .studio-sug-key { font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.3px; }
+        .studio-sug-val { font-size: 12.5px; color: #111; line-height: 1.5; margin-top: 1px; }
+        .studio-sug-apply {
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            width: 100%; margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+            border: none; background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
+            font-family: inherit; transition: opacity 0.15s;
+        }
+        .studio-sug-apply:hover { opacity: 0.88; }
     </style>
 </head>
 <body>
@@ -573,6 +607,12 @@
                 <label class="studio-label">CTA Button</label>
                 <input class="studio-input" id="studioCta" value="สมัครเลย">
             </div>
+
+            <!-- AI Content Suggestions -->
+            <button class="studio-suggest-btn" id="suggestBtn" onclick="fetchContentSuggestions()">
+                ✨ ให้ AI แนะนำ Content 3 แบบ
+            </button>
+            <div class="studio-suggest-cards" id="suggestCards"></div>
         </div>
 
         <!-- Step 3: Style -->
@@ -1143,6 +1183,93 @@ async function saveCreative() {
     if (!studioResultUrl) { alert('ยังไม่มีภาพที่สร้าง'); return; }
     appendAiMsg('✅ บันทึกภาพโฆษณาเรียบร้อยแล้ว — ดูได้ที่ Gallery ด้านบน', false, false);
     closeStudio();
+}
+
+// ── AI Content Suggestions ──────────────────────────────────
+async function fetchContentSuggestions() {
+    const btn   = document.getElementById('suggestBtn');
+    const cards = document.getElementById('suggestCards');
+    btn.disabled = true;
+    btn.textContent = '⏳ AI กำลังคิด Content...';
+    cards.classList.remove('show');
+    cards.innerHTML = '';
+
+    // Gather product name from selected product (if any)
+    const productName = studioSelectedProduct?.product_name || 'ชุดพยาบาล';
+
+    try {
+        const r = await fetch('/api/facebook-ads/generate-content-suggestions', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                campaign_name: campaignCtx.campaign_name || '',
+                goal_type:     campaignCtx.goal_type     || 'lead',
+                audience_note: campaignCtx.audience_note || '',
+                product_name:  productName,
+            })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'ไม่สำเร็จ');
+        renderContentSuggestions(d.suggestions || []);
+    } catch(e) {
+        cards.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:6px;">❌ ${e.message}</div>`;
+        cards.classList.add('show');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔄 สร้างใหม่อีกครั้ง';
+    }
+}
+
+function renderContentSuggestions(suggestions) {
+    const cards = document.getElementById('suggestCards');
+    if (!suggestions.length) {
+        cards.innerHTML = '<div style="color:#9ca3af;font-size:12px;padding:4px;">ไม่พบ Content</div>';
+        cards.classList.add('show');
+        return;
+    }
+    cards.innerHTML = suggestions.map((s, i) => `
+        <div class="studio-sug-card">
+            <div class="studio-sug-header">
+                <span class="studio-sug-icon">${s.style_icon || '✦'}</span>
+                <span>แบบที่ ${i + 1}: ${escHtml(s.style_name || '')}</span>
+            </div>
+            <div class="studio-sug-row">
+                <div class="studio-sug-key">Headline</div>
+                <div class="studio-sug-val">${escHtml(s.headline || '')}</div>
+            </div>
+            <div class="studio-sug-row">
+                <div class="studio-sug-key">Body</div>
+                <div class="studio-sug-val">${escHtml(s.body || '')}</div>
+            </div>
+            <div class="studio-sug-row">
+                <div class="studio-sug-key">CTA</div>
+                <div class="studio-sug-val">${escHtml(s.cta || '')}</div>
+            </div>
+            <button class="studio-sug-apply" onclick="applyContentSuggestion(${i})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                สร้างภาพโฆษณาด้วย Content นี้
+            </button>
+        </div>`).join('');
+    cards.classList.add('show');
+    // Store suggestions for apply
+    cards._suggestions = suggestions;
+}
+
+function applyContentSuggestion(idx) {
+    const cards = document.getElementById('suggestCards');
+    const s = (cards._suggestions || [])[idx];
+    if (!s) return;
+    document.getElementById('studioHeadline').value = s.headline || '';
+    document.getElementById('studioBody').value     = s.body     || '';
+    document.getElementById('studioCta').value      = s.cta      || 'สมัครเลย';
+    // Scroll to generate button and trigger generation
+    const genBtn = document.getElementById('studioGenBtn');
+    genBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => generateImage(), 300);
+}
+
+function escHtml(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ══════════════════════════════════
