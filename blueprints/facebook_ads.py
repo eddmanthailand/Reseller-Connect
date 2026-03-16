@@ -3285,7 +3285,9 @@ def campaign_creatives(campaign_id):
                 'status':      ad.get('effective_status') or ad.get('status', ''),
                 'body':        c.get('body') or c.get('object_story_spec', {}).get('link_data', {}).get('message', ''),
                 'title':       c.get('title') or c.get('object_story_spec', {}).get('link_data', {}).get('name', ''),
-                'image_url':   c.get('image_url') or c.get('thumbnail_url'),
+                'image_url':   (c.get('image_url') or c.get('thumbnail_url')
+                               or c.get('object_story_spec', {}).get('link_data', {}).get('picture')
+                               or c.get('object_story_spec', {}).get('video_data', {}).get('image_url')),
                 'cta':         c.get('call_to_action_type', ''),
             })
         return jsonify({'ads': ads, 'total': len(ads)}), 200

@@ -602,8 +602,11 @@ async function loadGallery() {
         body.innerHTML = galleryAds.map((ad, i) => {
             const sc = ad.status === 'ACTIVE' ? 's-active' : (ad.status === 'PAUSED' ? 's-paused' : 's-other');
             const st = ad.status === 'ACTIVE' ? '● เปิดอยู่' : (ad.status === 'PAUSED' ? '⏸ หยุด' : (ad.status || '—'));
-            const img = ad.image_url
-                ? `<img class="adv-ad-thumb" src="${escAttr(ad.image_url)}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+            const proxySrc = ad.image_url
+                ? `/api/facebook-ads/proxy-image?url=${encodeURIComponent(ad.image_url)}`
+                : null;
+            const img = proxySrc
+                ? `<img class="adv-ad-thumb" src="${escAttr(proxySrc)}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
                   + `<div class="adv-ad-no-img" style="display:none;">🖼️</div>`
                 : `<div class="adv-ad-no-img">🖼️</div>`;
             return `<div class="adv-ad-card" id="adc${i}" onclick="selectAd(${i})">
