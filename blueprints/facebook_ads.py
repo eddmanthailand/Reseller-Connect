@@ -2903,12 +2903,21 @@ def advisor_chat():
         '\nถ้าไม่มีอะไรใหม่หรือน่ากังวล ให้ตอบแค่คำว่า "OK" เพียงคำเดียว ห้ามอธิบายเพิ่ม'
     ) if is_auto else ''
 
+    _cid = campaign_id or '<campaign_id>'
     on_demand_note = (
-        '\n\n=== On-demand DB Query ===\n'
-        'ถ้าต้องการข้อมูลเพิ่มเติมจาก DB ที่ไม่มีใน context ด้านบน ให้ตอบกลับด้วย JSON นี้เท่านั้น:\n'
+        '\n\n=== เครื่องมือดึงข้อมูลเพิ่มเติม (เลือกใช้ได้ 1 อย่าง ต่อ 1 รอบ) ===\n\n'
+        'วิธีที่ 1 — ดึงข้อมูลจาก DB ภายใน:\n'
         '{"need_query":true,"sql":"SELECT ...","reason":"เหตุผล"}\n'
-        'ระบบจะ execute SELECT query แล้วส่งผลลัพธ์กลับมาให้ ห้ามใช้ INSERT/UPDATE/DELETE\n'
-        'ถ้าไม่ต้องการ query เพิ่ม ตอบตามปกติ ห้าม wrap ด้วย JSON'
+        '(ห้ามใช้ INSERT/UPDATE/DELETE)\n\n'
+        'วิธีที่ 2 — ดึงข้อมูลสดจาก Meta/Facebook Ads API:\n'
+        '{"need_meta_api":true,"path":"<path>","reason":"เหตุผล"}\n'
+        'ตัวอย่าง path ที่ใช้บ่อย (ระบบใส่ access_token ให้อัตโนมัติ):\n'
+        f'  /{_cid}/insights?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions&date_preset=last_30d\n'
+        f'  /{_cid}/insights?fields=impressions,clicks,spend,reach&breakdowns=age,gender&date_preset=last_30d\n'
+        f'  /{_cid}/adsets?fields=name,status,daily_budget,targeting,bid_strategy,optimization_goal,reach_estimate\n'
+        f'  /{_cid}/ads?fields=name,status,adcreatives{{body,title,image_url,call_to_action_type}}\n'
+        f'  /{_cid}?fields=name,status,objective,daily_budget,lifetime_budget,effective_status\n'
+        '\nถ้าไม่ต้องการข้อมูลเพิ่ม ตอบตามปกติ ห้าม wrap ด้วย JSON'
     ) if not is_auto else ''
 
     system_prompt = (
@@ -3023,10 +3032,16 @@ def advisor_chat():
         response = client.models.generate_content(model='gemini-2.5-flash', contents=contents, config=cfg)
         reply = (response.text or '').strip()
 
-        # On-demand query tool loop (max 1 round)
-        if not is_auto and reply.startswith('{') and 'need_query' in reply:
+        # On-demand tool loop (max 1 round) — DB query OR Meta API fetch
+        _has_tool = not is_auto and (
+            ('need_query' in reply or 'need_meta_api' in reply) and '{' in reply
+        )
+        if _has_tool:
             try:
+                import urllib.request as _urllib_req, urllib.parse as _urllib_parse
                 tool_req = json.loads(_re.search(r'\{.*\}', reply, _re.DOTALL).group(0))
+                followup_text = None
+
                 if tool_req.get('need_query') and tool_req.get('sql'):
                     conn2 = cursor2 = None
                     try:
@@ -3042,6 +3057,38 @@ def advisor_chat():
                         f"ผลลัพธ์: {json.dumps(qresult, ensure_ascii=False, default=str)}]\n\n"
                         f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลนี้ประกอบ"
                     )
+
+                elif tool_req.get('need_meta_api') and tool_req.get('path'):
+                    raw_path = tool_req['path'].lstrip('/')
+                    # Security: block non-GET-safe chars and access_token injection
+                    if 'access_token' not in raw_path and _re.match(r'^[\w\-\/\?\=\&\,\.\{\}]+$', raw_path):
+                        conn2 = cursor2 = None
+                        try:
+                            conn2 = get_db()
+                            cursor2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                            meta_token, _ = _get_meta_credentials(cursor2)
+                        finally:
+                            if cursor2: cursor2.close()
+                            if conn2: conn2.close()
+
+                        if meta_token:
+                            sep = '&' if '?' in raw_path else '?'
+                            api_url = (f'https://graph.facebook.com/v19.0/{raw_path}'
+                                       f'{sep}access_token={meta_token}')
+                            req = _urllib_req.Request(api_url, headers={'User-Agent': 'EKGShops/1.0'})
+                            with _urllib_req.urlopen(req, timeout=15) as _r:
+                                meta_result = json.loads(_r.read().decode())
+                            meta_result.pop('access_token', None)
+                            followup_text = (
+                                f"[ผลจาก Meta API: {tool_req.get('reason','')}\n"
+                                f"path: /{raw_path.split('?')[0]}  (params: {raw_path.split('?')[1] if '?' in raw_path else '-'})\n"
+                                f"ผลลัพธ์: {json.dumps(meta_result, ensure_ascii=False, default=str)[:4000]}]\n\n"
+                                f"ตอบคำถามเดิมของผู้ใช้โดยใช้ข้อมูลสดจาก Facebook Ads API นี้ประกอบ"
+                            )
+                        else:
+                            followup_text = "[Meta API: ไม่พบ Access Token กรุณาตั้งค่า Meta Access Token ก่อน]"
+
+                if followup_text:
                     contents2 = _build_contents(extra_user_text=followup_text)
                     if contents2:
                         r2 = client.models.generate_content(model='gemini-2.5-flash', contents=contents2, config=cfg)
