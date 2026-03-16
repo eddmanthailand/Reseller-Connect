@@ -7,9 +7,10 @@
     <link rel="stylesheet" href="/static/css/dashboard.css?v=20260228">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif;
-            background: #f2f2f7;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+            background: #f5f5f7;
             color: #1d1d1f;
             height: 100dvh;
             display: flex;
@@ -17,603 +18,661 @@
             overflow: hidden;
         }
 
-        /* ─── Header ─── */
+        /* ══════════════════════════════════
+           HEADER
+        ══════════════════════════════════ */
         .adv-header {
             flex-shrink: 0;
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 0 14px;
-            height: 48px;
-            background: rgba(242,242,247,0.95);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 0.5px solid rgba(0,0,0,0.12);
+            padding: 0 16px;
+            height: 52px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
             z-index: 50;
         }
         .adv-back {
-            display: flex; align-items: center; gap: 4px;
-            color: #007aff; font-size: 14px; font-weight: 500;
-            text-decoration: none; padding: 4px 0; flex-shrink: 0;
+            display: flex; align-items: center; gap: 5px;
+            color: #6366f1; font-size: 13px; font-weight: 500;
+            text-decoration: none; padding: 6px 10px;
+            border-radius: 8px; transition: background 0.15s;
         }
-        .adv-back svg { flex-shrink: 0; }
-        .adv-title {
-            flex: 1; min-width: 0;
-            font-size: 14px; font-weight: 600;
+        .adv-back:hover { background: #f0f0f5; }
+        .adv-title-wrap { flex: 1; min-width: 0; }
+        .adv-title-name {
+            font-size: 14px; font-weight: 700; color: #111;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .adv-title-sub { font-size: 11px; font-weight: 400; color: #6e6e73; }
-
-        /* ─── Capture Bar ─── */
-        .adv-capture-bar {
+        .adv-title-sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+        .adv-db-badge {
+            font-size: 11px; padding: 3px 8px; border-radius: 20px;
+            background: #dcfce7; color: #166534; font-weight: 600;
             flex-shrink: 0;
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px 14px;
+        }
+        .adv-db-badge.err { background: #fef3c7; color: #92400e; }
+
+        /* ══════════════════════════════════
+           CONTROL BAR (Capture + Brief merged)
+        ══════════════════════════════════ */
+        .adv-ctrl-bar {
+            flex-shrink: 0;
             background: #fff;
-            border-bottom: 0.5px solid #e5e5ea;
+            border-bottom: 1px solid #f0f0f0;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
             flex-wrap: wrap;
         }
-        .adv-status-dot {
-            width: 7px; height: 7px; border-radius: 50%;
-            background: #c7c7cc; flex-shrink: 0; transition: background 0.3s;
+        .adv-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #d1d5db; flex-shrink: 0; transition: background 0.3s;
         }
-        .adv-status-dot.live { background: #34c759; animation: pulse-dot 2s infinite; }
-        @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-        .adv-status-label { font-size: 12px; color: #6e6e73; }
-        .adv-status-label.live { color: #1d1d1f; font-weight: 500; }
-        .adv-capture-btn {
-            padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
-            border: none; cursor: pointer; transition: opacity 0.15s;
+        .adv-dot.live { background: #22c55e; box-shadow: 0 0 0 3px #22c55e22; animation: pulse-live 2s infinite; }
+        @keyframes pulse-live { 0%,100%{box-shadow:0 0 0 3px #22c55e22;} 50%{box-shadow:0 0 0 6px #22c55e11;} }
+        .adv-ctrl-label { font-size: 12px; color: #6b7280; }
+        .adv-ctrl-label.live { color: #111; font-weight: 500; }
+
+        .adv-btn {
+            padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+            border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
-        .adv-capture-btn:hover { opacity: 0.82; }
-        .adv-btn-start { background: #34c759; color: #fff; }
-        .adv-btn-stop  { background: #ff3b30; color: #fff; }
-        .adv-interval-sel {
-            padding: 4px 8px; border-radius: 7px; border: 0.5px solid #c7c7cc;
-            font-size: 12px; background: #f2f2f7; color: #1d1d1f;
+        .adv-btn-green { background: #22c55e; color: #fff; }
+        .adv-btn-green:hover { background: #16a34a; }
+        .adv-btn-red { background: #ef4444; color: #fff; }
+        .adv-btn-red:hover { background: #dc2626; }
+        .adv-btn-gray {
+            background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
         }
-        .adv-last-check { margin-left: auto; font-size: 11px; color: #8e8e93; white-space: nowrap; }
-        .adv-preview-wrap { width: 100%; display: none; }
+        .adv-btn-gray:hover { background: #e5e7eb; }
+
+        .adv-interval {
+            padding: 4px 8px; border-radius: 7px;
+            border: 1px solid #e5e7eb; font-size: 12px;
+            background: #f9fafb; color: #374151; cursor: pointer;
+        }
+        .adv-last-check { margin-left: auto; font-size: 11px; color: #9ca3af; white-space: nowrap; }
+
+        /* Brief chips inline */
+        .adv-brief-chips {
+            width: 100%;
+            display: none;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f0f0;
+            margin-top: 4px;
+        }
+        .adv-brief-chips.show { display: flex; }
+        .adv-brief-label { font-size: 11px; color: #6366f1; font-weight: 700; }
+        .adv-chip {
+            font-size: 11px; padding: 2px 8px;
+            border-radius: 20px; background: #f0f0ff;
+            color: #4338ca; border: 1px solid #e0e7ff;
+        }
+
+        /* Capture preview */
+        .adv-preview-wrap { width: 100%; display: none; margin-top: 6px; }
         .adv-preview-wrap.show { display: block; }
         #advPreviewVideo {
-            width: 100%; max-height: 110px; object-fit: contain;
-            border-radius: 8px; background: #000; margin-top: 6px;
+            width: 100%; max-height: 100px; object-fit: contain;
+            border-radius: 10px; background: #111;
         }
 
-        /* ─── Brief bar ─── */
-        .adv-brief-bar {
-            flex-shrink: 0; display: none; align-items: center; gap: 6px;
-            flex-wrap: wrap; padding: 6px 14px;
-            background: #f0f4ff; border-bottom: 0.5px solid #dce6ff; font-size: 11px;
-        }
-        .adv-brief-bar.show { display: flex; }
-        .adv-brief-chip {
-            background: #fff; border: 0.5px solid #c7c7cc;
-            border-radius: 6px; padding: 2px 7px; font-size: 11px; color: #1d1d1f;
-        }
-        .adv-brief-label { font-size: 11px; color: #4a4a8a; font-weight: 600; }
-
-        /* ─── Creative Gallery ─── */
+        /* ══════════════════════════════════
+           GALLERY (collapsed by default)
+        ══════════════════════════════════ */
         .adv-gallery {
             flex-shrink: 0;
             background: #fff;
-            border-bottom: 0.5px solid #e5e5ea;
+            border-bottom: 1px solid #f0f0f0;
         }
-        .adv-gallery-header {
+        .adv-gallery-hdr {
             display: flex; align-items: center; gap: 6px;
-            padding: 7px 14px; cursor: pointer;
-            font-size: 12px; font-weight: 600; color: #3d3d3d;
+            padding: 7px 16px; cursor: pointer;
             user-select: none;
         }
-        .adv-gallery-header:hover { background: #f9f9f9; }
-        .adv-gallery-toggle { margin-left: auto; font-size: 11px; color: #8e8e93; transition: transform 0.2s; }
-        .adv-gallery.open .adv-gallery-toggle { transform: rotate(180deg); }
+        .adv-gallery-hdr:hover { background: #fafafa; }
+        .adv-gallery-hdr-title { font-size: 12px; font-weight: 600; color: #374151; }
+        .adv-gallery-hdr-count { font-size: 11px; color: #9ca3af; }
+        .adv-gallery-hdr-chevron {
+            margin-left: auto; font-size: 10px; color: #9ca3af;
+            transition: transform 0.2s;
+        }
+        .adv-gallery.open .adv-gallery-hdr-chevron { transform: rotate(180deg); }
         .adv-gallery-body {
             display: none;
-            overflow-x: auto;
-            padding: 0 10px 10px;
             gap: 10px;
+            overflow-x: auto;
+            padding: 0 12px 12px;
             scrollbar-width: thin;
+            scrollbar-color: #e5e7eb transparent;
         }
         .adv-gallery.open .adv-gallery-body { display: flex; }
-        .adv-gallery-body::-webkit-scrollbar { height: 4px; }
-        .adv-gallery-body::-webkit-scrollbar-thumb { background: #c7c7cc; border-radius: 2px; }
+        .adv-gallery-body::-webkit-scrollbar { height: 3px; }
+        .adv-gallery-body::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
+
         .adv-ad-card {
-            flex-shrink: 0;
-            width: 140px;
-            border: 0.5px solid #e5e5ea;
-            border-radius: 10px;
-            overflow: hidden;
-            background: #fafafa;
-            cursor: pointer;
-            transition: box-shadow 0.15s, transform 0.15s;
+            flex-shrink: 0; width: 130px;
+            border: 1px solid #f0f0f0; border-radius: 12px;
+            overflow: hidden; background: #fafafa;
+            transition: box-shadow 0.15s, transform 0.15s; cursor: pointer;
         }
-        .adv-ad-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.12); transform: translateY(-1px); }
-        .adv-ad-card.active-ad { border-color: #af52de; box-shadow: 0 0 0 2px #af52de33; }
-        .adv-ad-img {
-            width: 100%; height: 80px;
-            object-fit: cover; background: #e5e5ea;
-            display: block;
+        .adv-ad-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateY(-2px); }
+        .adv-ad-card.selected { border-color: #6366f1; box-shadow: 0 0 0 2px #6366f133; }
+        .adv-ad-thumb {
+            width: 100%; height: 76px;
+            object-fit: cover; display: block; background: #e5e7eb;
         }
-        .adv-ad-img-placeholder {
-            width: 100%; height: 80px;
-            background: linear-gradient(135deg, #e5e5ea, #f2f2f7);
+        .adv-ad-no-img {
+            width: 100%; height: 76px;
+            background: linear-gradient(135deg, #e0e7ff, #f0f0ff);
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; color: #c7c7cc;
+            font-size: 22px; color: #a5b4fc;
         }
-        .adv-ad-info {
-            padding: 6px 8px;
-        }
+        .adv-ad-info { padding: 6px 8px 8px; }
         .adv-ad-name {
-            font-size: 11px; font-weight: 600; color: #1d1d1f;
+            font-size: 10px; font-weight: 600; color: #111;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
         }
-        .adv-ad-status {
-            font-size: 10px; font-weight: 600; margin-bottom: 4px;
-        }
-        .adv-ad-status.active { color: #34c759; }
-        .adv-ad-status.paused { color: #ff9500; }
-        .adv-ad-status.other  { color: #8e8e93; }
-        .adv-ad-analyze-btn {
-            width: 100%; padding: 4px 0;
-            background: #af52de; color: #fff;
-            border: none; border-radius: 6px;
-            font-size: 11px; font-weight: 600;
+        .adv-ad-status { font-size: 10px; font-weight: 600; margin-bottom: 6px; }
+        .s-active { color: #22c55e; }
+        .s-paused { color: #f59e0b; }
+        .s-other  { color: #9ca3af; }
+        .adv-analyze-btn {
+            width: 100%; padding: 4px; border-radius: 7px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff; border: none; font-size: 10px; font-weight: 700;
             cursor: pointer; transition: opacity 0.15s;
         }
-        .adv-ad-analyze-btn:hover { opacity: 0.85; }
-        .adv-ad-analyze-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
-        .adv-gallery-empty {
-            padding: 12px 4px;
-            font-size: 12px; color: #8e8e93;
-            white-space: nowrap;
+        .adv-analyze-btn:hover { opacity: 0.88; }
+        .adv-analyze-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+        .adv-gallery-info {
+            padding: 10px 4px; font-size: 12px; color: #9ca3af; white-space: nowrap;
         }
-        .adv-gallery-loading {
-            padding: 12px 4px;
-            font-size: 12px; color: #8e8e93;
-            animation: adv-pulse 1.2s infinite;
-        }
-        @keyframes adv-pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+        @keyframes shimmer { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+        .adv-loading { animation: shimmer 1s infinite; }
 
-        /* ─── Quick Actions ─── */
-        .adv-quick-bar {
-            flex-shrink: 0;
-            display: flex; gap: 6px; padding: 6px 14px;
-            overflow-x: auto; background: #f9f9f9;
-            border-bottom: 0.5px solid #e5e5ea;
-            scrollbar-width: none;
-        }
-        .adv-quick-bar::-webkit-scrollbar { display: none; }
-        .adv-quick-btn {
-            flex-shrink: 0;
-            padding: 5px 12px; border-radius: 20px;
-            border: 0.5px solid #c7c7cc;
-            background: #fff; color: #1d1d1f;
-            font-size: 12px; font-weight: 500;
-            cursor: pointer; transition: background 0.12s, border-color 0.12s;
-            white-space: nowrap;
-        }
-        .adv-quick-btn:hover { background: #f2f2f7; border-color: #007aff; color: #007aff; }
-
-        /* ─── Messages ─── */
+        /* ══════════════════════════════════
+           MESSAGES
+        ══════════════════════════════════ */
         #advMessages {
             flex: 1; overflow-y: auto;
-            padding: 12px 14px;
-            display: flex; flex-direction: column; gap: 10px;
+            padding: 20px 16px 12px;
+            display: flex; flex-direction: column; gap: 14px;
             scroll-behavior: smooth;
         }
-        .adv-msg {
-            max-width: 88%; padding: 9px 12px;
-            border-radius: 14px; font-size: 13px;
-            line-height: 1.6; word-break: break-word;
+
+        .adv-welcome {
+            align-self: center;
+            background: linear-gradient(135deg, #f0f0ff 0%, #faf0ff 100%);
+            border: 1px solid #e0e7ff;
+            border-radius: 16px; padding: 16px 18px;
+            font-size: 13px; line-height: 1.7; color: #374151;
+            max-width: 95%; text-align: center;
         }
+        .adv-welcome strong { color: #4f46e5; }
+
+        /* User bubble */
         .adv-msg.user {
             align-self: flex-end;
-            background: #007aff; color: #fff;
-            border-bottom-right-radius: 4px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 18px 18px 4px 18px;
+            font-size: 13px; line-height: 1.6;
+            max-width: 86%;
             white-space: pre-wrap;
+            box-shadow: 0 2px 8px rgba(99,102,241,0.25);
         }
+
+        /* AI bubble */
         .adv-msg.ai {
             align-self: flex-start;
-            background: #fff; color: #1d1d1f;
-            border: 0.5px solid #e5e5ea;
-            border-bottom-left-radius: 4px;
+            position: relative;
+            background: #fff;
+            color: #1f2937;
+            padding: 12px 14px;
+            border-radius: 18px 18px 18px 4px;
+            font-size: 13px; line-height: 1.7;
+            max-width: 92%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
         }
-        .adv-msg.ai.auto-flag { border-color: #ff9500; background: #fffbf0; }
-        .adv-msg.thinking {
-            align-self: flex-start;
-            background: #f2f2f7; color: #6e6e73; font-size: 12px;
+        .adv-msg.ai.flagged {
+            background: #fffbeb;
+            box-shadow: 0 1px 4px rgba(245,158,11,0.15), 0 4px 16px rgba(245,158,11,0.08);
         }
-        .adv-msg-badge {
+        .adv-auto-badge {
             display: inline-block; font-size: 10px; font-weight: 700;
-            padding: 1px 5px; border-radius: 4px;
-            background: #ff950022; color: #c75a00; margin-bottom: 4px;
-        }
-        .adv-welcome {
-            align-self: flex-start;
-            background: #f0f4ff; border: 0.5px solid #c0cdff;
-            border-radius: 14px; border-bottom-left-radius: 4px;
-            padding: 10px 13px; font-size: 13px; line-height: 1.6;
-            color: #1d1d1f; max-width: 92%;
+            padding: 1px 6px; border-radius: 4px;
+            background: #fef3c7; color: #d97706; margin-bottom: 6px;
         }
 
-        /* ─── Markdown rendered AI messages ─── */
+        /* Thinking bubble */
+        .adv-thinking {
+            align-self: flex-start;
+            display: flex; align-items: center; gap: 8px;
+            background: #f9fafb; border: 1px solid #f0f0f0;
+            border-radius: 14px; padding: 10px 14px;
+            font-size: 12px; color: #6b7280;
+        }
+        .adv-thinking-dots { display: flex; gap: 4px; }
+        .adv-thinking-dots span {
+            width: 6px; height: 6px; border-radius: 50%; background: #6366f1;
+            animation: thinking-bounce 1.2s infinite;
+        }
+        .adv-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .adv-thinking-dots span:nth-child(3) { animation-delay: 0.30s; }
+        @keyframes thinking-bounce {
+            0%,60%,100% { transform: translateY(0); opacity:0.6; }
+            30% { transform: translateY(-5px); opacity:1; }
+        }
+
+        /* TTS button */
+        .adv-tts-btn {
+            position: absolute; bottom: 8px; right: 10px;
+            width: 26px; height: 26px; border-radius: 50%;
+            border: none; cursor: pointer;
+            background: #f3f4f6; color: #6b7280;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; transition: all 0.15s;
+            opacity: 0;
+        }
+        .adv-msg.ai:hover .adv-tts-btn { opacity: 1; }
+        .adv-tts-btn:hover { background: #e0e7ff; color: #4f46e5; }
+        .adv-tts-btn.playing { opacity: 1; background: #ede9fe; color: #7c3aed; animation: tts-pulse 1.5s infinite; }
+        @keyframes tts-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.12);} }
+
+        /* Markdown styles inside AI bubble */
         .adv-msg.ai p { margin-bottom: 8px; }
         .adv-msg.ai p:last-child { margin-bottom: 0; }
-        .adv-msg.ai strong { font-weight: 700; }
-        .adv-msg.ai em { font-style: italic; }
-        .adv-msg.ai h4 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; color: #1d1d1f; }
-        .adv-msg.ai ul { padding-left: 16px; margin: 4px 0; }
-        .adv-msg.ai li { margin-bottom: 3px; }
+        .adv-msg.ai strong { font-weight: 700; color: #111827; }
+        .adv-msg.ai h4 { font-size: 13px; font-weight: 700; color: #111827; margin: 10px 0 5px; }
+        .adv-msg.ai ul { padding-left: 18px; margin: 5px 0 8px; }
+        .adv-msg.ai ol { padding-left: 18px; margin: 5px 0 8px; }
+        .adv-msg.ai li { margin-bottom: 4px; }
         .adv-msg.ai code {
-            background: #f2f2f7; border-radius: 4px;
-            padding: 1px 5px; font-family: 'SF Mono', monospace; font-size: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+            background: #f3f4f6; border-radius: 4px; padding: 1px 5px; color: #374151;
         }
-        .adv-msg.ai a { color: #007aff; }
-        .adv-msg.ai hr { border: none; border-top: 0.5px solid #e5e5ea; margin: 8px 0; }
-        .adv-msg-creative-img {
-            max-width: 100%; border-radius: 8px;
-            margin-bottom: 8px; display: block;
-            border: 0.5px solid #e5e5ea;
+        .adv-msg.ai hr { border: none; border-top: 1px solid #f0f0f0; margin: 10px 0; }
+        .adv-msg.ai-creative-img {
+            max-width: 100%; border-radius: 10px; display: block;
+            margin-bottom: 10px; border: 1px solid #f0f0f0;
         }
 
-        /* Tool use indicator */
-        .adv-tool-indicator {
-            display: flex; align-items: center; gap: 5px;
-            font-size: 11px; color: #8e8e93; margin-bottom: 6px;
+        /* ══════════════════════════════════
+           QUICK SUGGESTIONS (above input)
+        ══════════════════════════════════ */
+        .adv-suggestions {
+            flex-shrink: 0;
+            display: flex; gap: 6px;
+            padding: 8px 16px 2px;
+            overflow-x: auto;
+            background: transparent;
+            scrollbar-width: none;
         }
-        .adv-tool-dot {
-            width: 5px; height: 5px; border-radius: 50%;
-            background: #007aff; animation: adv-pulse 0.8s infinite;
+        .adv-suggestions::-webkit-scrollbar { display: none; }
+        .adv-sug-btn {
+            flex-shrink: 0;
+            padding: 6px 13px; border-radius: 20px;
+            border: 1px solid #e5e7eb;
+            background: #fff; color: #374151;
+            font-size: 12px; font-weight: 500;
+            cursor: pointer; white-space: nowrap;
+            transition: all 0.12s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .adv-sug-btn:hover {
+            background: #f0f0ff; border-color: #6366f1; color: #4f46e5;
+            box-shadow: 0 2px 8px rgba(99,102,241,0.15);
         }
 
-        /* ─── Input Bar ─── */
-        .adv-input-bar {
-            flex-shrink: 0; display: flex; align-items: flex-end; gap: 8px;
-            padding: 10px 14px; background: #fff; border-top: 0.5px solid #e5e5ea;
+        /* ══════════════════════════════════
+           INPUT BAR
+        ══════════════════════════════════ */
+        .adv-input-wrap {
+            flex-shrink: 0;
+            padding: 10px 16px 14px;
+            background: #fff;
+            border-top: 1px solid #f0f0f0;
+        }
+        .adv-input-row {
+            display: flex; align-items: flex-end; gap: 8px;
+            background: #f9fafb;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 16px; padding: 6px 6px 6px 12px;
+            transition: border-color 0.15s;
+        }
+        .adv-input-row:focus-within {
+            border-color: #6366f1;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
         }
         #advInput {
-            flex: 1; resize: none;
-            border: 0.5px solid #c7c7cc; border-radius: 12px;
-            padding: 9px 12px; font-size: 14px; font-family: inherit;
-            line-height: 1.4; max-height: 120px; overflow-y: auto;
-            background: #f9f9f9; color: #1d1d1f;
+            flex: 1; resize: none; border: none; outline: none;
+            background: transparent; font-size: 14px; font-family: inherit;
+            line-height: 1.5; max-height: 120px; overflow-y: auto;
+            color: #111827;
         }
-        #advInput:focus { outline: none; border-color: #007aff; background: #fff; }
-        #advInput::placeholder { color: #c7c7cc; }
-        .adv-snap-btn {
-            flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
-            border: none; cursor: pointer; background: #f2f2f7;
+        #advInput::placeholder { color: #9ca3af; }
+        .adv-input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .adv-icon-btn {
+            width: 34px; height: 34px; border-radius: 10px;
+            border: none; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
-            color: #3d3d3d; transition: opacity 0.15s;
+            font-size: 14px; transition: all 0.15s; background: transparent; color: #6b7280;
         }
-        .adv-snap-btn:hover { opacity: 0.75; }
+        .adv-icon-btn:hover { background: #f0f0f5; color: #4f46e5; }
         .adv-send-btn {
-            flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
-            border: none; cursor: pointer; background: #007aff;
+            width: 34px; height: 34px; border-radius: 10px;
+            border: none; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
             color: #fff; transition: opacity 0.15s;
         }
-        .adv-send-btn:hover { opacity: 0.82; }
-        .adv-send-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+        .adv-send-btn:hover { opacity: 0.88; }
+        .adv-send-btn:disabled { background: #e5e7eb; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-<!-- Header -->
+<!-- ── Header ── -->
 <div class="adv-header">
     <a class="adv-back" href="/admin/facebook-ads" target="_self">
-        <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         กลับ
     </a>
-    <div class="adv-title">
-        <span id="advCampName">🤖 AI ผู้ช่วย Ads</span>
-        <div class="adv-title-sub" id="advCampId">Campaign ID: {{ campaign_id }}</div>
+    <div class="adv-title-wrap">
+        <div class="adv-title-name" id="advCampName">AI ผู้ช่วย Ads</div>
+        <div class="adv-title-sub" id="advCampId">{{ campaign_id }}</div>
     </div>
+    <span class="adv-db-badge err" id="advDbBadge" style="display:none;"></span>
 </div>
 
-<!-- Capture Bar -->
-<div class="adv-capture-bar" id="advCaptureBar">
-    <div class="adv-status-dot" id="advDot"></div>
-    <span class="adv-status-label" id="advStatusLabel">ยังไม่ได้เปิดดูหน้าจอ</span>
-    <button class="adv-capture-btn adv-btn-start" id="advStartBtn" onclick="startCapture()">📷 เปิดดูหน้าจอ</button>
-    <button class="adv-capture-btn adv-btn-stop" id="advStopBtn" style="display:none;" onclick="stopCapture()">⏹ หยุดดู</button>
-    <select class="adv-interval-sel" id="advIntervalSel" onchange="changeInterval()">
-        <option value="10">ทุก 10 วิ</option>
-        <option value="15" selected>ทุก 15 วิ</option>
-        <option value="30">ทุก 30 วิ</option>
-        <option value="60">ทุก 60 วิ</option>
+<!-- ── Control Bar (Capture + Brief) ── -->
+<div class="adv-ctrl-bar" id="advCtrlBar">
+    <div class="adv-dot" id="advDot"></div>
+    <span class="adv-ctrl-label" id="advCtrlLabel">ยังไม่เปิดหน้าจอ</span>
+    <button class="adv-btn adv-btn-green" id="advBtnStart" onclick="startCapture()">📷 เปิดดูหน้าจอ</button>
+    <button class="adv-btn adv-btn-red" id="advBtnStop" style="display:none;" onclick="stopCapture()">⏹ หยุด</button>
+    <select class="adv-interval" id="advInterval" onchange="changeInterval()">
+        <option value="10">10 วิ</option>
+        <option value="15" selected>15 วิ</option>
+        <option value="30">30 วิ</option>
+        <option value="60">60 วิ</option>
     </select>
-    <span class="adv-last-check" id="advLastCheck"></span>
+    <span id="advLastCheck" class="adv-last-check"></span>
     <div class="adv-preview-wrap" id="advPreviewWrap">
         <video id="advPreviewVideo" autoplay muted playsinline></video>
     </div>
+    <div class="adv-brief-chips" id="advBriefChips"></div>
 </div>
 
-<!-- Brief bar -->
-<div class="adv-brief-bar" id="advBriefBar"></div>
-
-<!-- Creative Gallery -->
+<!-- ── Gallery (collapsed by default) ── -->
 <div class="adv-gallery" id="advGallery">
-    <div class="adv-gallery-header" onclick="toggleGallery()">
-        <span>🖼️ ภาพโฆษณา</span>
-        <span id="advGalleryCount" style="font-size:11px;color:#8e8e93;font-weight:400;"></span>
-        <span class="adv-gallery-toggle" id="advGalleryToggle">▼</span>
+    <div class="adv-gallery-hdr" onclick="toggleGallery()">
+        <span style="font-size:14px;">🖼️</span>
+        <span class="adv-gallery-hdr-title">ภาพโฆษณา</span>
+        <span class="adv-gallery-hdr-count" id="advGalleryCount"></span>
+        <span class="adv-gallery-hdr-chevron">▲</span>
     </div>
-    <div class="adv-gallery-body" id="advGalleryBody">
-        <div class="adv-gallery-loading" id="advGalleryLoading">⏳ กำลังโหลดภาพโฆษณา...</div>
-    </div>
+    <div class="adv-gallery-body" id="advGalleryBody"></div>
 </div>
 
-<!-- Quick Actions -->
-<div class="adv-quick-bar">
-    <button class="adv-quick-btn" onclick="quickAsk('วิเคราะห์ภาพรวมทั้งหมดของแคมเปญนี้ ผลลัพธ์เป็นอย่างไร ดีหรือมีปัญหาอะไร')">📊 ภาพรวม</button>
-    <button class="adv-quick-btn" onclick="quickAsk('ดู Ad Sets ทั้งหมดในแคมเปญนี้ ช่วยดู targeting audience ว่าตั้งค่าถูกต้องสำหรับพยาบาลไหม')">👥 Ad Sets</button>
-    <button class="adv-quick-btn" onclick="quickAsk('ตรวจสอบ CPL และ CTR ปัจจุบัน เทียบกับเป้าหมายที่ตั้งไว้ และ benchmark B2B ไทย ควรทำอะไร')">💰 CPL/CTR</button>
-    <button class="adv-quick-btn" onclick="quickAsk('Frequency สูงเกินไปไหม? ถ้า audience เริ่ม fatigue ควรทำอะไร')">🔄 Frequency</button>
-    <button class="adv-quick-btn" onclick="quickAsk('ดู demographic breakdown ว่า age/gender ไหนให้ผลดีที่สุด และควรเพิ่มงบให้กลุ่มไหน')">👁 Demographics</button>
-    <button class="adv-quick-btn" onclick="quickAsk('แนะนำ copy โฆษณาใหม่สำหรับแคมเปญนี้ ให้เหมาะกับพยาบาลและบุคลากรสาธารณสุข ทั้ง headline และ body text')">✍️ Copy</button>
-    <button class="adv-quick-btn" onclick="quickAsk('ตรวจสอบว่าแคมเปญนี้พร้อม scale budget ได้ไหม ถ้าเพิ่มงบจะกระทบ CPL อย่างไร')">📈 Scale</button>
-    <button class="adv-quick-btn" onclick="quickAsk('วิเคราะห์ ad creative ทั้งหมดในแคมเปญ ตัวไหนน่าจะ perform ดีที่สุดและทำไม')">🎨 Creative</button>
-</div>
-
-<!-- Messages -->
+<!-- ── Messages ── -->
 <div id="advMessages">
     <div class="adv-welcome" id="advWelcome">
-        👋 พร้อมช่วยวิเคราะห์แคมเปญแล้วค่ะ<br><br>
-        ✨ <strong>ใหม่:</strong> ดูภาพโฆษณาด้านบน แล้วกด <strong>🔬 วิเคราะห์</strong> เพื่อให้ AI วิเคราะห์ภาพจริงๆ<br>
-        📷 <strong>เปิดดูหน้าจอ</strong> เพื่อให้ AI ตรวจสอบ Ads Manager อัตโนมัติ<br>
-        💬 หรือ <strong>พิมพ์คำถาม</strong> / กดปุ่ม Quick Action ด้านบน
+        <div style="font-size:28px;margin-bottom:10px;">🤖</div>
+        <strong>พร้อมช่วยวิเคราะห์แคมเปญแล้ว</strong><br>
+        <span style="font-size:12px;color:#6b7280;line-height:1.8;">
+            กดปุ่มด้านล่างเพื่อเริ่มต้น หรือพิมพ์คำถามได้เลย<br>
+            กด 🖼️ <strong>ภาพโฆษณา</strong> เพื่อดูและวิเคราะห์ Creative ด้วย AI
+        </span>
     </div>
 </div>
 
-<!-- Hidden canvas & video -->
+<!-- Hidden elements -->
 <canvas id="advCanvas" style="display:none;"></canvas>
 <video id="advSourceVideo" style="display:none;" autoplay muted playsinline></video>
 
-<!-- Input Bar -->
-<div class="adv-input-bar">
-    <button class="adv-snap-btn" onclick="sendWithSnapshot()" title="ถ่ายภาพหน้าจอและถาม">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-    </button>
-    <textarea id="advInput" rows="1" placeholder="พิมพ์คำถาม... (Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)"
-        onkeydown="advInputKeydown(event)" oninput="advAutoResize(this)"></textarea>
-    <button class="adv-send-btn" id="advSendBtn" onclick="sendMessage()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    </button>
+<!-- ── Suggestions ── -->
+<div class="adv-suggestions" id="advSuggestions">
+    <button class="adv-sug-btn" onclick="quickAsk('วิเคราะห์ภาพรวมผลลัพธ์แคมเปญนี้ มีปัญหาอะไรบ้าง')">📊 ภาพรวม</button>
+    <button class="adv-sug-btn" onclick="quickAsk('ดู Ad Sets และ targeting ว่าเหมาะสมกับพยาบาลไหม')">👥 Ad Sets</button>
+    <button class="adv-sug-btn" onclick="quickAsk('ตรวจสอบ CPL และ CTR เทียบเป้าหมาย ควรทำอะไร')">💰 CPL/CTR</button>
+    <button class="adv-sug-btn" onclick="quickAsk('Frequency สูงเกินไปไหม ควรแก้อย่างไร')">🔄 Frequency</button>
+    <button class="adv-sug-btn" onclick="quickAsk('ดู demographics ว่ากลุ่มไหนให้ผลดี ควรเพิ่มงบไปที่ไหน')">📈 Demographics</button>
+    <button class="adv-sug-btn" onclick="quickAsk('แนะนำ copy โฆษณาใหม่ให้เหมาะกับพยาบาลและบุคลากรสาธารณสุข')">✍️ Copy</button>
+    <button class="adv-sug-btn" onclick="quickAsk('แคมเปญนี้พร้อม scale budget ได้ไหม ถ้าเพิ่มงบจะเกิดอะไรขึ้น')">🚀 Scale</button>
+</div>
+
+<!-- ── Input ── -->
+<div class="adv-input-wrap">
+    <div class="adv-input-row">
+        <textarea id="advInput" rows="1" placeholder="พิมพ์คำถาม... (Enter ส่ง)"
+            onkeydown="onInputKey(event)" oninput="autoResize(this)"></textarea>
+        <div class="adv-input-actions">
+            <button class="adv-icon-btn" onclick="sendWithSnap()" title="ถ่ายภาพหน้าจอ">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+            <button class="adv-send-btn" id="advSendBtn" onclick="sendMsg()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
 const CAMPAIGN_ID = {{ campaign_id | tojson }};
 
-let captureStream    = null;
-let autoTimer        = null;
-let chatHistory      = [];
-let campaignCtx      = {};
-let advisorDbContext = '';
-let isRequesting     = false;
-let galleryOpen      = true;
-let galleryAds       = [];
+let captureStream = null, autoTimer = null;
+let chatHistory = [], campaignCtx = {}, advisorDbContext = '';
+let isRequesting = false;
+let galleryAds = [], galleryLoaded = false;
+let ttsUtterance = null, ttsSpeaking = false, ttsActiveBtn = null;
 
-// ─── Init ────────────────────────────────────────────────────────
-
-async function initAdvisor() {
-    const [briefRes, ctxRes] = await Promise.allSettled([
+// ══════════════════════════════════
+// INIT
+// ══════════════════════════════════
+async function init() {
+    const [briefR, ctxR] = await Promise.allSettled([
         fetch(`/api/facebook-ads/campaign-brief/${CAMPAIGN_ID}`, { credentials: 'include' }),
         fetch('/api/facebook-ads/advisor-context', { credentials: 'include' })
     ]);
-
     try {
-        const d = await briefRes.value.json();
+        const d = await briefR.value.json();
         if (d.found) {
-            campaignCtx = {
-                campaign_name: d.campaign_name || '',
-                goal_type: d.goal_type,
-                target_cpl: d.target_cpl,
-                target_ctr: d.target_ctr,
-                max_daily_budget: d.max_daily_budget,
-                audience_note: d.audience_note,
-            };
-            if (d.campaign_name) {
-                document.getElementById('advCampName').textContent = '🤖 ' + d.campaign_name;
-            }
-            _renderBrief(d);
+            campaignCtx = { campaign_name: d.campaign_name || '', goal_type: d.goal_type,
+                target_cpl: d.target_cpl, target_ctr: d.target_ctr,
+                max_daily_budget: d.max_daily_budget, audience_note: d.audience_note };
+            if (d.campaign_name) document.getElementById('advCampName').textContent = d.campaign_name;
+            renderBriefChips(d);
         }
     } catch(e) {}
-
     try {
-        const cd = await ctxRes.value.json();
+        const cd = await ctxR.value.json();
         if (cd.db_context) {
             advisorDbContext = cd.db_context;
-            _showDbContextBadge(true);
+            showDbBadge('● DB โหลดแล้ว', false);
         }
-    } catch(e) { _showDbContextBadge(false); }
-
-    loadGallery();
+    } catch(e) { showDbBadge('● DB ไม่พร้อม', true); }
 }
 
-function _showDbContextBadge(ok) {
-    const bar = document.getElementById('advCaptureBar');
-    if (!bar) return;
-    const badge = document.createElement('span');
-    badge.style.cssText = 'font-size:11px;color:' + (ok ? '#34c759' : '#ff9500') + ';';
-    badge.textContent = ok ? '● DB โหลดแล้ว' : '● DB ไม่พร้อม';
-    bar.appendChild(badge);
+function showDbBadge(txt, isErr) {
+    const b = document.getElementById('advDbBadge');
+    b.textContent = txt; b.style.display = '';
+    b.className = 'adv-db-badge' + (isErr ? ' err' : '');
 }
 
-function _renderBrief(b) {
-    const bar = document.getElementById('advBriefBar');
-    if (!b || !b.found) return;
+function renderBriefChips(b) {
+    const wrap = document.getElementById('advBriefChips');
     const gm = { lead:'Lead/สมัคร', registration:'Registration', awareness:'Awareness', purchase:'ยอดขาย' };
-    let html = `<span class="adv-brief-label">🎯 เป้าหมาย:</span>`;
-    html += `<span class="adv-brief-chip">${gm[b.goal_type] || b.goal_type || 'Lead'}</span>`;
-    if (b.target_cpl)       html += `<span class="adv-brief-chip">CPL ≤ ฿${b.target_cpl}</span>`;
-    if (b.target_ctr)       html += `<span class="adv-brief-chip">CTR ≥ ${b.target_ctr}%</span>`;
-    if (b.max_daily_budget) html += `<span class="adv-brief-chip">งบ/วัน ≤ ฿${b.max_daily_budget}</span>`;
-    if (b.audience_note)    html += `<span class="adv-brief-chip" style="color:#555;">${b.audience_note}</span>`;
-    bar.innerHTML = html;
-    bar.classList.add('show');
+    let h = `<span class="adv-brief-label">🎯 เป้าหมาย</span>`;
+    h += `<span class="adv-chip">${gm[b.goal_type] || b.goal_type || 'Lead'}</span>`;
+    if (b.target_cpl)       h += `<span class="adv-chip">CPL ≤ ฿${b.target_cpl}</span>`;
+    if (b.target_ctr)       h += `<span class="adv-chip">CTR ≥ ${b.target_ctr}%</span>`;
+    if (b.max_daily_budget) h += `<span class="adv-chip">งบ/วัน ≤ ฿${b.max_daily_budget}</span>`;
+    if (b.audience_note)    h += `<span class="adv-chip" style="color:#6366f1;">${esc(b.audience_note)}</span>`;
+    wrap.innerHTML = h;
+    wrap.classList.add('show');
 }
 
-// ─── Creative Gallery ────────────────────────────────────────────
-
+// ══════════════════════════════════
+// GALLERY
+// ══════════════════════════════════
 function toggleGallery() {
-    galleryOpen = !galleryOpen;
-    const el = document.getElementById('advGallery');
-    el.classList.toggle('open', galleryOpen);
+    const g = document.getElementById('advGallery');
+    const isOpen = g.classList.toggle('open');
+    if (isOpen && !galleryLoaded) loadGallery();
 }
 
 async function loadGallery() {
+    galleryLoaded = true;
     const body = document.getElementById('advGalleryBody');
-    body.innerHTML = '<div class="adv-gallery-loading">⏳ กำลังโหลดภาพโฆษณา...</div>';
-    document.getElementById('advGallery').classList.add('open');
-
+    body.innerHTML = '<div class="adv-gallery-info adv-loading">⏳ กำลังโหลด...</div>';
     try {
         const r = await fetch(`/api/facebook-ads/campaign-creatives/${CAMPAIGN_ID}`, { credentials: 'include' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
-
         galleryAds = d.ads || [];
-        renderGallery(galleryAds);
-        const cnt = document.getElementById('advGalleryCount');
-        cnt.textContent = galleryAds.length ? `(${galleryAds.length} ads)` : '';
+        document.getElementById('advGalleryCount').textContent = galleryAds.length ? `(${galleryAds.length})` : '';
+        if (!galleryAds.length) {
+            body.innerHTML = '<div class="adv-gallery-info">ไม่พบโฆษณาในแคมเปญนี้</div>';
+            return;
+        }
+        body.innerHTML = galleryAds.map((ad, i) => {
+            const sc = ad.status === 'ACTIVE' ? 's-active' : (ad.status === 'PAUSED' ? 's-paused' : 's-other');
+            const st = ad.status === 'ACTIVE' ? '● เปิดอยู่' : (ad.status === 'PAUSED' ? '⏸ หยุด' : (ad.status || '—'));
+            const img = ad.image_url
+                ? `<img class="adv-ad-thumb" src="${escAttr(ad.image_url)}" alt="" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+                  + `<div class="adv-ad-no-img" style="display:none;">🖼️</div>`
+                : `<div class="adv-ad-no-img">🖼️</div>`;
+            return `<div class="adv-ad-card" id="adc${i}" onclick="selectAd(${i})">
+                ${img}
+                <div class="adv-ad-info">
+                    <div class="adv-ad-name" title="${escAttr(ad.name)}">${esc(ad.name || 'Ad ' + (i+1))}</div>
+                    <div class="adv-ad-status ${sc}">${st}</div>
+                    <button class="adv-analyze-btn" id="adab${i}" onclick="event.stopPropagation();analyzeAd(${i})">🔬 วิเคราะห์ด้วย AI</button>
+                </div>
+            </div>`;
+        }).join('');
     } catch(e) {
-        body.innerHTML = `<div class="adv-gallery-empty">⚠️ ${e.message}</div>`;
+        body.innerHTML = `<div class="adv-gallery-info">⚠️ ${esc(e.message)}</div>`;
     }
 }
 
-function renderGallery(ads) {
-    const body = document.getElementById('advGalleryBody');
-    if (!ads || !ads.length) {
-        body.innerHTML = '<div class="adv-gallery-empty">ไม่พบ Ads ในแคมเปญนี้</div>';
-        return;
-    }
-    body.innerHTML = ads.map((ad, idx) => {
-        const statusCls = ad.status === 'ACTIVE' ? 'active' : (ad.status === 'PAUSED' ? 'paused' : 'other');
-        const statusTh  = ad.status === 'ACTIVE' ? '● เปิดอยู่' : (ad.status === 'PAUSED' ? '⏸ หยุด' : ad.status);
-        const imgHtml   = ad.image_url
-            ? `<img class="adv-ad-img" src="${_escAttr(ad.image_url)}" alt="${_escAttr(ad.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-               <div class="adv-ad-img-placeholder" style="display:none;">🖼️</div>`
-            : `<div class="adv-ad-img-placeholder">🖼️</div>`;
-        return `
-        <div class="adv-ad-card" id="adcard_${idx}" onclick="selectAd(${idx})">
-            ${imgHtml}
-            <div class="adv-ad-info">
-                <div class="adv-ad-name" title="${_escAttr(ad.name)}">${_escHtml(ad.name) || 'Ad ' + (idx+1)}</div>
-                <div class="adv-ad-status ${statusCls}">${statusTh}</div>
-                <button class="adv-ad-analyze-btn" id="adanalyze_${idx}"
-                    onclick="event.stopPropagation();analyzeCreative(${idx})">🔬 วิเคราะห์</button>
-            </div>
-        </div>`;
-    }).join('');
+function selectAd(i) {
+    document.querySelectorAll('.adv-ad-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('adc' + i)?.classList.add('selected');
 }
 
-function selectAd(idx) {
-    document.querySelectorAll('.adv-ad-card').forEach(c => c.classList.remove('active-ad'));
-    document.getElementById('adcard_' + idx)?.classList.add('active-ad');
-}
-
-async function analyzeCreative(idx) {
-    const ad = galleryAds[idx];
+async function analyzeAd(i) {
+    const ad = galleryAds[i];
     if (!ad) return;
-    const btn = document.getElementById('adanalyze_' + idx);
+    const btn = document.getElementById('adab' + i);
     if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังโหลด...'; }
-    selectAd(idx);
+    selectAd(i);
 
-    let imgBase64 = null;
+    let imgB64 = null;
     if (ad.image_url) {
         try {
-            const proxyUrl = `/api/facebook-ads/proxy-image?url=${encodeURIComponent(ad.image_url)}`;
-            const imgRes = await fetch(proxyUrl, { credentials: 'include' });
-            if (imgRes.ok) {
-                const blob = await imgRes.blob();
-                imgBase64 = await _blobToBase64(blob);
-                imgBase64 = imgBase64.split(',')[1];
-            }
-        } catch(e) { imgBase64 = null; }
+            const pr = await fetch(`/api/facebook-ads/proxy-image?url=${encodeURIComponent(ad.image_url)}`, { credentials: 'include' });
+            if (pr.ok) { const blob = await pr.blob(); imgB64 = (await blobToB64(blob)).split(',')[1]; }
+        } catch(e) {}
     }
 
-    const adBody  = ad.body  ? `\nข้อความโฆษณา: "${ad.body.substring(0, 200)}"` : '';
-    const adTitle = ad.title ? `\nTitle: "${ad.title}"` : '';
-    const adCta   = ad.cta   ? `\nCTA: ${ad.cta}` : '';
-    const msg = `วิเคราะห์ Ad Creative นี้ให้ละเอียด:\nAd Name: "${ad.name}"${adTitle}${adBody}${adCta}
-${imgBase64 ? '\n[ภาพ ad แนบมาด้านล่าง — วิเคราะห์ visual design, ข้อความ, CTA, และความน่าดึงดูด]' : ''}
-ประเมิน: 1) คุณภาพภาพและ visual hierarchy 2) Copy text ดึงดูดใจพยาบาลไหม 3) CTA ชัดเจนไหม 4) คะแนน 1-10 และข้อแนะนำปรับปรุง`;
+    const msg = `วิเคราะห์ Ad Creative นี้:\nชื่อ: "${ad.name}"${ad.title ? '\nTitle: "' + ad.title + '"' : ''}${ad.body ? '\nข้อความ: "' + ad.body.substring(0,200) + '"' : ''}${ad.cta ? '\nCTA: ' + ad.cta : ''}\n${imgB64 ? '[ภาพแนบมาแล้ว วิเคราะห์ visual, copy, CTA, ให้คะแนน 1-10]' : ''}`;
 
-    appendMsg('user', `🔬 วิเคราะห์ Ad: ${ad.name}${imgBase64 ? ' (พร้อมภาพ)' : ''}`);
+    appendUserMsg(`🔬 วิเคราะห์ "${ad.name}"${imgB64 ? ' (พร้อมภาพ)' : ''}`);
     chatHistory.push({ role: 'user', text: msg });
-
-    if (btn) { btn.disabled = false; btn.textContent = '🔬 วิเคราะห์'; }
-    await callAdvisor(msg, imgBase64, false, ad.image_url);
+    if (btn) { btn.disabled = false; btn.textContent = '🔬 วิเคราะห์ด้วย AI'; }
+    await callAI(msg, imgB64, false, ad.image_url);
 }
 
-function _blobToBase64(blob) {
+function blobToB64(blob) {
     return new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(reader.result);
-        reader.onerror = rej;
-        reader.readAsDataURL(blob);
+        const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej;
+        r.readAsDataURL(blob);
     });
 }
 
-// ─── Quick Actions ────────────────────────────────────────────────
+// ══════════════════════════════════
+// TTS
+// ══════════════════════════════════
+function speakText(text, btn) {
+    if (!window.speechSynthesis) return;
+    if (ttsSpeaking) {
+        window.speechSynthesis.cancel();
+        ttsSpeaking = false;
+        if (ttsActiveBtn) { ttsActiveBtn.textContent = '🔊'; ttsActiveBtn.classList.remove('playing'); }
+        if (ttsActiveBtn === btn) { ttsActiveBtn = null; return; }
+    }
+    // Strip HTML tags for reading
+    const clean = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    ttsUtterance = new SpeechSynthesisUtterance(clean);
+    ttsUtterance.lang = 'th-TH';
+    ttsUtterance.rate = 1.0;
+    // Try to pick a Thai voice
+    const voices = window.speechSynthesis.getVoices();
+    const thVoice = voices.find(v => v.lang.startsWith('th'));
+    if (thVoice) ttsUtterance.voice = thVoice;
 
-function quickAsk(text) {
-    if (isRequesting) return;
-    const input = document.getElementById('advInput');
-    input.value = text;
-    advAutoResize(input);
-    sendMessage();
+    ttsUtterance.onstart = () => {
+        ttsSpeaking = true; ttsActiveBtn = btn;
+        btn.textContent = '⏹'; btn.classList.add('playing');
+    };
+    ttsUtterance.onend = ttsUtterance.onerror = () => {
+        ttsSpeaking = false;
+        if (ttsActiveBtn) { ttsActiveBtn.textContent = '🔊'; ttsActiveBtn.classList.remove('playing'); }
+        ttsActiveBtn = null;
+    };
+    window.speechSynthesis.speak(ttsUtterance);
 }
 
-// ─── Screen Capture ──────────────────────────────────────────────
-
+// ══════════════════════════════════
+// CAPTURE
+// ══════════════════════════════════
 async function startCapture() {
     try {
-        captureStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 2, max: 5 } }, audio: false
-        });
-        const srcVid = document.getElementById('advSourceVideo');
-        const prvVid = document.getElementById('advPreviewVideo');
-        srcVid.srcObject = captureStream;
-        prvVid.srcObject = captureStream;
+        captureStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal:2, max:5 } }, audio: false });
+        const src = document.getElementById('advSourceVideo'), prv = document.getElementById('advPreviewVideo');
+        src.srcObject = captureStream; prv.srcObject = captureStream;
         captureStream.getVideoTracks()[0].addEventListener('ended', stopCapture);
         document.getElementById('advDot').classList.add('live');
-        document.getElementById('advStatusLabel').textContent = 'กำลังดูหน้าจออยู่';
-        document.getElementById('advStatusLabel').classList.add('live');
-        document.getElementById('advStartBtn').style.display = 'none';
-        document.getElementById('advStopBtn').style.display = '';
+        document.getElementById('advCtrlLabel').textContent = 'กำลังดูหน้าจออยู่';
+        document.getElementById('advCtrlLabel').classList.add('live');
+        document.getElementById('advBtnStart').style.display = 'none';
+        document.getElementById('advBtnStop').style.display = '';
         document.getElementById('advPreviewWrap').classList.add('show');
-        startAutoInterval();
-        appendMsg('ai', '✅ เริ่มดูหน้าจอแล้วค่ะ จะแจ้งเตือนเมื่อพบสิ่งที่น่าสังเกต');
-    } catch(e) {
-        if (e.name !== 'NotAllowedError') appendMsg('ai', '❌ ไม่สามารถเปิดดูหน้าจอได้: ' + e.message);
-    }
+        startInterval();
+        appendAiMsg('✅ เริ่มดูหน้าจอแล้ว จะแจ้งเตือนเมื่อพบสิ่งน่าสังเกต', false, false);
+    } catch(e) { if (e.name !== 'NotAllowedError') appendAiMsg('❌ ' + e.message, false, false); }
 }
 
 function stopCapture() {
     if (captureStream) { captureStream.getTracks().forEach(t => t.stop()); captureStream = null; }
     clearInterval(autoTimer); autoTimer = null;
-    document.getElementById('advSourceVideo').srcObject = null;
-    document.getElementById('advPreviewVideo').srcObject = null;
+    ['advSourceVideo','advPreviewVideo'].forEach(id => document.getElementById(id).srcObject = null);
     document.getElementById('advDot').classList.remove('live');
-    document.getElementById('advStatusLabel').textContent = 'หยุดดูหน้าจอแล้ว';
-    document.getElementById('advStatusLabel').classList.remove('live');
-    document.getElementById('advStartBtn').style.display = '';
-    document.getElementById('advStopBtn').style.display = 'none';
+    document.getElementById('advCtrlLabel').textContent = 'หยุดดูหน้าจอแล้ว';
+    document.getElementById('advCtrlLabel').classList.remove('live');
+    document.getElementById('advBtnStart').style.display = '';
+    document.getElementById('advBtnStop').style.display = 'none';
     document.getElementById('advPreviewWrap').classList.remove('show');
 }
 
-function changeInterval() { if (captureStream) startAutoInterval(); }
+function changeInterval() { if (captureStream) startInterval(); }
 
-function _isBlackFrame(canvas, n = 64) {
+function _blackFrame(canvas, n=64) {
     try {
-        const ctx = canvas.getContext('2d');
-        const w = canvas.width, h = canvas.height;
-        if (!w || !h) return true;
+        const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+        if (!w||!h) return true;
         let dark = 0;
-        for (let i = 0; i < n; i++) {
+        for (let i=0;i<n;i++) {
             const px = ctx.getImageData(Math.floor(Math.random()*w), Math.floor(Math.random()*h), 1, 1).data;
             if (px[0]+px[1]+px[2] < 30) dark++;
         }
@@ -624,212 +683,201 @@ function _isBlackFrame(canvas, n = 64) {
 function captureFrame() {
     const vid = document.getElementById('advSourceVideo');
     if (!vid.videoWidth || !vid.videoHeight || vid.readyState < 2) return null;
-    const canvas = document.getElementById('advCanvas');
+    const c = document.getElementById('advCanvas');
     let w = vid.videoWidth, h = vid.videoHeight;
-    const maxW = 1280, maxH = 720;
-    if (w > maxW) { h = Math.round(h*maxW/w); w = maxW; }
-    if (h > maxH) { w = Math.round(w*maxH/h); h = maxH; }
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(vid, 0, 0, w, h);
-    if (_isBlackFrame(canvas)) return null;
-    return canvas.toDataURL('image/jpeg', 0.65).split(',')[1];
+    if (w > 1280) { h = Math.round(h*1280/w); w = 1280; }
+    if (h > 720)  { w = Math.round(w*720/h);  h = 720;  }
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(vid, 0, 0, w, h);
+    return _blackFrame(c) ? null : c.toDataURL('image/jpeg', 0.65).split(',')[1];
 }
 
 async function autoCapture() {
     if (isRequesting || !captureStream) return;
-    const screenshot = captureFrame();
-    if (!screenshot) return;
-    await callAdvisor('', screenshot, true);
+    const shot = captureFrame();
+    if (!shot) return;
+    await callAI('', shot, true);
 }
 
-function startAutoInterval() {
+function startInterval() {
     clearInterval(autoTimer);
-    const secs = parseInt(document.getElementById('advIntervalSel').value || '15', 10);
-    setTimeout(() => {
-        if (!captureStream) return;
-        autoCapture();
-        autoTimer = setInterval(autoCapture, secs * 1000);
-    }, 2000);
+    const s = parseInt(document.getElementById('advInterval').value || '15', 10);
+    setTimeout(() => { if (!captureStream) return; autoCapture(); autoTimer = setInterval(autoCapture, s*1000); }, 2000);
 }
 
-// ─── Chat ────────────────────────────────────────────────────────
-
-async function sendMessage() {
-    const input = document.getElementById('advInput');
-    const text = input.value.trim();
-    if (!text || isRequesting) return;
-    input.value = '';
-    advAutoResize(input);
-    appendMsg('user', text);
-    chatHistory.push({ role: 'user', text });
-    await callAdvisor(text, null, false);
-}
-
-async function sendWithSnapshot() {
+// ══════════════════════════════════
+// CHAT
+// ══════════════════════════════════
+function quickAsk(txt) {
     if (isRequesting) return;
-    const screenshot = captureFrame();
-    const input = document.getElementById('advInput');
-    const text = input.value.trim() || 'ดูภาพหน้าจอนี้และวิเคราะห์สิ่งที่เห็น';
-    input.value = '';
-    advAutoResize(input);
-    appendMsg('user', text + (screenshot ? ' 📷' : ''));
-    chatHistory.push({ role: 'user', text });
-    await callAdvisor(text, screenshot, false);
+    document.getElementById('advInput').value = '';
+    appendUserMsg(txt);
+    chatHistory.push({ role: 'user', text: txt });
+    callAI(txt, null, false);
 }
 
-async function callAdvisor(message, screenshot, isAuto, creativeImageUrl = null) {
-    isRequesting = true;
-    const btn = document.getElementById('advSendBtn');
-    btn.disabled = true;
+async function sendMsg() {
+    const inp = document.getElementById('advInput');
+    const txt = inp.value.trim();
+    if (!txt || isRequesting) return;
+    inp.value = ''; autoResize(inp);
+    appendUserMsg(txt);
+    chatHistory.push({ role: 'user', text: txt });
+    await callAI(txt, null, false);
+}
 
-    let thinkingEl = null;
+async function sendWithSnap() {
+    if (isRequesting) return;
+    const shot = captureFrame();
+    const inp = document.getElementById('advInput');
+    const txt = inp.value.trim() || 'ดูภาพหน้าจอนี้และวิเคราะห์';
+    inp.value = ''; autoResize(inp);
+    appendUserMsg(txt + (shot ? ' 📷' : ''));
+    chatHistory.push({ role: 'user', text: txt });
+    await callAI(txt, shot, false);
+}
+
+async function callAI(msg, screenshot, isAuto, creativeImgUrl = null) {
+    isRequesting = true;
+    document.getElementById('advSendBtn').disabled = true;
+
+    let thinkEl = null;
     if (!isAuto) {
-        thinkingEl = appendMsg('ai', '', 'thinking');
-        thinkingEl.innerHTML = `<div class="adv-tool-indicator"><div class="adv-tool-dot"></div>AI กำลังประมวลผล${screenshot ? ' (พร้อมภาพ)' : ''}...</div>`;
+        thinkEl = document.createElement('div');
+        thinkEl.className = 'adv-thinking';
+        const label = screenshot && !isAuto ? 'วิเคราะห์ภาพ' : 'กำลังคิด';
+        thinkEl.innerHTML = `<div class="adv-thinking-dots"><span></span><span></span><span></span></div><span>${label}...</span>`;
+        document.getElementById('advMessages').appendChild(thinkEl);
+        thinkEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
     }
 
     try {
-        const body = {
-            campaign_id:      CAMPAIGN_ID,
-            message:          message,
-            screenshot:       screenshot || undefined,
-            history:          chatHistory.slice(-12),
-            is_auto:          isAuto,
-            campaign_context: campaignCtx,
-            db_context_text:  advisorDbContext,
-        };
         const r = await fetch('/api/facebook-ads/advisor-chat', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+            body: JSON.stringify({
+                campaign_id: CAMPAIGN_ID, message: msg,
+                screenshot: screenshot || undefined,
+                history: chatHistory.slice(-12),
+                is_auto: isAuto,
+                campaign_context: campaignCtx,
+                db_context_text: advisorDbContext
+            })
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
-
-        if (thinkingEl) thinkingEl.remove();
+        if (thinkEl) thinkEl.remove();
 
         const reply = d.reply || '';
         if (isAuto) {
             if (!d.is_trivial && reply) {
-                const el = appendMsgHtml('ai', mdToHtml(reply), 'auto-flag');
-                el.insertAdjacentHTML('afterbegin', '<div class="adv-msg-badge">🔄 auto</div>');
+                appendAiMsg(reply, true, false);
                 chatHistory.push({ role: 'model', text: reply });
-                document.getElementById('advLastCheck').textContent = '⚠️ แจ้งเตือน ' + _timeNow();
+                document.getElementById('advLastCheck').textContent = '⚠️ ' + timeNow();
             } else {
-                document.getElementById('advLastCheck').textContent = '✓ ตรวจสอบแล้ว ' + _timeNow();
+                document.getElementById('advLastCheck').textContent = '✓ ' + timeNow();
             }
         } else {
-            // If this was a creative analysis, prepend the image
-            let prefix = '';
-            if (creativeImageUrl) {
-                prefix = `<img class="adv-msg-creative-img" src="${_escAttr(creativeImageUrl)}" alt="Ad Creative" onerror="this.style.display='none'">`;
-            }
-            appendMsgHtml('ai', prefix + mdToHtml(reply));
+            appendAiMsg(reply, false, true, creativeImgUrl);
             chatHistory.push({ role: 'model', text: reply });
         }
     } catch(e) {
-        if (thinkingEl) thinkingEl.remove();
-        if (!isAuto) appendMsg('ai', '❌ ' + e.message);
+        if (thinkEl) thinkEl.remove();
+        if (!isAuto) appendAiMsg('❌ ' + e.message, false, false);
     } finally {
         isRequesting = false;
-        btn.disabled = false;
+        document.getElementById('advSendBtn').disabled = false;
     }
 }
 
-// ─── Markdown → HTML ─────────────────────────────────────────────
+// ══════════════════════════════════
+// RENDER
+// ══════════════════════════════════
+function appendUserMsg(txt) {
+    const wrap = document.getElementById('advMessages');
+    document.getElementById('advWelcome')?.remove();
+    const el = document.createElement('div');
+    el.className = 'adv-msg user';
+    el.textContent = txt;
+    wrap.appendChild(el);
+    wrap.scrollTop = wrap.scrollHeight;
+}
 
+function appendAiMsg(text, isAuto, withTts, creativeImgUrl = null) {
+    const wrap = document.getElementById('advMessages');
+    document.getElementById('advWelcome')?.remove();
+    const el = document.createElement('div');
+    el.className = 'adv-msg ai' + (isAuto ? ' flagged' : '');
+
+    let inner = '';
+    if (isAuto) inner += '<div class="adv-auto-badge">🔄 auto</div>';
+    if (creativeImgUrl) inner += `<img class="adv-ai-creative-img" src="${escAttr(creativeImgUrl)}" alt="Creative" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px;border:1px solid #f0f0f0;" onerror="this.style.display='none'">`;
+    inner += mdToHtml(text);
+
+    if (withTts && window.speechSynthesis) {
+        inner += `<button class="adv-tts-btn" onclick="speakText(this.closest('.adv-msg').querySelector('[data-raw]')?.dataset.raw || ${JSON.stringify(text)}, this)" title="อ่านออกเสียง">🔊</button>`;
+    }
+
+    el.innerHTML = inner;
+    // Store raw text for TTS
+    if (withTts) {
+        const rawSpan = document.createElement('span');
+        rawSpan.dataset.raw = text;
+        rawSpan.style.display = 'none';
+        el.appendChild(rawSpan);
+    }
+
+    // Fix TTS button to read raw text
+    if (withTts && window.speechSynthesis) {
+        const ttsBtn = el.querySelector('.adv-tts-btn');
+        if (ttsBtn) {
+            const rawText = text;
+            ttsBtn.onclick = (e) => { e.stopPropagation(); speakText(rawText, ttsBtn); };
+        }
+    }
+
+    wrap.appendChild(el);
+    wrap.scrollTop = wrap.scrollHeight;
+    return el;
+}
+
+// ══════════════════════════════════
+// MARKDOWN → HTML
+// ══════════════════════════════════
 function mdToHtml(text) {
     if (!text) return '';
-    let h = _escHtml(text);
-
-    // Headers
+    let h = esc(text);
     h = h.replace(/^### (.+)$/gm, '<h4>$1</h4>');
     h = h.replace(/^## (.+)$/gm, '<h4>$1</h4>');
-
-    // Bold + italic
     h = h.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-    // Inline code
     h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Horizontal rule
     h = h.replace(/^---+$/gm, '<hr>');
-
-    // Unordered lists (collect consecutive - lines into <ul>)
-    h = h.replace(/((?:^[-•] .+\n?)+)/gm, (match) => {
-        const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-•] /, '')}</li>`).join('');
-        return `<ul>${items}</ul>`;
-    });
-
-    // Numbered lists
-    h = h.replace(/((?:^\d+\. .+\n?)+)/gm, (match) => {
-        const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
-        return `<ol style="padding-left:16px;margin:4px 0;">${items}</ol>`;
-    });
-
-    // Paragraphs (double newline)
+    h = h.replace(/((?:^[-•] .+\n?)+)/gm, m => '<ul>' + m.trim().split('\n').map(l => `<li>${l.replace(/^[-•] /, '')}</li>`).join('') + '</ul>');
+    h = h.replace(/((?:^\d+\. .+\n?)+)/gm, m => '<ol>' + m.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('') + '</ol>');
     h = h.replace(/\n{2,}/g, '</p><p>');
     h = `<p>${h}</p>`;
-
-    // Single newlines inside paragraphs
-    h = h.replace(/<\/p><p>/g, '</p><p>');
     h = h.replace(/\n/g, '<br>');
-
-    // Clean up empty paragraphs
     h = h.replace(/<p>\s*<\/p>/g, '');
     h = h.replace(/<p>(<(?:ul|ol|h4|hr))/g, '$1');
-    h = h.replace(/(<\/(?:ul|ol|h4|hr)>)<\/p>/g, '$1');
-
+    h = h.replace(/(<\/(?:ul|ol|h4)>)<\/p>/g, '$1');
     return h;
 }
 
-// ─── UI Helpers ──────────────────────────────────────────────────
-
-function appendMsg(role, text, extraClass = '') {
-    const wrap = document.getElementById('advMessages');
-    const el = document.createElement('div');
-    el.className = `adv-msg ${role}${extraClass ? ' ' + extraClass : ''}`;
-    el.textContent = text;
-    wrap.appendChild(el);
-    wrap.scrollTop = wrap.scrollHeight;
-    return el;
+// ══════════════════════════════════
+// UTILS
+// ══════════════════════════════════
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function escAttr(s) { return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function timeNow() { return new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }
+function onInputKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } }
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight,120)+'px'; }
 
-function appendMsgHtml(role, html, extraClass = '') {
-    const wrap = document.getElementById('advMessages');
-    const el = document.createElement('div');
-    el.className = `adv-msg ${role}${extraClass ? ' ' + extraClass : ''}`;
-    el.innerHTML = html;
-    wrap.appendChild(el);
-    wrap.scrollTop = wrap.scrollHeight;
-    return el;
-}
-
-function _escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function _escAttr(s) {
-    return String(s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function _timeNow() {
-    return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-}
-
-function advInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-}
-
-function advAutoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-}
-
-// ─── Boot ────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', initAdvisor);
+// Boot
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
