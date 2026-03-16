@@ -3,450 +3,552 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI ผู้ช่วย Ads — EKG Shops</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=20260228">
+    <title>AI Ads Advisor — EKG Shops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --gm-primary: #1a73e8;
+            --gm-primary-dark: #1557b0;
+            --gm-primary-container: #d2e3fc;
+            --gm-on-primary: #fff;
+            --gm-surface: #fff;
+            --gm-surface-2: #f8f9fa;
+            --gm-surface-3: #f1f3f4;
+            --gm-on-surface: #202124;
+            --gm-on-surface-2: #5f6368;
+            --gm-on-surface-3: #9aa0a6;
+            --gm-outline: #dadce0;
+            --gm-outline-v: #f1f3f4;
+            --gm-error: #d93025;
+            --gm-error-bg: #fce8e6;
+            --gm-warn: #b06000;
+            --gm-warn-bg: #fef7e0;
+            --gm-success: #188038;
+            --gm-success-bg: #e6f4ea;
+            --gm-indigo: #3c4043;
+            --gm-elev1: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+            --gm-elev2: 0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15);
+            --font: 'Google Sans', 'Roboto', 'Noto Sans Thai', system-ui, sans-serif;
+        }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-            background: #f5f5f7; color: #1d1d1f;
+            font-family: var(--font);
+            background: var(--gm-surface-2);
+            color: var(--gm-on-surface);
             height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
         }
 
-        /* ══ HEADER ══ */
-        .adv-header {
-            flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-            padding: 0 16px; height: 52px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; z-index: 50;
+        /* ══════════════════════════════════════
+           APP BAR
+        ══════════════════════════════════════ */
+        .gm-appbar {
+            flex-shrink: 0; display: flex; align-items: center; gap: 4px;
+            padding: 0 8px 0 4px; height: 56px; background: var(--gm-surface);
+            border-bottom: 1px solid var(--gm-outline); z-index: 100;
         }
-        .adv-back {
-            display: flex; align-items: center; gap: 5px;
-            color: #6366f1; font-size: 13px; font-weight: 500;
-            text-decoration: none; padding: 6px 10px; border-radius: 8px;
-            transition: background 0.15s;
+        .gm-back-btn {
+            display: flex; align-items: center; justify-content: center;
+            width: 40px; height: 40px; border-radius: 50%;
+            color: var(--gm-on-surface-2); text-decoration: none;
+            transition: background .15s; flex-shrink: 0;
         }
-        .adv-back:hover { background: #f0f0f5; }
-        .adv-title-wrap { flex: 1; min-width: 0; }
-        .adv-title-name {
-            font-size: 14px; font-weight: 700; color: #111;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        .gm-back-btn:hover { background: var(--gm-surface-3); }
+        .gm-appbar-title { flex: 1; min-width: 0; padding: 0 4px; }
+        .gm-appbar-name {
+            font-size: 15px; font-weight: 500; color: var(--gm-on-surface);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
         }
-        .adv-title-sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
-        .adv-db-badge {
-            font-size: 11px; padding: 3px 8px; border-radius: 20px;
-            background: #dcfce7; color: #166534; font-weight: 600; flex-shrink: 0;
+        .gm-appbar-sub { font-size: 11px; color: var(--gm-on-surface-3); margin-top: 1px; letter-spacing: .3px; }
+        .gm-db-badge {
+            font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px;
+            background: var(--gm-success-bg); color: var(--gm-success);
+            border: 1px solid #ceead6; flex-shrink: 0; white-space: nowrap;
         }
-        .adv-db-badge.err { background: #fef3c7; color: #92400e; }
+        .gm-db-badge.err { background: var(--gm-warn-bg); color: var(--gm-warn); border-color: #fdd663; }
 
-        /* ══ CONTROL BAR ══ */
-        .adv-ctrl-bar {
-            flex-shrink: 0; background: #fff;
-            border-bottom: 1px solid #f0f0f0;
-            padding: 8px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-        }
-        .adv-dot {
-            width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;
-            flex-shrink: 0; transition: background 0.3s;
-        }
-        .adv-dot.live { background: #22c55e; animation: pulse-live 2s infinite; }
-        @keyframes pulse-live { 0%,100%{box-shadow:0 0 0 3px #22c55e22;} 50%{box-shadow:0 0 0 6px #22c55e11;} }
-        .adv-ctrl-label { font-size: 12px; color: #6b7280; }
-        .adv-ctrl-label.live { color: #111; font-weight: 500; }
-        .adv-btn {
-            padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-            border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-        }
-        .btn-green { background: #22c55e; color: #fff; }
-        .btn-green:hover { background: #16a34a; }
-        .btn-red { background: #ef4444; color: #fff; }
-        .btn-red:hover { background: #dc2626; }
-        .adv-interval {
-            padding: 4px 8px; border-radius: 7px; border: 1px solid #e5e7eb;
-            font-size: 12px; background: #f9fafb; color: #374151;
-        }
-        .adv-last-check { margin-left: auto; font-size: 11px; color: #9ca3af; white-space: nowrap; }
-        .adv-brief-chips {
-            width: 100%; display: none; align-items: center; flex-wrap: wrap; gap: 5px;
-            padding-top: 6px; border-top: 1px solid #f0f0f0; margin-top: 4px;
-        }
-        .adv-brief-chips.show { display: flex; }
-        .adv-brief-label { font-size: 11px; color: #6366f1; font-weight: 700; }
-        .adv-chip {
-            font-size: 11px; padding: 2px 8px; border-radius: 20px;
-            background: #f0f0ff; color: #4338ca; border: 1px solid #e0e7ff;
-        }
-
-        /* ══ CAMPAIGN METRICS BAR ══ */
+        /* ══════════════════════════════════════
+           METRICS STRIP
+        ══════════════════════════════════════ */
         .adv-metrics-bar {
             flex-shrink: 0; display: none;
-            padding: 7px 16px; background: #f8f7ff;
-            border-bottom: 1px solid #e9e6ff;
-            overflow-x: auto; scrollbar-width: none; gap: 12px; align-items: center;
+            background: var(--gm-surface);
+            border-bottom: 1px solid var(--gm-outline);
+            padding: 0 8px; overflow-x: auto; scrollbar-width: none;
+            gap: 0; align-items: stretch; min-height: 56px;
         }
         .adv-metrics-bar::-webkit-scrollbar { display: none; }
         .adv-metrics-bar.show { display: flex; }
-        .adv-metric-item { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: 1px; }
-        .adv-metric-val { font-size: 13px; font-weight: 700; color: #1e1b4b; line-height: 1.2; }
-        .adv-metric-lbl { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
-        .adv-metric-div { width: 1px; height: 24px; background: #ddd6fe; flex-shrink: 0; }
-        .adv-status-pill {
-            font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
+        .adv-metrics-loading {
+            display: flex; align-items: center; padding: 0 16px;
+            font-size: 12px; color: var(--gm-on-surface-3);
         }
-        .adv-status-pill.active { background: #dcfce7; color: #16a34a; }
-        .adv-status-pill.paused { background: #fef9c3; color: #854d0e; }
-        .adv-status-pill.other  { background: #f3f4f6; color: #6b7280; }
-        .adv-metric-warn { color: #dc2626 !important; }
-        .adv-metrics-loading { font-size: 11px; color: #9ca3af; }
+        .adv-status-pill {
+            display: flex; align-items: center; flex-shrink: 0;
+            font-size: 11px; font-weight: 600; padding: 0 12px;
+            white-space: nowrap;
+        }
+        .adv-status-pill.active { color: var(--gm-success); }
+        .adv-status-pill.paused { color: var(--gm-warn); }
+        .adv-status-pill.other  { color: var(--gm-on-surface-3); }
+        .adv-metric-div { width: 1px; background: var(--gm-outline); flex-shrink: 0; margin: 10px 0; }
+        .adv-metric-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            flex-shrink: 0; padding: 8px 14px; gap: 1px;
+        }
+        .adv-metric-val { font-size: 14px; font-weight: 600; color: var(--gm-on-surface); line-height: 1.2; }
+        .adv-metric-lbl { font-size: 9.5px; color: var(--gm-on-surface-3); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+        .adv-metric-warn { color: var(--gm-error) !important; }
 
-        .adv-preview-wrap { width: 100%; display: none; margin-top: 6px; }
+        /* ══════════════════════════════════════
+           CAPTURE CARD
+        ══════════════════════════════════════ */
+        .gm-capture-card {
+            flex-shrink: 0; background: var(--gm-surface);
+            border-bottom: 1px solid var(--gm-outline);
+            padding: 8px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .gm-live-indicator {
+            display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+        }
+        .adv-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--gm-outline);
+            flex-shrink: 0; transition: background .3s;
+        }
+        .adv-dot.live { background: #34a853; animation: gm-pulse 2s infinite; }
+        @keyframes gm-pulse {
+            0%,100% { box-shadow: 0 0 0 3px #34a85322; }
+            50%      { box-shadow: 0 0 0 6px #34a85311; }
+        }
+        .adv-ctrl-label {
+            font-size: 12px; color: var(--gm-on-surface-3); white-space: nowrap;
+        }
+        .adv-ctrl-label.live { color: var(--gm-success); font-weight: 500; }
+        .gm-capture-btns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .adv-btn {
+            display: flex; align-items: center; gap: 5px;
+            padding: 6px 16px; border-radius: 20px; font-family: var(--font);
+            font-size: 12px; font-weight: 600; border: none; cursor: pointer;
+            transition: box-shadow .15s, background .15s; white-space: nowrap;
+        }
+        .btn-green {
+            background: #34a853; color: #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,.2);
+        }
+        .btn-green:hover { background: #2d9248; box-shadow: var(--gm-elev1); }
+        .btn-red {
+            background: var(--gm-error); color: #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,.2);
+        }
+        .btn-red:hover { background: #b3261e; }
+        .adv-interval {
+            padding: 5px 10px; border-radius: 20px;
+            border: 1px solid var(--gm-outline); background: var(--gm-surface);
+            font-family: var(--font); font-size: 12px; color: var(--gm-on-surface);
+            cursor: pointer; outline: none;
+        }
+        .adv-interval:focus { border-color: var(--gm-primary); }
+        .adv-last-check { margin-left: auto; font-size: 11px; color: var(--gm-on-surface-3); white-space: nowrap; }
+        .adv-preview-wrap { width: 100%; display: none; margin-top: 4px; }
         .adv-preview-wrap.show { display: block; }
         #advPreviewVideo {
-            width: 100%; max-height: 100px; object-fit: contain;
-            border-radius: 10px; background: #111;
+            width: 100%; max-height: 90px; object-fit: contain;
+            border-radius: 8px; background: #202124;
+            border: 1px solid var(--gm-outline);
+        }
+        .adv-brief-chips {
+            width: 100%; display: none; align-items: center; flex-wrap: wrap; gap: 6px;
+            padding-top: 8px; border-top: 1px solid var(--gm-outline-v); margin-top: 4px;
+        }
+        .adv-brief-chips.show { display: flex; }
+        .adv-brief-label { font-size: 11px; color: var(--gm-primary); font-weight: 600; }
+        .adv-chip {
+            font-size: 11px; padding: 3px 10px; border-radius: 20px;
+            background: var(--gm-primary-container); color: var(--gm-primary);
+            border: 1px solid #a8c7fa; font-weight: 500;
         }
 
-        /* ══ GALLERY ══ */
-        .adv-gallery { flex-shrink: 0; background: #fff; border-bottom: 1px solid #f0f0f0; }
-        .adv-gallery-hdr {
-            display: flex; align-items: center; gap: 6px;
-            padding: 7px 16px; cursor: pointer; user-select: none;
+        /* ══════════════════════════════════════
+           AD GALLERY
+        ══════════════════════════════════════ */
+        .adv-gallery {
+            flex-shrink: 0; background: var(--gm-surface);
+            border-bottom: 1px solid var(--gm-outline);
         }
-        .adv-gallery-hdr:hover { background: #fafafa; }
-        .adv-gallery-hdr-title { font-size: 12px; font-weight: 600; color: #374151; }
-        .adv-gallery-hdr-count { font-size: 11px; color: #9ca3af; }
-        .adv-gallery-chevron { margin-left: auto; font-size: 10px; color: #9ca3af; transition: transform 0.2s; }
+        .adv-gallery-hdr {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 16px; cursor: pointer; user-select: none;
+            transition: background .15s;
+        }
+        .adv-gallery-hdr:hover { background: var(--gm-surface-3); }
+        .adv-gallery-hdr-icon { font-size: 14px; }
+        .adv-gallery-hdr-title { font-size: 12px; font-weight: 500; color: var(--gm-on-surface); }
+        .adv-gallery-hdr-count { font-size: 11px; color: var(--gm-on-surface-3); }
+        .adv-gallery-chevron {
+            margin-left: auto; color: var(--gm-on-surface-3);
+            transition: transform .2s; flex-shrink: 0;
+        }
         .adv-gallery.open .adv-gallery-chevron { transform: rotate(180deg); }
         .adv-gallery-body {
             display: none; gap: 10px; overflow-x: auto;
-            padding: 0 12px 12px; scrollbar-width: thin; scrollbar-color: #e5e7eb transparent;
+            padding: 4px 12px 12px; scrollbar-width: thin; scrollbar-color: var(--gm-outline) transparent;
         }
         .adv-gallery.open .adv-gallery-body { display: flex; }
-        .adv-gallery-body::-webkit-scrollbar { height: 3px; }
-        .adv-gallery-body::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 2px; }
+        .adv-gallery-body::-webkit-scrollbar { height: 4px; }
+        .adv-gallery-body::-webkit-scrollbar-thumb { background: var(--gm-outline); border-radius: 2px; }
         .adv-ad-card {
-            flex-shrink: 0; width: 130px; border: 1px solid #f0f0f0; border-radius: 12px;
-            overflow: hidden; background: #fafafa; transition: box-shadow 0.15s, transform 0.15s; cursor: pointer;
+            flex-shrink: 0; width: 120px; border: 1px solid var(--gm-outline);
+            border-radius: 12px; overflow: hidden; background: var(--gm-surface);
+            transition: box-shadow .15s, transform .15s; cursor: pointer;
         }
-        .adv-ad-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); transform: translateY(-2px); }
-        .adv-ad-card.selected { border-color: #6366f1; box-shadow: 0 0 0 2px #6366f133; }
-        .adv-ad-thumb { width: 100%; height: 76px; object-fit: cover; display: block; background: #e5e7eb; }
+        .adv-ad-card:hover { box-shadow: var(--gm-elev1); transform: translateY(-1px); }
+        .adv-ad-card.selected { border-color: var(--gm-primary); box-shadow: 0 0 0 2px #d2e3fc; }
+        .adv-ad-thumb { width: 100%; height: 72px; object-fit: cover; display: block; background: var(--gm-surface-3); }
         .adv-ad-no-img {
-            width: 100%; height: 76px;
-            background: linear-gradient(135deg, #e0e7ff, #f0f0ff);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 22px; color: #a5b4fc;
+            width: 100%; height: 72px; background: var(--gm-primary-container);
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
         }
         .adv-ad-info { padding: 6px 8px 8px; }
-        .adv-ad-name { font-size: 10px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+        .adv-ad-name { font-size: 10px; font-weight: 500; color: var(--gm-on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
         .adv-ad-status { font-size: 10px; font-weight: 600; margin-bottom: 6px; }
-        .s-active { color: #22c55e; } .s-paused { color: #f59e0b; } .s-other { color: #9ca3af; }
+        .s-active { color: var(--gm-success); } .s-paused { color: var(--gm-warn); } .s-other { color: var(--gm-on-surface-3); }
         .adv-analyze-btn {
-            width: 100%; padding: 4px; border-radius: 7px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff; border: none; font-size: 10px; font-weight: 700;
-            cursor: pointer; transition: opacity 0.15s;
+            width: 100%; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--gm-primary);
+            background: transparent; color: var(--gm-primary); font-family: var(--font);
+            font-size: 10px; font-weight: 600; cursor: pointer; transition: background .15s;
         }
-        .adv-analyze-btn:hover { opacity: 0.88; }
-        .adv-analyze-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
-        .adv-gallery-info { padding: 10px 4px; font-size: 12px; color: #9ca3af; white-space: nowrap; }
-        @keyframes shimmer { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+        .adv-analyze-btn:hover { background: var(--gm-primary-container); }
+        .adv-analyze-btn:disabled { border-color: var(--gm-outline); color: var(--gm-on-surface-3); cursor: not-allowed; background: transparent; }
+        .adv-gallery-info { padding: 12px 4px; font-size: 12px; color: var(--gm-on-surface-3); white-space: nowrap; }
+        @keyframes shimmer { 0%,100%{opacity:1;} 50%{opacity:.4;} }
         .adv-loading { animation: shimmer 1s infinite; }
 
-        /* ══ MESSAGES ══ */
+        /* ══════════════════════════════════════
+           MESSAGES
+        ══════════════════════════════════════ */
         #advMessages {
             flex: 1; overflow-y: auto;
             padding: 20px 16px 12px;
-            display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth;
+            display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth;
+            background: var(--gm-surface-2);
         }
+        #advMessages::-webkit-scrollbar { width: 4px; }
+        #advMessages::-webkit-scrollbar-thumb { background: var(--gm-outline); border-radius: 2px; }
         .adv-welcome {
-            align-self: center;
-            background: linear-gradient(135deg, #f0f0ff 0%, #faf0ff 100%);
-            border: 1px solid #e0e7ff; border-radius: 16px; padding: 16px 18px;
-            font-size: 13px; line-height: 1.7; color: #374151; max-width: 95%; text-align: center;
+            align-self: center; max-width: 96%;
+            background: var(--gm-surface); border: 1px solid var(--gm-outline);
+            border-radius: 16px; padding: 20px 18px; text-align: center;
+            box-shadow: var(--gm-elev1);
         }
-        .adv-welcome strong { color: #4f46e5; }
+        .adv-welcome-icon { font-size: 36px; margin-bottom: 10px; }
+        .adv-welcome-title { font-size: 15px; font-weight: 600; color: var(--gm-on-surface); margin-bottom: 6px; }
+        .adv-welcome-desc { font-size: 12px; color: var(--gm-on-surface-2); line-height: 1.8; }
+        .adv-welcome-desc strong { color: var(--gm-primary); font-weight: 600; }
         .adv-msg.user {
             align-self: flex-end;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff; padding: 10px 14px;
-            border-radius: 18px 18px 4px 18px;
-            font-size: 13px; line-height: 1.6; max-width: 86%;
-            white-space: pre-wrap; box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+            background: var(--gm-primary); color: #fff;
+            padding: 10px 15px; border-radius: 20px 20px 4px 20px;
+            font-size: 13px; line-height: 1.55; max-width: 82%;
+            white-space: pre-wrap; box-shadow: 0 1px 3px rgba(26,115,232,.35);
         }
         .adv-msg.ai {
             align-self: flex-start; position: relative;
-            background: #fff; color: #1f2937; padding: 12px 14px 28px;
-            border-radius: 18px 18px 18px 4px;
-            font-size: 13px; line-height: 1.7; max-width: 92%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
+            background: var(--gm-surface); color: var(--gm-on-surface);
+            padding: 12px 14px 30px; border-radius: 4px 20px 20px 20px;
+            font-size: 13px; line-height: 1.7; max-width: 93%;
+            box-shadow: var(--gm-elev1); border: 1px solid var(--gm-outline);
         }
-        .adv-msg.ai.flagged { background: #fffbeb; }
+        .adv-msg.ai.flagged { border-color: #fdd663; background: var(--gm-warn-bg); }
         .adv-auto-badge {
-            display: inline-block; font-size: 10px; font-weight: 700;
-            padding: 1px 6px; border-radius: 4px;
-            background: #fef3c7; color: #d97706; margin-bottom: 6px;
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+            background: var(--gm-warn-bg); color: var(--gm-warn); border: 1px solid #fdd663;
+            margin-bottom: 8px;
         }
         .adv-thinking {
-            align-self: flex-start; display: flex; align-items: center; gap: 8px;
-            background: #f9fafb; border: 1px solid #f0f0f0;
-            border-radius: 14px; padding: 10px 14px; font-size: 12px; color: #6b7280;
+            align-self: flex-start; display: flex; align-items: center; gap: 10px;
+            background: var(--gm-surface); border: 1px solid var(--gm-outline);
+            border-radius: 20px; padding: 10px 14px; font-size: 12px; color: var(--gm-on-surface-2);
+            box-shadow: var(--gm-elev1);
         }
         .adv-thinking-dots { display: flex; gap: 4px; }
         .adv-thinking-dots span {
-            width: 6px; height: 6px; border-radius: 50%; background: #6366f1;
-            animation: thinking-bounce 1.2s infinite;
+            width: 6px; height: 6px; border-radius: 50%; background: var(--gm-primary);
+            animation: gm-bounce 1.2s infinite;
         }
-        .adv-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
-        .adv-thinking-dots span:nth-child(3) { animation-delay: 0.30s; }
-        @keyframes thinking-bounce { 0%,60%,100%{transform:translateY(0);opacity:0.6;} 30%{transform:translateY(-5px);opacity:1;} }
+        .adv-thinking-dots span:nth-child(2) { animation-delay: .15s; }
+        .adv-thinking-dots span:nth-child(3) { animation-delay: .30s; }
+        @keyframes gm-bounce { 0%,80%,100%{transform:scale(0.7);opacity:.5;} 40%{transform:scale(1);opacity:1;} }
 
-        /* TTS button */
+        /* AI message internals */
+        .adv-msg.ai h4 { font-size: 13px; font-weight: 600; margin: 8px 0 4px; color: var(--gm-on-surface); }
+        .adv-msg.ai p { margin-bottom: 6px; }
+        .adv-msg.ai ul, .adv-msg.ai ol { padding-left: 18px; margin: 4px 0; }
+        .adv-msg.ai li { margin-bottom: 3px; }
+        .adv-msg.ai code { background: var(--gm-surface-3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+        .adv-msg.ai hr { border: none; border-top: 1px solid var(--gm-outline); margin: 8px 0; }
+        .adv-msg.ai strong { font-weight: 600; }
         .adv-tts-btn {
-            position: absolute; bottom: 7px; right: 10px;
-            width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
-            background: #f3f4f6; color: #6b7280;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 11px; transition: all 0.15s; opacity: 0;
+            position: absolute; right: 8px; bottom: 6px;
+            background: none; border: none; cursor: pointer;
+            font-size: 14px; padding: 3px; border-radius: 50%;
+            color: var(--gm-on-surface-3); transition: background .15s;
         }
-        .adv-msg.ai:hover .adv-tts-btn { opacity: 1; }
-        .adv-tts-btn:hover { background: #e0e7ff; color: #4f46e5; }
-        .adv-tts-btn.playing { opacity:1; background:#ede9fe; color:#7c3aed; animation:tts-pulse 1.5s infinite; }
-        @keyframes tts-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
+        .adv-tts-btn:hover { background: var(--gm-surface-3); }
+        .adv-tts-btn.playing { color: var(--gm-primary); }
 
-        /* Markdown */
-        .adv-msg.ai p { margin-bottom: 8px; }
-        .adv-msg.ai p:last-child { margin-bottom: 0; }
-        .adv-msg.ai strong { font-weight: 700; color: #111827; }
-        .adv-msg.ai h4 { font-size: 13px; font-weight: 700; color: #111827; margin: 10px 0 5px; }
-        .adv-msg.ai ul,
-        .adv-msg.ai ol { padding-left: 18px; margin: 5px 0 8px; }
-        .adv-msg.ai li { margin-bottom: 4px; }
-        .adv-msg.ai code {
-            font-family: 'SF Mono', monospace; font-size: 12px;
-            background: #f3f4f6; border-radius: 4px; padding: 1px 5px; color: #374151;
-        }
-        .adv-msg.ai hr { border: none; border-top: 1px solid #f0f0f0; margin: 10px 0; }
-
-        /* ══ ACTION CARDS ══ */
-        .adv-action-cards {
-            display: flex; flex-direction: column; gap: 8px;
-            margin-top: 10px; max-width: 92%; align-self: flex-start;
-        }
+        /* ══════════════════════════════════════
+           ACTION CARDS
+        ══════════════════════════════════════ */
+        .adv-action-cards { display: flex; flex-direction: column; gap: 8px; max-width: 93%; }
         .adv-action-card {
-            background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
-            padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            background: var(--gm-surface); border: 1px solid var(--gm-outline);
+            border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+            box-shadow: var(--gm-elev1);
         }
-        .adv-action-card.type-generate { border-color: #c4b5fd; background: #fdf4ff; }
-        .adv-action-card.type-pause    { border-color: #fca5a5; background: #fff5f5; }
-        .adv-action-card.type-copy     { border-color: #93c5fd; background: #f0f9ff; }
-        .adv-action-card-label {
-            font-size: 13px; font-weight: 700; color: #111; margin-bottom: 4px;
+        .adv-action-card.critical { border-left: 3px solid var(--gm-error); border-color: var(--gm-error); }
+        .adv-action-card.high     { border-left: 3px solid #f9ab00; }
+        .adv-action-card.medium   { border-left: 3px solid var(--gm-primary); }
+        .adv-action-card.low      { border-left: 3px solid var(--gm-success); }
+        .adv-action-header { display: flex; align-items: center; gap: 8px; }
+        .adv-action-sev {
+            font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; flex-shrink: 0;
         }
-        .adv-action-card-reason { font-size: 11px; color: #6b7280; margin-bottom: 10px; line-height: 1.5; }
-        .adv-action-card-preview {
-            display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
-        }
-        .adv-action-preview-item {
-            background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 8px;
-            padding: 6px 10px; font-size: 11px; color: #374151;
-            display: flex; flex-direction: column; gap: 2px; max-width: 200px;
-        }
-        .adv-action-preview-item span:first-child { font-weight: 700; color: #6b7280; font-size: 10px; }
+        .sev-critical { background: var(--gm-error-bg); color: var(--gm-error); }
+        .sev-high     { background: #fef7e0; color: #b06000; }
+        .sev-medium   { background: var(--gm-primary-container); color: var(--gm-primary-dark); }
+        .sev-low      { background: var(--gm-success-bg); color: var(--gm-success); }
+        .adv-action-issue { font-size: 12px; font-weight: 500; color: var(--gm-on-surface); flex: 1; }
+        .adv-action-body { font-size: 12px; color: var(--gm-on-surface-2); line-height: 1.6; }
+        .adv-action-btns { display: flex; flex-wrap: wrap; gap: 6px; }
         .adv-action-btn {
-            padding: 7px 16px; border-radius: 9px; font-size: 12px; font-weight: 700;
-            border: none; cursor: pointer; transition: all 0.15s; margin-right: 6px;
+            padding: 6px 14px; border-radius: 20px; font-family: var(--font);
+            font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s;
+            white-space: nowrap;
         }
-        .adv-action-btn.primary {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
-        }
-        .adv-action-btn.primary:hover { opacity: 0.88; }
-        .adv-action-btn.secondary {
-            background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
-        }
-        .adv-action-btn.secondary:hover { background: #e5e7eb; }
-        .adv-action-btn.danger { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-        .adv-action-btn.danger:hover { background: #fecaca; }
-        .adv-action-btn.success { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
-        .adv-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .adv-action-btn.api { background: var(--gm-primary); color: #fff; border: none; }
+        .adv-action-btn.api:hover { background: var(--gm-primary-dark); }
+        .adv-action-btn.url { background: transparent; color: var(--gm-primary); border: 1px solid var(--gm-primary); }
+        .adv-action-btn.url:hover { background: var(--gm-primary-container); }
+        .adv-action-btn:disabled { background: var(--gm-surface-3); color: var(--gm-on-surface-3); border-color: transparent; cursor: not-allowed; }
+        .adv-action-done { font-size: 11px; color: var(--gm-success); font-weight: 600; }
 
-        /* ══ QUICK SUGGESTIONS ══ */
+        /* ══════════════════════════════════════
+           QUICK ACTIONS (Chips)
+        ══════════════════════════════════════ */
         .adv-suggestions {
-            flex-shrink: 0; display: flex; gap: 6px;
-            padding: 8px 16px 2px; overflow-x: auto; background: transparent; scrollbar-width: none;
+            flex-shrink: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+            padding: 8px 12px; background: var(--gm-surface);
+            border-top: 1px solid var(--gm-outline);
         }
         .adv-suggestions::-webkit-scrollbar { display: none; }
         .adv-sug-btn {
-            flex-shrink: 0; padding: 6px 13px; border-radius: 20px;
-            border: 1px solid #e5e7eb; background: #fff; color: #374151;
-            font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
-            transition: all 0.12s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+            padding: 6px 14px; border-radius: 20px; font-family: var(--font);
+            font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s;
+            white-space: nowrap;
+            background: var(--gm-surface); color: var(--gm-on-surface);
+            border: 1px solid var(--gm-outline);
         }
-        .adv-sug-btn:hover { background: #f0f0ff; border-color: #6366f1; color: #4f46e5; }
+        .adv-sug-btn:hover { background: var(--gm-primary-container); border-color: var(--gm-primary); color: var(--gm-primary-dark); }
+        .adv-sug-btn:last-child {
+            background: var(--gm-primary); color: #fff; border-color: transparent;
+        }
+        .adv-sug-btn:last-child:hover { background: var(--gm-primary-dark); }
 
-        /* ══ INPUT BAR ══ */
+        /* ══════════════════════════════════════
+           INPUT BAR
+        ══════════════════════════════════════ */
         .adv-input-wrap {
-            flex-shrink: 0; padding: 10px 16px 14px;
-            background: #fff; border-top: 1px solid #f0f0f0;
+            flex-shrink: 0; padding: 8px 12px 10px;
+            background: var(--gm-surface); border-top: 1px solid var(--gm-outline);
         }
         .adv-input-row {
             display: flex; align-items: flex-end; gap: 8px;
-            background: #f9fafb; border: 1.5px solid #e5e7eb;
-            border-radius: 16px; padding: 6px 6px 6px 12px; transition: border-color 0.15s;
+            background: var(--gm-surface-2); border: 1.5px solid var(--gm-outline);
+            border-radius: 28px; padding: 6px 6px 6px 16px;
+            transition: border-color .2s, box-shadow .2s;
         }
         .adv-input-row:focus-within {
-            border-color: #6366f1; background: #fff;
-            box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+            border-color: var(--gm-primary);
+            box-shadow: 0 0 0 3px rgba(26,115,232,.12);
         }
         #advInput {
-            flex: 1; resize: none; border: none; outline: none;
-            background: transparent; font-size: 14px; font-family: inherit;
-            line-height: 1.5; max-height: 120px; overflow-y: auto; color: #111827;
+            flex: 1; border: none; background: transparent; outline: none; resize: none;
+            font-family: var(--font); font-size: 14px; color: var(--gm-on-surface);
+            line-height: 1.5; max-height: 120px; padding: 3px 0;
+            scrollbar-width: thin;
         }
-        #advInput::placeholder { color: #9ca3af; }
+        #advInput::placeholder { color: var(--gm-on-surface-3); }
         .adv-input-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .adv-icon-btn {
-            width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: transparent; color: var(--gm-on-surface-2);
             display: flex; align-items: center; justify-content: center;
-            font-size: 14px; transition: all 0.15s; background: transparent; color: #6b7280;
+            cursor: pointer; transition: background .15s;
         }
-        .adv-icon-btn:hover { background: #f0f0f5; color: #4f46e5; }
+        .adv-icon-btn:hover { background: var(--gm-surface-3); }
         .adv-send-btn {
-            width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: var(--gm-primary); color: #fff;
             display: flex; align-items: center; justify-content: center;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; transition: opacity 0.15s;
+            cursor: pointer; transition: background .15s, box-shadow .15s;
+            box-shadow: 0 1px 3px rgba(26,115,232,.4);
         }
-        .adv-send-btn:hover { opacity: 0.88; }
-        .adv-send-btn:disabled { background: #e5e7eb; cursor: not-allowed; }
+        .adv-send-btn:hover { background: var(--gm-primary-dark); }
+        .adv-send-btn:disabled { background: var(--gm-outline); box-shadow: none; cursor: not-allowed; }
 
-        /* ══════════════════════════════════════════════════
+        /* ══════════════════════════════════════
            CONTENT STUDIO MODAL
-        ══════════════════════════════════════════════════ */
+        ══════════════════════════════════════ */
         .studio-overlay {
-            position: fixed; inset: 0; z-index: 200;
-            background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
-            display: none; align-items: flex-end;
+            position: fixed; inset: 0; z-index: 9000;
+            background: rgba(32,33,36,.5);
+            display: none; align-items: flex-end; justify-content: center;
         }
-        .studio-overlay.open { display: flex; }
         .studio-panel {
-            width: 100%; max-height: 92dvh;
-            background: #fff; border-radius: 24px 24px 0 0;
-            display: flex; flex-direction: column;
-            animation: slide-up 0.3s ease;
+            background: var(--gm-surface); border-radius: 28px 28px 0 0;
+            width: 100%; max-height: 88dvh; display: flex; flex-direction: column;
+            box-shadow: 0 -4px 24px rgba(0,0,0,.15);
         }
-        @keyframes slide-up { from{transform:translateY(100%);} to{transform:translateY(0);} }
         .studio-handle {
-            width: 40px; height: 4px; border-radius: 2px;
-            background: #e5e7eb; margin: 12px auto 0;
+            width: 36px; height: 4px; background: var(--gm-outline);
+            border-radius: 2px; margin: 10px auto 0;
         }
         .studio-header {
-            display: flex; align-items: center; gap: 10px;
-            padding: 14px 18px 12px; border-bottom: 1px solid #f0f0f0;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px 12px; border-bottom: 1px solid var(--gm-outline);
         }
-        .studio-title { font-size: 16px; font-weight: 700; flex: 1; }
+        .studio-title { font-size: 16px; font-weight: 600; color: var(--gm-on-surface); flex: 1; }
         .studio-close {
-            width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
-            background: #f3f4f6; color: #374151; font-size: 16px; line-height: 30px; text-align: center;
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: var(--gm-surface-3); color: var(--gm-on-surface-2);
+            font-size: 14px; cursor: pointer; transition: background .15s;
+            display: flex; align-items: center; justify-content: center;
         }
-        .studio-close:hover { background: #e5e7eb; }
-        .studio-body { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
-        .studio-section-label { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 2px; }
-        .studio-tone-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+        .studio-close:hover { background: var(--gm-outline); }
+        .studio-body { overflow-y: auto; padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 16px; }
+        .studio-section-label { font-size: 12px; font-weight: 600; color: var(--gm-on-surface-2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+        .studio-tone-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .studio-tone-opt {
-            border: 1.5px solid #e5e7eb; border-radius: 10px;
-            padding: 9px 8px; text-align: center; cursor: pointer;
-            font-size: 12px; font-weight: 600; color: #374151;
-            transition: all 0.15s; background: #fafafa; line-height: 1.4;
+            padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--gm-outline);
+            cursor: pointer; font-family: var(--font); font-size: 13px; font-weight: 500;
+            color: var(--gm-on-surface); background: var(--gm-surface);
+            transition: all .15s; line-height: 1.4;
         }
-        .studio-tone-opt:hover { border-color: #a5b4fc; background: #f5f3ff; }
-        .studio-tone-opt.active { border-color: #6366f1; background: #ede9fe; color: #4f46e5; }
-        .studio-tone-all {
-            grid-column: 1/-1; border-color: #6366f1;
-            background: linear-gradient(135deg,#f5f3ff,#ede9fe); color:#4f46e5;
-        }
-        .studio-tone-all.active { background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border-color:transparent; }
+        .studio-tone-opt:hover { border-color: var(--gm-primary); background: var(--gm-primary-container); color: var(--gm-primary-dark); }
+        .studio-tone-opt.active { border-color: var(--gm-primary); background: var(--gm-primary-container); color: var(--gm-primary-dark); }
+        .studio-tone-all { grid-column: 1 / -1; text-align: center; }
+        .studio-tone-all.active { background: var(--gm-primary); color: #fff; border-color: var(--gm-primary); }
         .studio-gen-btn {
-            width: 100%; padding: 14px; border-radius: 14px; border: none; cursor: pointer;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff; font-size: 15px; font-weight: 700;
-            transition: opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 14px; border-radius: 28px; border: none; cursor: pointer;
+            background: var(--gm-primary); color: #fff; font-family: var(--font);
+            font-size: 15px; font-weight: 600; transition: background .15s, box-shadow .15s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 2px 6px rgba(26,115,232,.35);
         }
-        .studio-gen-btn:hover { opacity: 0.9; }
-        .studio-gen-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+        .studio-gen-btn:hover { background: var(--gm-primary-dark); box-shadow: var(--gm-elev2); }
+        .studio-gen-btn:disabled { background: var(--gm-surface-3); color: var(--gm-on-surface-3); box-shadow: none; cursor: not-allowed; }
         .studio-content-cards { display: flex; flex-direction: column; gap: 14px; }
         .studio-content-card {
-            border: 1.5px solid #e5e7eb; border-radius: 14px;
-            background: #fafafa; overflow: hidden; transition: border-color 0.15s;
+            border: 1.5px solid var(--gm-outline); border-radius: 16px;
+            background: var(--gm-surface); overflow: hidden; transition: border-color .15s, box-shadow .15s;
         }
-        .studio-content-card:hover { border-color: #a5b4fc; }
+        .studio-content-card:hover { border-color: var(--gm-primary); box-shadow: var(--gm-elev1); }
         .studio-card-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 13px; background: linear-gradient(135deg,#f5f3ff,#ede9fe);
-            border-bottom: 1px solid #e5e7eb;
+            padding: 11px 14px; background: var(--gm-primary-container);
+            border-bottom: 1px solid var(--gm-outline);
         }
-        .studio-card-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #4f46e5; }
+        .studio-card-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--gm-primary-dark); }
         .studio-copy-all-btn {
-            font-size: 11px; font-weight: 700; color: #4f46e5; background: #fff;
-            border: 1px solid #c4b5fd; border-radius: 6px; padding: 3px 9px; cursor: pointer;
-            font-family: inherit; transition: all 0.15s;
+            font-size: 11px; font-weight: 600; color: var(--gm-primary-dark);
+            background: var(--gm-surface); border: 1px solid #a8c7fa; border-radius: 20px;
+            padding: 3px 10px; cursor: pointer; font-family: var(--font); transition: all .15s;
         }
-        .studio-copy-all-btn:hover { background: #ede9fe; }
-        .studio-copy-all-btn.copied { color: #16a34a; border-color: #86efac; background: #f0fdf4; }
-        .studio-card-body { padding: 10px 13px; display: flex; flex-direction: column; gap: 9px; }
-        .studio-field-row { display: flex; flex-direction: column; gap: 3px; }
+        .studio-copy-all-btn:hover { background: var(--gm-primary); color: #fff; border-color: var(--gm-primary); }
+        .studio-copy-all-btn.copied { color: var(--gm-success); border-color: #ceead6; background: var(--gm-success-bg); }
+        .studio-card-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+        .studio-field-row { display: flex; flex-direction: column; gap: 4px; }
         .studio-field-label {
-            font-size: 9.5px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.4px;
+            font-size: 10px; font-weight: 600; color: var(--gm-on-surface-3);
+            text-transform: uppercase; letter-spacing: .5px;
             display: flex; align-items: center; justify-content: space-between;
         }
         .studio-field-copy {
-            font-size: 10px; color: #6366f1; cursor: pointer; font-weight: 700;
-            background: none; border: none; font-family: inherit; padding: 0; transition: color 0.15s;
+            font-size: 10px; font-weight: 600; color: var(--gm-primary); cursor: pointer;
+            background: none; border: none; font-family: var(--font); padding: 0; transition: color .15s;
         }
-        .studio-field-copy:hover { color: #4f46e5; }
-        .studio-field-copy.copied { color: #16a34a; }
+        .studio-field-copy:hover { color: var(--gm-primary-dark); }
+        .studio-field-copy.copied { color: var(--gm-success); }
         .studio-field-val {
-            font-size: 12.5px; color: #111; line-height: 1.55;
-            background: #fff; border: 1px solid #f0f0f0; border-radius: 7px; padding: 7px 10px;
+            font-size: 13px; color: var(--gm-on-surface); line-height: 1.55;
+            background: var(--gm-surface-2); border: 1px solid var(--gm-outline);
+            border-radius: 8px; padding: 8px 12px;
         }
-        .studio-field-val.hook { font-weight: 700; color: #1e1b4b; font-size: 13.5px; }
-        .studio-hashtags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .studio-field-val.hook { font-weight: 600; font-size: 14px; }
+        .studio-hashtags { display: flex; flex-wrap: wrap; gap: 6px; }
         .studio-hashtag {
-            background: #ede9fe; color: #4f46e5; border-radius: 20px;
-            padding: 2px 9px; font-size: 11px; font-weight: 600;
+            background: var(--gm-primary-container); color: var(--gm-primary-dark);
+            border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 500;
         }
+        .content-tone-label {
+            font-size: 11px; color: var(--gm-on-surface-3); font-weight: 500;
+        }
+
+        /* ══════════════════════════════════════
+           MISC
+        ══════════════════════════════════════ */
+        #advMessages .adv-msg.ai img { max-width: 100%; border-radius: 10px; display: block; margin-bottom: 8px; border: 1px solid var(--gm-outline); }
     </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="adv-header">
-    <a class="adv-back" href="/admin/facebook-ads" target="_self">
-        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        กลับ
+<!-- ═══════════════════════════════════
+     APP BAR
+═══════════════════════════════════ -->
+<header class="gm-appbar">
+    <a class="gm-back-btn" href="/admin/facebook-ads" target="_self" title="กลับ">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </a>
-    <div class="adv-title-wrap">
-        <div class="adv-title-name" id="advCampName">AI ผู้ช่วย Ads</div>
-        <div class="adv-title-sub" id="advCampId">{{ campaign_id }}</div>
+    <div class="gm-appbar-title">
+        <div class="gm-appbar-name" id="advCampName">AI Ads Advisor</div>
+        <div class="gm-appbar-sub" id="advCampId">{{ campaign_id }}</div>
     </div>
-    <span class="adv-db-badge err" id="advDbBadge" style="display:none;"></span>
-</div>
+    <span class="gm-db-badge err" id="advDbBadge" style="display:none;"></span>
+</header>
 
-<!-- Campaign Metrics Bar -->
+<!-- ═══════════════════════════════════
+     CAMPAIGN METRICS STRIP
+═══════════════════════════════════ -->
 <div class="adv-metrics-bar" id="advMetricsBar">
     <span class="adv-metrics-loading">⏳ กำลังโหลดข้อมูลแคมเปญ…</span>
 </div>
 
-<!-- Control Bar -->
-<div class="adv-ctrl-bar">
-    <div class="adv-dot" id="advDot"></div>
-    <span class="adv-ctrl-label" id="advCtrlLabel">ยังไม่เปิดหน้าจอ</span>
-    <button class="adv-btn btn-green" id="advBtnStart" onclick="startCapture()">📷 เปิดดูหน้าจอ</button>
-    <button class="adv-btn btn-red" id="advBtnStop" style="display:none;" onclick="stopCapture()">⏹ หยุด</button>
-    <select class="adv-interval" id="advInterval" onchange="changeInterval()">
-        <option value="10">10 วิ</option>
-        <option value="15" selected>15 วิ</option>
-        <option value="30">30 วิ</option>
-        <option value="60">60 วิ</option>
-    </select>
+<!-- ═══════════════════════════════════
+     SCREEN CAPTURE CARD
+═══════════════════════════════════ -->
+<div class="gm-capture-card">
+    <div class="gm-live-indicator">
+        <div class="adv-dot" id="advDot"></div>
+        <span class="adv-ctrl-label" id="advCtrlLabel">ยังไม่เปิดหน้าจอ</span>
+    </div>
+    <div class="gm-capture-btns">
+        <button class="adv-btn btn-green" id="advBtnStart" onclick="startCapture()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            เปิดดูหน้าจอ
+        </button>
+        <button class="adv-btn btn-red" id="advBtnStop" style="display:none;" onclick="stopCapture()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            หยุด
+        </button>
+        <select class="adv-interval" id="advInterval" onchange="changeInterval()">
+            <option value="10">10 วิ</option>
+            <option value="15" selected>15 วิ</option>
+            <option value="30">30 วิ</option>
+            <option value="60">60 วิ</option>
+        </select>
+    </div>
     <span id="advLastCheck" class="adv-last-check"></span>
     <div class="adv-preview-wrap" id="advPreviewWrap">
         <video id="advPreviewVideo" autoplay muted playsinline></video>
@@ -454,27 +556,31 @@
     <div class="adv-brief-chips" id="advBriefChips"></div>
 </div>
 
-<!-- Ad Gallery -->
+<!-- ═══════════════════════════════════
+     AD GALLERY
+═══════════════════════════════════ -->
 <div class="adv-gallery" id="advGallery">
     <div class="adv-gallery-hdr" onclick="toggleGallery()">
-        <span style="font-size:14px;">🖼️</span>
+        <span class="adv-gallery-hdr-icon">🖼️</span>
         <span class="adv-gallery-hdr-title">ภาพโฆษณาปัจจุบัน</span>
         <span class="adv-gallery-hdr-count" id="advGalleryCount"></span>
-        <span class="adv-gallery-chevron">▲</span>
+        <svg class="adv-gallery-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="adv-gallery-body" id="advGalleryBody"></div>
 </div>
 
-<!-- Messages -->
+<!-- ═══════════════════════════════════
+     MESSAGES
+═══════════════════════════════════ -->
 <div id="advMessages">
     <div class="adv-welcome" id="advWelcome">
-        <div style="font-size:28px;margin-bottom:10px;">🤖</div>
-        <strong>AI ผู้ช่วยพร้อมทำงานแล้ว</strong><br>
-        <span style="font-size:12px;color:#6b7280;line-height:1.8;">
+        <div class="adv-welcome-icon">🤖</div>
+        <div class="adv-welcome-title">AI Ads Advisor พร้อมทำงาน</div>
+        <div class="adv-welcome-desc">
             ถามหรือกดปุ่มด้านล่างเพื่อเริ่ม<br>
             AI จะแนะนำ <strong>Action Cards</strong> ที่กดแล้วทำงานได้จริงทันที<br>
             รวมถึง <strong>🎨 สร้างภาพโฆษณาใหม่</strong> ด้วย AI
-        </span>
+        </div>
     </div>
 </div>
 
@@ -482,7 +588,9 @@
 <canvas id="advCanvas" style="display:none;"></canvas>
 <video id="advSourceVideo" style="display:none;" autoplay muted playsinline></video>
 
-<!-- Suggestions -->
+<!-- ═══════════════════════════════════
+     QUICK ACTION CHIPS
+═══════════════════════════════════ -->
 <div class="adv-suggestions">
     <button class="adv-sug-btn" onclick="quickAsk('วิเคราะห์ภาพรวมผลลัพธ์แคมเปญนี้ มีปัญหาอะไรบ้าง')">📊 ภาพรวม</button>
     <button class="adv-sug-btn" onclick="quickAsk('Frequency สูงเกินไปไหม ควรสร้าง creative ใหม่ไหม')">🔄 Creative Refresh</button>
@@ -493,32 +601,36 @@
     <button class="adv-sug-btn" onclick="openStudio(null)">🎨 สร้างภาพโฆษณา</button>
 </div>
 
-<!-- Input -->
+<!-- ═══════════════════════════════════
+     INPUT BAR
+═══════════════════════════════════ -->
 <div class="adv-input-wrap">
     <div class="adv-input-row">
         <textarea id="advInput" rows="1" placeholder="พิมพ์คำถาม... (Enter ส่ง)"
             onkeydown="onInputKey(event)" oninput="autoResize(this)"></textarea>
         <div class="adv-input-actions">
             <button class="adv-icon-btn" onclick="sendWithSnap()" title="ถ่ายภาพหน้าจอ">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
             </button>
             <button class="adv-send-btn" id="advSendBtn" onclick="sendMsg()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
         </div>
     </div>
 </div>
 
-<!-- ════════════════════════════════════════
+<!-- ═══════════════════════════════════
      CONTENT STUDIO MODAL
-════════════════════════════════════════ -->
+═══════════════════════════════════ -->
 <div class="studio-overlay" id="studioOverlay" onclick="overlayClick(event)" style="display:none;">
 <div class="studio-panel" id="studioPanel">
     <div class="studio-handle"></div>
     <div class="studio-header">
-        <div style="font-size:20px;">✍️</div>
+        <div style="font-size:22px;">✍️</div>
         <div class="studio-title">Content Studio</div>
-        <button class="studio-close" onclick="closeStudio()">✕</button>
+        <button class="studio-close" onclick="closeStudio()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
     </div>
     <div class="studio-body" id="studioBodyScroll">
 
@@ -529,16 +641,16 @@
         <div>
             <div class="studio-section-label">🎯 เลือก Tone โฆษณา</div>
             <div class="studio-tone-grid" id="studioToneGrid">
-                <div class="studio-tone-opt" data-tone="urgent" onclick="selectTone(this)">⚡ เร่งด่วน<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">สร้างความรีบ</span></div>
-                <div class="studio-tone-opt" data-tone="emotion" onclick="selectTone(this)">💛 อารมณ์<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">ความภูมิใจ</span></div>
-                <div class="studio-tone-opt" data-tone="benefit" onclick="selectTone(this)">📊 ประโยชน์<br><span style="font-weight:400;font-size:10px;color:#9ca3af;">ข้อเท็จจริง</span></div>
+                <div class="studio-tone-opt" data-tone="urgent" onclick="selectTone(this)">⚡ เร่งด่วน<br><span style="font-size:11px;font-weight:400;color:#5f6368;">สร้างความรีบ</span></div>
+                <div class="studio-tone-opt" data-tone="emotion" onclick="selectTone(this)">💛 อารมณ์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ความภูมิใจ</span></div>
+                <div class="studio-tone-opt" data-tone="benefit" onclick="selectTone(this)">📊 ประโยชน์<br><span style="font-size:11px;font-weight:400;color:#5f6368;">ข้อเท็จจริง</span></div>
                 <div class="studio-tone-opt studio-tone-all active" data-tone="all" onclick="selectTone(this)">✨ สร้างทั้ง 3 แบบพร้อมกัน</div>
             </div>
         </div>
 
         <!-- Generate button -->
         <button class="studio-gen-btn" id="studioGenBtn" onclick="generateContent()">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             สร้าง Content โฆษณา
         </button>
 
@@ -593,9 +705,9 @@ async function init() {
         const cd = await ctxR.value.json();
         if (cd.db_context) {
             advisorDbContext = cd.db_context;
-            showDbBadge('● DB โหลดแล้ว', false);
+            showDbBadge('DB พร้อม', false);
         }
-    } catch(e) { showDbBadge('● DB ไม่พร้อม', true); }
+    } catch(e) { showDbBadge('DB ไม่พร้อม', true); }
 
     // Live campaign metrics from Meta API
     try {
@@ -604,20 +716,20 @@ async function init() {
             if (info && !info.error) {
                 renderMetricsBar(info);
                 const nameEl = document.getElementById('advCampName');
-                if (!nameEl.textContent || nameEl.textContent === 'AI ผู้ช่วย Ads') {
-                    nameEl.textContent = info.name || 'AI ผู้ช่วย Ads';
+                if (!nameEl.textContent || nameEl.textContent === 'AI Ads Advisor') {
+                    nameEl.textContent = info.name || 'AI Ads Advisor';
                 }
             } else {
-                metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ ${(info && info.error) || 'โหลดข้อมูลไม่สำเร็จ'}</span>`;
+                metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:var(--gm-error);">⚠ ${(info && info.error) || 'โหลดข้อมูลไม่สำเร็จ'}</span>`;
                 metricsBar.classList.add('show');
             }
         } else {
-            metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ เชื่อมต่อ Meta API ไม่ได้</span>`;
+            metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:var(--gm-error);">⚠ เชื่อมต่อ Meta API ไม่ได้</span>`;
             metricsBar.classList.add('show');
         }
     } catch(e) {
         console.error('renderMetricsBar error:', e);
-        metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ JS error: ${e.message}</span>`;
+        metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:var(--gm-error);">⚠ JS error: ${e.message}</span>`;
         metricsBar.classList.add('show');
     }
 }
@@ -667,7 +779,7 @@ function renderMetricsBar(info) {
 function showDbBadge(txt, isErr) {
     const b = document.getElementById('advDbBadge');
     b.textContent = txt; b.style.display = '';
-    b.className = 'adv-db-badge' + (isErr ? ' err' : '');
+    b.className = 'gm-db-badge' + (isErr ? ' err' : '');
 }
 
 function renderBriefChips(b) {
@@ -898,7 +1010,9 @@ async function callAI(msg, screenshot, isAuto, creativeImgUrl = null) {
                 if (actions.length) renderActionCards(actions);
                 chatHistory.push({ role: 'model', text: cleanReply });
                 document.getElementById('advLastCheck').textContent = '⚠️ ' + timeNow();
-            } else { document.getElementById('advLastCheck').textContent = '✓ ' + timeNow(); }
+            } else {
+                document.getElementById('advLastCheck').textContent = '✓ ' + timeNow();
+            }
         } else {
             appendAiMsg(cleanReply, false, true, creativeImgUrl);
             if (actions.length) renderActionCards(actions);
@@ -906,7 +1020,7 @@ async function callAI(msg, screenshot, isAuto, creativeImgUrl = null) {
         }
     } catch(e) {
         if (thinkEl) thinkEl.remove();
-        if (!isAuto) appendAiMsg('❌ ' + e.message, false, false);
+        if (!isAuto) appendAiMsg('❌ ' + esc(e.message), false, false);
     } finally {
         isRequesting = false;
         document.getElementById('advSendBtn').disabled = false;
@@ -916,100 +1030,89 @@ async function callAI(msg, screenshot, isAuto, creativeImgUrl = null) {
 // ══════════════════════════════════
 // ACTION CARDS
 // ══════════════════════════════════
+let _actionItems = [];  // global store for action items
+
 function parseActions(raw) {
-    const match = raw.match(/<!--ACTIONS:(\[[\s\S]*?\])-->/);
-    if (!match) return { text: raw, actions: [] };
-    let actions = [];
-    try { actions = JSON.parse(match[1]); } catch(e) {}
-    const text = raw.replace(/<!--ACTIONS:[\s\S]*?-->/, '').trim();
-    return { text, actions };
+    const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
+    if (!jsonMatch) return { text: raw, actions: [] };
+    try {
+        const parsed = JSON.parse(jsonMatch[1].trim());
+        const actions = Array.isArray(parsed) ? parsed : (parsed.action_items || []);
+        const text = raw.replace(/```json[\s\S]*?```/, '').trim();
+        return { text, actions };
+    } catch(e) { return { text: raw, actions: [] }; }
 }
 
 function renderActionCards(actions) {
     if (!actions.length) return;
+    const baseIdx = _actionItems.length;
+    _actionItems = _actionItems.concat(actions);
     const wrap = document.getElementById('advMessages');
     const container = document.createElement('div');
     container.className = 'adv-action-cards';
-    actions.forEach(a => {
+    actions.forEach((item, i) => {
+        const globalIdx = baseIdx + i;
+        const sev = (item.severity || 'medium').toLowerCase();
+        const sevClass = ['critical','high','medium','low'].includes(sev) ? sev : 'medium';
         const card = document.createElement('div');
-        card.className = `adv-action-card type-${a.type}`;
-        if (a.type === 'suggest_content' || a.type === 'generate_image') {
-            card.innerHTML = `
-                <div class="adv-action-card-label">✍️ ${esc(a.label || 'สร้าง Content โฆษณา')}</div>
-                <div class="adv-action-card-reason">${esc(a.reason || '')}</div>
-                <button class="adv-action-btn primary" onclick='openStudio(${JSON.stringify(a.tone||"all")})'>✨ เปิด Content Studio</button>`;
-        } else if (a.type === 'pause_adset') {
-            card.innerHTML = `
-                <div class="adv-action-card-label">⏸ ${esc(a.label || 'หยุด Ad Set')}</div>
-                <div class="adv-action-card-reason">${esc(a.reason || '')}</div>
-                ${a.adset_name ? `<div class="adv-action-card-preview"><div class="adv-action-preview-item"><span>Ad Set</span><span>${esc(a.adset_name)}</span></div></div>` : ''}
-                <button class="adv-action-btn danger" id="pauseBtn_${esc(a.adset_id || '')}" onclick='pauseAdSet(${JSON.stringify(a.adset_id)}, ${JSON.stringify(a.adset_name)}, this)'>⏸ หยุด Ad Set นี้</button>`;
-        } else if (a.type === 'copy_text') {
-            card.innerHTML = `
-                <div class="adv-action-card-label">📋 ${esc(a.label || 'Copy ข้อความ')}</div>
-                <div class="adv-action-card-reason">${esc(a.reason || '')}</div>
-                <div style="background:#f0f9ff;border-radius:8px;padding:8px 10px;font-size:12px;color:#1e40af;margin-bottom:10px;">${esc(a.text || '')}</div>
-                <button class="adv-action-btn success" onclick='copyToClipboard(${JSON.stringify(a.text)}, this)'>📋 Copy</button>`;
-        }
+        card.className = `adv-action-card ${sevClass}`;
+        const btns = (item.action_buttons || []).map((btn, bi) => {
+            const cls = btn.type === 'api-execute' ? 'api' : 'url';
+            return `<button class="adv-action-btn ${cls}" id="acbtn_${globalIdx}_${bi}"
+                onclick="executeActionItem(${globalIdx},${bi},this)"
+                >${esc(btn.label || 'ดำเนินการ')}</button>`;
+        }).join('');
+        card.innerHTML = `
+            <div class="adv-action-header">
+                <span class="adv-action-sev sev-${sevClass}">${sev.toUpperCase()}</span>
+                <span class="adv-action-issue">${esc(item.issue || '')}</span>
+            </div>
+            ${item.recommendation ? `<div class="adv-action-body">${esc(item.recommendation)}</div>` : ''}
+            ${btns ? `<div class="adv-action-btns">${btns}</div>` : ''}`;
         container.appendChild(card);
     });
     wrap.appendChild(container);
-    wrap.scrollTop = wrap.scrollHeight;
+    container.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
-async function pauseAdSet(adsetId, adsetName, btn) {
-    if (!adsetId) return;
-    if (!confirm(`ยืนยันหยุด Ad Set "${adsetName}"?`)) return;
-    btn.disabled = true; btn.textContent = '⏳...';
+async function executeActionItem(itemIdx, btnIdx, btn) {
+    const item = _actionItems[itemIdx];
+    if (!item) return;
+    const btnDef = (item.action_buttons || [])[btnIdx];
+    if (!btnDef) return;
+    if (btnDef.type === 'url-open') { window.open(btnDef.url, '_blank'); return; }
+    btn.disabled = true; btn.textContent = '⏳ กำลังทำ…';
     try {
-        const r = await fetch('/api/facebook-ads/toggle-adset', {
+        const r = await fetch('/api/facebook-ads/execute-action', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adset_id: adsetId, status: 'PAUSED' })
+            body: JSON.stringify({ campaign_id: CAMPAIGN_ID, action: btnDef })
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'ไม่สำเร็จ');
-        btn.textContent = '✅ หยุดแล้ว'; btn.className = 'adv-action-btn success';
-        appendAiMsg(`✅ หยุด Ad Set "${adsetName}" เรียบร้อยแล้ว`, false, false);
-    } catch(e) { btn.disabled = false; btn.textContent = '⏸ หยุด Ad Set นี้'; alert('❌ ' + e.message); }
-}
-
-async function copyToClipboard(text, btn) {
-    try {
-        await navigator.clipboard.writeText(text);
-        const orig = btn.textContent; btn.textContent = '✅ Copied!';
-        setTimeout(() => btn.textContent = orig, 1500);
-    } catch(e) { alert('กรุณา copy ด้วยตัวเอง: ' + text); }
-}
-
-// ══════════════════════════════════
-// CREATIVE STUDIO
-// ══════════════════════════════════
-async function openStudio(tone) {
-    studioTone = tone || 'all';
-    document.querySelectorAll('.studio-tone-opt').forEach(el => {
-        el.classList.toggle('active', el.dataset.tone === studioTone);
-    });
-    const chips = document.getElementById('studioContextChips');
-    if (chips) {
-        const parts = [];
-        if (campaignCtx.campaign_name) parts.push('📢 ' + campaignCtx.campaign_name);
-        if (campaignCtx.goal_type)     parts.push('🎯 ' + campaignCtx.goal_type);
-        if (campaignCtx.audience_note) parts.push('👥 ' + campaignCtx.audience_note.substring(0,40));
-        chips.innerHTML = parts.map(p => `<span style="background:#ede9fe;color:#4f46e5;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">${escHtml(p)}</span>`).join('');
+        if (!r.ok) throw new Error(d.error || 'ผิดพลาด');
+        btn.textContent = '✅ สำเร็จ';
+        appendAiMsg(`✅ ${btnDef.label}: ${d.message || 'ดำเนินการสำเร็จ'}`, false, false);
+    } catch(e) {
+        btn.disabled = false; btn.textContent = btnDef.label || 'ลองใหม่';
+        appendAiMsg(`❌ ${e.message}`, false, false);
     }
-    const cards = document.getElementById('studioContentCards');
-    cards.style.display = 'none';
-    cards.innerHTML = '';
-    const ov = document.getElementById('studioOverlay');
-    ov.style.display = 'flex';
-    ov.classList.add('open');
+}
+
+// ══════════════════════════════════
+// CONTENT STUDIO
+// ══════════════════════════════════
+function openStudio(adData) {
+    const overlay = document.getElementById('studioOverlay');
+    overlay.style.display = 'flex';
+    const chips = document.getElementById('studioContextChips');
+    chips.innerHTML = '';
+    if (campaignCtx.campaign_name) chips.innerHTML += `<span class="adv-chip">📢 ${esc(campaignCtx.campaign_name)}</span>`;
+    if (campaignCtx.goal_type)     chips.innerHTML += `<span class="adv-chip">🎯 ${esc(campaignCtx.goal_type)}</span>`;
+    if (campaignCtx.audience_note) chips.innerHTML += `<span class="adv-chip">👥 ${esc(campaignCtx.audience_note.substring(0,30))}</span>`;
 }
 
 function closeStudio() {
-    const ov = document.getElementById('studioOverlay');
-    ov.style.display = 'none';
-    ov.classList.remove('open');
+    document.getElementById('studioOverlay').style.display = 'none';
 }
 
 function overlayClick(e) {
@@ -1024,144 +1127,106 @@ function selectTone(el) {
 
 async function generateContent() {
     const btn = document.getElementById('studioGenBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> กำลังสร้าง...';
+    btn.disabled = true; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg> กำลังสร้าง…';
     const cards = document.getElementById('studioContentCards');
-    cards.style.display = 'none';
+    cards.innerHTML = ''; cards.style.display = 'none';
     try {
         const r = await fetch('/api/facebook-ads/generate-content-suggestions', {
             method: 'POST', credentials: 'include',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                campaign_id:   CAMPAIGN_ID,
+                campaign_id: CAMPAIGN_ID,
                 campaign_name: campaignCtx.campaign_name || '',
                 goal_type:     campaignCtx.goal_type     || 'lead',
                 audience_note: campaignCtx.audience_note || '',
-                product_name:  'ชุดพยาบาล EKG',
-                tone:          studioTone,
+                tone: studioTone
             })
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+        if (!r.ok) throw new Error(d.error || 'ผิดพลาด');
         studioSuggestions = d.suggestions || [];
-        renderContentCards(studioSuggestions);
+        if (!studioSuggestions.length) throw new Error('ไม่ได้รับ content กลับมา');
+        renderStudioCards(studioSuggestions);
     } catch(e) {
-        alert('สร้าง Content ไม่สำเร็จ: ' + e.message);
+        cards.innerHTML = `<div style="color:var(--gm-error);font-size:13px;">⚠ ${esc(e.message)}</div>`;
+        cards.style.display = 'flex';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> สร้าง Content โฆษณา';
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> สร้าง Content โฆษณา';
     }
 }
 
-function renderContentCards(suggestions) {
-    const wrap = document.getElementById('studioContentCards');
-    if (!suggestions.length) {
-        wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px;">ไม่พบ Content</div>';
-        wrap.style.display = 'flex';
-        return;
-    }
-    wrap.innerHTML = suggestions.map((s, i) => {
-        const tags = (s.hashtags || []).map(h => `<span class="studio-hashtag">${escHtml('#'+h)}</span>`).join('');
-        return `
-        <div class="studio-content-card">
+function renderStudioCards(suggestions) {
+    const toneNames = { urgent:'⚡ เร่งด่วน', emotion:'💛 อารมณ์', benefit:'📊 ประโยชน์' };
+    const cards = document.getElementById('studioContentCards');
+    cards.innerHTML = suggestions.map((s, i) => {
+        const toneName = toneNames[s.tone] || s.tone || `แบบที่ ${i+1}`;
+        const fields = [
+            { key:'hook',         label:'Hook / หัวข้อ',    cls:'hook' },
+            { key:'primary_text', label:'Primary Text',      cls:'' },
+            { key:'headline',     label:'Headline',          cls:'' },
+            { key:'description',  label:'Description',       cls:'' },
+            { key:'cta',          label:'CTA',               cls:'' },
+        ];
+        const fieldHtml = fields.map(f => s[f.key] ? `
+            <div class="studio-field-row">
+                <div class="studio-field-label">
+                    ${esc(f.label)}
+                    <button class="studio-field-copy" onclick="copyField(this,'${escAttr(s[f.key])}')">คัดลอก</button>
+                </div>
+                <div class="studio-field-val ${f.cls}">${esc(s[f.key])}</div>
+            </div>` : '').join('');
+        const tags = (s.hashtags || []).map(t => `<span class="studio-hashtag">${esc(t)}</span>`).join('');
+        const allText = fields.filter(f=>s[f.key]).map(f=>`${f.label}: ${s[f.key]}`).join('\n') + (tags ? '\n' + (s.hashtags||[]).join(' ') : '');
+        return `<div class="studio-content-card">
             <div class="studio-card-header">
-                <div class="studio-card-title"><span>${s.style_icon||'✦'}</span> แบบที่ ${i+1}: ${escHtml(s.style_name||'')}</div>
-                <button class="studio-copy-all-btn" id="copyAllBtn${i}" onclick="copyAllContent(${i})">📋 Copy ทั้งหมด</button>
+                <div class="studio-card-title">${esc(toneName)}</div>
+                <button class="studio-copy-all-btn" onclick="copyAll(this,'${escAttr(allText)}')">คัดลอกทั้งหมด</button>
             </div>
             <div class="studio-card-body">
-                <div class="studio-field-row">
-                    <div class="studio-field-label">
-                        <span>🪝 Hook (บรรทัดแรก)</span>
-                        <button class="studio-field-copy" onclick="copyField(${i},'hook',this)">Copy</button>
-                    </div>
-                    <div class="studio-field-val hook">${escHtml(s.hook||'')}</div>
-                </div>
-                <div class="studio-field-row">
-                    <div class="studio-field-label">
-                        <span>📝 Primary Text</span>
-                        <button class="studio-field-copy" onclick="copyField(${i},'primary_text',this)">Copy</button>
-                    </div>
-                    <div class="studio-field-val">${escHtml(s.primary_text||'')}</div>
-                </div>
-                <div class="studio-field-row">
-                    <div class="studio-field-label">
-                        <span>🔤 Headline</span>
-                        <button class="studio-field-copy" onclick="copyField(${i},'headline',this)">Copy</button>
-                    </div>
-                    <div class="studio-field-val">${escHtml(s.headline||'')}</div>
-                </div>
-                <div class="studio-field-row">
-                    <div class="studio-field-label">
-                        <span>💬 Description</span>
-                        <button class="studio-field-copy" onclick="copyField(${i},'description',this)">Copy</button>
-                    </div>
-                    <div class="studio-field-val">${escHtml(s.description||'')}</div>
-                </div>
-                <div class="studio-field-row">
-                    <div class="studio-field-label"><span>🖱️ CTA Button</span></div>
-                    <div class="studio-field-val" style="font-weight:700;color:#6366f1;">${escHtml(s.cta||'')}</div>
-                </div>
-                ${tags ? '<div class="studio-field-row"><div class="studio-field-label"><span>#️⃣ Hashtags</span><button class="studio-field-copy" onclick="copyField('+i+',\'hashtags\',this)">Copy</button></div><div class="studio-hashtags">'+tags+'</div></div>' : ''}
+                ${fieldHtml}
+                ${tags ? `<div class="studio-field-row"><div class="studio-field-label">Hashtags</div><div class="studio-hashtags">${tags}</div></div>` : ''}
             </div>
         </div>`;
     }).join('');
-    wrap.style.display = 'flex';
-    wrap.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    cards.style.display = 'flex';
+    document.getElementById('studioBodyScroll').scrollTop = 9999;
 }
 
-function copyField(idx, field, btn) {
-    const s = studioSuggestions[idx];
-    if (!s) return;
-    const text = field === 'hashtags' ? (s.hashtags||[]).map(h=>'#'+h).join(' ') : (s[field]||'');
+function copyField(btn, text) {
     navigator.clipboard.writeText(text).then(() => {
-        btn.textContent = '✓'; btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
-    }).catch(()=>{});
+        btn.textContent = '✓ คัดลอกแล้ว'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'คัดลอก'; btn.classList.remove('copied'); }, 2000);
+    });
 }
 
-function copyAllContent(idx) {
-    const s = studioSuggestions[idx];
-    if (!s) return;
-    const parts = [
-        s.hook         ? '🪝 Hook:
-'+s.hook                                  : '',
-        s.primary_text ? '📝 Primary Text:
-'+s.primary_text                  : '',
-        s.headline     ? '🔤 Headline: '+s.headline                            : '',
-        s.description  ? '💬 Description: '+s.description                      : '',
-        s.cta          ? '🖱️ CTA: '+s.cta                                     : '',
-        s.hashtags?.length ? '#️⃣ Hashtags: '+s.hashtags.map(h=>'#'+h).join(' '): '',
-    ].filter(Boolean);
-    navigator.clipboard.writeText(parts.join('
-
-')).then(() => {
-        const btn = document.getElementById('copyAllBtn'+idx);
-        if (btn) { btn.textContent='✅ Copied!'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent='📋 Copy ทั้งหมด';btn.classList.remove('copied');},2000); }
-    }).catch(()=>{});
-}
-
-function escHtml(str) {
-    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function copyAll(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '✓ คัดลอกแล้ว'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'คัดลอกทั้งหมด'; btn.classList.remove('copied'); }, 2000);
+    });
 }
 
 // ══════════════════════════════════
-// RENDER
+// MESSAGE RENDERING
 // ══════════════════════════════════
 function appendUserMsg(txt) {
     const wrap = document.getElementById('advMessages');
-    document.getElementById('advWelcome')?.remove();
-    const el = document.createElement('div'); el.className = 'adv-msg user'; el.textContent = txt;
-    wrap.appendChild(el); wrap.scrollTop = wrap.scrollHeight;
+    const el = document.createElement('div');
+    el.className = 'adv-msg user';
+    el.textContent = txt;
+    wrap.appendChild(el);
+    wrap.scrollTop = wrap.scrollHeight;
 }
 
-function appendAiMsg(text, isAuto, withTts, creativeImgUrl = null) {
+function appendAiMsg(text, isAuto = false, withTts = true, creativeImgUrl = null) {
     const wrap = document.getElementById('advMessages');
     document.getElementById('advWelcome')?.remove();
     const el = document.createElement('div');
     el.className = 'adv-msg ai' + (isAuto ? ' flagged' : '');
     let inner = '';
     if (isAuto) inner += '<div class="adv-auto-badge">🔄 auto</div>';
-    if (creativeImgUrl) inner += `<img src="${escAttr(creativeImgUrl)}" alt="Creative" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px;border:1px solid #f0f0f0;" onerror="this.style.display='none'">`;
+    if (creativeImgUrl) inner += `<img src="${escAttr(creativeImgUrl)}" alt="Creative" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px;border:1px solid var(--gm-outline);" onerror="this.style.display='none'">`;
     inner += mdToHtml(text);
     if (withTts && window.speechSynthesis) {
         inner += `<button class="adv-tts-btn" title="อ่านออกเสียง">🔊</button>`;
