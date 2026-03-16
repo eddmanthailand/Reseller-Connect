@@ -412,19 +412,35 @@ function stopCapture() {
     document.getElementById('advPreviewWrap').classList.remove('show');
 }
 
-function startAutoInterval() {
-    clearInterval(autoTimer);
-    const secs = parseInt(document.getElementById('advIntervalSel').value || '15', 10);
-    autoTimer = setInterval(autoCapture, secs * 1000);
-}
-
 function changeInterval() {
     if (captureStream) startAutoInterval();
 }
 
+function _isBlackFrame(canvas, sampleCount = 64) {
+    // Sample random pixels — if all near-black, frame hasn't painted yet
+    try {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        if (!w || !h) return true;
+        let darkPx = 0;
+        for (let i = 0; i < sampleCount; i++) {
+            const px = ctx.getImageData(
+                Math.floor(Math.random() * w),
+                Math.floor(Math.random() * h),
+                1, 1
+            ).data;
+            // pixel is "dark" if R+G+B < 30
+            if (px[0] + px[1] + px[2] < 30) darkPx++;
+        }
+        // >90% dark pixels → black frame
+        return darkPx / sampleCount > 0.9;
+    } catch(e) { return false; }
+}
+
 function captureFrame() {
     const vid = document.getElementById('advSourceVideo');
-    if (!vid.videoWidth) return null;
+    // Must have dimensions AND enough data decoded (readyState 2 = HAVE_CURRENT_DATA)
+    if (!vid.videoWidth || !vid.videoHeight || vid.readyState < 2) return null;
     const canvas = document.getElementById('advCanvas');
     let w = vid.videoWidth, h = vid.videoHeight;
     const maxW = 1280, maxH = 720;
@@ -432,14 +448,27 @@ function captureFrame() {
     if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(vid, 0, 0, w, h);
+    // Reject black frames silently
+    if (_isBlackFrame(canvas)) return null;
     return canvas.toDataURL('image/jpeg', 0.65).split(',')[1];
 }
 
 async function autoCapture() {
     if (isRequesting || !captureStream) return;
     const screenshot = captureFrame();
-    if (!screenshot) return;
+    if (!screenshot) return;   // null = black frame or not ready, skip silently
     await callAdvisor('', screenshot, true);
+}
+
+function startAutoInterval() {
+    clearInterval(autoTimer);
+    const secs = parseInt(document.getElementById('advIntervalSel').value || '15', 10);
+    // Wait 2 s for stream to stabilize before first auto-capture
+    setTimeout(() => {
+        if (!captureStream) return;
+        autoCapture();  // first capture right after wait
+        autoTimer = setInterval(autoCapture, secs * 1000);
+    }, 2000);
 }
 
 // ─── Chat ────────────────────────────────────────────────────────
