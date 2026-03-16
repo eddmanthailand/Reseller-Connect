@@ -599,18 +599,27 @@ async function init() {
 
     // Live campaign metrics from Meta API
     try {
-        const info = await infoR.value.json();
-        if (!info.error) {
-            renderMetricsBar(info);
-            // Update header name with live Meta API name if no brief override
-            if (!document.getElementById('advCampName').textContent || 
-                document.getElementById('advCampName').textContent === 'AI ผู้ช่วย Ads') {
-                document.getElementById('advCampName').textContent = info.name || 'AI ผู้ช่วย Ads';
+        if (infoR.status === 'fulfilled') {
+            const info = await infoR.value.json();
+            if (info && !info.error) {
+                renderMetricsBar(info);
+                const nameEl = document.getElementById('advCampName');
+                if (!nameEl.textContent || nameEl.textContent === 'AI ผู้ช่วย Ads') {
+                    nameEl.textContent = info.name || 'AI ผู้ช่วย Ads';
+                }
+            } else {
+                metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ ${(info && info.error) || 'โหลดข้อมูลไม่สำเร็จ'}</span>`;
+                metricsBar.classList.add('show');
             }
         } else {
-            metricsBar.classList.remove('show');
+            metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ เชื่อมต่อ Meta API ไม่ได้</span>`;
+            metricsBar.classList.add('show');
         }
-    } catch(e) { metricsBar.classList.remove('show'); }
+    } catch(e) {
+        console.error('renderMetricsBar error:', e);
+        metricsBar.innerHTML = `<span class="adv-metrics-loading" style="color:#ef4444;">⚠ JS error: ${e.message}</span>`;
+        metricsBar.classList.add('show');
+    }
 }
 
 function renderMetricsBar(info) {
