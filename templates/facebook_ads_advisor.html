@@ -528,29 +528,19 @@
         .studio-copy-all-btn:hover { background: var(--gm-primary); color: #fff; border-color: var(--gm-primary); }
         .studio-copy-all-btn.copied { color: var(--gm-success); border-color: #ceead6; background: var(--gm-success-bg); }
         .studio-card-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-        .studio-field-row { display: flex; flex-direction: column; gap: 4px; }
-        .studio-field-label {
-            font-size: 10px; font-weight: 600; color: var(--gm-on-surface-3);
-            text-transform: uppercase; letter-spacing: .5px;
-            display: flex; align-items: center; justify-content: space-between;
+        .studio-combined-box {
+            width: 100%; min-height: 220px; resize: vertical;
+            font-family: var(--font); font-size: 13px; line-height: 1.7;
+            color: var(--gm-on-surface); background: var(--gm-surface-2);
+            border: 1.5px solid var(--gm-outline); border-radius: 10px;
+            padding: 12px 14px; box-sizing: border-box; outline: none;
+            transition: border-color .2s;
         }
-        .studio-field-copy {
-            font-size: 10px; font-weight: 600; color: var(--gm-primary); cursor: pointer;
-            background: none; border: none; font-family: var(--font); padding: 0; transition: color .15s;
+        .studio-combined-box:focus { border-color: var(--gm-primary); }
+        .studio-card-footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
         }
-        .studio-field-copy:hover { color: var(--gm-primary-dark); }
-        .studio-field-copy.copied { color: var(--gm-success); }
-        .studio-field-val {
-            font-size: 13px; color: var(--gm-on-surface); line-height: 1.55;
-            background: var(--gm-surface-2); border: 1px solid var(--gm-outline);
-            border-radius: 8px; padding: 8px 12px;
-        }
-        .studio-field-val.hook { font-weight: 600; font-size: 14px; }
-        .studio-hashtags { display: flex; flex-wrap: wrap; gap: 6px; }
-        .studio-hashtag {
-            background: var(--gm-primary-container); color: var(--gm-primary-dark);
-            border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 500;
-        }
+        .studio-char-hint { font-size: 11px; color: var(--gm-on-surface-3); }
         .content-tone-label {
             font-size: 11px; color: var(--gm-on-surface-3); font-weight: 500;
         }
@@ -1332,74 +1322,64 @@ async function generateContent() {
 function renderStudioCards(suggestions) {
     const toneIcons = { urgent:'⚡', emotion:'💛', benefit:'📊', social_proof:'🌟', story:'📖' };
     const cards = document.getElementById('studioContentCards');
+
+    const fields = [
+        { key:'hook',           label:'🎣 Hook (เปิดตัว)'      },
+        { key:'secondary_hook', label:'🎣 Hook ทางเลือก'        },
+        { key:'offer_line',     label:'🎁 Offer / Value Prop'   },
+        { key:'primary_text',   label:'📝 Primary Text (Body)'  },
+        { key:'headline',       label:'📌 Headline'             },
+        { key:'description',    label:'💬 Description'          },
+        { key:'cta',            label:'👆 CTA Button'           },
+    ];
+
     cards.innerHTML = suggestions.map((s, i) => {
         const icon = s.style_icon || toneIcons[s.tone] || '✍️';
         const name = s.style_name || s.tone || `แบบที่ ${i+1}`;
-        const fwk  = s.framework ? `<span style="font-size:10px;color:var(--gm-on-surface-3);font-weight:500;background:var(--gm-surface-3);padding:2px 8px;border-radius:10px;">${esc(s.framework)}</span>` : '';
+        const fwk  = s.framework
+            ? `<span style="font-size:10px;color:var(--gm-on-surface-3);font-weight:500;background:var(--gm-surface-3);padding:2px 8px;border-radius:10px;">${esc(s.framework)}</span>`
+            : '';
 
-        // Define display fields — only show if value exists
-        const fields = [
-            { key:'hook',           label:'🎣 Hook (เปิดตัว)',         cls:'hook',  char:70  },
-            { key:'secondary_hook', label:'🎣 Hook ทางเลือก',          cls:'hook',  char:70  },
-            { key:'offer_line',     label:'🎁 Offer / Value Prop',     cls:'',      char:50  },
-            { key:'primary_text',   label:'📝 Primary Text (Body)',    cls:'',      char:250 },
-            { key:'headline',       label:'📌 Headline',               cls:'',      char:40  },
-            { key:'description',    label:'💬 Description',            cls:'',      char:30  },
-            { key:'cta',            label:'👆 CTA Button',             cls:'',      char:10  },
-        ];
-
-        const fieldHtml = fields.map(f => {
-            if (!s[f.key]) return '';
-            const val = s[f.key];
-            const charLen = val.length;
-            const overLimit = charLen > f.char;
-            const charHint = `<span style="font-size:9px;color:${overLimit ? 'var(--gm-error)' : 'var(--gm-on-surface-3)'};">${charLen}/${f.char}</span>`;
-            return `<div class="studio-field-row">
-                <div class="studio-field-label">
-                    <span>${esc(f.label)} ${charHint}</span>
-                    <button class="studio-field-copy" onclick="copyField(this,'${escAttr(val)}')">คัดลอก</button>
-                </div>
-                <div class="studio-field-val ${f.cls}">${esc(val)}</div>
-            </div>`;
-        }).join('');
-
-        const tags = (s.hashtags || []).map(t => `<span class="studio-hashtag">#${esc(t)}</span>`).join('');
-
-        // Build full copy text
-        const allParts = [];
-        fields.forEach(f => { if (s[f.key]) allParts.push(`${f.label.replace(/^[^\s]+ /,'')}: ${s[f.key]}`); });
-        if (s.hashtags?.length) allParts.push((s.hashtags.map(t => '#'+t).join(' ')));
-        const allText = allParts.join('\n\n');
+        // Build combined text block for the textarea
+        const lines = [];
+        fields.forEach(f => {
+            if (s[f.key]) lines.push(`${f.label}:\n${s[f.key]}`);
+        });
+        if (s.hashtags?.length) lines.push(`🏷️ Hashtags:\n${s.hashtags.map(t => '#' + t).join(' ')}`);
+        const combined = lines.join('\n\n');
+        const boxId = `studioBox_${i}`;
 
         return `<div class="studio-content-card">
             <div class="studio-card-header">
                 <div class="studio-card-title">${icon} ${esc(name)} ${fwk}</div>
-                <button class="studio-copy-all-btn" onclick="copyAll(this,'${escAttr(allText)}')">คัดลอกทั้งหมด</button>
             </div>
             <div class="studio-card-body">
-                ${fieldHtml}
-                ${tags ? `<div class="studio-field-row">
-                    <div class="studio-field-label">🏷️ Hashtags</div>
-                    <div class="studio-hashtags">${tags}</div>
-                </div>` : ''}
+                <textarea class="studio-combined-box" id="${boxId}" readonly>${esc(combined)}</textarea>
+                <div class="studio-card-footer">
+                    <span class="studio-char-hint">${combined.length} ตัวอักษร</span>
+                    <button class="studio-copy-all-btn" onclick="copyAll(this,'${boxId}')">📋 คัดลอกทั้งหมด</button>
+                </div>
             </div>
         </div>`;
     }).join('');
+
     cards.style.display = 'flex';
     document.getElementById('studioBodyScroll').scrollTop = 9999;
 }
 
-function copyField(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
+function copyAll(btn, boxId) {
+    const el = document.getElementById(boxId);
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(el.value).then(() => {
         btn.textContent = '✓ คัดลอกแล้ว'; btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'คัดลอก'; btn.classList.remove('copied'); }, 2000);
-    });
-}
-
-function copyAll(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
+        setTimeout(() => { btn.textContent = '📋 คัดลอกทั้งหมด'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {
+        // Fallback for older browsers
+        document.execCommand('copy');
         btn.textContent = '✓ คัดลอกแล้ว'; btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'คัดลอกทั้งหมด'; btn.classList.remove('copied'); }, 2000);
+        setTimeout(() => { btn.textContent = '📋 คัดลอกทั้งหมด'; btn.classList.remove('copied'); }, 2000);
     });
 }
 
