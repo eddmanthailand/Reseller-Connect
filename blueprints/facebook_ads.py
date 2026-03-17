@@ -3017,6 +3017,7 @@ def advisor_chat():
     if campaign_id and not is_auto:
         try:
             import urllib.request as _pf_req
+            import concurrent.futures as _cf
             _c_pf = _cur_pf = None
             try:
                 _c_pf = get_db()
@@ -3032,24 +3033,71 @@ def advisor_chat():
                     with _pf_req.urlopen(req, timeout=12) as rr:
                         return json.loads(rr.read().decode())
 
-                _ins_url = (
-                    f'https://graph.facebook.com/v19.0/{campaign_id}/insights'
+                _BASE = 'https://graph.facebook.com/v19.0'
+                _tok  = _tok_pf
+
+                _ins_30d_url = (
+                    f'{_BASE}/{campaign_id}/insights'
                     f'?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
-                    f'&date_preset=last_30d&access_token={_tok_pf}'
+                    f'&date_preset=last_30d&access_token={_tok}'
                 )
                 _camp_url = (
-                    f'https://graph.facebook.com/v19.0/{campaign_id}'
+                    f'{_BASE}/{campaign_id}'
                     f'?fields=name,status,effective_status,objective,daily_budget,lifetime_budget'
-                    f'&access_token={_tok_pf}'
+                    f'&access_token={_tok}'
                 )
-                _ins = _pf_api(_ins_url).get('data', [{}])
-                _ins = _ins[0] if _ins else {}
-                _ci  = _pf_api(_camp_url)
+                _adsets_url = (
+                    f'{_BASE}/{campaign_id}/adsets'
+                    f'?fields=id,name,status,effective_status,daily_budget,lifetime_budget,'
+                    f'bid_strategy,optimization_goal,billing_event,targeting'
+                    f'&limit=10&access_token={_tok}'
+                )
+                _ads_url = (
+                    f'{_BASE}/{campaign_id}/ads'
+                    f'?fields=id,name,status,effective_status,adset_id'
+                    f'&limit=20&access_token={_tok}'
+                )
+
+                # Fetch all 4 endpoints in parallel
+                with _cf.ThreadPoolExecutor(max_workers=4) as _pool:
+                    _f_ins  = _pool.submit(_pf_api, _ins_30d_url)
+                    _f_camp = _pool.submit(_pf_api, _camp_url)
+                    _f_sets = _pool.submit(_pf_api, _adsets_url)
+                    _f_ads  = _pool.submit(_pf_api, _ads_url)
+                    try: _ins_raw = _f_ins.result(timeout=14)
+                    except Exception: _ins_raw = {}
+                    try: _ci = _f_camp.result(timeout=14)
+                    except Exception: _ci = {}
+                    try: _sets_raw = _f_sets.result(timeout=14)
+                    except Exception: _sets_raw = {}
+                    try: _ads_raw = _f_ads.result(timeout=14)
+                    except Exception: _ads_raw = {}
+
                 _ci.pop('access_token', None)
+                _ins_data = _ins_raw.get('data', [])
+                _ins = _ins_data[0] if _ins_data else {}
+
+                # Fallback: if all 30d metrics are zero, retry with date_preset=maximum
+                _all_zero = (not _ins or (float(_ins.get('spend', 0)) == 0
+                             and int(_ins.get('impressions', 0)) == 0))
+                _ins_period = 'last_30d'
+                if _all_zero:
+                    try:
+                        _ins_max_url = (
+                            f'{_BASE}/{campaign_id}/insights'
+                            f'?fields=impressions,reach,clicks,ctr,cpc,cpm,spend,frequency,actions'
+                            f'&date_preset=maximum&access_token={_tok}'
+                        )
+                        _ins_max = _pf_api(_ins_max_url).get('data', [])
+                        if _ins_max:
+                            _ins = _ins_max[0]
+                            _ins_period = 'ตลอดทุกช่วง (maximum)'
+                    except Exception:
+                        pass
 
                 def _act_v(row, key):
                     for a in (row.get('actions') or []):
-                        if a['action_type'] == key:
+                        if a.get('action_type') == key:
                             return float(a['value'])
                     return 0.0
 
@@ -3061,21 +3109,49 @@ def advisor_chat():
                 _cpm = float(_ins.get('cpm', 0))
                 _frq = float(_ins.get('frequency', 0))
                 _imp = int(_ins.get('impressions', 0))
-                _lds = int(_act_v(_ins, 'lead'))
+                _lds = int(_act_v(_ins, 'lead') or _act_v(_ins, 'onsite_conversion.lead_grouped'))
                 _lpv = int(_act_v(_ins, 'landing_page_view'))
                 _cpl = round(_sp / _lds, 2) if _lds > 0 else None
                 _bud = round(int(_ci.get('daily_budget') or 0) / 100, 2)
+                _lbud = round(int(_ci.get('lifetime_budget') or 0) / 100, 2)
+
+                # Build Ad Sets summary
+                _sets_list = _sets_raw.get('data', [])
+                _sets_lines = []
+                for _s in _sets_list:
+                    _s_bud = round(int(_s.get('daily_budget') or _s.get('lifetime_budget') or 0) / 100, 2)
+                    _s_bud_label = (f'฿{_s_bud}/วัน' if _s.get('daily_budget')
+                                    else (f'฿{_s_bud} ตลอดแคมเปญ' if _s.get('lifetime_budget') else 'ไม่มีงบแยก'))
+                    _s_target = _s.get('targeting', {})
+                    _s_age = f"อายุ {_s_target.get('age_min','?')}–{_s_target.get('age_max','?')}" if _s_target else ''
+                    _sets_lines.append(
+                        f"  • [{_s.get('effective_status','?')}] {_s.get('name','?')} | {_s_bud_label}"
+                        f" | Goal: {_s.get('optimization_goal','?')} | {_s_age}"
+                    )
+                _sets_ctx = '\n'.join(_sets_lines) if _sets_lines else '  (ไม่พบข้อมูล Ad Set)'
+
+                # Build Ads summary
+                _ads_list = _ads_raw.get('data', [])
+                _ads_lines = []
+                for _a in _ads_list:
+                    _ads_lines.append(
+                        f"  • [{_a.get('effective_status','?')}] {_a.get('name','?')} (ID: {_a.get('id','?')})"
+                    )
+                _ads_ctx = '\n'.join(_ads_lines) if _ads_lines else '  (ไม่พบข้อมูล Ad)'
 
                 live_meta_ctx = (
-                    f'\n=== ข้อมูลแคมเปญสดจาก Meta API (30 วันล่าสุด) — ไม่ต้องดึงซ้ำ ===\n'
+                    f'\n=== ข้อมูลแคมเปญสดจาก Meta API ({_ins_period}) — ไม่ต้องดึงซ้ำ ===\n'
                     f'Campaign ID: {campaign_id}\n'
                     f'ชื่อ: {_ci.get("name", "ไม่ทราบ")}\n'
-                    f'สถานะ: {_ci.get("status","?")} | Objective: {_ci.get("objective","?")}\n'
-                    f'งบปัจจุบัน: ฿{_bud}/วัน\n'
+                    f'สถานะ: {_ci.get("status","?")} | Effective: {_ci.get("effective_status","?")} | Objective: {_ci.get("objective","?")}\n'
+                    f'งบปัจจุบัน: {"฿" + str(_bud) + "/วัน" if _bud else ("฿" + str(_lbud) + " ตลอดแคมเปญ" if _lbud else "ไม่มีงบ")}\n'
+                    f'\n--- Insights ({_ins_period}) ---\n'
                     f'ยอดใช้จ่าย: ฿{_sp:.2f} | Reach: {_rc:,} | Impressions: {_imp:,}\n'
                     f'Clicks: {_cl:,} | CTR: {_ctr:.2f}% | CPC: ฿{_cpc:.2f} | CPM: ฿{_cpm:.2f}\n'
                     f'Frequency: {_frq:.1f} | Landing Page Views: {_lpv:,}\n'
                     f'Leads: {_lds} | CPL: {"฿" + str(_cpl) if _cpl else "ยังไม่มี Lead"}\n'
+                    f'\n--- Ad Sets ({len(_sets_list)} ชุด) ---\n{_sets_ctx}\n'
+                    f'\n--- Ads ({len(_ads_list)} ชิ้น) ---\n{_ads_ctx}\n'
                 )
         except Exception:
             live_meta_ctx = ''  # silently fail — bot can still use on-demand tool
