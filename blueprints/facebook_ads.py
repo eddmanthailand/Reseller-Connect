@@ -500,6 +500,15 @@ def track_page_visit():
               referrer or None, traffic_type, active_pixel))
         conn.commit()
 
+        # Persist traffic source in Flask session so registration flow can read it
+        if source == 'facebook' or traffic_type in ('facebook_ad', 'organic_social') and source in ('facebook', 'instagram'):
+            from flask import session as _sess
+            _sess['_traffic_source'] = 'facebook'
+            _sess['_utm_campaign'] = utm_campaign or _sess.get('_utm_campaign')
+            if fbclid:
+                _sess['_fbclid'] = fbclid
+            _sess.modified = True
+
         # Server-side PageView → Meta CAPI
         fbc = data.get('fbc') or None
         fbp = data.get('fbp') or None
@@ -626,12 +635,23 @@ def get_facebook_ads_stats():
         ''')
         today_visits = cursor.fetchone()['count']
 
-        cursor.execute('''
-            SELECT COUNT(*) as count FROM users
-            WHERE notes LIKE '%[source: facebook]%'
-            AND DATE(created_at) = CURRENT_DATE
-        ''')
-        today_registrations = cursor.fetchone()['count']
+        def _fb_regs(cursor, where_clause):
+            """Count facebook registrations from users.notes OR conversion_events (whichever is greater)."""
+            cursor.execute(f'''
+                SELECT COUNT(*) as count FROM users
+                WHERE notes LIKE '%[source: facebook]%' AND {where_clause}
+            ''')
+            notes_count = cursor.fetchone()['count']
+            cursor.execute(f'''
+                SELECT COUNT(*) as count FROM conversion_events
+                WHERE event_type = 'register_complete'
+                AND (traffic_type = 'facebook' OR source LIKE '%facebook%')
+                AND {where_clause}
+            ''')
+            ce_count = cursor.fetchone()['count']
+            return max(notes_count, ce_count)
+
+        today_registrations = _fb_regs(cursor, "DATE(created_at) = CURRENT_DATE")
 
         cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
@@ -641,12 +661,7 @@ def get_facebook_ads_stats():
         ''')
         week_visits = cursor.fetchone()['count']
 
-        cursor.execute('''
-            SELECT COUNT(*) as count FROM users
-            WHERE notes LIKE '%[source: facebook]%'
-            AND created_at >= CURRENT_DATE - INTERVAL '7 days'
-        ''')
-        week_registrations = cursor.fetchone()['count']
+        week_registrations = _fb_regs(cursor, "created_at >= CURRENT_DATE - INTERVAL '7 days'")
 
         cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
@@ -656,12 +671,7 @@ def get_facebook_ads_stats():
         ''')
         month_visits = cursor.fetchone()['count']
 
-        cursor.execute('''
-            SELECT COUNT(*) as count FROM users
-            WHERE notes LIKE '%[source: facebook]%'
-            AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
-        ''')
-        month_registrations = cursor.fetchone()['count']
+        month_registrations = _fb_regs(cursor, "created_at >= DATE_TRUNC('month', CURRENT_DATE)")
 
         cursor.execute(f'''
             SELECT COUNT(*) as count FROM page_visits
@@ -670,11 +680,7 @@ def get_facebook_ads_stats():
         ''')
         total_visits = cursor.fetchone()['count']
 
-        cursor.execute('''
-            SELECT COUNT(*) as count FROM users
-            WHERE notes LIKE '%[source: facebook]%'
-        ''')
-        total_registrations = cursor.fetchone()['count']
+        total_registrations = _fb_regs(cursor, "TRUE")
 
         cursor.execute(f'''
             SELECT DATE(created_at) as date, COUNT(*) as visits
@@ -687,11 +693,18 @@ def get_facebook_ads_stats():
         daily_visits = {str(row['date']): row['visits'] for row in cursor.fetchall()}
 
         cursor.execute('''
-            SELECT DATE(created_at) as date, COUNT(*) as registrations
-            FROM users
-            WHERE notes LIKE '%[source: facebook]%'
-            AND created_at >= CURRENT_DATE - INTERVAL '6 days'
-            GROUP BY DATE(created_at) ORDER BY date
+            SELECT date, MAX(cnt) as registrations FROM (
+                SELECT DATE(created_at) as date, COUNT(*) as cnt FROM users
+                WHERE notes LIKE '%[source: facebook]%'
+                AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY DATE(created_at)
+                UNION ALL
+                SELECT DATE(created_at) as date, COUNT(*) as cnt FROM conversion_events
+                WHERE event_type = 'register_complete'
+                AND (traffic_type = 'facebook' OR source LIKE '%facebook%')
+                AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY DATE(created_at)
+            ) combined GROUP BY date ORDER BY date
         ''')
         daily_registrations = {str(row['date']): row['registrations'] for row in cursor.fetchall()}
 
@@ -843,6 +856,13 @@ def get_facebook_ads_stats():
             FROM users u
             LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
             WHERE u.notes LIKE '%[source: facebook]%'
+               OR EXISTS (
+                   SELECT 1 FROM conversion_events ce
+                   WHERE ce.event_type = 'register_complete'
+                     AND (ce.traffic_type = 'facebook' OR ce.source LIKE '%facebook%')
+                     AND ce.created_at BETWEEN u.created_at - INTERVAL '5 minutes'
+                                            AND u.created_at + INTERVAL '5 minutes'
+               )
             ORDER BY u.created_at DESC
             LIMIT 10
         ''')

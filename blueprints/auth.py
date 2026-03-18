@@ -108,11 +108,23 @@ def google_callback():
 
         display_name = name or username
 
+        # Detect traffic source from session (set by track_page_visit when fbclid/utm_source detected)
+        _traffic_source = session.get('_traffic_source', '')
+        _utm_campaign   = session.get('_utm_campaign', '')
+        _is_facebook    = (
+            _traffic_source == 'facebook'
+            or bool(session.get('_fbclid'))
+            or ('facebook' in str(_utm_campaign).lower())
+            or ('fb' in str(_utm_campaign).lower())
+            or ('instagram' in str(_utm_campaign).lower())
+        )
+        user_notes = '[source: facebook]' if _is_facebook else None
+
         cursor.execute('''
-            INSERT INTO users (full_name, username, password, role_id, reseller_tier_id, email)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (full_name, username, password, role_id, reseller_tier_id, email, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (display_name, username, password_hash, reseller_role['id'], tier_id, email))
+        ''', (display_name, username, password_hash, reseller_role['id'], tier_id, email, user_notes))
 
         new_user_id = cursor.fetchone()['id']
         conn.commit()
@@ -136,8 +148,8 @@ def google_callback():
         try:
             visitor_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
             user_agent = request.headers.get('User-Agent', '')
-            utm_campaign = session.get('_utm_campaign') or request.referrer or None
-            traffic_type = 'facebook' if (utm_campaign and 'fb' in str(utm_campaign).lower()) else 'organic'
+            utm_campaign = _utm_campaign or request.referrer or None
+            traffic_type = 'facebook' if _is_facebook else 'organic'
             import uuid as _uuid
             sess_id = session.get('_tracking_session') or str(_uuid.uuid4())[:16]
             cursor.execute('''
