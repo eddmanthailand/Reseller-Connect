@@ -3416,5 +3416,73 @@
             } catch(_e) {}
         })();
     </script>
+
+    <!-- EKG Behaviour Tracker -->
+    <script>
+    (function() {
+        // Generate or restore anonymous session ID
+        var _sid = sessionStorage.getItem('_ekg_sid');
+        if (!_sid) { _sid = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('_ekg_sid', _sid); }
+
+        function _track(event, page, meta) {
+            try {
+                navigator.sendBeacon('/api/track', new Blob([JSON.stringify({
+                    event: event,
+                    session_id: _sid,
+                    page: page || location.pathname,
+                    metadata: meta || {}
+                })], { type: 'application/json' }));
+            } catch(e) {
+                fetch('/api/track', { method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ event: event, session_id: _sid, page: page || location.pathname, metadata: meta || {} })
+                }).catch(function(){});
+            }
+        }
+
+        // Expose globally for SPA to call
+        window._ekgTrack = _track;
+
+        // Track initial page view
+        _track('page_view', location.pathname);
+
+        // Track SPA view changes (intercept pushState)
+        var _origPush = history.pushState.bind(history);
+        history.pushState = function() { _origPush.apply(history, arguments); _track('page_view', location.pathname); };
+        window.addEventListener('popstate', function() { _track('page_view', location.pathname); });
+
+        // Track search (debounced)
+        var _searchTimer;
+        document.addEventListener('input', function(e) {
+            if (e.target && (e.target.id === 'searchInput' || e.target.type === 'search' || e.target.placeholder && e.target.placeholder.includes('ค้นหา'))) {
+                clearTimeout(_searchTimer);
+                _searchTimer = setTimeout(function() {
+                    var q = e.target.value.trim();
+                    if (q.length > 1) _track('search', location.pathname, { query: q });
+                }, 800);
+            }
+        });
+
+        // Track add-to-cart clicks (delegate)
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-track-cart],[id*="addToCart"],[class*="add-cart"],[class*="add_cart"]');
+            if (btn) {
+                var name = btn.dataset.productName || btn.closest('[data-product-name]')?.dataset.productName || '';
+                var id   = btn.dataset.productId   || btn.closest('[data-product-id]')?.dataset.productId   || '';
+                _track('add_to_cart', location.pathname, { product_id: id, product_name: name });
+            }
+        });
+
+    })();
+    </script>
+
+    {% if config.get('CLARITY_ID') %}
+    <!-- Microsoft Clarity -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){ c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "{{ config.get('CLARITY_ID') }}");
+    </script>
+    {% endif %}
 </body>
 </html>

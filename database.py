@@ -1440,6 +1440,24 @@ def init_db():
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL")
 
+        # User behaviour tracking
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_events (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                session_id VARCHAR(64),
+                event_type VARCHAR(50) NOT NULL,
+                page VARCHAR(255),
+                metadata JSONB DEFAULT '{}',
+                ip_hash VARCHAR(64),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_events_user_id  ON user_events(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_events_event    ON user_events(event_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_events_created  ON user_events(created_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_events_session  ON user_events(session_id)")
+
         conn.commit()
         print("✅ Database initialized successfully with Neon PostgreSQL!")
         

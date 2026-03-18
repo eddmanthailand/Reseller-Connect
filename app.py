@@ -107,6 +107,9 @@ app.register_blueprint(member_bot_bp)
 from blueprints.warehouse import warehouse_bp
 app.register_blueprint(warehouse_bp)
 
+from blueprints.analytics import analytics_bp
+app.register_blueprint(analytics_bp)
+
 from blueprints.marketing import marketing_bp
 app.register_blueprint(marketing_bp)
 
