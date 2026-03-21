@@ -204,6 +204,15 @@ def _agent_build_system_prompt(settings, context=None):
 - query_order_detail: รายละเอียดออเดอร์เฉพาะใบ (params: order_number หรือ order_id)
 - query_customer: ค้นหาข้อมูลลูกค้า (params: name หรือ phone)
 - query_resellers: รายชื่อตัวแทนและสถิติ (params: tier="Gold" optional)
+- query_reseller_profile: โปรไฟล์ตัวแทนแบบละเอียด (params: name="ชื่อหรือร้านค้า") — ที่อยู่, บัญชีธนาคาร, PromptPay, ยอดซื้อรวม
+- query_resellers_missing_profile: ตัวแทนที่โปรไฟล์ไม่ครบ (params: field="address"/"phone"/"brand_name"/"province"/"all")
+- query_resellers_new: ตัวแทนสมัครใหม่และรายการที่รออนุมัติ
+- query_reseller_orders: ออเดอร์ของตัวแทนคนหนึ่ง (params: name="ชื่อตัวแทน", limit=10)
+- query_promotions: โปรโมชันทั้งหมด (active/inactive) — ชื่อ, ประเภท, เงื่อนไข
+- query_coupons: คูปองทั้งหมด — code, ส่วนลด, จำนวนที่ใช้แล้ว, วันหมดอายุ
+- query_revenue_by_reseller: ยอดขายแยกตัวแทน (params: period="week"/"month"/"all", limit=10)
+- query_shipments_pending: พัสดุที่ยังไม่มีเลขติดตาม
+- query_orders_by_date: ออเดอร์ตามวันที่ (params: date="YYYY-MM-DD", status optional)
 - query_unread_chat: แชทที่ยังไม่ได้อ่าน
 - query_mto_status: สถานะออเดอร์สั่งผลิต (MTO)
 - read_notes: อ่านสมุดโน้ต AI ทั้งหมด
@@ -241,6 +250,9 @@ def _agent_build_system_prompt(settings, context=None):
 - write_google_sheet: เขียน/อัปเดตข้อมูลลง Google Sheets (params: spreadsheet_id, range="Sheet1!A1", values=[["col1","col2",...]], mode="append"/"overwrite")
 
 [WRITE — ต้อง Superadmin อนุมัติทุกครั้ง]
+- approve_reseller: อนุมัติหรือปฏิเสธการสมัครตัวแทน (params: reseller_name, approve=true/false)
+- update_reseller_tier: เปลี่ยนระดับตัวแทน (params: reseller_name, tier_name="Silver"/"Gold"/"Platinum")
+- update_shipment_tracking: ใส่เลขติดตามพัสดุ (params: order_number, tracking_number, shipping_provider optional) — อัปเดตสถานะออเดอร์เป็น shipped อัตโนมัติ
 - adjust_stock: เพิ่ม/ลดสต็อก SKU (params: product_name, color, size, quantity, direction="add"/"subtract")
 - update_order_status: เปลี่ยนสถานะออเดอร์ (params: order_number, new_status)
 - toggle_product: เปิด/ปิดการขายสินค้า (params: product_name, active=true/false)
@@ -1097,6 +1109,254 @@ def _agent_execute_read_tool(tool, params, cursor):
             return {'text': f"📒 **สมุดโน้ต AI** ({len(rows)} รายการ)\n" + '\n'.join(lines)}
         except Exception as e:
             return {'text': f'ไม่สามารถอ่านสมุดโน้ตได้: {e}'}
+
+    elif tool == 'query_reseller_profile':
+        q = str(params.get('name', '') or params.get('username', ''))
+        if not q:
+            return {'text': 'กรุณาระบุชื่อหรือ username ของตัวแทน'}
+        cursor.execute('''
+            SELECT u.full_name, u.username, u.phone, u.email, u.brand_name, u.line_id,
+                   u.address, u.subdistrict, u.district, u.province, u.postal_code,
+                   u.bank_name, u.bank_account_number, u.bank_account_name, u.promptpay_number,
+                   u.is_approved, u.created_at, u.notes, rt.name as tier_name,
+                   COUNT(o.id) as order_cnt, COALESCE(SUM(o.final_amount),0) as total_spend
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN (\'cancelled\',\'returned\',\'stock_restored\')
+            WHERE (u.full_name ILIKE %s OR u.username ILIKE %s OR u.brand_name ILIKE %s)
+              AND u.role_id = 3
+            GROUP BY u.id, rt.name LIMIT 3
+        ''', (f'%{q}%', f'%{q}%', f'%{q}%'))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'ไม่พบตัวแทนชื่อ "{q}"'}
+        if len(rows) > 1:
+            opts = ', '.join([f"{r['full_name']} (@{r['username']})" for r in rows])
+            return {'text': f'พบหลายคน: {opts} — ระบุให้ชัดขึ้น'}
+        r = rows[0]
+        addr = ' '.join(filter(None, [r['address'], r['subdistrict'], r['district'], r['province'], r['postal_code']])) or '(ไม่ได้ใส่)'
+        bank = ' '.join(filter(None, [r['bank_name'], r['bank_account_number'], r['bank_account_name']])) or '(ไม่มี)'
+        return {'text': (
+            f"👤 **{r['full_name']}** (@{r['username']})\n"
+            f"ร้านค้า: {r['brand_name'] or '(ไม่มี)'}\n"
+            f"ระดับ: {r['tier_name'] or '-'} | สถานะ: {'✅ อนุมัติแล้ว' if r['is_approved'] else '⏳ รออนุมัติ'}\n"
+            f"เบอร์: {r['phone'] or '(ไม่มี)'} | Line: {r['line_id'] or '(ไม่มี)'}\n"
+            f"ที่อยู่ร้าน: {addr}\n"
+            f"ธนาคาร: {bank}\n"
+            f"PromptPay: {r['promptpay_number'] or '(ไม่มี)'}\n"
+            f"ออเดอร์: {int(r['order_cnt'])} ใบ | ยอดซื้อรวม: ฿{float(r['total_spend']):,.0f}\n"
+            f"สมัครเมื่อ: {str(r['created_at'])[:10]}"
+            + (f"\nหมายเหตุ: {r['notes']}" if r['notes'] else '')
+        )}
+
+    elif tool == 'query_resellers_missing_profile':
+        field = str(params.get('field', 'all'))
+        conditions = {
+            'address': "(u.address IS NULL OR u.address = '')",
+            'phone':   "(u.phone IS NULL OR u.phone = '')",
+            'brand_name': "(u.brand_name IS NULL OR u.brand_name = '')",
+            'province': "(u.province IS NULL OR u.province = '')",
+        }
+        if field == 'all':
+            where = "(" + " OR ".join(conditions.values()) + ")"
+        elif field in conditions:
+            where = conditions[field]
+        else:
+            where = "(" + " OR ".join(conditions.values()) + ")"
+        cursor.execute(f'''
+            SELECT u.full_name, u.username, u.phone, u.brand_name, u.address, u.province,
+                   rt.name as tier_name
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.role_id = 3 AND u.is_approved = TRUE AND {where}
+            ORDER BY u.created_at DESC LIMIT 20
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': f'✅ ตัวแทนทุกคนมีข้อมูล{"ที่อยู่" if field=="address" else "โปรไฟล์"} ครบแล้ว'}
+        lines = []
+        for r in rows:
+            missing = []
+            if not r['phone']: missing.append('เบอร์โทร')
+            if not r['brand_name']: missing.append('ชื่อร้านค้า')
+            if not r['address']: missing.append('ที่อยู่')
+            if not r['province']: missing.append('จังหวัด')
+            lines.append(f"• {r['full_name']} (@{r['username']}) [{r['tier_name'] or '-'}] — ขาด: {', '.join(missing) if missing else '-'}")
+        label = {'address':'ที่อยู่','phone':'เบอร์โทร','brand_name':'ชื่อร้าน','province':'จังหวัด'}.get(field,'โปรไฟล์')
+        return {'text': f"⚠️ ตัวแทนที่ข้อมูล{label}ไม่ครบ ({len(rows)} คน):\n" + '\n'.join(lines)}
+
+    elif tool == 'query_resellers_new':
+        cursor.execute('''
+            SELECT u.full_name, u.username, u.phone, u.email, u.brand_name,
+                   u.is_approved, u.created_at, rt.name as tier_name
+            FROM users u
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.role_id = 3
+            ORDER BY u.created_at DESC LIMIT 15
+        ''')
+        rows = cursor.fetchall()
+        pending = [r for r in rows if not r['is_approved']]
+        recent  = [r for r in rows if r['is_approved']][:10]
+        lines = []
+        if pending:
+            lines.append(f"⏳ **รออนุมัติ {len(pending)} คน:**")
+            for r in pending:
+                lines.append(f"  • {r['full_name']} (@{r['username']}) | {r['phone'] or '-'} | สมัคร {str(r['created_at'])[:10]}")
+        if recent:
+            lines.append(f"\n✅ **สมัครล่าสุด (อนุมัติแล้ว):**")
+            for r in recent[:5]:
+                lines.append(f"  • {r['full_name']} [{r['tier_name'] or '-'}] | สมัคร {str(r['created_at'])[:10]}")
+        return {'text': '\n'.join(lines) if lines else 'ไม่มีข้อมูลสมาชิกใหม่'}
+
+    elif tool == 'query_reseller_orders':
+        q = str(params.get('name', '') or params.get('reseller_name', ''))
+        limit = int(params.get('limit', 10))
+        cursor.execute('''SELECT id, full_name FROM users WHERE (full_name ILIKE %s OR username ILIKE %s) AND role_id=3 LIMIT 3''',
+                       (f'%{q}%', f'%{q}%'))
+        users = cursor.fetchall()
+        if not users:
+            return {'text': f'ไม่พบตัวแทนชื่อ "{q}"'}
+        if len(users) > 1:
+            opts = ', '.join([u['full_name'] for u in users])
+            return {'text': f'พบหลายคน: {opts} — ระบุให้ชัดขึ้น'}
+        uid = users[0]['id']
+        cursor.execute('''
+            SELECT order_number, status, final_amount, created_at, payment_method
+            FROM orders WHERE user_id = %s ORDER BY created_at DESC LIMIT %s
+        ''', (uid, limit))
+        orders = cursor.fetchall()
+        if not orders:
+            return {'text': f'ตัวแทน {users[0]["full_name"]} ยังไม่มีออเดอร์'}
+        sl = {'pending_payment':'รอชำระ','processing':'จัดเตรียม','shipped':'จัดส่งแล้ว','delivered':'ส่งถึงแล้ว','cancelled':'ยกเลิก'}
+        lines = [f"• {o['order_number']} — {sl.get(o['status'],o['status'])} — ฿{float(o['final_amount']):,.0f} ({str(o['created_at'])[:10]})" for o in orders]
+        return {'text': f"📦 ออเดอร์ของ {users[0]['full_name']} ({len(orders)} ใบล่าสุด):\n" + '\n'.join(lines)}
+
+    elif tool == 'query_promotions':
+        cursor.execute('''
+            SELECT p.name, p.promo_type, p.reward_type, p.reward_value,
+                   p.is_active, p.start_date, p.end_date,
+                   b.name as brand_name, rt.name as min_tier
+            FROM promotions p
+            LEFT JOIN brands b ON b.id = p.target_brand_id
+            LEFT JOIN reseller_tiers rt ON rt.id = p.min_tier_id
+            ORDER BY p.is_active DESC, p.created_at DESC LIMIT 20
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีโปรโมชันในระบบ'}
+        active = [r for r in rows if r['is_active']]
+        inactive = [r for r in rows if not r['is_active']]
+        lines = []
+        if active:
+            lines.append(f"✅ **โปรโมชัน Active ({len(active)} รายการ):**")
+            for r in active:
+                exp = f" (หมดอายุ {str(r['end_date'])[:10]})" if r['end_date'] else ''
+                tier = f" | ขั้นต่ำ: {r['min_tier']}" if r['min_tier'] else ''
+                lines.append(f"  • {r['name']} — {r['reward_type']} {r['reward_value']}{tier}{exp}")
+        if inactive:
+            lines.append(f"\n⏸ **ปิดใช้งาน ({len(inactive)} รายการ):**")
+            for r in inactive[:5]:
+                lines.append(f"  • {r['name']}")
+        return {'text': '\n'.join(lines)}
+
+    elif tool == 'query_coupons':
+        cursor.execute('''
+            SELECT code, name, discount_type, discount_value, usage_count, total_quota,
+                   per_user_limit, min_spend, is_active, start_date, end_date
+            FROM coupons ORDER BY is_active DESC, created_at DESC LIMIT 20
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีคูปองในระบบ'}
+        active = [r for r in rows if r['is_active']]
+        lines = [f"🎟️ **คูปองทั้งหมด ({len(rows)} รายการ)**"]
+        for r in rows:
+            status = '✅' if r['is_active'] else '⏸'
+            quota = f"{r['usage_count']}/{r['total_quota']}" if r['total_quota'] else f"{r['usage_count']}/∞"
+            disc = f"{r['discount_value']}%" if r['discount_type'] == 'percent' else f"฿{r['discount_value']}"
+            exp = f" หมด {str(r['end_date'])[:10]}" if r['end_date'] else ''
+            lines.append(f"  {status} **{r['code']}** ({r['name']}) — ลด {disc} | ใช้แล้ว {quota}{exp}")
+        return {'text': '\n'.join(lines)}
+
+    elif tool == 'query_revenue_by_reseller':
+        period = str(params.get('period', 'month'))
+        limit = int(params.get('limit', 10))
+        if period == 'week':
+            date_cond = "DATE(o.created_at) >= DATE_TRUNC('week', CURRENT_DATE)"
+        elif period == 'all':
+            date_cond = "TRUE"
+        else:
+            date_cond = "DATE(o.created_at) >= DATE_TRUNC('month', CURRENT_DATE)"
+        cursor.execute(f'''
+            SELECT u.full_name, u.brand_name, rt.name as tier_name,
+                   COUNT(o.id) as order_cnt, COALESCE(SUM(o.final_amount),0) as revenue
+            FROM orders o
+            JOIN users u ON u.id = o.user_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE o.status NOT IN (\'cancelled\',\'returned\',\'stock_restored\')
+              AND o.is_quick_order = FALSE AND {date_cond}
+            GROUP BY u.full_name, u.brand_name, rt.name
+            ORDER BY revenue DESC LIMIT %s
+        ''', (limit,))
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': 'ยังไม่มีข้อมูลยอดขายตามตัวแทน'}
+        period_label = {'week':'สัปดาห์นี้','month':'เดือนนี้','all':'ทั้งหมด'}.get(period,'เดือนนี้')
+        lines = [f"💰 **ยอดขายแยกตัวแทน ({period_label}) Top {limit}:**"]
+        for i, r in enumerate(rows):
+            name = r['brand_name'] or r['full_name']
+            lines.append(f"  {i+1}. {name} [{r['tier_name'] or '-'}] — {int(r['order_cnt'])} ออเดอร์ ฿{float(r['revenue']):,.0f}")
+        return {'text': '\n'.join(lines)}
+
+    elif tool == 'query_shipments_pending':
+        cursor.execute('''
+            SELECT o.order_number, u.full_name as reseller_name, os.status,
+                   os.tracking_number, os.shipping_provider, os.created_at, w.name as warehouse_name
+            FROM order_shipments os
+            JOIN orders o ON o.id = os.order_id
+            JOIN users u ON u.id = o.user_id
+            JOIN warehouses w ON w.id = os.warehouse_id
+            WHERE (os.tracking_number IS NULL OR os.tracking_number = '')
+              AND os.status NOT IN (\'delivered\',\'returned\')
+              AND o.status NOT IN (\'cancelled\',\'returned\',\'stock_restored\')
+            ORDER BY os.created_at DESC LIMIT 20
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            return {'text': '✅ ไม่มีพัสดุที่รอกรอกเลขติดตาม'}
+        lines = [f"📦 **พัสดุที่ยังไม่มีเลขติดตาม ({len(rows)} รายการ):**"]
+        for r in rows:
+            lines.append(f"  • {r['order_number']} | {r['reseller_name']} | คลัง: {r['warehouse_name']} | {str(r['created_at'])[:10]}")
+        return {'text': '\n'.join(lines)}
+
+    elif tool == 'query_orders_by_date':
+        date_str = str(params.get('date', '') or today.isoformat())
+        status_filter = params.get('status', '')
+        try:
+            import datetime as _dt2
+            target_date = _dt2.date.fromisoformat(date_str)
+        except Exception:
+            target_date = today
+        where_extra = ''
+        if status_filter:
+            where_extra = f" AND o.status = '{status_filter}'"
+        cursor.execute(f'''
+            SELECT o.order_number, o.status, o.final_amount, o.payment_method,
+                   u.full_name as reseller_name, o.created_at
+            FROM orders o
+            JOIN users u ON u.id = o.user_id
+            WHERE DATE(o.created_at) = %s {where_extra}
+            ORDER BY o.created_at DESC LIMIT 30
+        ''', (target_date,))
+        rows = cursor.fetchall()
+        sl = {'pending_payment':'รอชำระ','processing':'จัดเตรียม','shipped':'จัดส่งแล้ว','delivered':'ส่งถึงแล้ว','cancelled':'ยกเลิก','paid':'ชำระแล้ว'}
+        if not rows:
+            return {'text': f'ไม่มีออเดอร์วันที่ {target_date}'}
+        total = sum(float(r['final_amount']) for r in rows if r['status'] not in ('cancelled','returned'))
+        lines = [f"📋 **ออเดอร์วันที่ {target_date} ({len(rows)} ใบ | รวม ฿{total:,.0f}):**"]
+        for r in rows:
+            lines.append(f"  • {r['order_number']} — {sl.get(r['status'],r['status'])} — ฿{float(r['final_amount']):,.0f} | {r['reseller_name']}")
+        return {'text': '\n'.join(lines)}
 
     elif tool == 'query_facebook_ads':
         import urllib.request as _ur
@@ -2358,6 +2618,90 @@ def agent_chat():
                                 'message': intent.get('message', f"จะเขียน {len(values)} แถว ลง Google Sheet `{range_}` (mode: {mode})"),
                                 'model_used': model_used}), 200
 
+            elif tool == 'approve_reseller':
+                r_name = (params.get('reseller_name') or params.get('username') or '').strip()
+                approve = bool(params.get('approve', True))
+                if not r_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ reseller_name หรือ username'}), 200
+                cursor.execute('''SELECT id, full_name, username, is_approved FROM users
+                    WHERE (full_name ILIKE %s OR username ILIKE %s) AND role_id=3 LIMIT 3''',
+                    (f'%{r_name}%', f'%{r_name}%'))
+                found = cursor.fetchall()
+                if not found:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบตัวแทนชื่อ "{r_name}"'}), 200
+                if len(found) > 1:
+                    opts = ', '.join([f"{u['full_name']} (@{u['username']})" for u in found])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายคน: {opts} — ระบุให้ชัดขึ้น'}), 200
+                u = found[0]
+                plan = {
+                    'before': {'ชื่อ': u['full_name'], 'สถานะ': 'อนุมัติแล้ว' if u['is_approved'] else 'รออนุมัติ'},
+                    'after':  {'ชื่อ': u['full_name'], 'สถานะใหม่': 'อนุมัติ ✅' if approve else 'ปฏิเสธ ❌'}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'user_id': u['id'], 'old_approved': u['is_approved']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {**params, 'user_id': u['id'], 'approve': approve},
+                                'message': intent.get('message', f"จะ{'อนุมัติ' if approve else 'ปฏิเสธ'}สมาชิก {u['full_name']}"),
+                                'model_used': model_used}), 200
+
+            elif tool == 'update_reseller_tier':
+                r_name = (params.get('reseller_name') or params.get('name') or '').strip()
+                tier_name = (params.get('tier_name') or params.get('tier') or '').strip()
+                if not r_name or not tier_name:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ reseller_name และ tier_name'}), 200
+                cursor.execute('''SELECT u.id, u.full_name, u.username, rt.name as current_tier
+                    FROM users u LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+                    WHERE (u.full_name ILIKE %s OR u.username ILIKE %s) AND u.role_id=3 LIMIT 3''',
+                    (f'%{r_name}%', f'%{r_name}%'))
+                found = cursor.fetchall()
+                if not found:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบตัวแทนชื่อ "{r_name}"'}), 200
+                if len(found) > 1:
+                    opts = ', '.join([f"{u['full_name']} (@{u['username']})" for u in found])
+                    return jsonify({'type': 'answer', 'message': f'พบหลายคน: {opts} — ระบุให้ชัดขึ้น'}), 200
+                u = found[0]
+                cursor.execute('SELECT id, name FROM reseller_tiers WHERE name ILIKE %s LIMIT 1', (f'%{tier_name}%',))
+                tier_row = cursor.fetchone()
+                if not tier_row:
+                    cursor.execute('SELECT name FROM reseller_tiers ORDER BY level_rank')
+                    all_tiers = ', '.join([r['name'] for r in cursor.fetchall()])
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบระดับ "{tier_name}" — ระดับที่มี: {all_tiers}'}), 200
+                plan = {
+                    'before': {'ตัวแทน': u['full_name'], 'ระดับปัจจุบัน': u['current_tier'] or '-'},
+                    'after':  {'ตัวแทน': u['full_name'], 'ระดับใหม่': tier_row['name']}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'user_id': u['id'], 'old_tier': u['current_tier']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {'user_id': u['id'], 'tier_id': tier_row['id'], 'tier_name': tier_row['name']},
+                                'message': intent.get('message', f"จะเปลี่ยนระดับ {u['full_name']} → {tier_row['name']}"),
+                                'model_used': model_used}), 200
+
+            elif tool == 'update_shipment_tracking':
+                order_num = (params.get('order_number') or '').strip()
+                tracking  = (params.get('tracking_number') or '').strip()
+                provider  = (params.get('shipping_provider') or '').strip()
+                if not order_num or not tracking:
+                    return jsonify({'type': 'answer', 'message': 'กรุณาระบุ order_number และ tracking_number'}), 200
+                cursor.execute('SELECT id, order_number, status FROM orders WHERE order_number ILIKE %s LIMIT 1', (f'%{order_num}%',))
+                order = cursor.fetchone()
+                if not order:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบออเดอร์ "{order_num}"'}), 200
+                cursor.execute('SELECT id, tracking_number, shipping_provider FROM order_shipments WHERE order_id=%s LIMIT 1', (order['id'],))
+                shipment = cursor.fetchone()
+                if not shipment:
+                    return jsonify({'type': 'answer', 'message': f'ไม่พบข้อมูลพัสดุสำหรับออเดอร์ {order["order_number"]}'}), 200
+                plan = {
+                    'before': {'ออเดอร์': order['order_number'], 'เลขพัสดุเดิม': shipment['tracking_number'] or '(ว่าง)', 'ขนส่งเดิม': shipment['shipping_provider'] or '(ว่าง)'},
+                    'after':  {'เลขพัสดุใหม่': tracking, 'ขนส่ง': provider or shipment['shipping_provider'] or '-'}
+                }
+                log_id = _agent_log_plan(conn.cursor(), conn, admin_id, admin_name, message, tool, context_page,
+                                          params, {'shipment_id': shipment['id'], 'old_tracking': shipment['tracking_number']})
+                return jsonify({'type': 'plan', 'tool': tool, 'log_id': log_id, 'plan': plan,
+                                'params': {'shipment_id': shipment['id'], 'tracking_number': tracking, 'shipping_provider': provider or shipment['shipping_provider']},
+                                'message': intent.get('message', f"จะอัปเดตเลขพัสดุออเดอร์ {order['order_number']} → {tracking}"),
+                                'model_used': model_used}), 200
+
             return jsonify({'type': 'answer', 'message': f'tool "{tool}" ยังไม่รองรับ'}), 200
 
         elif itype == 'clarify':
@@ -2895,6 +3239,84 @@ def agent_execute():
                              ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
                 conn.commit()
             return jsonify({'message': result['text'], 'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'approve_reseller':
+            user_id = params.get('user_id')
+            approve = bool(params.get('approve', True))
+            if not user_id:
+                return jsonify({'error': 'ขาด user_id'}), 400
+            cursor.execute('SELECT id, full_name, is_approved FROM users WHERE id=%s', (user_id,))
+            u = cursor.fetchone()
+            if not u:
+                return jsonify({'error': f'ไม่พบผู้ใช้ id {user_id}'}), 400
+            old_approved = u['is_approved']
+            cursor.execute('UPDATE users SET is_approved=%s WHERE id=%s', (approve, user_id))
+            before_data = {'ชื่อ': u['full_name'], 'สถานะเดิม': 'อนุมัติแล้ว' if old_approved else 'รออนุมัติ'}
+            after_data  = {'ชื่อ': u['full_name'], 'สถานะใหม่': 'อนุมัติ ✅' if approve else 'ปฏิเสธ ❌'}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            action_word = 'อนุมัติ' if approve else 'ปฏิเสธ'
+            return jsonify({'message': f'✅ {action_word}สมาชิก **{u["full_name"]}** สำเร็จ',
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'update_reseller_tier':
+            user_id = params.get('user_id')
+            tier_id = params.get('tier_id')
+            tier_name = params.get('tier_name', '')
+            if not user_id or not tier_id:
+                return jsonify({'error': 'ขาด user_id หรือ tier_id'}), 400
+            cursor.execute('SELECT id, full_name FROM users WHERE id=%s', (user_id,))
+            u = cursor.fetchone()
+            if not u:
+                return jsonify({'error': f'ไม่พบผู้ใช้ id {user_id}'}), 400
+            cursor.execute('SELECT id, name FROM reseller_tiers WHERE id=%s', (tier_id,))
+            tier_row = cursor.fetchone()
+            if not tier_row:
+                return jsonify({'error': f'ไม่พบระดับ id {tier_id}'}), 400
+            cursor.execute('SELECT rt.name FROM users u LEFT JOIN reseller_tiers rt ON rt.id=u.reseller_tier_id WHERE u.id=%s', (user_id,))
+            old_tier_row = cursor.fetchone()
+            old_tier = old_tier_row['name'] if old_tier_row and old_tier_row['name'] else '(ไม่มีระดับ)'
+            cursor.execute('UPDATE users SET reseller_tier_id=%s WHERE id=%s', (tier_id, user_id))
+            before_data = {'ตัวแทน': u['full_name'], 'ระดับเดิม': old_tier}
+            after_data  = {'ตัวแทน': u['full_name'], 'ระดับใหม่': tier_row['name']}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f'✅ เปลี่ยนระดับ **{u["full_name"]}** → {tier_row["name"]} สำเร็จ',
+                            'before': before_data, 'after': after_data}), 200
+
+        elif tool == 'update_shipment_tracking':
+            shipment_id = params.get('shipment_id')
+            tracking    = (params.get('tracking_number') or '').strip()
+            provider    = (params.get('shipping_provider') or '').strip()
+            if not shipment_id or not tracking:
+                return jsonify({'error': 'ขาด shipment_id หรือ tracking_number'}), 400
+            cursor.execute('''SELECT os.id, os.tracking_number, os.shipping_provider, o.order_number
+                FROM order_shipments os JOIN orders o ON o.id=os.order_id WHERE os.id=%s''', (shipment_id,))
+            shipment = cursor.fetchone()
+            if not shipment:
+                return jsonify({'error': f'ไม่พบพัสดุ id {shipment_id}'}), 400
+            old_tracking = shipment['tracking_number'] or '(ว่าง)'
+            old_provider = shipment['shipping_provider'] or '(ว่าง)'
+            update_fields = 'tracking_number=%s'
+            update_vals = [tracking]
+            if provider:
+                update_fields += ', shipping_provider=%s'
+                update_vals.append(provider)
+            update_vals.append(shipment_id)
+            cursor.execute(f'UPDATE order_shipments SET {update_fields} WHERE id=%s', update_vals)
+            cursor.execute("UPDATE orders SET status='shipped' WHERE id=(SELECT order_id FROM order_shipments WHERE id=%s) AND status='processing'", (shipment_id,))
+            before_data = {'ออเดอร์': shipment['order_number'], 'เลขพัสดุเดิม': old_tracking, 'ขนส่งเดิม': old_provider}
+            after_data  = {'เลขพัสดุใหม่': tracking, 'ขนส่ง': provider or old_provider}
+            if log_id:
+                cursor.execute('UPDATE agent_action_logs SET status=%s, before_data=%s, after_data=%s, executed_at=CURRENT_TIMESTAMP WHERE id=%s',
+                               ('executed', _json.dumps(before_data), _json.dumps(after_data), log_id))
+            conn.commit()
+            return jsonify({'message': f'✅ อัปเดตเลขพัสดุออเดอร์ **{shipment["order_number"]}** → {tracking} สำเร็จ',
+                            'before': before_data, 'after': after_data}), 200
 
         return jsonify({'error': f'ไม่รองรับ tool "{tool}"'}), 400
 
