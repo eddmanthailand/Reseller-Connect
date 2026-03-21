@@ -232,11 +232,24 @@ def public_chat_message():
         prod_rows = []
         kw_conditions = ''
         kw_count_params = []
-        # Extract product IDs already shown in history (for "show more" pagination)
-        _shown_hist_ids = set()
-        for _sh in history:
-            for _sid in _re.findall(r'\(#(\d+)\)', str(_sh.get('text', ''))):
-                _shown_hist_ids.add(int(_sid))
+
+        # Helper: แปลง SKU codes → ไซส์อ่านง่าย เช่น "S, M, L, XL, 2XL, 3XL"
+        _SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+        def _readable_sizes(sku_list_str):
+            found = set()
+            for sku in (sku_list_str or '').split(' | '):
+                parts = sku.strip().split('-')
+                if parts:
+                    last = parts[-1].upper()
+                    if last in _SIZE_ORDER:
+                        found.add(last)
+            return ', '.join(s for s in _SIZE_ORDER if s in found) or sku_list_str
+
+        # นับรอบที่ bot แสดงสินค้าไปแล้ว (สำหรับ pagination)
+        _bot_prod_turns = sum(
+            1 for _h in history
+            if _h.get('role') == 'bot' and '฿' in str(_h.get('text', ''))
+        )
         _SHOW_MORE_KW = ('ดูเพิ่ม', 'แสดงเพิ่ม', 'เพิ่มเติม', 'ดูทั้งหมด', 'อีกบ้าง', 'แสดงอีก',
                          'ต้องการดูเพิ่ม', 'มีอีกไหม', 'ดูเพิ่มเติม', 'อยากดูเพิ่ม', 'ดูสินค้าเพิ่ม')
         _is_show_more = any(kw in user_msg for kw in _SHOW_MORE_KW)
@@ -278,17 +291,16 @@ def public_chat_message():
                     WHERE p.status = 'active' AND ({kw_conditions})
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
                     ORDER BY p.name
-                    LIMIT 15
+                    LIMIT 50
                 """, kw_params)
                 prod_rows = cursor.fetchall()
                 for pr in prod_rows:
-                    brand = pr.get('brand_name') or ''
                     price = float(pr.get('min_price') or 0)
                     member_price = float(pr.get('member_price') or 0)
                     disc = float(pr.get('discount_pct') or 0)
                     bot_desc = pr.get('bot_description') or ''
                     cat = pr.get('cat_name') or ''
-                    skus = pr.get('sku_list') or ''
+                    skus = _readable_sizes(pr.get('sku_list') or '')
                     img = pr.get('image_url') or ''
                     prod_list.append({
                         'id': pr['id'],
@@ -304,7 +316,7 @@ def public_chat_message():
                     if cat:
                         products_text += f" หมวด:{cat}"
                     if skus:
-                        products_text += f" ไซส์:{skus}"
+                        products_text += f" ไซส์:{skus} สี:White"
                     if bot_desc:
                         products_text += f" ({bot_desc})"
                     if pr.get('size_chart_group_id'):
@@ -348,17 +360,16 @@ def public_chat_message():
                     WHERE p.status = 'active'
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
                     ORDER BY p.name
-                    LIMIT 12
+                    LIMIT 50
                 """, [BRONZE_TIER_ID, BRONZE_TIER_ID])
                 prod_rows = cursor.fetchall()
                 for pr in prod_rows:
-                    brand = pr.get('brand_name') or ''
                     price = float(pr.get('min_price') or 0)
                     member_price = float(pr.get('member_price') or 0)
                     disc = float(pr.get('discount_pct') or 0)
                     bot_desc = pr.get('bot_description') or ''
                     cat = pr.get('cat_name') or ''
-                    skus = pr.get('sku_list') or ''
+                    skus = _readable_sizes(pr.get('sku_list') or '')
                     img = pr.get('image_url') or ''
                     prod_list.append({
                         'id': pr['id'],
@@ -374,18 +385,20 @@ def public_chat_message():
                     if cat:
                         products_text += f" หมวด:{cat}"
                     if skus:
-                        products_text += f" ไซส์:{skus}"
+                        products_text += f" ไซส์:{skus} สี:White"
+                    if bot_desc:
+                        products_text += f" ({bot_desc})"
                     if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
                     products_text += f" (#{pr['id']})\n"
             except Exception as _fe:
                 print(f'[GuestBot] fallback product search error: {_fe}')
 
-        # "Show more" products: user explicitly asks to see more, load next batch excluding shown IDs
-        if _is_show_more and _shown_hist_ids and not prod_rows:
+        # "Show more": user asks to see more, load next page using conversation-turn offset
+        if _is_show_more and not prod_rows:
             try:
                 conn.rollback()
-                _excl_list = list(_shown_hist_ids)[:60]
+                _sm_offset = _bot_prod_turns * 50
                 cursor.execute(f"""
                     SELECT p.id, p.name, p.bot_description, p.size_chart_group_id,
                            b.name as brand_name,
@@ -407,19 +420,19 @@ def public_chat_message():
                            STRING_AGG(DISTINCT s.sku_code, ' | ' ORDER BY s.sku_code) as sku_list
                     FROM products p LEFT JOIN brands b ON b.id = p.brand_id
                     JOIN skus s ON s.product_id = p.id
-                    WHERE p.status = 'active' AND p.id != ALL(%s)
+                    WHERE p.status = 'active'
                     GROUP BY p.id, p.name, p.bot_description, p.size_chart_group_id, b.name
-                    ORDER BY p.name LIMIT 15
-                """, [BRONZE_TIER_ID, BRONZE_TIER_ID, _excl_list])
+                    ORDER BY p.name LIMIT 50 OFFSET %s
+                """, [BRONZE_TIER_ID, BRONZE_TIER_ID, _sm_offset])
                 _sm_rows = cursor.fetchall()
                 for pr in _sm_rows:
-                    _sm_brand = pr.get('brand_name') or ''
                     _sm_price = float(pr.get('min_price') or 0)
                     _sm_mprice = float(pr.get('member_price') or 0)
                     _sm_disc = float(pr.get('discount_pct') or 0)
                     _sm_cat = pr.get('cat_name') or ''
-                    _sm_skus = pr.get('sku_list') or ''
+                    _sm_skus = _readable_sizes(pr.get('sku_list') or '')
                     _sm_img = pr.get('image_url') or ''
+                    _sm_bot_desc = pr.get('bot_description') or ''
                     prod_list.append({'id': pr['id'], 'name': pr['name'], 'image_url': _sm_img,
                                       'price': f'฿{_sm_price:.0f}',
                                       'member_price': f'฿{_sm_mprice:.0f}' if _sm_mprice > 0 else ''})
@@ -430,7 +443,9 @@ def public_chat_message():
                     if _sm_cat:
                         products_text += f" หมวด:{_sm_cat}"
                     if _sm_skus:
-                        products_text += f" ไซส์:{_sm_skus}"
+                        products_text += f" ไซส์:{_sm_skus} สี:White"
+                    if _sm_bot_desc:
+                        products_text += f" ({_sm_bot_desc})"
                     if pr.get('size_chart_group_id'):
                         products_text += " [มีตารางไซส์]"
                     products_text += f" (#{pr['id']})\n"
@@ -443,10 +458,10 @@ def public_chat_message():
                     pass
 
         # Count total matching products to notify user of remaining not shown
-        if prod_rows and len(prod_rows) >= 15:
+        if prod_rows and len(prod_rows) >= 50:
             try:
                 conn.rollback()
-                _all_shown_ids = {r['id'] for r in prod_rows} | _shown_hist_ids
+                _all_shown_ids = {r['id'] for r in prod_rows}
                 if kw_conditions and kw_count_params:
                     cursor.execute(
                         f"SELECT COUNT(DISTINCT p.id) FROM products p JOIN skus s ON s.product_id = p.id WHERE p.status = 'active' AND ({kw_conditions})",
