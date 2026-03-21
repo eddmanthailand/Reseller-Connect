@@ -1088,6 +1088,101 @@ function proceedToCheckout() {
     window.location.hash = 'checkout';
 }
 
+// ── Store Address Setup Modal ──────────────────────────────────
+
+function _escSA(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function openStoreAddressSetup() {
+    const customerId = document.getElementById('checkoutCustomer')?.value;
+    const customer = customerId
+        ? (checkoutData.customers || []).find(c => c.id == customerId)
+        : null;
+
+    const cur = checkoutData.selfAddress || {};
+    const prefill = {
+        name:        cur.brand_name || cur.full_name || (customer?.full_name) || '',
+        phone:       cur.phone      || customer?.phone       || '',
+        address:     cur.address    || customer?.address     || '',
+        province:    cur.province   || customer?.province    || '',
+        postal_code: cur.postal_code || customer?.postal_code || '',
+    };
+
+    document.getElementById('storeAddrModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'storeAddrModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.72);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(5px);';
+    modal.innerHTML = `
+        <div style="background:#1c1c1e;border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <div style="font-size:18px;font-weight:700;color:#fff;">📦 ที่อยู่ร้านของคุณ</div>
+                <button onclick="document.getElementById('storeAddrModal').remove()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;">×</button>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">ใช้เป็นที่อยู่ผู้ส่งบนป้ายพัสดุ — บันทึกแล้วจะอัปเดตโปรไฟล์ด้วย</div>
+            ${customer ? `<div style="background:rgba(52,199,89,0.13);border:1px solid rgba(52,199,89,0.3);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:12px;color:#34c759;">💡 กรอกล่วงหน้าจากที่อยู่ผู้รับ — ตรวจสอบและแก้ไขให้ถูกต้องก่อนบันทึก</div>` : ''}
+            <form id="storeAddrForm" onsubmit="saveStoreAddressSetup(event)">
+                ${_saField('saName','text','ชื่อ / ชื่อร้าน *','ชื่อหรือชื่อร้าน',prefill.name,true)}
+                ${_saField('saPhone','tel','เบอร์โทรศัพท์ *','08x-xxx-xxxx',prefill.phone,true)}
+                <div style="margin-bottom:14px;">
+                    <label style="font-size:12px;color:rgba(255,255,255,0.55);display:block;margin-bottom:5px;">ที่อยู่ *</label>
+                    <textarea id="saAddress" required rows="2" placeholder="บ้านเลขที่ ถนน ซอย หมู่บ้าน" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;resize:none;font-family:inherit;">${_escSA(prefill.address)}</textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;">
+                    ${_saField('saProvince','text','จังหวัด *','จังหวัด',prefill.province,true,'',true)}
+                    ${_saField('saPostal','text','รหัสไปรษณีย์ *','xxxxx',prefill.postal_code,true,'maxlength="5"',true)}
+                </div>
+                <button type="submit" id="saSubmitBtn" class="btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:700;border-radius:12px;">
+                    💾 บันทึกและดำเนินการต่อ
+                </button>
+            </form>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    setTimeout(() => document.getElementById('saName')?.focus(), 80);
+}
+
+function _saField(id, type, label, placeholder, value, required, extraAttrs, noMargin) {
+    return `<div style="margin-bottom:${noMargin ? '0' : '14px'};">
+        <label style="font-size:12px;color:rgba(255,255,255,0.55);display:block;margin-bottom:5px;">${label}</label>
+        <input id="${id}" type="${type}" ${required ? 'required' : ''} value="${_escSA(value)}" placeholder="${placeholder}" ${extraAttrs || ''}
+            style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.13);border-radius:10px;color:#fff;font-size:14px;box-sizing:border-box;">
+    </div>`;
+}
+
+async function saveStoreAddressSetup(event) {
+    event.preventDefault();
+    const btn = document.getElementById('saSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+
+    const profileData = {
+        brand_name:  document.getElementById('saName')?.value?.trim()    || '',
+        phone:       document.getElementById('saPhone')?.value?.trim()   || '',
+        address:     document.getElementById('saAddress')?.value?.trim() || '',
+        province:    document.getElementById('saProvince')?.value?.trim()|| '',
+        postal_code: document.getElementById('saPostal')?.value?.trim()  || '',
+    };
+
+    try {
+        const r = await fetch(`${RESELLER_API_URL}/reseller/profile`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profileData)
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'บันทึกไม่สำเร็จ');
+
+        checkoutData.selfAddress = { ...checkoutData.selfAddress, ...profileData };
+        document.getElementById('storeAddrModal')?.remove();
+        renderCheckout();
+        showAlert('บันทึกที่อยู่ร้านเรียบร้อย', 'success');
+    } catch (e) {
+        showAlert('❌ ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '💾 บันทึกและดำเนินการต่อ'; }
+    }
+}
+
 let checkoutData = { items: [], total: 0, retailTotal: 0, tierSavings: 0, customers: [], selfAddress: null };
 
 async function loadCheckout() {
@@ -1155,7 +1250,10 @@ function renderCheckout() {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 20px; height: 20px;"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 </div>
                 <div style="flex: 1;">
-                    <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">${addr.brand_name || addr.full_name || 'ที่อยู่ร้าน'}</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <div style="font-weight: 600; font-size: 15px;">${addr.brand_name || addr.full_name || 'ที่อยู่ร้าน'}</div>
+                        <button onclick="openStoreAddressSetup()" style="background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);font-size:11px;padding:3px 10px;border-radius:20px;cursor:pointer;">แก้ไข</button>
+                    </div>
                     <div style="font-size: 13px; opacity: 0.8; margin-bottom: 2px;">📱 ${addr.phone || '-'}</div>
                     <div style="font-size: 13px; opacity: 0.7;">${fullAddress}</div>
                 </div>
@@ -1168,9 +1266,9 @@ function renderCheckout() {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" style="width: 24px; height: 24px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 </div>
                 <div style="font-weight: 500; margin-bottom: 4px; color: #ffffff;">ยังไม่ได้ตั้งค่าที่อยู่ร้าน</div>
-                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 16px;">กรุณาไปตั้งค่าที่อยู่ร้านก่อนใช้งาน</div>
-                <button onclick="window.location.hash='profile'" class="btn-primary" style="padding: 10px 20px; font-size: 13px;">
-                    🔧 ไปตั้งค่าโปรไฟล์
+                <div style="font-size: 13px; opacity: 0.7; margin-bottom: 16px;">กรอกที่อยู่ร้านเพื่อใช้เป็นที่อยู่ผู้ส่งบนพัสดุ</div>
+                <button onclick="openStoreAddressSetup()" class="btn-primary" style="padding: 10px 20px; font-size: 13px;">
+                    ✏️ กรอกที่อยู่ร้าน
                 </button>
             </div>
         `;
@@ -3611,6 +3709,32 @@ async function loadProfile() {
             await setProfileAddressFromText(profile.province, profile.district, profile.subdistrict, profile.postal_code);
         }
         loadProfileCouponWallet();
+
+        // ── Warning banner for missing required info ──
+        const missingProfileFields = [];
+        if (!profile.phone)   missingProfileFields.push('เบอร์โทรศัพท์');
+        if (!profile.address) missingProfileFields.push('ที่อยู่');
+        if (!profile.province) missingProfileFields.push('จังหวัด');
+
+        let profileWarn = document.getElementById('profileIncompleteWarn');
+        if (missingProfileFields.length > 0) {
+            if (!profileWarn) {
+                profileWarn = document.createElement('div');
+                profileWarn.id = 'profileIncompleteWarn';
+                const form = document.getElementById('profileForm') || document.querySelector('#page-profile form');
+                if (form) form.parentNode.insertBefore(profileWarn, form);
+            }
+            profileWarn.style.cssText = 'background:rgba(255,159,10,0.15);border:1px solid rgba(255,159,10,0.4);border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;';
+            profileWarn.innerHTML = `
+                <svg style="flex-shrink:0;margin-top:1px;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff9f0a" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div>
+                    <div style="font-size:13px;font-weight:600;color:#ff9f0a;margin-bottom:3px;">ข้อมูลยังไม่ครบ — กรุณากรอกเพื่อใช้งาน Checkout</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.6);">ยังขาด: <strong style="color:rgba(255,255,255,0.85);">${missingProfileFields.join(', ')}</strong></div>
+                </div>`;
+        } else if (profileWarn) {
+            profileWarn.remove();
+        }
+
     } catch (error) {
         console.error('Error loading profile:', error);
     }
