@@ -144,6 +144,32 @@ app.register_blueprint(auth_bp)
 def privacy_policy():
     return render_template('privacy_policy.html')
 
+
+@app.route('/robots.txt')
+def robots_txt():
+    content = (
+        "User-agent: *\n"
+        "Disallow: /admin/\n"
+        "Disallow: /api/\n"
+        "Disallow: /login\n"
+        "Disallow: /register\n"
+        "Allow: /catalog\n"
+        "Allow: /\n"
+        "\n"
+        "Sitemap: https://ekgshops.com/sitemap.xml\n"
+    )
+    return content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+@app.route('/.well-known/security.txt')
+def security_txt():
+    content = (
+        "Contact: mailto:admin@ekgshops.com\n"
+        "Preferred-Languages: th, en\n"
+        "Policy: https://ekgshops.com/privacy-policy\n"
+    )
+    return content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
 @app.errorhandler(400)
 def bad_request(e):
     if request.path.startswith('/api/'):
@@ -218,24 +244,6 @@ def add_header(response):
     response.headers.pop('Server', None)
     return response
 
-
-# ---- In-memory IP-based rate limiter for public APIs ----
-import collections
-_rate_store = collections.defaultdict(list)
-_rate_lock = threading.Lock()
-
-def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
-    """Return True if request is allowed, False if rate limit exceeded."""
-    import time as _time
-    now = _time.monotonic()
-    cutoff = now - window_seconds
-    with _rate_lock:
-        hits = _rate_store[key]
-        hits[:] = [t for t in hits if t > cutoff]
-        if len(hits) >= max_requests:
-            return False
-        hits.append(now)
-        return True
 
 # ==================== AUTO-CANCEL SCHEDULER ====================
 

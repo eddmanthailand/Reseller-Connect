@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, session, render_template
 
 from database import get_db
-from utils import handle_error, login_required, admin_required
+from utils import handle_error, login_required, admin_required, is_trusted_origin
 
 facebook_ads_bp = Blueprint('facebook_ads', __name__)
 
@@ -443,21 +443,21 @@ def save_facebook_pixel_settings():
 
 @facebook_ads_bp.route('/api/facebook-pixel-settings/public', methods=['GET'])
 def get_facebook_pixel_public():
-    """Get Facebook Pixel ID for frontend (public endpoint)"""
+    """Get Facebook Pixel ID for frontend (public endpoint) — returns pixel_id only."""
     conn = None
     cursor = None
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute('''
-            SELECT pixel_id, track_page_view, track_lead, track_complete_registration
+            SELECT pixel_id
             FROM facebook_pixel_settings
             WHERE is_active = TRUE
             LIMIT 1
         ''')
         settings = cursor.fetchone()
         if settings and settings.get('pixel_id'):
-            return jsonify(dict(settings)), 200
+            return jsonify({'pixel_id': settings['pixel_id']}), 200
         return jsonify({}), 200
     except Exception as e:
         return handle_error(e)
@@ -530,6 +530,9 @@ def track_page_visit():
 @facebook_ads_bp.route('/api/track-event', methods=['POST'])
 def track_conversion_event():
     """Track conversion funnel events (chatbot_open, register_click, register_complete, etc.)"""
+    if not is_trusted_origin():
+        return jsonify({'error': 'Forbidden'}), 403
+
     conn = None
     cursor = None
     try:

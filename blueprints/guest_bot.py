@@ -5,6 +5,7 @@ import os
 import threading
 from blueprints.bot_cache import _BOT_CACHE, _bot_cache_get
 from blueprints.push_utils import notify_admins_guest_lead
+from utils import check_rate_limit
 
 guest_bot_bp = Blueprint('guest_bot', __name__)
 
@@ -13,6 +14,11 @@ def public_chat_message():
     """Guest chat bot for public catalog page — no login required."""
     import json as _json, re as _re
     try:
+        # Rate limit: 20 requests per minute per IP
+        visitor_ip = (request.headers.get('X-Forwarded-For', '') or request.remote_addr or 'unknown').split(',')[0].strip()
+        if not check_rate_limit(f'chat:{visitor_ip}', max_requests=20, window_seconds=60):
+            return jsonify({'reply': 'ส่งข้อความถี่เกินไปค่ะ กรุณารอสักครู่แล้วลองใหม่นะคะ 😊'}), 429
+
         data = request.json or {}
         user_msg = (data.get('message') or '').strip()[:500]
         history = data.get('history') or []   # [{role:'user'|'bot', text:'...'}]

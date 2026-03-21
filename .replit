@@ -50,3 +50,6 @@ VAPID_PUBLIC_KEY = "BEzwbayspvyMS6paBy_KXQAWgnl54ozegJGwZQiHZJ8wXAOQU3yG8TpUNcSd
 VAPID_PRIVATE_KEY = "R4iNEnx-oyVMCx-FNi0YowOa6GHe3VVJVxKRjIz9kds"
 VAPID_SUBJECT = "mailto:admin@ekgshops.com"
 SENDER_EMAIL = "cmidcoteam@gmail.com"
+
+[userenv.production]
+PRODUCTION = "true"

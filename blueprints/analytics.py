@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session, render_template
 from database import get_db
-from utils import admin_required
+from utils import admin_required, is_trusted_origin
 import psycopg2.extras
 import hashlib
 import json
@@ -13,6 +13,9 @@ analytics_bp = Blueprint('analytics', __name__)
 @analytics_bp.route('/api/track', methods=['POST'])
 def track_event():
     try:
+        if not is_trusted_origin():
+            return jsonify({'ok': False}), 403
+
         data = request.get_json(silent=True) or {}
         event_type = (data.get('event') or '').strip()[:50]
         if not event_type:
