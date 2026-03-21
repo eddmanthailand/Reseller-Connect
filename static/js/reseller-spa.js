@@ -1,5 +1,11 @@
 const RESELLER_API_URL = '/api';
 
+let _currentModalProduct = null;
+
+function _mTrack(event, meta) {
+    try { if (window._ekgTrack) window._ekgTrack(event, window.location.hash || window.location.pathname, meta || {}); } catch(e) {}
+}
+
 function getTierSVG(tier, size = 22) {
     const configs = {
         'Bronze':   { fill: '#c07830', stroke: '#8b5520' },
@@ -99,6 +105,7 @@ function setupNavigation() {
 let previousPageBeforeChat = 'home';
 
 function switchPage(pageName) {
+    _mTrack('page_view', { section: pageName });
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === pageName);
     });
@@ -498,6 +505,8 @@ let selectedSkuId = null;
 let currentProductCustomizations = [];
 
 function openProductModal(product) {
+    _currentModalProduct = product;
+    _mTrack('product_view', { product_id: product.id, product_name: product.name });
     // Reset customizations
     selectedCustomizations = {};
     currentProductCustomizations = product.customizations || [];
@@ -887,6 +896,7 @@ async function addToCartFromModal() {
         
         if (response.ok) {
             showAlert('เพิ่มสินค้าลงตะกร้าแล้ว', 'success');
+            _mTrack('add_to_cart', { product_id: _currentModalProduct?.id, product_name: _currentModalProduct?.name, sku_id: selectedSkuId, quantity });
             loadCartBadge();
             closeProductModal();
         } else {
@@ -1074,6 +1084,7 @@ async function removeFromCart(itemId) {
 }
 
 function proceedToCheckout() {
+    _mTrack('checkout_start', { total: checkoutData?.total });
     window.location.hash = 'checkout';
 }
 
@@ -2259,6 +2270,7 @@ async function handleStripeReturn() {
             const data = await res.json();
             if (data.success) {
                 loadCartBadge();
+                _mTrack('checkout_complete', { method: 'stripe', order_number: data.order_number });
                 showAlert(`ชำระเงินสำเร็จ! ออเดอร์ ${data.order_number || ''} กำลังดำเนินการ`, 'success');
                 window.location.hash = 'orders';
             } else {
@@ -2405,6 +2417,7 @@ async function placeOrderWithPromptPay() {
         }
 
         loadCartBadge && loadCartBadge();
+        _mTrack('checkout_complete', { method: 'promptpay', order_id: orderId });
         showPromptPayModal(orderId);
         window.location.hash = 'orders';
         setTimeout(() => { loadOrders && loadOrders(); }, 500);
@@ -2431,6 +2444,7 @@ async function placeOrderCOD() {
         btn.disabled  = false;
         btnText.textContent = 'ยืนยันสั่งซื้อ (COD)';
         await loadCartBadge();
+        _mTrack('checkout_complete', { method: 'cod', order_number: order.order_number, total: order.total });
         showAlert(`สั่งซื้อสำเร็จ! เลขที่ ${order.order_number}\nทีมงานจะเตรียมสินค้าและแจ้งเลข Tracking ให้ทราบ`, 'success');
         window.location.hash = 'orders';
         loadOrders();
