@@ -264,6 +264,9 @@ async function viewOrderDetails(orderId) {
                                         <button onclick="printShippingLabel(${idx})" style="font-size: 11px; padding: 6px 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                                             พิมพ์ใบปะหน้า
                                         </button>
+                                        <button onclick="shareShippingLabel(${orderId}, ${shipment.id})" style="font-size: 11px; padding: 6px 12px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                            แชร์ใบปะหน้า
+                                        </button>
                                         <span style="background: ${shipmentStatusColor}; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;">${shipmentStatusLabel}</span>
                                     </div>
                                 </div>
@@ -1377,6 +1380,40 @@ function printShippingLabel(shipmentIndex) {
 </html>
     `);
     printWindow.document.close();
+}
+
+async function shareShippingLabel(orderId, shipmentId) {
+    try {
+        const r = await fetch(`/api/admin/orders/${orderId}/shipments/${shipmentId}/print-token`, { credentials: 'include' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'ไม่สามารถสร้างลิงก์ได้');
+        const url = d.url;
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+        overlay.innerHTML = `
+            <div style="background:#1e1e2e;border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:28px;width:90%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+                <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">แชร์ใบปะหน้า</div>
+                <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:18px;">คัดลอกลิงก์นี้ส่งให้พนักงาน — เปิดแล้วปริ้นได้เลย ไม่ต้อง login</div>
+                <div style="display:flex;gap:8px;">
+                    <input id="_shareLabelUrl" readonly value="${url}" style="flex:1;font-size:12px;padding:10px 12px;background:rgba(255,255,255,0.07);color:#a5f3fc;border:1px solid rgba(255,255,255,0.15);border-radius:8px;outline:none;min-width:0;">
+                    <button id="_shareCopyBtn" onclick="
+                        navigator.clipboard.writeText('${url}').then(() => {
+                            this.textContent='✓ คัดลอกแล้ว';
+                            this.style.background='linear-gradient(135deg,#10b981,#059669)';
+                            setTimeout(() => { this.textContent='คัดลอก'; this.style.background='linear-gradient(135deg,#6366f1,#8b5cf6)'; }, 2000);
+                        });
+                    " style="font-size:12px;padding:10px 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;">คัดลอก</button>
+                </div>
+                <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:16px;font-size:13px;padding:10px;background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;">ปิด</button>
+            </div>`;
+        document.body.appendChild(overlay);
+        setTimeout(() => document.getElementById('_shareLabelUrl')?.select(), 100);
+    } catch (e) {
+        alert('❌ ' + e.message);
+    }
 }
 
 function showModal(content) {

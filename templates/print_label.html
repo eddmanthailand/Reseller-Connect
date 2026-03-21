@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบปะหน้าพัสดุ - {{ order_number }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        @page { size: A4; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Sarabun', 'Segoe UI', sans-serif; font-size: 14px; color: #222; background: #fff; }
+
+        .page { width: 190mm; min-height: 277mm; margin: 0 auto; }
+
+        /* ── Top half: shipping label ── */
+        .shipping-half {
+            height: 138mm;
+            padding: 14px 16px;
+            border-bottom: 3px dashed #bbb;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .label-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1.5px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .label-brand { font-size: 18px; font-weight: 700; color: #4f46e5; letter-spacing: 0.5px; }
+        .label-meta { font-size: 11px; color: #666; text-align: right; }
+        .label-meta strong { font-size: 13px; color: #222; }
+
+        .address-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            flex: 1;
+        }
+        .address-box { }
+        .address-tag {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .address-name { font-size: 16px; font-weight: 700; color: #111; line-height: 1.3; }
+        .address-phone { font-size: 14px; font-weight: 600; color: #4f46e5; margin: 3px 0; }
+        .address-detail { font-size: 12px; color: #555; line-height: 1.5; }
+
+        .barcode-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-top: 1.5px solid #eee;
+            padding-top: 10px;
+        }
+        .barcode-wrap { flex: 1; }
+        .barcode-wrap svg { width: 100%; height: 55px; }
+        .tracking-info { text-align: right; }
+        .tracking-provider { font-size: 12px; color: #888; }
+        .tracking-number { font-size: 15px; font-weight: 700; color: #111; letter-spacing: 1px; }
+
+        /* ── Bottom half: packing slip ── */
+        .packing-half { padding: 14px 16px; }
+
+        .pack-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1.5px solid #ddd;
+            padding-bottom: 8px;
+        }
+        .pack-title { font-size: 13px; font-weight: 700; color: #333; }
+        .pack-order { font-size: 12px; color: #666; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th {
+            background: #f3f4f6;
+            padding: 7px 10px;
+            text-align: left;
+            font-weight: 700;
+            color: #444;
+            border-bottom: 1.5px solid #ddd;
+        }
+        thead th:last-child { text-align: center; }
+        tbody td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+        tbody td:first-child { text-align: center; width: 28px; }
+        tbody td:last-child { text-align: center; font-weight: 700; width: 50px; }
+        .check-box {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 2px solid #444;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+        .customization { font-size: 10px; color: #7c3aed; margin-top: 3px; }
+        .sku-code { font-size: 10px; color: #999; margin-top: 2px; }
+
+        .pack-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            font-size: 12px;
+            color: #555;
+        }
+        .pack-total { font-weight: 700; font-size: 13px; color: #111; }
+        .signatures { display: flex; gap: 32px; }
+        .sig-box { text-align: center; }
+        .sig-line { width: 100px; border-bottom: 1.5px solid #aaa; margin-bottom: 4px; height: 28px; }
+        .sig-label { font-size: 10px; color: #888; }
+
+        /* Print button (hidden when printing) */
+        .print-btn-bar {
+            text-align: center;
+            padding: 20px 0 10px;
+        }
+        .print-btn {
+            font-family: 'Sarabun', sans-serif;
+            font-size: 15px;
+            padding: 12px 40px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+        @media print {
+            .print-btn-bar { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-btn-bar">
+        <button class="print-btn" onclick="window.print()">🖨️ พิมพ์ใบปะหน้า</button>
+    </div>
+
+    <div class="page">
+        <!-- ── Shipping Label (top half) ── -->
+        <div class="shipping-half">
+            <div class="label-header">
+                <div class="label-brand">EKG Shops</div>
+                <div class="label-meta">
+                    <div>คำสั่งซื้อ: <strong>{{ order_number }}</strong></div>
+                    <div>วันที่: {{ order_date }}</div>
+                    {% if warehouse_name %}<div>คลัง: {{ warehouse_name }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="address-row">
+                <div class="address-box">
+                    <div class="address-tag">ผู้ส่ง (FROM)</div>
+                    <div class="address-name">{{ sender_name }}</div>
+                    <div class="address-phone">{{ sender_phone }}</div>
+                    <div class="address-detail">{{ sender_address }}</div>
+                </div>
+                <div class="address-box">
+                    <div class="address-tag">ผู้รับ (TO)</div>
+                    <div class="address-name">{{ recipient_name }}</div>
+                    <div class="address-phone">{{ recipient_phone }}</div>
+                    <div class="address-detail">{{ recipient_address }}</div>
+                </div>
+            </div>
+
+            {% if tracking_number %}
+            <div class="barcode-row">
+                <div class="barcode-wrap">
+                    <svg id="barcode"></svg>
+                </div>
+                <div class="tracking-info">
+                    {% if shipping_provider %}<div class="tracking-provider">{{ shipping_provider }}</div>{% endif %}
+                    <div class="tracking-number">{{ tracking_number }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ── Packing Slip (bottom half) ── -->
+        <div class="packing-half">
+            <div class="pack-header">
+                <div class="pack-title">ใบรายการสินค้า</div>
+                <div class="pack-order">{{ order_number }} | ผู้รับ: {{ recipient_name }}</div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>✓</th>
+                        <th>สินค้า</th>
+                        <th>รหัส SKU</th>
+                        <th>จำนวน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td><span class="check-box"></span></td>
+                        <td>
+                            {{ item.product_name }}{% if item.variant_name %} ({{ item.variant_name }}){% endif %}
+                            {% if item.customization_labels %}
+                            <div class="customization">{{ item.customization_labels | join(', ') }}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="sku-code">{{ item.sku_code or '' }}</span></td>
+                        <td>x {{ item.quantity }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="pack-footer">
+                <div class="pack-total">รวม {{ total_qty }} ชิ้น</div>
+                <div class="signatures">
+                    <div class="sig-box">
+                        <div class="sig-line"></div>
+                        <div class="sig-label">ผู้จัดสินค้า</div>
+                    </div>
+                    <div class="sig-box">
+                        <div class="sig-line"></div>
+                        <div class="sig-label">วันที่ / เวลา</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            {% if tracking_number %}
+            var barcodeEl = document.getElementById('barcode');
+            if (barcodeEl && typeof JsBarcode !== 'undefined') {
+                try {
+                    JsBarcode('#barcode', '{{ tracking_number }}', {
+                        format: 'CODE128',
+                        width: 2,
+                        height: 55,
+                        displayValue: false,
+                        margin: 0
+                    });
+                } catch (e) {
+                    barcodeEl.parentElement.style.display = 'none';
+                }
+            }
+            {% endif %}
+        };
+    </script>
+</body>
+</html>

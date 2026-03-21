@@ -8,7 +8,7 @@ from blueprints.mail_utils import (send_email, send_order_status_chat,
 from blueprints.marketing import _calc_best_promotion, _calc_coupon_discount
 import psycopg2.extras
 import psycopg2
-import json, os, io, re, csv
+import json, os, io, re, csv, hmac, hashlib
 from datetime import datetime, timedelta
 
 orders_bp = Blueprint('orders', __name__)
@@ -5441,3 +5441,173 @@ def admin_get_mto_stats():
         if conn:
             conn.close()
 
+
+
+# ==================== PRINT LABEL SHARE ====================
+
+def _gen_print_token(order_number: str, shipment_id: int) -> str:
+    secret = (os.environ.get('SESSION_SECRET') or 'ekgshops_print').encode()
+    msg = f"{order_number}:{shipment_id}".encode()
+    return hmac.new(secret, msg, hashlib.sha256).hexdigest()[:20]
+
+
+@orders_bp.route('/api/admin/orders/<int:order_id>/shipments/<int:shipment_id>/print-token', methods=['GET'])
+@login_required
+@admin_required
+def get_print_token(order_id, shipment_id):
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('SELECT order_number FROM orders WHERE id = %s', (order_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Order not found'}), 404
+        order_number = row['order_number']
+        token = _gen_print_token(order_number, shipment_id)
+        host = request.host_url.rstrip('/')
+        url = f"{host}/print/label/{order_number}/{shipment_id}/{token}"
+        return jsonify({'url': url, 'token': token}), 200
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@orders_bp.route('/print/label/<order_number>/<int:shipment_id>/<token>', methods=['GET'])
+def public_print_label(order_number, shipment_id, token):
+    expected = _gen_print_token(order_number, shipment_id)
+    if not hmac.compare_digest(expected, token):
+        return '<h2 style="font-family:sans-serif;color:red;padding:40px;">ลิงก์ไม่ถูกต้องหรือหมดอายุ</h2>', 403
+    conn = cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute('''
+            SELECT o.*, u.full_name as reseller_name, u.brand_name as reseller_brand_name,
+                   u.phone as reseller_phone, u.address as reseller_address,
+                   u.subdistrict as reseller_subdistrict, u.district as reseller_district,
+                   u.province as reseller_province, u.postal_code as reseller_postal_code
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.order_number = %s
+        ''', (order_number,))
+        order = cursor.fetchone()
+        if not order:
+            return '<h2 style="font-family:sans-serif;padding:40px;">ไม่พบคำสั่งซื้อ</h2>', 404
+        order = dict(order)
+
+        cursor.execute('''
+            SELECT os.*, w.name as warehouse_name
+            FROM order_shipments os
+            JOIN warehouses w ON w.id = os.warehouse_id
+            WHERE os.id = %s AND os.order_id = %s
+        ''', (shipment_id, order['id']))
+        shipment = cursor.fetchone()
+        if not shipment:
+            return '<h2 style="font-family:sans-serif;padding:40px;">ไม่พบข้อมูลพัสดุ</h2>', 404
+        shipment = dict(shipment)
+
+        cursor.execute('''
+            SELECT osi.quantity, s.sku_code, p.name as product_name, oi.sku_id,
+                   oi.customization_data, oi.id as order_item_id
+            FROM order_shipment_items osi
+            JOIN order_items oi ON oi.id = osi.order_item_id
+            JOIN skus s ON s.id = oi.sku_id
+            JOIN products p ON p.id = s.product_id
+            WHERE osi.shipment_id = %s
+        ''', (shipment_id,))
+        items = []
+        for item in cursor.fetchall():
+            item_dict = dict(item)
+            cursor.execute('''
+                SELECT ov.value FROM sku_values_map svm
+                JOIN option_values ov ON ov.id = svm.option_value_id
+                JOIN options o2 ON o2.id = ov.option_id
+                WHERE svm.sku_id = %s ORDER BY o2.id
+            ''', (item_dict['sku_id'],))
+            opt_vals = [r['value'] for r in cursor.fetchall()]
+            item_dict['variant_name'] = ' - '.join(opt_vals) if opt_vals else ''
+            labels = []
+            cust = item_dict.get('customization_data')
+            if cust:
+                if isinstance(cust, str):
+                    cust = json.loads(cust)
+                if isinstance(cust, dict):
+                    choice_ids = []
+                    for v in cust.values():
+                        if isinstance(v, list):
+                            choice_ids.extend(v)
+                    if choice_ids:
+                        cursor.execute('''
+                            SELECT pc.name, cc.label FROM customization_choices cc
+                            JOIN product_customizations pc ON pc.id = cc.customization_id
+                            WHERE cc.id = ANY(%s)
+                        ''', (choice_ids,))
+                        for r in cursor.fetchall():
+                            labels.append(f"{r['name']}: {r['label']}")
+            item_dict['customization_labels'] = labels
+            items.append(item_dict)
+
+        customer = None
+        if order.get('customer_id'):
+            cursor.execute('''
+                SELECT full_name, phone, address, province, district, subdistrict, postal_code
+                FROM reseller_customers WHERE id = %s
+            ''', (order['customer_id'],))
+            row2 = cursor.fetchone()
+            if row2:
+                customer = dict(row2)
+
+        order_date = ''
+        if order.get('created_at'):
+            try:
+                order_date = order['created_at'].strftime('%-d %b %Y')
+            except Exception:
+                order_date = str(order['created_at'])[:10]
+
+        sender_name = order.get('reseller_brand_name') or order.get('reseller_name') or 'ร้านค้า'
+        sender_phone = order.get('reseller_phone') or '-'
+        sender_address = ' '.join(filter(None, [
+            order.get('reseller_address'), order.get('reseller_subdistrict'),
+            order.get('reseller_district'), order.get('reseller_province')
+        ])) or '-'
+
+        if customer:
+            recipient_name = customer.get('full_name') or '-'
+            recipient_phone = customer.get('phone') or '-'
+            recipient_address = ' '.join(filter(None, [
+                customer.get('address'), customer.get('subdistrict'),
+                customer.get('district'), customer.get('province'), customer.get('postal_code')
+            ])) or '-'
+        else:
+            recipient_name = order.get('reseller_name') or '-'
+            recipient_phone = order.get('reseller_phone') or '-'
+            recipient_address = ' '.join(filter(None, [
+                order.get('reseller_address'), order.get('reseller_subdistrict'),
+                order.get('reseller_district'), order.get('reseller_province')
+            ])) or '-'
+
+        total_qty = sum(i['quantity'] for i in items)
+
+        return render_template('print_label.html',
+            order_number=order_number,
+            order_date=order_date,
+            sender_name=sender_name,
+            sender_phone=sender_phone,
+            sender_address=sender_address,
+            recipient_name=recipient_name,
+            recipient_phone=recipient_phone,
+            recipient_address=recipient_address,
+            warehouse_name=shipment.get('warehouse_name', ''),
+            shipping_provider=shipment.get('shipping_provider', ''),
+            tracking_number=shipment.get('tracking_number', ''),
+            items=items,
+            total_qty=total_qty,
+        )
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
