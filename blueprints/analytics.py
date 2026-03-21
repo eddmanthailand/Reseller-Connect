@@ -186,3 +186,148 @@ def analytics_data():
     finally:
         if cur:  cur.close()
         if conn: conn.close()
+
+
+# ─────────────────────────────────────────────
+# GET /api/admin/analytics/behavior  — behavioral insight data
+# ─────────────────────────────────────────────
+@analytics_bp.route('/api/admin/analytics/behavior')
+@admin_required
+def analytics_behavior():
+    days = min(int(request.args.get('days', 30)), 90)
+    conn = cur = None
+    try:
+        conn = get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # 1. Activity by hour (0-23)
+        cur.execute('''
+            SELECT EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*) AS cnt
+            FROM user_events
+            WHERE user_id IS NOT NULL AND created_at >= NOW() - INTERVAL %s
+            GROUP BY hour ORDER BY hour
+        ''', (f'{days} days',))
+        hour_rows = cur.fetchall()
+        hour_data = {r['hour']: r['cnt'] for r in hour_rows}
+        hours = [{'hour': h, 'cnt': hour_data.get(h, 0)} for h in range(24)]
+
+        # 2. Activity by day of week (0=Mon ... 6=Sun)
+        cur.execute('''
+            SELECT EXTRACT(ISODOW FROM created_at)::int - 1 AS dow, COUNT(*) AS cnt
+            FROM user_events
+            WHERE user_id IS NOT NULL AND created_at >= NOW() - INTERVAL %s
+            GROUP BY dow ORDER BY dow
+        ''', (f'{days} days',))
+        dow_rows = cur.fetchall()
+        dow_data = {r['dow']: r['cnt'] for r in dow_rows}
+        day_names = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
+        dow = [{'day': day_names[i], 'cnt': dow_data.get(i, 0)} for i in range(7)]
+
+        # 3. Tier behavior breakdown
+        cur.execute('''
+            SELECT
+                COALESCE(rt.name, 'ไม่ระบุ')                                              AS tier,
+                COUNT(DISTINCT e.user_id)                                                   AS members,
+                COUNT(DISTINCT CASE WHEN e.event_type='product_view' THEN e.id END)        AS product_views,
+                COUNT(DISTINCT CASE WHEN e.event_type='add_to_cart'  THEN e.id END)        AS cart_adds,
+                COUNT(DISTINCT CASE WHEN e.event_type='checkout_start' THEN e.id END)      AS checkouts,
+                COUNT(DISTINCT CASE WHEN e.event_type='page_view'    THEN e.id END)        AS page_views
+            FROM users u
+            JOIN user_events e ON e.user_id = u.id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.role_id = 3 AND e.created_at >= NOW() - INTERVAL %s
+            GROUP BY rt.name ORDER BY members DESC
+        ''', (f'{days} days',))
+        tier_breakdown = [dict(r) for r in cur.fetchall()]
+
+        # 4. Product interest gap — viewed but not ordered (or low order ratio)
+        cur.execute('''
+            SELECT
+                e.metadata->>'product_name'                           AS product_name,
+                COUNT(*)                                               AS view_cnt,
+                COALESCE(
+                    (SELECT COUNT(*) FROM order_items oi
+                     JOIN products p2 ON p2.id = oi.product_id
+                     WHERE p2.name = e.metadata->>'product_name'
+                       AND oi.created_at >= NOW() - INTERVAL %s),
+                    0
+                )                                                      AS order_cnt
+            FROM user_events e
+            WHERE e.event_type = 'product_view'
+              AND e.user_id IS NOT NULL
+              AND e.created_at >= NOW() - INTERVAL %s
+              AND e.metadata->>'product_name' IS NOT NULL
+            GROUP BY e.metadata->>'product_name'
+            HAVING COUNT(*) >= 1
+            ORDER BY view_cnt DESC LIMIT 15
+        ''', (f'{days} days', f'{days} days',))
+        interest_gap = [dict(r) for r in cur.fetchall()]
+
+        # 5. Section popularity (from page column pattern matching)
+        cur.execute('''
+            SELECT
+                CASE
+                    WHEN page LIKE '%#catalog%' OR page LIKE '%catalog%' THEN 'แคตตาล็อกสินค้า'
+                    WHEN page LIKE '%#cart%'                              THEN 'ตะกร้าสินค้า'
+                    WHEN page LIKE '%#checkout%'                          THEN 'Checkout'
+                    WHEN page LIKE '%#orders%'                            THEN 'ประวัติออเดอร์'
+                    WHEN page LIKE '%#profile%'                           THEN 'โปรไฟล์'
+                    WHEN page LIKE '%#chat%'                              THEN 'แชท'
+                    WHEN page LIKE '%#promotions%'                        THEN 'โปรโมชัน'
+                    WHEN page LIKE '%#dashboard%' OR page LIKE '%/dashboard%' THEN 'หน้าหลัก'
+                    WHEN page LIKE '%/reseller%'                          THEN 'หน้าหลักตัวแทน'
+                    ELSE 'อื่นๆ (' || COALESCE(page, '-') || ')'
+                END                                   AS section,
+                COUNT(*)                              AS cnt,
+                COUNT(DISTINCT user_id)               AS users
+            FROM user_events
+            WHERE event_type = 'page_view'
+              AND user_id IS NOT NULL
+              AND created_at >= NOW() - INTERVAL %s
+            GROUP BY section ORDER BY cnt DESC LIMIT 10
+        ''', (f'{days} days',))
+        sections = [dict(r) for r in cur.fetchall()]
+
+        # 6. Engagement score per user (composite: views + cart + checkout weight)
+        cur.execute('''
+            SELECT
+                u.full_name, u.username,
+                COALESCE(rt.name, '-')                                                      AS tier,
+                MAX(e.created_at)                                                            AS last_active,
+                COUNT(DISTINCT CASE WHEN e.event_type='page_view'    THEN e.id END)         AS pv,
+                COUNT(DISTINCT CASE WHEN e.event_type='product_view' THEN e.id END)         AS prodv,
+                COUNT(DISTINCT CASE WHEN e.event_type='add_to_cart'  THEN e.id END)         AS cart,
+                COUNT(DISTINCT CASE WHEN e.event_type='checkout_start' THEN e.id END)       AS chk,
+                (COUNT(DISTINCT CASE WHEN e.event_type='page_view'    THEN e.id END) * 1 +
+                 COUNT(DISTINCT CASE WHEN e.event_type='product_view' THEN e.id END) * 3 +
+                 COUNT(DISTINCT CASE WHEN e.event_type='add_to_cart'  THEN e.id END) * 5 +
+                 COUNT(DISTINCT CASE WHEN e.event_type='checkout_start' THEN e.id END) * 10) AS score
+            FROM users u
+            JOIN user_events e ON e.user_id = u.id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
+            WHERE u.role_id = 3 AND e.created_at >= NOW() - INTERVAL %s
+            GROUP BY u.full_name, u.username, rt.name
+            ORDER BY score DESC LIMIT 20
+        ''', (f'{days} days',))
+        engagement = []
+        for r in cur.fetchall():
+            row = dict(r)
+            if row.get('last_active'):
+                row['last_active'] = row['last_active'].isoformat()
+            engagement.append(row)
+
+        return jsonify({
+            'hours': hours,
+            'dow': dow,
+            'tier_breakdown': tier_breakdown,
+            'interest_gap': interest_gap,
+            'sections': sections,
+            'engagement': engagement,
+            'days': days
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cur:  cur.close()
+        if conn: conn.close()
