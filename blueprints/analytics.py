@@ -71,15 +71,15 @@ def analytics_data():
         conn = get_db()
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        # 1. Summary counts
+        # 1. Summary counts — events-based
         cur.execute('''
             SELECT
-                COUNT(DISTINCT CASE WHEN e.event_type = 'page_view'       THEN e.session_id END) AS sessions,
-                COUNT(DISTINCT e.user_id)                                                          AS active_users,
-                COUNT(*)                                                                           AS total_events,
-                COUNT(DISTINCT CASE WHEN e.event_type = 'add_to_cart'     THEN e.user_id END)     AS cart_users,
-                COUNT(DISTINCT CASE WHEN e.event_type = 'checkout_start'  THEN e.user_id END)     AS checkout_users,
-                COUNT(DISTINCT CASE WHEN e.event_type = 'checkout_complete' THEN e.user_id END)   AS buyers
+                COUNT(DISTINCT CASE WHEN e.event_type = 'page_view'      THEN e.session_id END) AS sessions,
+                COUNT(DISTINCT e.user_id)                                                         AS active_users,
+                COUNT(*)                                                                          AS total_events,
+                COUNT(DISTINCT CASE WHEN e.event_type = 'add_to_cart'    THEN e.user_id END)    AS cart_users,
+                COUNT(DISTINCT CASE WHEN e.event_type = 'checkout_start' THEN e.user_id END)    AS checkout_users,
+                COUNT(DISTINCT CASE WHEN e.event_type = 'product_view'   THEN e.user_id END)    AS product_view_users
             FROM user_events e
             WHERE e.created_at >= NOW() - INTERVAL %s
               AND e.user_id IS NOT NULL
@@ -89,6 +89,16 @@ def analytics_data():
         # Total registered members
         cur.execute("SELECT COUNT(*) AS total FROM users WHERE role_id != 1")
         summary['total_members'] = (cur.fetchone() or {}).get('total', 0)
+
+        # Buyers — use real orders table (checkout_complete event often lost to redirect timing)
+        cur.execute('''
+            SELECT COUNT(DISTINCT user_id) AS buyers
+            FROM orders
+            WHERE status NOT IN ('cancelled', 'returned', 'stock_restored')
+              AND is_quick_order = FALSE
+              AND created_at >= NOW() - INTERVAL %s
+        ''', (f'{days} days',))
+        summary['buyers'] = (cur.fetchone() or {}).get('buyers', 0)
 
         # 2. Events per day (sparkline)
         cur.execute('''
