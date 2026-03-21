@@ -132,10 +132,11 @@ def analytics_data():
 
         # 6. Recent active users (last 50 events with user info)
         cur.execute('''
-            SELECT e.user_id, u.full_name, u.username, u.reseller_tier,
+            SELECT e.user_id, u.full_name, u.username, COALESCE(rt.name, '—') AS reseller_tier,
                    e.event_type, e.page, e.metadata, e.created_at
             FROM user_events e
             LEFT JOIN users u ON u.id = e.user_id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
             WHERE e.user_id IS NOT NULL
               AND e.created_at >= NOW() - INTERVAL %s
             ORDER BY e.created_at DESC LIMIT 60
@@ -150,7 +151,7 @@ def analytics_data():
         # 7. Per-user funnel
         cur.execute('''
             SELECT
-                u.id, u.full_name, u.username, u.reseller_tier,
+                u.id, u.full_name, u.username, COALESCE(rt.name, '—') AS reseller_tier,
                 MAX(e.created_at)                                                       AS last_seen,
                 COUNT(DISTINCT CASE WHEN e.event_type='page_view' THEN e.id END)       AS page_views,
                 COUNT(DISTINCT CASE WHEN e.event_type='product_view' THEN e.id END)    AS product_views,
@@ -159,8 +160,9 @@ def analytics_data():
                 COUNT(DISTINCT CASE WHEN e.event_type='search' THEN e.id END)          AS searches
             FROM users u
             JOIN user_events e ON e.user_id = u.id
+            LEFT JOIN reseller_tiers rt ON rt.id = u.reseller_tier_id
             WHERE e.created_at >= NOW() - INTERVAL %s
-            GROUP BY u.id, u.full_name, u.username, u.reseller_tier
+            GROUP BY u.id, u.full_name, u.username, rt.name
             ORDER BY last_seen DESC LIMIT 30
         ''', (f'{days} days',))
         user_funnel = []
@@ -243,23 +245,29 @@ def analytics_behavior():
         # 4. Product interest gap — viewed but not ordered (or low order ratio)
         cur.execute('''
             SELECT
-                e.metadata->>'product_name'                           AS product_name,
-                COUNT(*)                                               AS view_cnt,
-                COALESCE(
-                    (SELECT COUNT(*) FROM order_items oi
-                     JOIN products p2 ON p2.id = oi.product_id
-                     WHERE p2.name = e.metadata->>'product_name'
-                       AND oi.created_at >= NOW() - INTERVAL %s),
-                    0
-                )                                                      AS order_cnt
-            FROM user_events e
-            WHERE e.event_type = 'product_view'
-              AND e.user_id IS NOT NULL
-              AND e.created_at >= NOW() - INTERVAL %s
-              AND e.metadata->>'product_name' IS NOT NULL
-            GROUP BY e.metadata->>'product_name'
-            HAVING COUNT(*) >= 1
-            ORDER BY view_cnt DESC LIMIT 15
+                pv.product_name,
+                pv.view_cnt,
+                COALESCE(oc.order_cnt, 0) AS order_cnt
+            FROM (
+                SELECT
+                    e.metadata->>\'product_name\' AS product_name,
+                    COUNT(*)                       AS view_cnt
+                FROM user_events e
+                WHERE e.event_type = \'product_view\'
+                  AND e.user_id IS NOT NULL
+                  AND e.created_at >= NOW() - INTERVAL %s
+                  AND e.metadata->>\'product_name\' IS NOT NULL
+                GROUP BY e.metadata->>\'product_name\'
+                HAVING COUNT(*) >= 1
+            ) pv
+            LEFT JOIN (
+                SELECT product_name, COUNT(*) AS order_cnt
+                FROM order_items
+                WHERE created_at >= NOW() - INTERVAL %s
+                GROUP BY product_name
+            ) oc ON oc.product_name = pv.product_name
+            ORDER BY pv.view_cnt DESC
+            LIMIT 15
         ''', (f'{days} days', f'{days} days',))
         interest_gap = [dict(r) for r in cur.fetchall()]
 
