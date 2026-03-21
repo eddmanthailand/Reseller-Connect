@@ -6,262 +6,319 @@
 <title>Analytics — EKG Shops Admin</title>
 <link rel="stylesheet" href="/static/css/dashboard.css">
 <style>
-:root {
-    --pri: #7c3aed; --pri-light: #ede9fe; --pri-dark: #5b21b6;
-    --sur: #ffffff; --sur2: #f8fafc; --sur3: #f1f5f9;
-    --bdr: #e2e8f0; --txt: #1e293b; --txt2: #64748b; --txt3: #94a3b8;
-    --grn: #10b981; --grn-bg: #ecfdf5;
-    --ylw: #f59e0b; --ylw-bg: #fffbeb;
-    --red: #ef4444; --red-bg: #fef2f2;
-    --blu: #3b82f6; --blu-bg: #eff6ff;
-    --ora: #f97316; --ora-bg: #fff7ed;
-    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-    --shadow2: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    -webkit-font-smoothing: antialiased;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Sarabun', 'Segoe UI', sans-serif; background: var(--sur3); color: var(--txt); }
 a { color: inherit; text-decoration: none; }
 
-/* ── Top bar ── */
-.topbar {
-    background: var(--sur); border-bottom: 1px solid var(--bdr);
-    padding: 12px 24px; display: flex; align-items: center; gap: 12px;
-    position: sticky; top: 0; z-index: 10; box-shadow: var(--shadow);
-    flex-wrap: wrap;
+/* ── iOS System Colors ── */
+:root {
+    --blue:   #007aff;
+    --green:  #34c759;
+    --orange: #ff9500;
+    --red:    #ff3b30;
+    --purple: #7c3aed;
+    --indigo: #5856d6;
+    --gray1:  #1c1c1e;
+    --gray2:  #636366;
+    --gray3:  #aeaeb2;
+    --gray4:  #c7c7cc;
+    --gray5:  #e5e5ea;
+    --gray6:  #f2f2f7;
+    --white:  #ffffff;
+    --shadow-card: 0 1px 0 rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.06);
 }
-.topbar-title { font-size: 18px; font-weight: 700; color: var(--pri); }
-.topbar-back {
-    display: flex; align-items: center; gap: 4px; font-size: 13px;
-    color: var(--txt2); padding: 6px 10px; border-radius: 8px;
-    border: 1px solid var(--bdr); background: var(--sur2);
-    cursor: pointer; transition: all .15s;
-}
-.topbar-back:hover { background: var(--pri-light); color: var(--pri); border-color: var(--pri); }
-.spacer { flex: 1; }
-.day-select {
-    padding: 6px 12px; border: 1px solid var(--bdr); border-radius: 8px;
-    font-family: inherit; font-size: 13px; background: var(--sur2);
-    cursor: pointer; outline: none;
-}
-.day-select:focus { border-color: var(--pri); }
-.refresh-btn {
-    padding: 6px 14px; border: none; border-radius: 8px;
-    background: var(--pri); color: #fff; font-size: 13px; font-family: inherit;
-    cursor: pointer; transition: background .15s;
-}
-.refresh-btn:hover { background: var(--pri-dark); }
 
-/* ── Tabs ── */
-.tab-bar {
-    background: var(--sur); border-bottom: 1px solid var(--bdr);
-    padding: 0 24px; display: flex; gap: 0;
+/* ── Sticky Header ── */
+.ak-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(242,242,247,.9);
+    backdrop-filter: saturate(200%) blur(24px);
+    -webkit-backdrop-filter: saturate(200%) blur(24px);
+    border-bottom: .5px solid rgba(0,0,0,.08);
+    height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; gap: 12px;
 }
-.tab-btn {
-    padding: 12px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
-    border: none; background: none; cursor: pointer; color: var(--txt2);
-    border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+.ak-back {
+    display: flex; align-items: center; gap: 5px;
+    background: none; border: none; color: var(--blue);
+    font-size: 15px; font-weight: 500; cursor: pointer;
+    font-family: inherit; padding: 4px 0;
 }
-.tab-btn:hover { color: var(--pri); }
-.tab-btn.active { color: var(--pri); border-bottom-color: var(--pri); }
+.ak-title-wrap { display: flex; align-items: center; gap: 9px; }
+.ak-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(124,58,237,.35);
+}
+.ak-title { font-size: 17px; font-weight: 700; letter-spacing: -.4px; }
+.ak-header-right { display: flex; align-items: center; gap: 8px; }
+.ak-select {
+    padding: 6px 28px 6px 10px; border: .5px solid var(--gray4); border-radius: 9px;
+    font-size: 13px; font-weight: 500; color: var(--gray1); background: var(--white);
+    cursor: pointer; outline: none; font-family: inherit;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23636366' strokeWidth='1.5' strokeLinecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center;
+}
+.ak-refresh-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: #fff; border: none; border-radius: 9px;
+    padding: 7px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(124,58,237,.35);
+    font-family: inherit; transition: opacity .15s;
+}
+.ak-refresh-btn:hover { opacity: .85; }
 
-/* ── Layout ── */
-.page { padding: 24px; max-width: 1400px; margin: 0 auto; }
-
-/* ── Summary cards ── */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.stat-card {
-    background: var(--sur); border: 1px solid var(--bdr); border-radius: 12px;
-    padding: 16px; box-shadow: var(--shadow);
+/* ── Segmented Tabs ── */
+.ak-tab-bar {
+    background: rgba(242,242,247,.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: .5px solid rgba(0,0,0,.07);
+    padding: 10px 24px;
 }
-.stat-label { font-size: 11px; color: var(--txt3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
-.stat-value { font-size: 28px; font-weight: 700; color: var(--txt); line-height: 1; }
-.stat-sub { font-size: 11px; color: var(--txt3); margin-top: 4px; }
-.stat-card.highlight .stat-value { color: var(--pri); }
+.ak-seg { display: flex; background: var(--gray5); border-radius: 10px; padding: 3px; gap: 2px; width: fit-content; }
+.ak-seg-btn {
+    padding: 6px 20px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all .18s ease;
+    background: transparent; color: var(--gray2);
+}
+.ak-seg-btn.active {
+    background: var(--white); color: var(--gray1);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+/* ── Page container ── */
+.ak-page { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+/* ── Stat grid ── */
+.ak-stat-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin-bottom: 20px;
+}
+@media (max-width: 700px) { .ak-stat-grid { grid-template-columns: 1fr 1fr; } }
+.ak-stat-card {
+    background: var(--white); border-radius: 18px;
+    padding: 20px 20px 18px;
+    box-shadow: var(--shadow-card);
+    display: flex; flex-direction: column;
+}
+.ak-stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ak-stat-label { font-size: 12px; font-weight: 600; color: var(--gray2); letter-spacing: .1px; }
+.ak-stat-icon {
+    width: 30px; height: 30px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.ak-stat-value { font-size: 36px; font-weight: 700; letter-spacing: -1.5px; line-height: 1; }
+.ak-stat-sub { font-size: 11px; color: var(--gray3); margin-top: 4px; }
+
+/* ── Cards ── */
+.ak-card {
+    background: var(--white); border-radius: 18px;
+    padding: 20px; box-shadow: var(--shadow-card);
+    margin-bottom: 20px;
+}
+.ak-card-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+@media (max-width: 800px) { .ak-card-grid2 { grid-template-columns: 1fr; } }
+.ak-card-no-mb { margin-bottom: 0; }
+
+/* ── Section label ── */
+.ak-section { font-size: 13px; font-weight: 700; color: var(--gray1); margin-bottom: 14px; letter-spacing: -.2px; }
+.ak-section-sub { font-size: 11px; color: var(--gray3); font-weight: 400; margin-left: 6px; }
 
 /* ── Funnel ── */
-.funnel-wrap {
-    background: var(--sur); border: 1px solid var(--bdr); border-radius: 12px;
-    padding: 20px; box-shadow: var(--shadow); margin-bottom: 24px;
+.ak-funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.ak-funnel-label { width: 130px; font-size: 12px; color: var(--gray2); flex-shrink: 0; font-weight: 500; }
+.ak-funnel-track { flex: 1; background: var(--gray6); border-radius: 7px; height: 26px; overflow: hidden; }
+.ak-funnel-fill {
+    height: 100%; border-radius: 7px; transition: width .5s ease;
+    display: flex; align-items: center; padding-left: 10px; min-width: 28px;
 }
-.section-title { font-size: 14px; font-weight: 700; color: var(--txt); margin-bottom: 14px; }
-.section-sub { font-size: 12px; color: var(--txt3); margin-top: -10px; margin-bottom: 14px; }
-.funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.funnel-label { width: 130px; font-size: 12px; color: var(--txt2); flex-shrink: 0; }
-.funnel-bar-wrap { flex: 1; background: var(--sur3); border-radius: 6px; height: 22px; overflow: hidden; }
-.funnel-bar { height: 100%; border-radius: 6px; transition: width .5s ease; display: flex; align-items: center; padding-left: 8px; }
-.funnel-count { font-size: 12px; font-weight: 600; color: #fff; }
-.funnel-pct { width: 60px; font-size: 12px; color: var(--txt3); text-align: right; }
-
-/* ── Two-column ── */
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-@media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
-.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-@media (max-width: 900px) { .three-col { grid-template-columns: 1fr; } }
-.card {
-    background: var(--sur); border: 1px solid var(--bdr); border-radius: 12px;
-    padding: 20px; box-shadow: var(--shadow);
-}
-.card-mb { margin-bottom: 24px; }
-
-/* ── Table ── */
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th { padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--txt3); border-bottom: 1px solid var(--bdr); }
-.data-table td { padding: 9px 10px; border-bottom: 1px solid var(--bdr); vertical-align: middle; }
-.data-table tr:last-child td { border-bottom: none; }
-.data-table tr:hover td { background: var(--sur2); }
-.data-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
-
-/* ── User funnel table ── */
-.user-table-wrap { background: var(--sur); border: 1px solid var(--bdr); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); margin-bottom: 24px; overflow: auto; }
-.badge {
-    display: inline-block; padding: 2px 8px; border-radius: 20px;
-    font-size: 10px; font-weight: 600; background: var(--pri-light); color: var(--pri);
-}
-.badge.grn { background: var(--grn-bg); color: var(--grn); }
-.badge.ylw { background: var(--ylw-bg); color: var(--ylw); }
-.badge.red { background: var(--red-bg); color: var(--red); }
-.badge.blu { background: var(--blu-bg); color: var(--blu); }
-.badge.ora { background: var(--ora-bg); color: var(--ora); }
-.dot-row { display: flex; gap: 4px; align-items: center; }
-.dot { width: 8px; height: 8px; border-radius: 50%; }
-.dot.grn { background: var(--grn); }
-.dot.ylw { background: var(--ylw); }
-.dot.red { background: var(--red); }
-
-/* ── Event log ── */
-.event-log { font-size: 12px; }
-.event-row { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--bdr); align-items: flex-start; }
-.event-row:last-child { border-bottom: none; }
-.event-icon { font-size: 14px; flex-shrink: 0; }
-.event-meta { flex: 1; min-width: 0; }
-.event-user { font-weight: 600; color: var(--txt); }
-.event-type { color: var(--pri); font-size: 11px; font-weight: 600; }
-.event-page { color: var(--txt3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.event-time { color: var(--txt3); font-size: 11px; flex-shrink: 0; }
+.ak-funnel-count { font-size: 12px; font-weight: 700; color: #fff; }
+.ak-funnel-pct { width: 42px; font-size: 12px; color: var(--gray3); text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Bar chart ── */
-.bar-chart { display: flex; flex-direction: column; gap: 8px; }
-.bar-row { display: flex; align-items: center; gap: 10px; }
-.bar-name { width: 150px; font-size: 12px; color: var(--txt); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { flex: 1; background: var(--sur3); border-radius: 4px; height: 16px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; background: var(--pri); opacity: .85; transition: width .4s; }
-.bar-val { width: 40px; text-align: right; font-size: 12px; color: var(--txt2); flex-shrink: 0; }
+.ak-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ak-bar-row:last-child { margin-bottom: 0; }
+.ak-bar-name { width: 150px; font-size: 12px; color: var(--gray1); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.ak-bar-track { flex: 1; background: var(--gray6); border-radius: 5px; height: 18px; overflow: hidden; }
+.ak-bar-fill { height: 100%; border-radius: 5px; transition: width .4s ease; }
+.ak-bar-val { width: 38px; text-align: right; font-size: 12px; color: var(--gray2); flex-shrink: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ── Table ── */
+.ak-table-wrap { overflow: auto; }
+.ak-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ak-table th { padding: 9px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--gray3); border-bottom: .5px solid var(--gray5); font-weight: 600; }
+.ak-table td { padding: 10px 12px; border-bottom: .5px solid var(--gray6); vertical-align: middle; }
+.ak-table tr:last-child td { border-bottom: none; }
+.ak-table tr:hover td { background: #fafafa; }
+.ak-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ── Badge ── */
+.ak-badge {
+    display: inline-block; padding: 3px 9px; border-radius: 20px;
+    font-size: 10px; font-weight: 700;
+    background: #EDE9FE; color: var(--purple);
+}
+.ak-badge.grn { background: #E8F5E9; color: #1a7f37; }
+.ak-badge.ylw { background: #FFF8E1; color: #c75a00; }
+.ak-badge.red { background: #FFF3F3; color: var(--red); }
+.ak-badge.blu { background: #E3F2FD; color: #0055cc; }
+.ak-badge.gray { background: var(--gray6); color: var(--gray2); }
 
 /* ── Hour heatmap ── */
-.hour-grid {
-    display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; margin-top: 8px;
-}
-.hour-cell {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-}
-.hour-bar-wrap {
-    width: 100%; height: 60px; background: var(--sur3); border-radius: 4px;
-    display: flex; align-items: flex-end; overflow: hidden;
-}
-.hour-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--pri); opacity: .7; transition: height .4s; min-height: 2px; }
-.hour-bar.peak { background: var(--red); opacity: .85; }
-.hour-label { font-size: 9px; color: var(--txt3); }
-.hour-cnt { font-size: 9px; color: var(--pri); font-weight: 600; }
+.ak-hour-grid { display: flex; align-items: flex-end; gap: 3px; height: 80px; margin-bottom: 10px; }
+.ak-hour-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+.ak-hour-bar { width: 100%; border-radius: 4px 4px 2px 2px; min-height: 3px; transition: height .5s ease; }
+.ak-hour-label { font-size: 9px; color: var(--gray3); font-variant-numeric: tabular-nums; }
 
 /* ── DOW bars ── */
-.dow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 8px; }
-.dow-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.dow-bar-wrap { width: 100%; height: 70px; background: var(--sur3); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
-.dow-bar { width: 100%; border-radius: 6px 6px 0 0; background: var(--blu); opacity: .75; transition: height .4s; min-height: 2px; }
-.dow-label { font-size: 11px; color: var(--txt2); font-weight: 600; }
-.dow-cnt { font-size: 10px; color: var(--blu); font-weight: 600; }
-
-/* ── Interest gap ── */
-.gap-item {
-    display: flex; align-items: center; gap: 10px; padding: 8px 0;
-    border-bottom: 1px solid var(--bdr);
-}
-.gap-item:last-child { border-bottom: none; }
-.gap-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gap-views { font-size: 12px; color: var(--txt2); flex-shrink: 0; }
-.gap-pill {
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-    flex-shrink: 0;
-}
-.gap-pill.hot { background: var(--red-bg); color: var(--red); }
-.gap-pill.warn { background: var(--ylw-bg); color: var(--ylw); }
-.gap-pill.ok { background: var(--grn-bg); color: var(--grn); }
-
-/* ── Engagement leaderboard ── */
-.lb-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--bdr); }
-.lb-row:last-child { border-bottom: none; }
-.lb-rank { width: 24px; font-size: 13px; font-weight: 700; color: var(--txt3); flex-shrink: 0; text-align: center; }
-.lb-name { flex: 1; min-width: 0; }
-.lb-name-main { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-name-sub { font-size: 11px; color: var(--txt3); }
-.lb-score { font-size: 16px; font-weight: 700; color: var(--pri); flex-shrink: 0; }
-.lb-details { display: flex; gap: 6px; flex-shrink: 0; }
-.lb-ev { font-size: 10px; color: var(--txt3); }
+.ak-dow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.ak-dow-col { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.ak-dow-cnt { font-size: 10px; font-weight: 700; }
+.ak-dow-track { width: 100%; height: 70px; display: flex; align-items: flex-end; }
+.ak-dow-bar { width: 100%; border-radius: 6px 6px 3px 3px; min-height: 4px; transition: height .4s ease; }
+.ak-dow-label { font-size: 11px; font-weight: 600; }
 
 /* ── Tier breakdown ── */
-.tier-grid { display: grid; gap: 12px; }
-.tier-row {
-    background: var(--sur2); border: 1px solid var(--bdr); border-radius: 10px;
-    padding: 14px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+.ak-tier-item { padding: 12px 0; border-bottom: .5px solid var(--gray5); }
+.ak-tier-item:last-child { border-bottom: none; }
+.ak-tier-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+.ak-tier-name { font-size: 13px; font-weight: 700; }
+.ak-tier-stats { display: flex; gap: 16px; font-size: 12px; color: var(--gray2); }
+.ak-tier-stat { display: flex; gap: 4px; align-items: center; }
+.ak-tier-track { background: var(--gray6); border-radius: 5px; height: 7px; overflow: hidden; }
+.ak-tier-fill { height: 100%; border-radius: 5px; transition: width .4s ease; }
+
+/* ── Interest gap ── */
+.ak-gap-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: .5px solid var(--gray5); }
+.ak-gap-item:last-child { border-bottom: none; }
+.ak-gap-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-gap-meta { font-size: 11px; color: var(--gray3); flex-shrink: 0; white-space: nowrap; }
+.ak-gap-pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; flex-shrink: 0; }
+.ak-gap-pill.hot { background: #FFF3F3; color: var(--red); }
+.ak-gap-pill.warn { background: #FFF8E1; color: #c75a00; }
+.ak-gap-pill.ok { background: #E8F5E9; color: #1a7f37; }
+
+/* ── Leaderboard ── */
+.ak-lb-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: .5px solid var(--gray5); }
+.ak-lb-row:last-child { border-bottom: none; }
+.ak-lb-rank { width: 30px; font-size: 16px; text-align: center; flex-shrink: 0; }
+.ak-lb-avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--gray6); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--gray3); flex-shrink: 0; }
+.ak-lb-info { flex: 1; min-width: 0; }
+.ak-lb-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-lb-sub { font-size: 11px; color: var(--gray3); margin-top: 2px; }
+.ak-lb-bar-wrap { width: 100%; background: var(--gray6); border-radius: 3px; height: 4px; margin-top: 4px; overflow: hidden; }
+.ak-lb-bar-fill { height: 100%; border-radius: 3px; }
+.ak-lb-score { font-size: 20px; font-weight: 700; color: var(--blue); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.ak-lb-events { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.ak-lb-ev { font-size: 10px; color: var(--gray3); white-space: nowrap; }
+
+/* ── Event log ── */
+.ak-event-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: .5px solid var(--gray5); align-items: flex-start; }
+.ak-event-row:last-child { border-bottom: none; }
+.ak-event-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.ak-event-body { flex: 1; min-width: 0; }
+.ak-event-user { font-size: 13px; font-weight: 600; }
+.ak-event-type { font-size: 11px; font-weight: 600; color: var(--purple); }
+.ak-event-page { font-size: 11px; color: var(--gray3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-event-time { font-size: 11px; color: var(--gray3); flex-shrink: 0; margin-top: 2px; }
+
+/* ── Insight box ── */
+.ak-insight {
+    background: linear-gradient(135deg, #EDE9FE, #F0E8FF);
+    border: .5px solid rgba(124,58,237,.2);
+    border-radius: 14px; padding: 14px 16px;
+    display: flex; gap: 10px; align-items: flex-start;
+    margin-bottom: 20px;
 }
-.tier-name { font-size: 14px; font-weight: 700; color: var(--pri); min-width: 100px; }
-.tier-stat { display: flex; flex-direction: column; align-items: center; min-width: 70px; }
-.tier-stat-val { font-size: 18px; font-weight: 700; color: var(--txt); }
-.tier-stat-lbl { font-size: 10px; color: var(--txt3); text-transform: uppercase; }
-.tier-bar { flex: 1; min-width: 120px; }
-.tier-bar-label { font-size: 10px; color: var(--txt3); margin-bottom: 3px; }
-.tier-bar-track { background: var(--sur3); border-radius: 4px; height: 8px; overflow: hidden; }
-.tier-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+.ak-insight-icon { font-size: 18px; flex-shrink: 0; }
+.ak-insight-text { font-size: 13px; color: #4c1d95; line-height: 1.55; }
+.ak-insight-text strong { font-weight: 700; }
 
 /* ── Loading ── */
-.loading { text-align: center; padding: 60px; color: var(--txt3); }
-.loading-spinner {
-    width: 32px; height: 32px; border: 3px solid var(--bdr); border-top-color: var(--pri);
-    border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 12px;
+.ak-loading { text-align: center; padding: 60px; color: var(--gray3); }
+.ak-spinner {
+    width: 28px; height: 28px; border: 2.5px solid var(--gray5); border-top-color: var(--purple);
+    border-radius: 50%; animation: ak-spin .7s linear infinite; margin: 0 auto 12px;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ak-spin { to { transform: rotate(360deg); } }
 
-/* ── Insight callout ── */
-.insight-box {
-    background: var(--pri-light); border: 1px solid var(--pri); border-radius: 10px;
-    padding: 12px 16px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start;
+/* ── Section engagement bar ── */
+.ak-sec-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.ak-sec-row:last-child { margin-bottom: 0; }
+.ak-sec-name { width: 145px; font-size: 12px; color: var(--gray1); font-weight: 500; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ak-sec-track { flex: 1; background: var(--gray6); border-radius: 5px; height: 18px; overflow: hidden; }
+.ak-sec-fill { height: 100%; border-radius: 5px; transition: width .4s ease; }
+.ak-sec-val { font-size: 11px; color: var(--gray2); flex-shrink: 0; text-align: right; width: 70px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+    .ak-page { padding: 16px; }
+    .ak-stat-grid { grid-template-columns: 1fr 1fr; }
+    .ak-card-grid2 { grid-template-columns: 1fr; }
 }
-.insight-icon { font-size: 18px; flex-shrink: 0; }
-.insight-text { font-size: 13px; color: var(--pri-dark); line-height: 1.5; }
-.insight-text strong { font-weight: 700; }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-    <a href="/admin" class="topbar-back">← กลับ</a>
-    <div class="topbar-title">📊 Analytics</div>
-    <div class="spacer"></div>
-    <select class="day-select" id="daySelect" onchange="onDaysChange()">
-        <option value="7">7 วัน</option>
-        <option value="14">14 วัน</option>
-        <option value="30" selected>30 วัน</option>
-        <option value="90">90 วัน</option>
-    </select>
-    <button class="refresh-btn" onclick="reloadCurrent()">🔄 รีเฟรช</button>
+<!-- ── Sticky Header ── -->
+<div class="ak-header">
+    <div style="display:flex;align-items:center;gap:12px;">
+        <a href="/admin" class="ak-back">
+            <svg width="9" height="14" viewBox="0 0 9 15" fill="none"><path d="M7.5 1.5L1.5 7.5L7.5 13.5" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            กลับ
+        </a>
+        <div class="ak-title-wrap">
+            <div class="ak-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            </div>
+            <span class="ak-title">Analytics</span>
+        </div>
+    </div>
+    <div class="ak-header-right">
+        <select class="ak-select" id="daySelect" onchange="onDaysChange()">
+            <option value="7">7 วัน</option>
+            <option value="14">14 วัน</option>
+            <option value="30" selected>30 วัน</option>
+            <option value="90">90 วัน</option>
+        </select>
+        <button class="ak-refresh-btn" onclick="reloadCurrent()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            รีเฟรช
+        </button>
+    </div>
 </div>
 
-<div class="tab-bar">
-    <button class="tab-btn active" id="tab-overview" onclick="switchTab('overview')">📈 ภาพรวม</button>
-    <button class="tab-btn" id="tab-behavior" onclick="switchTab('behavior')">🧠 พฤติกรรมสมาชิก</button>
+<!-- ── Segmented Tabs ── -->
+<div class="ak-tab-bar">
+    <div class="ak-seg">
+        <button class="ak-seg-btn active" id="tab-overview" onclick="switchTab('overview')">📋 ภาพรวม</button>
+        <button class="ak-seg-btn" id="tab-behavior" onclick="switchTab('behavior')">🧠 พฤติกรรมสมาชิก</button>
+    </div>
 </div>
 
-<div class="page" id="pageRoot">
-    <div class="loading"><div class="loading-spinner"></div><div>กำลังโหลดข้อมูล...</div></div>
+<!-- ── Content ── -->
+<div class="ak-page" id="pageRoot">
+    <div class="ak-loading"><div class="ak-spinner"></div><div>กำลังโหลดข้อมูล...</div></div>
 </div>
 
 <script>
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 const EVENT_ICONS = {
-    page_view: '👁', product_view: '🔍', add_to_cart: '🛒',
-    checkout_start: '💳', checkout_complete: '✅', search: '🔎',
-    chatbot_message: '💬', login: '🔑', register: '🆕'
+    page_view:'👁', product_view:'🔍', add_to_cart:'🛒',
+    checkout_start:'💳', checkout_complete:'✅', search:'🔎',
+    chatbot_message:'💬', login:'🔑', register:'🆕'
 };
 
 let currentTab = 'overview';
@@ -277,7 +334,7 @@ function timeAgo(iso) {
 
 function switchTab(tab) {
     currentTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ak-seg-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(`tab-${tab}`).classList.add('active');
     reloadCurrent();
 }
@@ -294,12 +351,23 @@ function reloadCurrent() {
 // ════════════════════════════════════════════
 async function loadOverview() {
     document.getElementById('pageRoot').innerHTML =
-        '<div class="loading"><div class="loading-spinner"></div><div>กำลังโหลดข้อมูล...</div></div>';
+        '<div class="ak-loading"><div class="ak-spinner"></div><div>กำลังโหลดข้อมูล...</div></div>';
     const days = document.getElementById('daySelect').value;
     const res  = await fetch(`/api/admin/analytics/data?days=${days}`);
     const d    = await res.json();
-    if (d.error) { document.getElementById('pageRoot').innerHTML = `<p style="padding:40px;color:red">${esc(d.error)}</p>`; return; }
+    if (d.error) { document.getElementById('pageRoot').innerHTML = `<p style="padding:40px;color:#ff3b30">${esc(d.error)}</p>`; return; }
     renderOverview(d);
+}
+
+function _statCard(label, value, sub, iconEmoji, accentBg, valueColor) {
+    return `<div class="ak-stat-card">
+        <div class="ak-stat-top">
+            <span class="ak-stat-label">${label}</span>
+            <span class="ak-stat-icon" style="background:${accentBg}">${iconEmoji}</span>
+        </div>
+        <div class="ak-stat-value" style="color:${valueColor||'#1c1c1e'}">${value}</div>
+        ${sub ? `<div class="ak-stat-sub">${sub}</div>` : ''}
+    </div>`;
 }
 
 function renderOverview(d) {
@@ -311,99 +379,66 @@ function renderOverview(d) {
     const checkoutU    = s.checkout_users|| 0;
     const buyers       = s.buyers        || 0;
 
-    const statsHtml = `
-    <div class="stat-grid">
-        <div class="stat-card highlight">
-            <div class="stat-label">สมาชิกทั้งหมด</div>
-            <div class="stat-value">${totalMembers.toLocaleString()}</div>
-            <div class="stat-sub">registered</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Active ${days} วัน</div>
-            <div class="stat-value">${activeUsers.toLocaleString()}</div>
-            <div class="stat-sub">${totalMembers ? Math.round(activeUsers/totalMembers*100) : 0}% ของทั้งหมด</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Sessions</div>
-            <div class="stat-value">${(s.sessions||0).toLocaleString()}</div>
-            <div class="stat-sub">การเข้าชม</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Events</div>
-            <div class="stat-value">${(s.total_events||0).toLocaleString()}</div>
-            <div class="stat-sub">กิจกรรมทั้งหมด</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">ใส่ตะกร้า</div>
-            <div class="stat-value">${cartUsers.toLocaleString()}</div>
-            <div class="stat-sub">คน</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">สั่งซื้อแล้ว</div>
-            <div class="stat-value">${buyers.toLocaleString()}</div>
-            <div class="stat-sub">conversion</div>
-        </div>
+    const statsHtml = `<div class="ak-stat-grid">
+        ${_statCard('สมาชิกทั้งหมด', totalMembers.toLocaleString(), 'registered', '👥', '#EDE9FE', '#7c3aed')}
+        ${_statCard(`ACTIVE ${days} วัน`, activeUsers.toLocaleString(), `${totalMembers ? Math.round(activeUsers/totalMembers*100) : 0}% ของทั้งหมด`, '⚡', '#FFF3E0', '#ff9500')}
+        ${_statCard('SESSIONS', (s.sessions||0).toLocaleString(), 'การเข้าชม', '🔗', '#E3F2FD', '#007aff')}
+        ${_statCard('EVENTS', (s.total_events||0).toLocaleString(), 'กิจกรรมทั้งหมด', '📊', '#F3E5F5', '#5856d6')}
+        ${_statCard('ใส่ตะกร้า', cartUsers.toLocaleString(), 'คน', '🛒', '#FFF8E1', '#ff9500')}
+        ${_statCard('สั่งซื้อแล้ว', buyers.toLocaleString(), 'conversion', '✅', '#E8F5E9', '#34c759')}
     </div>`;
 
-    const funnelBase = activeUsers || 1;
+    const funnelBase = totalMembers || 1;
     const funnelItems = [
-        { label: 'เข้าใช้งาน',      val: activeUsers,        color: '#7c3aed' },
-        { label: 'ดูสินค้า',        val: s.product_view_users||activeUsers, color: '#3b82f6' },
-        { label: 'ใส่ตะกร้า',       val: cartUsers,           color: '#f59e0b' },
-        { label: 'เริ่ม Checkout',  val: checkoutU,           color: '#ef4444' },
-        { label: 'สั่งซื้อสำเร็จ',  val: buyers,             color: '#10b981' },
+        { label:'สมาชิกทั้งหมด', val: totalMembers,                             color:'#7c3aed' },
+        { label:'เข้าใช้งาน',    val: activeUsers,                              color:'#007aff' },
+        { label:'ดูสินค้า',      val: s.product_view_users||activeUsers,        color:'#0891b2' },
+        { label:'ใส่ตะกร้า',     val: cartUsers,                                color:'#ff9500' },
+        { label:'สั่งซื้อสำเร็จ',val: buyers,                                   color:'#34c759' },
     ];
-    const funnelHtml = `
-    <div class="funnel-wrap">
-        <div class="section-title">🔻 Conversion Funnel (${days} วันล่าสุด)</div>
+    const funnelHtml = `<div class="ak-card">
+        <div class="ak-section">Conversion Funnel <span class="ak-section-sub">${days} วันล่าสุด</span></div>
         ${funnelItems.map(f => {
             const pct = funnelBase > 0 ? Math.round(f.val/funnelBase*100) : 0;
             const w   = Math.max(pct, 3);
-            return `<div class="funnel-row">
-                <div class="funnel-label">${esc(f.label)}</div>
-                <div class="funnel-bar-wrap">
-                    <div class="funnel-bar" style="width:${w}%;background:${f.color}">
-                        <span class="funnel-count">${f.val.toLocaleString()}</span>
+            return `<div class="ak-funnel-row">
+                <div class="ak-funnel-label">${esc(f.label)}</div>
+                <div class="ak-funnel-track">
+                    <div class="ak-funnel-fill" style="width:${w}%;background:${f.color}">
+                        <span class="ak-funnel-count">${f.val.toLocaleString()}</span>
                     </div>
                 </div>
-                <div class="funnel-pct">${pct}%</div>
+                <div class="ak-funnel-pct">${pct}%</div>
             </div>`;
         }).join('')}
     </div>`;
 
     const maxPageViews = top_pages[0]?.views || 1;
-    const topPagesHtml = `
-    <div class="card">
-        <div class="section-title">📄 หน้าที่เข้าบ่อย</div>
-        <div class="bar-chart">
-            ${top_pages.map(p => `
-            <div class="bar-row">
-                <div class="bar-name" title="${esc(p.page)}">${esc(p.page||'/')}</div>
-                <div class="bar-track"><div class="bar-fill" style="width:${Math.round(p.views/maxPageViews*100)}%"></div></div>
-                <div class="bar-val">${p.views}</div>
-            </div>`).join('') || '<div style="color:var(--txt3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูล</div>'}
-        </div>
+    const topPagesHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">หน้าที่เข้าบ่อย</div>
+        ${top_pages.map(p => `
+        <div class="ak-bar-row">
+            <div class="ak-bar-name" title="${esc(p.page)}">${esc(p.page||'/')}</div>
+            <div class="ak-bar-track"><div class="ak-bar-fill" style="width:${Math.round(p.views/maxPageViews*100)}%;background:#7c3aed;opacity:.8"></div></div>
+            <div class="ak-bar-val">${p.views}</div>
+        </div>`).join('') || '<div style="color:var(--gray3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูล</div>'}
     </div>`;
 
     const maxProdViews = top_products[0]?.views || 1;
-    const topProductsHtml = `
-    <div class="card">
-        <div class="section-title">👗 สินค้าที่ดูบ่อย</div>
-        <div class="bar-chart">
-            ${top_products.map(p => `
-            <div class="bar-row">
-                <div class="bar-name" title="${esc(p.product)}">${esc(p.product||'-')}</div>
-                <div class="bar-track"><div class="bar-fill" style="width:${Math.round(p.views/maxProdViews*100)}%;background:#3b82f6"></div></div>
-                <div class="bar-val">${p.views}</div>
-            </div>`).join('') || '<div style="color:var(--txt3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูล</div>'}
-        </div>
+    const topProductsHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">สินค้าที่ดูบ่อย</div>
+        ${top_products.map(p => `
+        <div class="ak-bar-row">
+            <div class="ak-bar-name" title="${esc(p.product)}">${esc(p.product||'-')}</div>
+            <div class="ak-bar-track"><div class="ak-bar-fill" style="width:${Math.round(p.views/maxProdViews*100)}%;background:#ff9500;opacity:.85"></div></div>
+            <div class="ak-bar-val">${p.views}</div>
+        </div>`).join('') || '<div style="color:var(--gray3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูล</div>'}
     </div>`;
 
-    const userFunnelHtml = `
-    <div class="user-table-wrap">
-        <div class="section-title">👥 พฤติกรรมรายคน (${days} วันล่าสุด)</div>
-        <div style="overflow:auto">
-        <table class="data-table">
+    const userFunnelHtml = `<div class="ak-card">
+        <div class="ak-section">พฤติกรรมรายคน <span class="ak-section-sub">${days} วันล่าสุด</span></div>
+        <div class="ak-table-wrap">
+        <table class="ak-table">
             <thead><tr>
                 <th>สมาชิก</th><th>Tier</th><th>เข้าดูล่าสุด</th>
                 <th>Page Views</th><th>ดูสินค้า</th><th>ใส่ตะกร้า</th>
@@ -413,60 +448,55 @@ function renderOverview(d) {
             ${user_funnel.map(u => {
                 const stage = u.checkout_starts > 0 ? 'checkout' : u.cart_adds > 0 ? 'cart' : u.product_views > 0 ? 'browsing' : 'new';
                 const stageLabel = { checkout:'💳 Checkout', cart:'🛒 ตะกร้า', browsing:'🔍 เรียกดู', new:'🆕 ใหม่' }[stage];
-                const stageCls   = { checkout:'ylw', cart:'ylw', browsing:'blu', new:'' }[stage];
+                const stageCls   = { checkout:'ylw', cart:'ylw', browsing:'blu', new:'gray' }[stage];
                 return `<tr>
-                    <td><strong>${esc(u.full_name||u.username)}</strong><br><span style="color:var(--txt3);font-size:11px">@${esc(u.username)}</span></td>
-                    <td><span class="badge">${esc(u.reseller_tier||'—')}</span></td>
-                    <td style="font-size:12px;color:var(--txt2)">${u.last_seen ? timeAgo(u.last_seen) : '—'}</td>
+                    <td><strong>${esc(u.full_name||u.username)}</strong><br><span style="color:var(--gray3);font-size:11px">@${esc(u.username)}</span></td>
+                    <td><span class="ak-badge">${esc(u.reseller_tier||'—')}</span></td>
+                    <td style="font-size:12px;color:var(--gray2)">${u.last_seen ? timeAgo(u.last_seen) : '—'}</td>
                     <td class="num">${u.page_views||0}</td>
                     <td class="num">${u.product_views||0}</td>
-                    <td class="num" style="font-weight:${u.cart_adds>0?'700':'400'};color:${u.cart_adds>0?'var(--ylw)':'inherit'}">${u.cart_adds||0}</td>
+                    <td class="num" style="font-weight:${u.cart_adds>0?'700':'400'};color:${u.cart_adds>0?'var(--orange)':'inherit'}">${u.cart_adds||0}</td>
                     <td class="num" style="font-weight:${u.checkout_starts>0?'700':'400'};color:${u.checkout_starts>0?'var(--red)':'inherit'}">${u.checkout_starts||0}</td>
                     <td class="num">${u.searches||0}</td>
-                    <td><span class="badge ${stageCls}">${stageLabel}</span></td>
+                    <td><span class="ak-badge ${stageCls}">${stageLabel}</span></td>
                 </tr>`;
-            }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--txt3);padding:24px">ยังไม่มีข้อมูล — เริ่มใช้งานเมื่อสมาชิก login แล้ว</td></tr>'}
+            }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--gray3);padding:24px">ยังไม่มีข้อมูล — จะเห็นผลเมื่อสมาชิก login แล้ว</td></tr>'}
             </tbody>
         </table>
         </div>
     </div>`;
 
-    const recentHtml = `
-    <div class="card">
-        <div class="section-title">🕐 กิจกรรมล่าสุด</div>
-        <div class="event-log">
-            ${recent.slice(0,30).map(e => `
-            <div class="event-row">
-                <div class="event-icon">${EVENT_ICONS[e.event_type]||'•'}</div>
-                <div class="event-meta">
-                    <div class="event-user">${esc(e.full_name||e.username||'Guest')}</div>
-                    <div><span class="event-type">${esc(e.event_type)}</span>${e.metadata?.product_name ? ' <span style="color:var(--txt2);font-size:11px">'+esc(e.metadata.product_name)+'</span>' : ''}</div>
-                    <div class="event-page">${esc(e.page||'')}</div>
-                </div>
-                <div class="event-time">${e.created_at ? timeAgo(e.created_at) : ''}</div>
-            </div>`).join('') || '<div style="color:var(--txt3);font-size:13px">ยังไม่มีข้อมูล</div>'}
-        </div>
+    const recentHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">กิจกรรมล่าสุด</div>
+        ${recent.slice(0,30).map(e => `
+        <div class="ak-event-row">
+            <div class="ak-event-icon">${EVENT_ICONS[e.event_type]||'•'}</div>
+            <div class="ak-event-body">
+                <div class="ak-event-user">${esc(e.full_name||e.username||'Guest')}</div>
+                <div><span class="ak-event-type">${esc(e.event_type)}</span>${e.metadata?.product_name ? ' <span style="color:var(--gray2);font-size:11px">'+esc(e.metadata.product_name)+'</span>' : ''}</div>
+                <div class="ak-event-page">${esc(e.page||'')}</div>
+            </div>
+            <div class="ak-event-time">${e.created_at ? timeAgo(e.created_at) : ''}</div>
+        </div>`).join('') || '<div style="color:var(--gray3);font-size:13px">ยังไม่มีข้อมูล</div>'}
     </div>`;
 
     const maxEvt = event_breakdown[0]?.cnt || 1;
-    const evtHtml = `
-    <div class="card">
-        <div class="section-title">⚡ ประเภทกิจกรรม</div>
-        <div class="bar-chart">
-            ${event_breakdown.map(e => `
-            <div class="bar-row">
-                <div class="bar-name">${EVENT_ICONS[e.event_type]||'•'} ${esc(e.event_type)}</div>
-                <div class="bar-track"><div class="bar-fill" style="width:${Math.round(e.cnt/maxEvt*100)}%;background:#10b981"></div></div>
-                <div class="bar-val">${e.cnt}</div>
-            </div>`).join('') || '<div style="color:var(--txt3);font-size:13px">ยังไม่มีข้อมูล</div>'}
-        </div>
+    const evtColors = { page_view:'#7c3aed', product_view:'#007aff', add_to_cart:'#ff9500', checkout_start:'#ff3b30', checkout_complete:'#34c759', search:'#5856d6', chatbot_message:'#ec4899', login:'#64748b', register:'#10b981' };
+    const evtHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">ประเภทกิจกรรม</div>
+        ${event_breakdown.map(e => `
+        <div class="ak-bar-row">
+            <div class="ak-bar-name">${EVENT_ICONS[e.event_type]||'•'} ${esc(e.event_type)}</div>
+            <div class="ak-bar-track"><div class="ak-bar-fill" style="width:${Math.round(e.cnt/maxEvt*100)}%;background:${evtColors[e.event_type]||'#34c759'};opacity:.85"></div></div>
+            <div class="ak-bar-val">${e.cnt}</div>
+        </div>`).join('') || '<div style="color:var(--gray3);font-size:13px">ยังไม่มีข้อมูล</div>'}
     </div>`;
 
     document.getElementById('pageRoot').innerHTML =
         statsHtml + funnelHtml +
-        `<div class="two-col">${topPagesHtml}${topProductsHtml}</div>` +
+        `<div class="ak-card-grid2" style="margin-top:20px;">${topPagesHtml}${topProductsHtml}</div>` +
         userFunnelHtml +
-        `<div class="two-col">${recentHtml}${evtHtml}</div>`;
+        `<div class="ak-card-grid2">${recentHtml}${evtHtml}</div>`;
 }
 
 // ════════════════════════════════════════════
@@ -474,188 +504,167 @@ function renderOverview(d) {
 // ════════════════════════════════════════════
 async function loadBehavior() {
     document.getElementById('pageRoot').innerHTML =
-        '<div class="loading"><div class="loading-spinner"></div><div>กำลังวิเคราะห์พฤติกรรม...</div></div>';
+        '<div class="ak-loading"><div class="ak-spinner"></div><div>กำลังวิเคราะห์พฤติกรรม...</div></div>';
     const days = document.getElementById('daySelect').value;
     const res  = await fetch(`/api/admin/analytics/behavior?days=${days}`);
     const d    = await res.json();
-    if (d.error) { document.getElementById('pageRoot').innerHTML = `<p style="padding:40px;color:red">${esc(d.error)}</p>`; return; }
+    if (d.error) { document.getElementById('pageRoot').innerHTML = `<p style="padding:40px;color:#ff3b30">${esc(d.error)}</p>`; return; }
     renderBehavior(d);
 }
 
 function renderBehavior(d) {
     const { hours, dow, tier_breakdown, interest_gap, sections, engagement, days } = d;
 
-    // ── 1. Active hours heatmap ──
+    // ── 1. Hour heatmap ──
     const maxHour = Math.max(...hours.map(h => h.cnt), 1);
     const peakHour = hours.reduce((a, b) => b.cnt > a.cnt ? b : a, hours[0]);
-    const hourHtml = `
-    <div class="card card-mb">
-        <div class="section-title">🕐 เวลาที่ตัวแทนใช้งานมากที่สุด</div>
-        <div class="section-sub">แต่ละแท่งแสดงจำนวน event ในชั่วโมงนั้น — สีแดงคือชั่วโมง peak</div>
-        <div class="hour-grid">
+    const hourHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">ช่วงเวลาที่ Active <span class="ak-section-sub">สีเข้ม = ใช้มาก</span></div>
+        <div class="ak-hour-grid">
             ${hours.map(h => {
-                const pct = maxHour > 0 ? Math.round(h.cnt/maxHour*100) : 0;
+                const pct   = maxHour > 0 ? h.cnt / maxHour : 0;
                 const isPeak = h.cnt > 0 && h.cnt === peakHour.cnt;
-                const label = h.hour < 12 ? `${h.hour}am` : h.hour === 12 ? '12pm' : `${h.hour-12}pm`;
-                return `<div class="hour-cell">
-                    <div class="hour-cnt">${h.cnt > 0 ? h.cnt : ''}</div>
-                    <div class="hour-bar-wrap">
-                        <div class="hour-bar ${isPeak?'peak':''}" style="height:${pct}%"></div>
-                    </div>
-                    <div class="hour-label">${label}</div>
+                const bg = isPeak ? '#007aff' : `rgba(0,122,255,${0.1 + pct * 0.75})`;
+                const showLabel = h.hour % 6 === 0;
+                return `<div class="ak-hour-col">
+                    <div class="ak-hour-bar" style="height:${Math.max(pct*64,3)}px;background:${bg}"></div>
+                    ${showLabel ? `<div class="ak-hour-label">${h.hour}</div>` : '<div style="height:12px"></div>'}
                 </div>`;
             }).join('')}
         </div>
-        ${peakHour && peakHour.cnt > 0 ? `
-        <div style="margin-top:12px;font-size:12px;color:var(--txt2)">
-            🔴 Peak: <strong>${peakHour.hour < 12 ? peakHour.hour+'am' : peakHour.hour===12?'12pm':(peakHour.hour-12)+'pm'}</strong>
-            (${peakHour.cnt} events)
-        </div>` : '<div style="margin-top:12px;font-size:12px;color:var(--txt3)">ยังไม่มีข้อมูลพอ — จะเห็นผลเมื่อมีการใช้งานมากขึ้น</div>'}
+        ${peakHour && peakHour.cnt > 0
+            ? `<div style="font-size:12px;color:var(--gray2);margin-top:4px">⚡ Peak: <strong style="color:var(--blue)">${peakHour.hour < 12 ? peakHour.hour+'am' : peakHour.hour===12?'12pm':(peakHour.hour-12)+'pm'}</strong> · ${peakHour.cnt} events</div>`
+            : `<div style="font-size:12px;color:var(--gray3);margin-top:4px">ยังไม่มีข้อมูลพอ</div>`}
     </div>`;
 
     // ── 2. Day of week ──
     const maxDow = Math.max(...dow.map(d => d.cnt), 1);
     const peakDow = dow.reduce((a, b) => b.cnt > a.cnt ? b : a, dow[0]);
-    const dayColors = ['#7c3aed','#3b82f6','#10b981','#f59e0b','#ef4444','#ec4899','#8b5cf6'];
-    const dowHtml = `
-    <div class="card card-mb">
-        <div class="section-title">📅 วันที่ใช้งานมากสุดในสัปดาห์</div>
-        <div class="dow-grid">
+    const dowHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">วันที่ Active มากสุดในสัปดาห์</div>
+        <div class="ak-dow-grid">
             ${dow.map((dw, i) => {
-                const pct = maxDow > 0 ? Math.round(dw.cnt/maxDow*100) : 0;
-                return `<div class="dow-cell">
-                    <div class="dow-cnt">${dw.cnt > 0 ? dw.cnt : '0'}</div>
-                    <div class="dow-bar-wrap">
-                        <div class="dow-bar" style="height:${pct}%;background:${dayColors[i]}"></div>
+                const pct = maxDow > 0 ? dw.cnt / maxDow : 0;
+                const isPeak = dw.cnt === peakDow.cnt && dw.cnt > 0;
+                return `<div class="ak-dow-col">
+                    <div class="ak-dow-cnt" style="color:${isPeak?'#007aff':'var(--gray3)'}">${dw.cnt}</div>
+                    <div class="ak-dow-track">
+                        <div class="ak-dow-bar" style="height:${Math.max(pct*60,4)}px;background:${isPeak?'#007aff':`rgba(0,122,255,${0.2+pct*0.6})`}"></div>
                     </div>
-                    <div class="dow-label">${dw.day}</div>
+                    <div class="ak-dow-label" style="color:${isPeak?'#007aff':'var(--gray2)'}">${dw.day}</div>
                 </div>`;
             }).join('')}
         </div>
-        ${peakDow && peakDow.cnt > 0 ? `<div style="margin-top:10px;font-size:12px;color:var(--txt2)">วันยอดนิยม: <strong>วัน${peakDow.day}</strong> (${peakDow.cnt} events)</div>` : ''}
+        ${peakDow && peakDow.cnt > 0 ? `<div style="font-size:12px;color:var(--gray2);margin-top:10px">วันยอดนิยม: <strong style="color:var(--blue)">วัน${peakDow.day}</strong> · ${peakDow.cnt} events</div>` : ''}
     </div>`;
 
     // ── 3. Section engagement ──
     const maxSection = sections[0]?.cnt || 1;
-    const sectionColors = { 'แคตตาล็อกสินค้า':'#7c3aed','ตะกร้าสินค้า':'#f59e0b','Checkout':'#ef4444','ประวัติออเดอร์':'#3b82f6','โปรไฟล์':'#10b981','แชท':'#ec4899','โปรโมชัน':'#f97316','หน้าหลัก':'#64748b','หน้าหลักตัวแทน':'#64748b' };
-    const sectionHtml = `
-    <div class="card card-mb">
-        <div class="section-title">🗺️ Section ที่ตัวแทนใช้งานบ่อย</div>
-        <div class="bar-chart">
-            ${sections.map(s => {
-                const color = sectionColors[s.section] || '#94a3b8';
-                return `<div class="bar-row">
-                    <div class="bar-name" title="${esc(s.section)}">${esc(s.section)}</div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(s.cnt/maxSection*100)}%;background:${color}"></div></div>
-                    <div class="bar-val" style="color:var(--txt2)">${s.cnt} <span style="font-size:10px;color:var(--txt3)">(${s.users}คน)</span></div>
-                </div>`;
-            }).join('') || '<div style="color:var(--txt3);font-size:13px">ยังไม่มีข้อมูล</div>'}
-        </div>
+    const sectionColors = { 'แคตตาล็อกสินค้า':'#7c3aed','ตะกร้าสินค้า':'#ff9500','Checkout':'#ff3b30','ประวัติออเดอร์':'#007aff','โปรไฟล์':'#34c759','แชท':'#ec4899','โปรโมชัน':'#f97316','หน้าหลัก':'#aeaeb2','หน้าหลักตัวแทน':'#aeaeb2' };
+    const sectionHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">Section ที่ใช้งานบ่อย</div>
+        ${sections.map(s => {
+            const color = sectionColors[s.section] || '#aeaeb2';
+            return `<div class="ak-sec-row">
+                <div class="ak-sec-name" title="${esc(s.section)}">${esc(s.section)}</div>
+                <div class="ak-sec-track"><div class="ak-sec-fill" style="width:${Math.round(s.cnt/maxSection*100)}%;background:${color};opacity:.85"></div></div>
+                <div class="ak-sec-val">${s.cnt} <span style="font-size:10px;color:var(--gray3)">(${s.users}คน)</span></div>
+            </div>`;
+        }).join('') || '<div style="color:var(--gray3);font-size:13px">ยังไม่มีข้อมูล</div>'}
     </div>`;
 
-    // ── 4. Tier behavior breakdown ──
+    // ── 4. Tier breakdown ──
     const maxTierViews = Math.max(...(tier_breakdown.map(t => Number(t.page_views)||0)), 1);
-    const tierHtml = `
-    <div class="card card-mb">
-        <div class="section-title">📊 พฤติกรรมแยกตามระดับตัวแทน</div>
-        ${tier_breakdown.length === 0 ? '<div style="color:var(--txt3);font-size:13px">ยังไม่มีข้อมูล</div>' : ''}
-        <div class="tier-grid">
-            ${tier_breakdown.map(t => {
-                const pvPct   = maxTierViews > 0 ? Math.round((Number(t.page_views)||0)/maxTierViews*100) : 0;
-                const prodPct = Number(t.page_views) > 0 ? Math.round((Number(t.product_views)||0)/Number(t.page_views)*100) : 0;
-                const cartPct = Number(t.product_views) > 0 ? Math.round((Number(t.cart_adds)||0)/Number(t.product_views)*100) : 0;
-                const tierCol = { 'Bronze':'#cd7f32','Silver':'#94a3b8','Gold':'#f59e0b','Platinum':'#7c3aed','Diamond':'#3b82f6' };
-                const col = tierCol[t.tier] || '#64748b';
-                return `<div class="tier-row">
-                    <div class="tier-name" style="color:${col}">${esc(t.tier)}</div>
-                    <div class="tier-stat"><div class="tier-stat-val">${t.members}</div><div class="tier-stat-lbl">คน</div></div>
-                    <div class="tier-stat"><div class="tier-stat-val">${t.page_views||0}</div><div class="tier-stat-lbl">page views</div></div>
-                    <div class="tier-stat"><div class="tier-stat-val">${t.product_views||0}</div><div class="tier-stat-lbl">ดูสินค้า</div></div>
-                    <div class="tier-stat"><div class="tier-stat-val" style="color:${cartPct>10?'var(--ylw)':'inherit'}">${t.cart_adds||0}</div><div class="tier-stat-lbl">ตะกร้า</div></div>
-                    <div class="tier-bar">
-                        <div class="tier-bar-label">Activity level</div>
-                        <div class="tier-bar-track"><div class="tier-bar-fill" style="width:${pvPct}%;background:${col}"></div></div>
+    const tierHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">พฤติกรรมแยกตาม Tier</div>
+        ${tier_breakdown.length === 0 ? '<div style="color:var(--gray3);font-size:13px">ยังไม่มีข้อมูล</div>' : ''}
+        ${tier_breakdown.map(t => {
+            const pvPct  = maxTierViews > 0 ? Math.round((Number(t.page_views)||0)/maxTierViews*100) : 0;
+            const cartPct= Number(t.product_views)>0 ? Math.round((Number(t.cart_adds)||0)/Number(t.product_views)*100) : 0;
+            const tierCol = { 'Bronze':'#CD7F32','Silver':'#A0A0A0','Gold':'#FFD700','Platinum':'#7c3aed','Diamond':'#007aff' };
+            const col = tierCol[t.tier] || '#aeaeb2';
+            return `<div class="ak-tier-item">
+                <div class="ak-tier-head">
+                    <span class="ak-tier-name" style="color:${col}">${esc(t.tier)}</span>
+                    <div class="ak-tier-stats">
+                        <span class="ak-tier-stat">👥 ${t.members} คน</span>
+                        <span class="ak-tier-stat">👁 ${t.page_views||0}</span>
+                        <span class="ak-tier-stat">🔍 ${t.product_views||0}</span>
+                        <span class="ak-tier-stat" style="color:${cartPct>10?'var(--orange)':'inherit'}">🛒 ${t.cart_adds||0}</span>
                     </div>
-                </div>`;
-            }).join('')}
-        </div>
-    </div>`;
-
-    // ── 5. Product interest gap ──
-    const gapHtml = `
-    <div class="card card-mb">
-        <div class="section-title">🛍️ สินค้าที่ถูกดูมาก — ยังไม่ถูกสั่งซื้อ</div>
-        <div class="section-sub">ช่วยระบุสินค้าที่น่าสนใจแต่มีอุปสรรคในการซื้อ</div>
-        ${interest_gap.length === 0 ?
-            '<div style="color:var(--txt3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูลการดูสินค้า</div>'
-        :
-        interest_gap.map(g => {
-            const ratio = Number(g.order_cnt) > 0 ? Math.round(Number(g.view_cnt)/Number(g.order_cnt)) : 999;
-            const gapLevel = ratio >= 10 || Number(g.order_cnt) === 0 ? 'hot' : ratio >= 3 ? 'warn' : 'ok';
-            const gapLabel = { hot:'⚠️ ดูมาก ไม่ซื้อ', warn:'👀 อยู่ระหว่างตัดสินใจ', ok:'✅ ปกติ' }[gapLevel];
-            return `<div class="gap-item">
-                <div class="gap-name" title="${esc(g.product_name)}">${esc(g.product_name||'-')}</div>
-                <div class="gap-views">👁 ${g.view_cnt} ครั้ง | 📦 ${g.order_cnt} ออเดอร์</div>
-                <div class="gap-pill ${gapLevel}">${gapLabel}</div>
+                </div>
+                <div class="ak-tier-track"><div class="ak-tier-fill" style="width:${pvPct}%;background:${col}"></div></div>
             </div>`;
         }).join('')}
-        ${interest_gap.some(g => (Number(g.order_cnt)===0||Number(g.view_cnt)/Math.max(Number(g.order_cnt),1)>=5)) ? `
-        <div class="insight-box" style="margin-top:16px">
-            <div class="insight-icon">💡</div>
-            <div class="insight-text"><strong>Insight:</strong> สินค้าที่ถูกดูมากแต่ไม่ซื้ออาจมีปัญหาเรื่อง ราคา / สต็อกหมด / ขาดข้อมูล — ลองโปรโมชันเฉพาะกลุ่ม หรือให้บอท push notification</div>
+    </div>`;
+
+    // ── 5. Interest gap ──
+    const gapHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">ดูสินค้าแต่ยังไม่สั่ง <span class="ak-section-sub">Conversion gap</span></div>
+        ${interest_gap.length === 0
+            ? '<div style="color:var(--gray3);font-size:13px;padding:8px 0">ยังไม่มีข้อมูลการดูสินค้า</div>'
+            : interest_gap.map(g => {
+                const ratio = Number(g.order_cnt) > 0 ? Math.round(Number(g.view_cnt)/Number(g.order_cnt)) : 999;
+                const gapLevel = ratio >= 10 || Number(g.order_cnt) === 0 ? 'hot' : ratio >= 3 ? 'warn' : 'ok';
+                const gapLabel = { hot:'⚠️ ยังไม่สั่ง', warn:'👀 ตัดสินใจอยู่', ok:'✅ ปกติ' }[gapLevel];
+                return `<div class="ak-gap-item">
+                    <div class="ak-gap-name" title="${esc(g.product_name)}">${esc(g.product_name||'-')}</div>
+                    <div class="ak-gap-meta">👁${g.view_cnt} · 📦${g.order_cnt}</div>
+                    <div class="ak-gap-pill ${gapLevel}">${gapLabel}</div>
+                </div>`;
+            }).join('')}
+        ${interest_gap.some(g => Number(g.order_cnt)===0 && Number(g.view_cnt)>=2) ? `
+        <div class="ak-insight" style="margin-top:14px;margin-bottom:0">
+            <div class="ak-insight-icon">💡</div>
+            <div class="ak-insight-text"><strong>Insight:</strong> สินค้าที่ถูกดูมากแต่ไม่สั่งอาจมีปัญหาเรื่องราคา / สต็อก / ข้อมูลไม่พอ — ลองโปรโมชันหรือ push notification</div>
         </div>` : ''}
     </div>`;
 
-    // ── 6. Engagement leaderboard ──
+    // ── 6. Leaderboard ──
     const maxScore = engagement[0]?.score || 1;
-    const lbHtml = `
-    <div class="card card-mb">
-        <div class="section-title">🏆 Engagement Score (${days} วันล่าสุด)</div>
-        <div class="section-sub">คะแนน = Page view×1 + ดูสินค้า×3 + ตะกร้า×5 + Checkout×10</div>
-        ${engagement.length === 0 ? '<div style="color:var(--txt3);font-size:13px">ยังไม่มีข้อมูล</div>' :
+    const lbHtml = `<div class="ak-card ak-card-no-mb">
+        <div class="ak-section">Engagement Score <span class="ak-section-sub">${days} วันล่าสุด</span></div>
+        ${engagement.length === 0 ? '<div style="color:var(--gray3);font-size:13px">ยังไม่มีข้อมูล</div>' :
         engagement.map((u, i) => {
-            const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
-            const tierCol = { 'Bronze':'#cd7f32','Silver':'#94a3b8','Gold':'#f59e0b','Platinum':'#7c3aed','Diamond':'#3b82f6','-':'#64748b' };
-            const col = tierCol[u.tier] || '#64748b';
+            const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}`;
+            const tierCol = { 'Bronze':'#CD7F32','Silver':'#A0A0A0','Gold':'#FFD700','Platinum':'#7c3aed','Diamond':'#007aff','-':'#aeaeb2' };
+            const col = tierCol[u.tier] || '#aeaeb2';
             const pct = maxScore > 0 ? Math.round(Number(u.score)/maxScore*100) : 0;
-            return `<div class="lb-row">
-                <div class="lb-rank">${rankIcon}</div>
-                <div class="lb-name">
-                    <div class="lb-name-main">${esc(u.full_name||u.username)}</div>
-                    <div class="lb-name-sub" style="color:${col}">${esc(u.tier||'-')} &nbsp;·&nbsp; ${u.last_active?timeAgo(u.last_active):'—'}</div>
-                    <div style="margin-top:4px;background:var(--sur3);border-radius:4px;height:4px;width:100%;overflow:hidden">
-                        <div style="height:100%;width:${pct}%;background:${col};border-radius:4px"></div>
-                    </div>
+            return `<div class="ak-lb-row">
+                <div class="ak-lb-rank">${rankIcon}</div>
+                <div class="ak-lb-info">
+                    <div class="ak-lb-name">${esc(u.full_name||u.username)}</div>
+                    <div class="ak-lb-sub" style="color:${col}">${esc(u.tier||'-')} · ${u.last_active?timeAgo(u.last_active):'—'}</div>
+                    <div class="ak-lb-bar-wrap"><div class="ak-lb-bar-fill" style="width:${pct}%;background:${col}"></div></div>
                 </div>
-                <div class="lb-score">${Number(u.score).toLocaleString()}</div>
-                <div class="lb-details" style="flex-direction:column;align-items:flex-end;gap:2px">
-                    <div class="lb-ev">👁 ${u.pv||0} &nbsp; 🔍 ${u.prodv||0}</div>
-                    <div class="lb-ev">🛒 ${u.cart||0} &nbsp; 💳 ${u.chk||0}</div>
+                <div class="ak-lb-events">
+                    <div class="ak-lb-ev">👁 ${u.pv||0} &nbsp; 🔍 ${u.prodv||0}</div>
+                    <div class="ak-lb-ev">🛒 ${u.cart||0} &nbsp; 💳 ${u.chk||0}</div>
                 </div>
+                <div class="ak-lb-score">${Number(u.score).toLocaleString()}</div>
             </div>`;
         }).join('')}
     </div>`;
 
-    // ── Summary insight banner ──
-    const totalEvents = engagement.reduce((s, u) => s + (Number(u.pv)||0) + (Number(u.prodv)||0), 0);
+    // ── Insight banner ──
     const highGap = interest_gap.filter(g => Number(g.order_cnt)===0 && Number(g.view_cnt)>=2).length;
     const peakLabel = peakHour?.cnt > 0 ? (peakHour.hour<12?peakHour.hour+'am':peakHour.hour===12?'12pm':(peakHour.hour-12)+'pm') : 'ไม่ระบุ';
     const insightBanner = (highGap > 0 || engagement.length > 0) ? `
-    <div class="insight-box" style="margin-bottom:24px">
-        <div class="insight-icon">🧠</div>
-        <div class="insight-text">
+    <div class="ak-insight">
+        <div class="ak-insight-icon">🧠</div>
+        <div class="ak-insight-text">
             <strong>สรุปพฤติกรรม ${days} วันล่าสุด:</strong>
             ${engagement.length > 0 ? `มีตัวแทน <strong>${engagement.length} คน</strong> active · ` : ''}
-            ${peakHour?.cnt > 0 ? `ช่วงเวลา peak คือ <strong>${peakLabel}</strong> · ` : ''}
-            ${highGap > 0 ? `มีสินค้า <strong>${highGap} รายการ</strong> ที่ถูกดูแต่ยังไม่ถูกสั่ง` : ''}
+            ${peakHour?.cnt > 0 ? `ช่วง peak คือ <strong>${peakLabel}</strong> · ` : ''}
+            ${highGap > 0 ? `มีสินค้า <strong>${highGap} รายการ</strong> ที่ดูแต่ยังไม่สั่ง` : ''}
         </div>
     </div>` : '';
 
     document.getElementById('pageRoot').innerHTML =
         insightBanner +
-        `<div class="two-col">${hourHtml}${dowHtml}</div>` +
-        `<div class="two-col">${sectionHtml}${tierHtml}</div>` +
-        `<div class="two-col">${gapHtml}${lbHtml}</div>`;
+        `<div class="ak-card-grid2">${hourHtml}${dowHtml}</div>` +
+        `<div class="ak-card-grid2" style="margin-top:0">${sectionHtml}${tierHtml}</div>` +
+        `<div class="ak-card-grid2" style="margin-top:0">${gapHtml}${lbHtml}</div>`;
 }
 
 // Boot
