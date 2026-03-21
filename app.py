@@ -71,14 +71,17 @@ def validate_csrf_token():
         return False
     return True
 
-# CORS configuration - allow Replit domains
-allowed_origins = [
-    f"https://{os.environ.get('REPLIT_DEV_DOMAIN', '')}",
-    f"https://{os.environ.get('REPLIT_DEPLOYMENT_DOMAIN', '')}",
-    "https://ekgshops.com",
-    "https://www.ekgshops.com"
-]
-allowed_origins = [o for o in allowed_origins if o and o != "https://"]
+# CORS — production domains only; Replit dev domain only in non-production environments
+_PROD_ORIGINS = ["https://ekgshops.com", "https://www.ekgshops.com"]
+_is_production = os.environ.get('PRODUCTION', '').lower() in ('1', 'true', 'yes')
+
+if _is_production:
+    allowed_origins = _PROD_ORIGINS
+else:
+    _replit_dev = os.environ.get('REPLIT_DEV_DOMAIN', '')
+    allowed_origins = _PROD_ORIGINS + (
+        [f"https://{_replit_dev}"] if _replit_dev else []
+    )
 
 CORS(app, supports_credentials=True, origins=allowed_origins)
 
@@ -192,7 +195,47 @@ def add_header(response):
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+
+    # Security headers — applied to all responses
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), payment=()'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "https://connect.facebook.net https://www.googletagmanager.com "
+            "https://www.clarity.ms https://cdn.clarity.ms https://js.stripe.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob: https: http:; "
+        "connect-src 'self' https://api.facebook.com https://graph.facebook.com "
+            "https://www.clarity.ms https://api.stripe.com; "
+        "frame-src 'self' https://js.stripe.com https://www.facebook.com; "
+        "object-src 'none';"
+    )
+    # Remove server identification
+    response.headers.pop('Server', None)
     return response
+
+
+# ---- In-memory IP-based rate limiter for public APIs ----
+import collections
+_rate_store = collections.defaultdict(list)
+_rate_lock = threading.Lock()
+
+def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
+    """Return True if request is allowed, False if rate limit exceeded."""
+    import time as _time
+    now = _time.monotonic()
+    cutoff = now - window_seconds
+    with _rate_lock:
+        hits = _rate_store[key]
+        hits[:] = [t for t in hits if t > cutoff]
+        if len(hits) >= max_requests:
+            return False
+        hits.append(now)
+        return True
 
 # ==================== AUTO-CANCEL SCHEDULER ====================
 
