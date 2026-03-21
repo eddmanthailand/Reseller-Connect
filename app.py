@@ -223,7 +223,7 @@ def add_header(response):
         response.headers['Expires'] = '0'
 
     # Security headers — applied to all responses
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    # X-Frame-Options removed to allow Replit preview iframe embedding
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), payment=()'
