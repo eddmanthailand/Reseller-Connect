@@ -133,6 +133,9 @@ app.register_blueprint(orders_bp)
 from blueprints.products import products_bp
 app.register_blueprint(products_bp)
 
+from blueprints.synapse_api import synapse_bp
+app.register_blueprint(synapse_bp)
+
 from blueprints.cart import cart_bp
 app.register_blueprint(cart_bp)
 
