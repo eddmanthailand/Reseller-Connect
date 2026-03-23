@@ -1196,6 +1196,17 @@ async function callAI(msg, screenshot, isAuto, creativeImgUrl = null, vdoDuratio
 let _actionItems = [];  // global store for action items
 
 function parseActions(raw) {
+    // Format 1: <!--ACTIONS:[...]-->
+    const htmlCommentMatch = raw.match(/<!--ACTIONS:([\s\S]*?)-->/);
+    if (htmlCommentMatch) {
+        try {
+            const parsed = JSON.parse(htmlCommentMatch[1].trim());
+            const actions = Array.isArray(parsed) ? parsed : (parsed.action_items || []);
+            const text = raw.replace(/<!--ACTIONS:[\s\S]*?-->/, '').trim();
+            return { text, actions };
+        } catch(e) { return { text: raw.replace(/<!--ACTIONS:[\s\S]*?-->/, '').trim(), actions: [] }; }
+    }
+    // Format 2: ```json ... ```
     const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
     if (!jsonMatch) return { text: raw, actions: [] };
     try {
@@ -1206,14 +1217,50 @@ function parseActions(raw) {
     } catch(e) { return { text: raw, actions: [] }; }
 }
 
+function _normalizeAction(item) {
+    // Map need_meta_api type → standard action card format
+    if (item.type === 'need_meta_api') {
+        return {
+            severity: 'medium',
+            issue: '📊 ต้องการข้อมูลเพิ่มเติมจาก Meta API',
+            recommendation: item.reason || item.path || '',
+            action_buttons: item.path ? [{
+                type: 'url-open',
+                label: '🔗 ดูข้อมูลใน Graph Explorer',
+                url: `https://developers.facebook.com/tools/explorer/?path=${encodeURIComponent(item.path)}`
+            }] : []
+        };
+    }
+    // Map suggest_content, pause_adset, copy_text → standard format if no action_buttons
+    if (item.type === 'suggest_content' && !item.action_buttons) {
+        return { severity: 'medium', issue: item.label || '✍️ สร้าง Content โฆษณา', recommendation: item.reason || '', action_buttons: [] };
+    }
+    if (item.type === 'pause_adset' && !item.action_buttons) {
+        return {
+            severity: 'high', issue: item.label || `⏸ หยุด Ad Set: ${item.adset_name || ''}`,
+            recommendation: item.reason || '',
+            action_buttons: item.adset_id ? [{
+                type: 'api-execute', label: '⏸ หยุด Ad Set นี้',
+                endpoint: '/api/facebook-ads/execute-action',
+                payload: { action_type: 'pause_adset', adset_id: item.adset_id }
+            }] : []
+        };
+    }
+    if (item.type === 'copy_text' && !item.action_buttons) {
+        return { severity: 'low', issue: item.label || '📋 Copy ข้อความ', recommendation: item.text || item.reason || '', action_buttons: [] };
+    }
+    return item;
+}
+
 function renderActionCards(actions) {
     if (!actions.length) return;
     const baseIdx = _actionItems.length;
-    _actionItems = _actionItems.concat(actions);
+    const normalized = actions.map(_normalizeAction);
+    _actionItems = _actionItems.concat(normalized);
     const wrap = document.getElementById('advMessages');
     const container = document.createElement('div');
     container.className = 'adv-action-cards';
-    actions.forEach((item, i) => {
+    normalized.forEach((item, i) => {
         const globalIdx = baseIdx + i;
         const sev = (item.severity || 'medium').toLowerCase();
         const sevClass = ['critical','high','medium','low'].includes(sev) ? sev : 'medium';
@@ -1227,7 +1274,7 @@ function renderActionCards(actions) {
         }).join('');
         card.innerHTML = `
             <div class="adv-action-header">
-                <span class="adv-action-sev sev-${sevClass}">${sev.toUpperCase()}</span>
+                <span class="adv-action-sev sev-${sevClass}">${sevClass.toUpperCase()}</span>
                 <span class="adv-action-issue">${esc(item.issue || '')}</span>
             </div>
             ${item.recommendation ? `<div class="adv-action-body">${esc(item.recommendation)}</div>` : ''}
