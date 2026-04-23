@@ -2157,10 +2157,19 @@ async function placeOrder() {
                     });
 
                     if (slipRes.ok) {
-                        showAlert('สร้างคำสั่งซื้อและอัปโหลดสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+                        const slipData = await slipRes.json();
+                        if (slipData.auto_verified) {
+                            showAlert('✅ สร้างคำสั่งซื้อและตรวจสอบสลิปสำเร็จ! คำสั่งซื้อได้รับการยืนยันแล้ว', 'success');
+                        } else {
+                            showAlert('สร้างคำสั่งซื้อและอัปโหลดสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+                        }
                     } else {
                         const slipErr = await slipRes.json();
-                        showAlert('สร้างคำสั่งซื้อสำเร็จ แต่อัปโหลดสลิปไม่สำเร็จ: ' + (slipErr.error || 'กรุณาอัปโหลดใหม่จากหน้าประวัติ'), 'warning');
+                        if (slipRes.status === 422 && slipErr.thunder_rejected) {
+                            showAlert('สร้างคำสั่งซื้อสำเร็จ แต่สลิปไม่ผ่านการตรวจสอบ: ' + (slipErr.error || ''), 'warning');
+                        } else {
+                            showAlert('สร้างคำสั่งซื้อสำเร็จ แต่อัปโหลดสลิปไม่สำเร็จ: ' + (slipErr.error || 'กรุณาอัปโหลดใหม่จากหน้าประวัติ'), 'warning');
+                        }
                     }
                 } catch (slipError) {
                     console.error('Slip upload error:', slipError);
@@ -3275,8 +3284,19 @@ async function ppUploadSlip(orderId) {
         });
         clearTimeout(timeoutId);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
-        showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+        if (!res.ok) {
+            if (res.status === 422 && data.thunder_rejected) {
+                throw new Error(data.error || 'สลิปไม่ผ่านการตรวจสอบ');
+            }
+            throw new Error(data.error || 'เกิดข้อผิดพลาด');
+        }
+        if (data.auto_verified) {
+            showAlert('✅ ตรวจสอบสลิปสำเร็จ! คำสั่งซื้อได้รับการยืนยันแล้ว', 'success');
+        } else if (data.pending_manual) {
+            showAlert('📋 ส่งสลิปสำเร็จ รอ admin ตรวจสอบ', 'success');
+        } else {
+            showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบ', 'success');
+        }
         closePromptPayModal();
         loadOrders && loadOrders();
     } catch (e) {
@@ -3472,7 +3492,7 @@ async function uploadPaymentSlip(orderId) {
     
     const btn = document.getElementById('btnUploadSlip');
     btn.disabled = true;
-    btn.textContent = 'กำลังอัพโหลด...';
+    btn.textContent = '⏳ กำลังตรวจสอบสลิป...';
     
     try {
         const formData = new FormData();
@@ -3484,14 +3504,24 @@ async function uploadPaymentSlip(orderId) {
             body: formData
         });
         
+        const data = await response.json();
         if (response.ok) {
-            showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบสลิป', 'success');
+            if (data.auto_verified) {
+                showAlert('✅ ตรวจสอบสลิปสำเร็จ! คำสั่งซื้อได้รับการยืนยันแล้ว', 'success');
+            } else if (data.pending_manual) {
+                showAlert('📋 ส่งสลิปสำเร็จ รอ admin ตรวจสอบ', 'success');
+            } else {
+                showAlert('ส่งสลิปสำเร็จ! รอ admin ตรวจสอบสลิป', 'success');
+            }
             closePaymentSlipModal();
             closeOrderModal();
             loadOrders();
+        } else if (response.status === 422 && data.thunder_rejected) {
+            showAlert('❌ ' + (data.error || 'สลิปไม่ผ่านการตรวจสอบ'), 'error');
+            btn.disabled = false;
+            btn.textContent = 'อัพโหลดสลิป';
         } else {
-            const error = await response.json();
-            showAlert(error.error || 'เกิดข้อผิดพลาด', 'error');
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'error');
             btn.disabled = false;
             btn.textContent = 'อัพโหลดสลิป';
         }

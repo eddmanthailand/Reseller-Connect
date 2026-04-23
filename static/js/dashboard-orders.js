@@ -312,8 +312,9 @@ async function viewOrderDetails(orderId) {
                             <div class="slip-image-frame">
                                 <img src="${slip.slip_image_url}" alt="Payment Slip" onclick="viewSlipFullscreen('${slip.slip_image_url}')">
                             </div>
-                            <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #fff;">
+                            <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #fff;">
                                 <span style="background: ${slip.status === 'approved' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : slip.status === 'rejected' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #f59e0b, #d97706)'}; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">${slip.status === 'approved' ? 'อนุมัติแล้ว' : slip.status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}</span>
+                                ${slip.auto_verified ? '<span style="background: linear-gradient(135deg,#6366f1,#7c3aed); color:#fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;">⚡ Thunder Auto</span>' : ''}
                                 ${slip.amount ? `<span>ยอด: <strong>฿${parseFloat(slip.amount).toLocaleString('th-TH')}</strong></span>` : ''}
                             </div>
                         </div>

@@ -11,6 +11,81 @@ import psycopg2
 import json, os, io, re, csv, hmac, hashlib
 from datetime import datetime, timedelta
 
+# ==================== PROMPTPAY + THUNDER HELPERS ====================
+
+def _crc16_ccitt(data: bytes) -> int:
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if (crc & 0x8000) else (crc << 1)
+            crc &= 0xFFFF
+    return crc
+
+def _emv_tag(tag_id: str, value: str) -> str:
+    return f"{tag_id}{len(value):02d}{value}"
+
+def generate_promptpay_payload(target: str, amount: float = None) -> str:
+    cleaned = re.sub(r'[^0-9]', '', target)
+    if len(cleaned) == 10 and cleaned.startswith('0'):
+        pp_target = f"0066{cleaned[1:]}"
+        target_field = _emv_tag('01', pp_target)
+    elif len(cleaned) == 13:
+        target_field = _emv_tag('03', cleaned)
+    else:
+        raise ValueError(f"Invalid PromptPay number: {target}")
+
+    merchant_info = _emv_tag('00', 'A000000677010111') + target_field
+    payload = (
+        '000201'
+        + '010212'
+        + _emv_tag('29', merchant_info)
+        + '5303764'
+        + (_emv_tag('54', f'{amount:.2f}') if amount is not None else '')
+        + '5802TH'
+        + '6304'
+    )
+    crc = _crc16_ccitt(payload.encode('ascii'))
+    return payload + f'{crc:04X}'
+
+def call_thunder_verify(file_bytes: bytes, mime_type: str, expected_thb: float):
+    """Call Thunder API to verify a payment slip.
+    Returns dict: {ok, reason, thunder_raw, pending_manual}
+    """
+    import requests as _req
+    api_key = os.environ.get('THUNDER_API_KEY', '')
+    if not api_key:
+        return {'ok': False, 'pending_manual': True, 'reason': 'Thunder API ยังไม่ได้ตั้งค่า', 'thunder_raw': {}}
+    try:
+        resp = _req.post(
+            'https://api.thunder.in.th/v2/verify/bank',
+            headers={'Authorization': f'Bearer {api_key}'},
+            files={'image': ('slip.jpg', file_bytes, mime_type)},
+            data={'matchAmount': str(expected_thb), 'checkDuplicate': 'true'},
+            timeout=20
+        )
+        result = resp.json()
+        if resp.status_code in (403, 429):
+            return {'ok': False, 'pending_manual': True,
+                    'reason': 'Thunder API quota หมด รอ admin ตรวจสอบ', 'thunder_raw': result}
+        if resp.ok and result.get('success') is True:
+            data = result.get('data', {})
+            if data.get('isDuplicate'):
+                return {'ok': False, 'pending_manual': False,
+                        'reason': 'สลิปนี้เคยใช้แล้ว กรุณาใช้สลิปใหม่', 'thunder_raw': result}
+            if data.get('isAmountMatched') is False:
+                slip_amt = data.get('rawSlip', {}).get('amount', 0)
+                return {'ok': False, 'pending_manual': False,
+                        'reason': f'ยอดโอนไม่ตรง: ต้องโอน ฿{expected_thb:.2f} แต่สลิประบุ ฿{slip_amt:.2f}',
+                        'thunder_raw': result}
+            return {'ok': True, 'pending_manual': False, 'reason': '', 'thunder_raw': result}
+        return {'ok': False, 'pending_manual': False,
+                'reason': str(result.get('message', 'สลิปไม่ถูกต้อง')), 'thunder_raw': result}
+    except Exception as e:
+        print(f'[THUNDER] API error: {e}')
+        return {'ok': False, 'pending_manual': True,
+                'reason': 'เชื่อมต่อ Thunder ไม่ได้ รอ admin ตรวจสอบ', 'thunder_raw': {}}
+
 orders_bp = Blueprint('orders', __name__)
 
 # ==================== ORDER API ====================
@@ -546,7 +621,8 @@ def get_order_detail(order_id):
         
         # Get payment slips
         cursor.execute('''
-            SELECT id, slip_image_url, amount, status, admin_notes, created_at
+            SELECT id, slip_image_url, amount, status, admin_notes, created_at,
+                   auto_verified, verified_at, reject_reason
             FROM payment_slips
             WHERE order_id = %s
             ORDER BY created_at DESC
@@ -862,6 +938,8 @@ def upload_payment_slip(order_id):
         
         slip_image_url = None
         amount = None
+        file_data = None
+        mime_type = 'image/jpeg'
         
         if request.content_type and 'multipart/form-data' in request.content_type:
             slip_file = request.files.get('slip_image')
@@ -908,59 +986,123 @@ def upload_payment_slip(order_id):
         
         if order['status'] not in ['pending_payment', 'rejected']:
             return jsonify({'error': 'ไม่สามารถอัปโหลดสลิปสำหรับสถานะนี้ได้'}), 400
-        
+
+        expected_thb = float(amount or order['final_amount'])
+
+        # ── Thunder auto-verify (synchronous, before DB write) ──────────────
+        thunder_result = None
+        if file_data:  # only for actual file uploads
+            thunder_result = call_thunder_verify(file_data, mime_type, expected_thb)
+            print(f"[THUNDER] order={order_id} ok={thunder_result['ok']} manual={thunder_result.get('pending_manual')} reason={thunder_result.get('reason')}")
+
+        # Decide slip status based on Thunder result
+        if thunder_result is None:
+            # JSON URL path — skip auto-verify, go to manual review
+            slip_status = 'pending'
+            new_order_status = 'under_review'
+            auto_verified = False
+            thunder_response_json = None
+        elif thunder_result['ok']:
+            slip_status = 'approved'
+            new_order_status = 'preparing'
+            auto_verified = True
+            thunder_response_json = json.dumps(thunder_result['thunder_raw'], ensure_ascii=False)
+        elif thunder_result.get('pending_manual'):
+            slip_status = 'pending'
+            new_order_status = 'under_review'
+            auto_verified = False
+            thunder_response_json = json.dumps(thunder_result['thunder_raw'], ensure_ascii=False)
+        else:
+            # Rejected by Thunder (duplicate / wrong amount)
+            slip_status = 'rejected'
+            new_order_status = order['status']  # keep order as-is so they can re-upload
+            auto_verified = False
+            thunder_response_json = json.dumps(thunder_result['thunder_raw'], ensure_ascii=False)
+
         cursor.execute('''
-            INSERT INTO payment_slips (order_id, slip_image_url, amount, status)
-            VALUES (%s, %s, %s, 'pending')
+            INSERT INTO payment_slips (order_id, slip_image_url, amount, status, auto_verified, thunder_response)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        ''', (order_id, slip_image_url, amount or order['final_amount']))
-        
-        cursor.execute('''
-            UPDATE orders SET status = 'under_review', updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        ''', (order_id,))
-        
+        ''', (order_id, slip_image_url, expected_thb, slip_status, auto_verified, thunder_response_json))
+        slip_id = cursor.fetchone()['id']
+
+        if new_order_status != order['status']:
+            cursor.execute('''
+                UPDATE orders SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (new_order_status, order_id))
+
+            if new_order_status == 'preparing':
+                cursor.execute('''
+                    UPDATE payment_slips SET verified_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                ''', (slip_id,))
+
         conn.commit()
 
-        cursor.execute("SELECT id FROM users WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Super Admin', 'Assistant Admin'))")
-        admins = [dict(a) for a in cursor.fetchall()]
-        order_num = order.get('order_number') or f'#{order_id}'
+        # ── Return early with clear error if Thunder rejected ────────────────
+        if thunder_result and not thunder_result['ok'] and not thunder_result.get('pending_manual'):
+            return jsonify({'error': thunder_result['reason'], 'thunder_rejected': True}), 422
 
+        order_num = order.get('order_number') or f'#{order_id}'
         cursor.execute('SELECT full_name FROM users WHERE id = %s', (user_id,))
         reseller = cursor.fetchone()
         reseller_name = reseller['full_name'] if reseller else 'Reseller'
+        cursor.execute("SELECT id FROM users WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Super Admin', 'Assistant Admin'))")
+        admins = [dict(a) for a in cursor.fetchall()]
 
         def _notify():
             try:
-                for admin in admins:
-                    create_notification(
-                        admin['id'],
-                        'สลิปการชำระเงินใหม่',
-                        f'{reseller_name} อัปโหลดสลิป คำสั่งซื้อ {order_num}',
-                        'payment',
-                        'order',
-                        order_id
-                    )
+                if auto_verified:
+                    # Notify reseller: payment confirmed
                     try:
-                        send_push_notification(
+                        send_order_status_chat(user_id, order_num, 'payment_confirmed', order_id=order_id)
+                    except Exception:
+                        pass
+                    for admin in admins:
+                        try:
+                            create_notification(admin['id'], '✅ ชำระเงินยืนยันอัตโนมัติ',
+                                f'{reseller_name} ชำระ {order_num} ผ่าน Thunder', 'payment', 'order', order_id)
+                        except Exception:
+                            pass
+                else:
+                    # Notify admin: manual review needed
+                    for admin in admins:
+                        create_notification(
                             admin['id'],
-                            '🧾 สลิปใหม่รอตรวจสอบ',
-                            f'{reseller_name} อัปโหลดสลิป {order_num}',
-                            url='/admin#orders',
-                            tag=f'slip-{order_id}'
+                            'สลิปการชำระเงินใหม่',
+                            f'{reseller_name} อัปโหลดสลิป คำสั่งซื้อ {order_num}',
+                            'payment', 'order', order_id
                         )
-                    except Exception as push_err:
-                        print(f"[PUSH] Admin push error: {push_err}")
-                try:
-                    send_order_status_chat(user_id, order_num, 'slip_uploaded', order_id=order_id)
-                except Exception as chat_err:
-                    print(f"[CHAT] Slip upload chat notification error: {chat_err}")
+                        try:
+                            send_push_notification(
+                                admin['id'],
+                                '🧾 สลิปใหม่รอตรวจสอบ',
+                                f'{reseller_name} อัปโหลดสลิป {order_num}',
+                                url='/admin#orders',
+                                tag=f'slip-{order_id}'
+                            )
+                        except Exception as push_err:
+                            print(f"[PUSH] Admin push error: {push_err}")
+                    try:
+                        send_order_status_chat(user_id, order_num, 'slip_uploaded', order_id=order_id)
+                    except Exception as chat_err:
+                        print(f"[CHAT] Slip upload chat notification error: {chat_err}")
             except Exception as e:
                 print(f"[SLIP] Background notify error: {e}")
 
         threading.Thread(target=_notify, daemon=True).start()
 
-        return jsonify({'message': 'อัปโหลดสลิปสำเร็จ'}), 200
+        if auto_verified:
+            return jsonify({'message': '✅ ตรวจสอบสลิปสำเร็จ! คำสั่งซื้อได้รับการยืนยันแล้ว',
+                            'auto_verified': True, 'new_status': 'preparing'}), 200
+
+        pending_manual = thunder_result.get('pending_manual') if thunder_result else False
+        return jsonify({
+            'message': 'อัปโหลดสลิปสำเร็จ รอ admin ตรวจสอบ' if pending_manual else 'อัปโหลดสลิปสำเร็จ',
+            'auto_verified': False,
+            'pending_manual': bool(pending_manual)
+        }), 200
         
     except Exception as e:
         if conn:
@@ -972,6 +1114,81 @@ def upload_payment_slip(order_id):
             cursor.close()
         if conn:
             conn.close()
+
+# ==================== PROMPTPAY QR ENDPOINT ====================
+
+@orders_bp.route('/api/orders/<int:order_id>/promptpay-qr', methods=['GET'])
+@login_required
+def get_promptpay_qr(order_id):
+    """Generate PromptPay QR code with embedded amount for an order."""
+    conn = None
+    cursor = None
+    try:
+        user_id = session.get('user_id')
+        role = session.get('role', '')
+        is_admin = role in ('Super Admin', 'Assistant Admin')
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        if is_admin:
+            cursor.execute('SELECT id, final_amount, order_number, status FROM orders WHERE id = %s', (order_id,))
+        else:
+            cursor.execute('SELECT id, final_amount, order_number, status FROM orders WHERE id = %s AND user_id = %s', (order_id, user_id))
+        order = cursor.fetchone()
+
+        if not order:
+            return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
+
+        # Prefer promptpay_settings DB (existing system), fallback to env var
+        cursor.execute("SELECT account_number, account_name FROM promptpay_settings WHERE is_active = TRUE LIMIT 1")
+        pp_settings = cursor.fetchone()
+        if pp_settings and pp_settings.get('account_number'):
+            pp_number = pp_settings['account_number']
+            pp_name = pp_settings.get('account_name', '')
+        else:
+            pp_number = os.environ.get('PROMPTPAY_NUMBER', '')
+            pp_name = ''
+
+        if not pp_number:
+            return jsonify({'error': 'ระบบ PromptPay ยังไม่ได้ตั้งค่า'}), 503
+
+        amount = float(order['final_amount'])
+        try:
+            payload = generate_promptpay_payload(pp_number, amount)
+        except ValueError as e:
+            return jsonify({'error': f'PromptPay config ผิดพลาด: {e}'}), 500
+
+        import qrcode
+        import qrcode.image.svg
+        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color='black', back_color='white')
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        import base64
+        qr_b64 = base64.b64encode(buf.getvalue()).decode()
+        qr_data_url = f'data:image/png;base64,{qr_b64}'
+
+        return jsonify({
+            'qr_data_url': qr_data_url,
+            'amount': amount,
+            'order_number': order['order_number'],
+            'promptpay_number': pp_number,
+            'account_name': pp_name,
+            'payload': payload,
+        })
+
+    except Exception as e:
+        print(f'[QR] Error generating PromptPay QR: {e}')
+        return jsonify({'error': 'ไม่สามารถสร้าง QR Code ได้'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 
 # ==================== ADMIN DASHBOARD STATISTICS ====================
 
