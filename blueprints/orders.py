@@ -3096,7 +3096,7 @@ def admin_ship_order(order_id):
             return jsonify({'error': 'กรุณากรอกเลข Tracking'}), 400
         conn = get_db()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cursor.execute('SELECT id, status, user_id, order_number FROM orders WHERE id = %s', (order_id,))
+        cursor.execute('SELECT id, status, user_id, order_number, order_type, guest_email, shipping_name FROM orders WHERE id = %s', (order_id,))
         order = cursor.fetchone()
         if not order:
             return jsonify({'error': 'ไม่พบคำสั่งซื้อ'}), 404
@@ -3122,6 +3122,33 @@ def admin_ship_order(order_id):
                 'info', 'order', order_id)
         except Exception:
             pass
+        # Retail (guest) order → email the tracking link to the buyer
+        if order.get('order_type') == 'retail' and order.get('guest_email'):
+            try:
+                onum = order['order_number'] or f'#{order_id}'
+                buyer = order.get('shipping_name') or 'ลูกค้า'
+                track_url = f"{request.host_url.rstrip('/')}/shop/track"
+                html = f'''
+                <div style="font-family:'Noto Sans Thai',Arial,sans-serif;max-width:520px;margin:0 auto;color:#1f2937">
+                  <div style="background:linear-gradient(135deg,#7c3aed,#ec4899);padding:24px;border-radius:14px 14px 0 0;text-align:center">
+                    <h2 style="color:#fff;margin:0">EKG Shops</h2>
+                    <p style="color:rgba(255,255,255,0.9);margin:6px 0 0">จัดส่งสินค้าของคุณแล้ว 📦</p>
+                  </div>
+                  <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;padding:24px">
+                    <p>สวัสดีคุณ {buyer}</p>
+                    <p>คำสั่งซื้อ <b>{onum}</b> ของคุณถูกจัดส่งเรียบร้อยแล้ว</p>
+                    <p style="background:#f9fafb;border-radius:10px;padding:14px;margin:16px 0">
+                      เลขพัสดุ (Tracking): <b style="color:#7c3aed;font-size:18px">{tracking_number}</b>
+                    </p>
+                    <p style="text-align:center;margin:22px 0">
+                      <a href="{track_url}" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:600;display:inline-block">ติดตามคำสั่งซื้อ</a>
+                    </p>
+                    <p style="color:#6b7280;font-size:13px">ใช้เลขคำสั่งซื้อ <b>{onum}</b> และอีเมลนี้เพื่อตรวจสอบสถานะได้ที่หน้าติดตามคำสั่งซื้อ</p>
+                  </div>
+                </div>'''
+                send_email(order['guest_email'], f'📦 EKG Shops จัดส่งสินค้าแล้ว — {onum}', html)
+            except Exception as mail_err:
+                print(f"[SHIP] Retail tracking email error: {mail_err}")
         return jsonify({'message': 'อัปเดตสถานะจัดส่งสำเร็จ', 'tracking_number': tracking_number}), 200
     except Exception as e:
         try:

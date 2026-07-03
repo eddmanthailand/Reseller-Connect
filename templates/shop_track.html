@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7c3aed">
+    <title>ติดตามคำสั่งซื้อ | EKG Shops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --primary:#7c3aed; --accent:#ec4899; --green:#10b981; --red:#ef4444; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f9fafb; }
+        body { font-family:'Noto Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+        .site-header { position:sticky; top:0; z-index:10; background:rgba(255,255,255,0.95); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
+        .header-inner { max-width:720px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:60px; padding:0 16px; }
+        .logo { display:flex; align-items:center; gap:8px; text-decoration:none; }
+        .logo-icon { width:34px; height:34px; background:linear-gradient(135deg,var(--primary),var(--accent)); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; }
+        .logo-text { font-size:18px; font-weight:700; color:var(--primary); }
+        .btn-ghost { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:500; text-decoration:none; border:1.5px solid var(--border); color:var(--text); background:#fff; }
+        .wrap { max-width:720px; margin:0 auto; padding:24px 16px 60px; }
+        .card { background:#fff; border-radius:14px; box-shadow:0 2px 12px rgba(0,0,0,0.08); padding:24px; margin-bottom:18px; }
+        h1 { font-size:22px; font-weight:700; margin-bottom:6px; }
+        .sub { color:var(--muted); font-size:14px; margin-bottom:18px; }
+        .form-group { margin-bottom:14px; }
+        .form-group label { display:block; font-size:13px; font-weight:600; margin-bottom:5px; }
+        .form-group input { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-family:inherit; }
+        .form-group input:focus { outline:none; border-color:var(--primary); }
+        .btn-primary { width:100%; padding:13px; border:none; border-radius:12px; background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; }
+        .btn-primary:disabled { opacity:.5; cursor:not-allowed; }
+        .alert { padding:12px 14px; border-radius:10px; font-size:13.5px; margin-bottom:12px; }
+        .alert-error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+        .status-badge { display:inline-block; padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; }
+        .steps { display:flex; justify-content:space-between; margin:24px 0; position:relative; }
+        .steps::before { content:''; position:absolute; top:16px; left:8%; right:8%; height:2px; background:var(--border); z-index:0; }
+        .step { text-align:center; z-index:1; flex:1; }
+        .step .dot { width:34px; height:34px; border-radius:50%; background:#fff; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto 6px; font-size:15px; }
+        .step.active .dot { background:linear-gradient(135deg,var(--primary),var(--accent)); border-color:transparent; color:#fff; }
+        .step .lbl { font-size:11.5px; color:var(--muted); }
+        .step.active .lbl { color:var(--primary); font-weight:600; }
+        .row { display:flex; justify-content:space-between; font-size:14px; padding:8px 0; border-bottom:1px solid var(--border); }
+        .row:last-child { border-bottom:none; }
+        .row.total { font-weight:700; font-size:16px; color:var(--primary); }
+        .item { display:flex; justify-content:space-between; font-size:13.5px; padding:6px 0; }
+        .track-num { background:#faf5ff; border-radius:10px; padding:14px; text-align:center; margin-top:12px; }
+        .track-num b { color:var(--primary); font-size:18px; }
+        .info-line { font-size:13px; color:var(--muted); }
+        a.link { color:var(--primary); text-decoration:none; font-weight:600; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="/shop" class="logo"><span class="logo-icon">E</span><span class="logo-text">EKG Shops</span></a>
+            <a href="/shop" class="btn-ghost">← กลับหน้าร้าน</a>
+        </div>
+    </header>
+    <div class="wrap">
+        <div class="card" id="lookupCard">
+            <h1>ติดตามคำสั่งซื้อ</h1>
+            <p class="sub">กรอกเลขคำสั่งซื้อและอีเมลที่ใช้สั่งซื้อ</p>
+            <div id="alert"></div>
+            <div class="form-group"><label>เลขคำสั่งซื้อ</label><input id="orderNumber" placeholder="เช่น ORD-2607-0001"></div>
+            <div class="form-group"><label>อีเมล</label><input id="email" inputmode="email" placeholder="อีเมลที่ใช้สั่งซื้อ"></div>
+            <button class="btn-primary" id="lookupBtn" onclick="track()">ค้นหาคำสั่งซื้อ</button>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const money = n => '฿' + Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
+        const esc = s => String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        const STATUS = {
+            pending_payment:{label:'รอชำระเงิน',color:'#f59e0b',step:0},
+            under_review:{label:'รอตรวจสอบสลิป',color:'#f59e0b',step:1},
+            preparing:{label:'กำลังเตรียมสินค้า',color:'#3b82f6',step:1},
+            shipped:{label:'จัดส่งแล้ว',color:'#8b5cf6',step:2},
+            delivered:{label:'จัดส่งสำเร็จ',color:'#10b981',step:3},
+            cancelled:{label:'ยกเลิก',color:'#ef4444',step:-1},
+            rejected:{label:'สลิปไม่ผ่าน',color:'#ef4444',step:0},
+        };
+
+        async function track() {
+            const btn = document.getElementById('lookupBtn');
+            const alertBox = document.getElementById('alert');
+            alertBox.innerHTML = '';
+            const order_number = document.getElementById('orderNumber').value.trim();
+            const email = document.getElementById('email').value.trim();
+            if (!order_number || !email) { alertBox.innerHTML = '<div class="alert alert-error">กรุณากรอกเลขคำสั่งซื้อและอีเมล</div>'; return; }
+            btn.disabled = true; btn.textContent = 'กำลังค้นหา...';
+            try {
+                const r = await fetch('/api/shop/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_number,email})});
+                const d = await r.json();
+                if (!r.ok) { alertBox.innerHTML = `<div class="alert alert-error">${esc(d.error||'ไม่พบคำสั่งซื้อ')}</div>`; btn.disabled=false; btn.textContent='ค้นหาคำสั่งซื้อ'; return; }
+                await showOrder(d.guest_token);
+            } catch(e) {
+                alertBox.innerHTML = '<div class="alert alert-error">เชื่อมต่อไม่สำเร็จ</div>';
+            }
+            btn.disabled = false; btn.textContent = 'ค้นหาคำสั่งซื้อ';
+        }
+
+        async function showOrder(token) {
+            const res = document.getElementById('result');
+            res.innerHTML = '<div class="card">กำลังโหลด...</div>';
+            const d = await fetch('/api/shop/order/'+token).then(r=>r.json());
+            if (d.error) { res.innerHTML = `<div class="card"><div class="alert alert-error">${esc(d.error)}</div></div>`; return; }
+            const o = d.order;
+            const st = STATUS[o.status] || {label:o.status,color:'#6b7280',step:0};
+            const stepNames = ['ชำระเงิน','เตรียมสินค้า','จัดส่ง','สำเร็จ'];
+            let stepsHtml = '';
+            if (st.step >= 0) {
+                stepsHtml = '<div class="steps">' + stepNames.map((n,i)=>
+                    `<div class="step ${i<=st.step?'active':''}"><div class="dot">${i<=st.step?'✓':i+1}</div><div class="lbl">${n}</div></div>`
+                ).join('') + '</div>';
+            }
+            const itemsHtml = (o.items||[]).map(it=>
+                `<div class="item"><span>${esc(it.product_name)} <span style="color:#6b7280">(${esc(it.sku_code)}) ×${it.quantity}</span></span><span>${money(it.subtotal)}</span></div>`
+            ).join('');
+            const trackHtml = o.tracking_number
+                ? `<div class="track-num">เลขพัสดุ (Tracking)<br><b>${esc(o.tracking_number)}</b></div>` : '';
+            res.innerHTML = `
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                        <div><div style="font-size:13px;color:#6b7280">คำสั่งซื้อ</div><div style="font-size:18px;font-weight:700">${esc(o.order_number)}</div></div>
+                        <span class="status-badge" style="background:${st.color}22;color:${st.color}">${esc(st.label)}</span>
+                    </div>
+                    ${stepsHtml}
+                    ${trackHtml}
+                </div>
+                <div class="card">
+                    <h3 style="font-size:15px;margin-bottom:10px">รายการสินค้า</h3>
+                    ${itemsHtml}
+                    <div class="row" style="margin-top:10px"><span>ยอดสินค้า</span><span>${money(o.total_amount - o.discount_amount)}</span></div>
+                    ${o.discount_amount>0?`<div class="row"><span style="color:#10b981">ส่วนลด</span><span style="color:#10b981">-${money(o.discount_amount)}</span></div>`:''}
+                    <div class="row"><span>ค่าจัดส่ง</span><span>${money(o.shipping_fee)}</span></div>
+                    <div class="row total"><span>ยอดรวม</span><span>${money(o.final_amount)}</span></div>
+                </div>
+                <div class="card">
+                    <h3 style="font-size:15px;margin-bottom:10px">จัดส่งถึง</h3>
+                    <p class="info-line">${esc(o.shipping_name)} • ${esc(o.shipping_phone)}</p>
+                    <p class="info-line">${esc(o.shipping_address)} ${esc(o.shipping_subdistrict||'')} ${esc(o.shipping_district||'')} ${esc(o.shipping_province||'')} ${esc(o.shipping_postal||'')}</p>
+                    <p class="info-line" style="margin-top:12px">สินค้ามีปัญหา? <a class="link" href="tel:0836682211">ติดต่อแอดมิน 083-668-2211</a></p>
+                    ${o.status==='pending_payment'||o.status==='rejected'?`<a class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="/shop">ชำระเงิน / อัปโหลดสลิป ที่หน้าร้าน</a>`:''}
+                </div>`;
+        }
+
+        // auto-load last order from this device
+        try {
+            const last = JSON.parse(localStorage.getItem('ekg_shop_last_order'));
+            if (last && last.token) {
+                document.getElementById('orderNumber').value = last.order_number || '';
+                showOrder(last.token);
+            }
+        } catch(e) {}
+    </script>
+</body>
+</html>

@@ -139,6 +139,9 @@ app.register_blueprint(synapse_bp)
 from blueprints.cart import cart_bp
 app.register_blueprint(cart_bp)
 
+from blueprints.shop import shop_bp
+app.register_blueprint(shop_bp)
+
 from blueprints.auth import auth_bp, oauth
 oauth.init_app(app)
 app.register_blueprint(auth_bp)

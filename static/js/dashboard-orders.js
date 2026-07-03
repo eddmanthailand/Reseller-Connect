@@ -447,9 +447,29 @@ async function viewOrderDetails(orderId) {
             `;
         }
         
+        const isRetail = order.order_type === 'retail';
+        const retailAddress = [order.shipping_address, order.shipping_subdistrict, order.shipping_district, order.shipping_province, order.shipping_postal].filter(Boolean).join(' ');
+
         // Build reseller info section - Modern card
         let resellerHtml = '';
-        if (order.reseller_name) {
+        if (isRetail) {
+            resellerHtml = `
+                <div style="background: linear-gradient(135deg, rgba(236,72,153,0.2), rgba(236,72,153,0.05)); border: 1px solid rgba(236,72,153,0.35); border-radius: 12px; padding: 16px; margin-bottom: 16px; grid-column: span 2;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #ec4899, #db2777); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        </div>
+                        <h4 style="color: #fff; font-size: 14px; font-weight: 600; margin: 0;">🛍️ ลูกค้าขายปลีก (Retail)</h4>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #fff;">
+                        <div><span style="color: rgba(255,255,255,0.6);">ชื่อผู้รับ:</span> <strong>${escapeHtml(order.shipping_name || '-')}</strong></div>
+                        <div><span style="color: rgba(255,255,255,0.6);">โทร:</span> <strong>${escapeHtml(order.shipping_phone || '-')}</strong></div>
+                        ${order.guest_email ? `<div style="grid-column: span 2;"><span style="color: rgba(255,255,255,0.6);">อีเมล:</span> <strong>${escapeHtml(order.guest_email)}</strong></div>` : ''}
+                    </div>
+                    ${retailAddress ? `<div style="font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);"><span style="color: rgba(255,255,255,0.6);">ที่อยู่:</span> ${escapeHtml(retailAddress)}</div>` : ''}
+                </div>
+            `;
+        } else if (order.reseller_name) {
             const resellerFullAddress = [order.reseller_address, order.reseller_subdistrict, order.reseller_district, order.reseller_province, order.reseller_postal_code].filter(Boolean).join(' ');
             resellerHtml = `
                 <div style="background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.05)); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
@@ -473,7 +493,9 @@ async function viewOrderDetails(orderId) {
         
         // Build customer (recipient) info section
         let customerHtml = '';
-        if (order.customer) {
+        if (isRetail) {
+            customerHtml = '';
+        } else if (order.customer) {
             const c = order.customer;
             const fullAddress = [c.address, c.subdistrict, c.district, c.province, c.postal_code].filter(Boolean).join(' ');
             customerHtml = `
@@ -517,10 +539,16 @@ async function viewOrderDetails(orderId) {
                 <!-- Header -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
                     <div>
-                        <h2 style="color: #fff; font-size: 22px; font-weight: 700; margin: 0 0 4px 0;">${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
+                        <div style="display:flex;align-items:center;gap:10px;margin:0 0 4px 0;">
+                            <h2 style="color: #fff; font-size: 22px; font-weight: 700; margin: 0;">${order.order_number || 'คำสั่งซื้อ #' + order.id}</h2>
+                            ${isRetail ? '<span style="background: linear-gradient(135deg,#ec4899,#db2777); color:#fff; padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700;">🛍️ ขายปลีก</span>' : ''}
+                        </div>
                         <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin: 0;">${new Date(order.created_at).toLocaleString('th-TH')}</p>
                     </div>
-                    <span style="background: ${statusColors[order.status] || '#6b7280'}; color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;">${statusLabels[order.status] || order.status}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        ${isRetail ? `<button onclick="printDeliveryNote()" style="font-size: 12px; padding: 8px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">🧾 พิมพ์ใบส่งสินค้า</button>` : ''}
+                        <span style="background: ${statusColors[order.status] || '#6b7280'}; color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;">${statusLabels[order.status] || order.status}</span>
+                    </div>
                 </div>
                 
                 <!-- Info cards -->
@@ -1172,6 +1200,83 @@ async function reshipOrder(orderId) {
         console.error('Error reshipping order:', error);
         showGlobalAlert('เกิดข้อผิดพลาด', 'error');
     }
+}
+
+function printDeliveryNote() {
+    const order = window.currentOrderData;
+    if (!order) { showGlobalAlert('ไม่พบข้อมูลคำสั่งซื้อ', 'error'); return; }
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    const baht = (n) => '฿' + parseFloat(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const orderNumber = order.order_number || `ORD-${order.id}`;
+    const orderDate = new Date(order.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+    const recipientName = order.shipping_name || '-';
+    const recipientPhone = order.shipping_phone || '-';
+    const recipientAddress = [order.shipping_address, order.shipping_subdistrict, order.shipping_district, order.shipping_province, order.shipping_postal].filter(Boolean).join(' ') || '-';
+    const items = order.items || [];
+    const itemRows = items.map((it, i) => {
+        const qty = it.quantity || 0;
+        const subtotal = parseFloat(it.subtotal != null ? it.subtotal : (it.unit_price * qty) || 0);
+        const unit = qty ? subtotal / qty : parseFloat(it.unit_price || 0);
+        return `<tr>
+            <td style="text-align:center;">${i + 1}</td>
+            <td>${esc(it.product_name || '-')}${it.variant_name ? ' (' + esc(it.variant_name) + ')' : ''}<br><span style="color:#666;font-size:11px;">SKU: ${esc(it.sku_code || '-')}</span></td>
+            <td style="text-align:center;">${qty}</td>
+            <td style="text-align:right;">${baht(unit)}</td>
+            <td style="text-align:right;">${baht(subtotal)}</td>
+        </tr>`;
+    }).join('');
+    const itemTotal = parseFloat(order.total_amount || 0) - parseFloat(order.discount_amount || 0);
+    const shipping = parseFloat(order.shipping_fee || 0);
+    const discount = parseFloat(order.discount_amount || 0);
+    const final = parseFloat(order.final_amount || order.total_amount || 0);
+    const w = window.open('', '_blank', 'width=800,height=1100');
+    w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ใบส่งสินค้า - ${esc(orderNumber)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Noto Sans Thai',sans-serif; color:#1f2937; padding:32px; font-size:14px; }
+        .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #7c3aed; padding-bottom:16px; margin-bottom:20px; }
+        .brand { font-size:24px; font-weight:700; color:#7c3aed; }
+        .brand small { display:block; font-size:12px; color:#666; font-weight:400; margin-top:2px; }
+        .doc-title { text-align:right; }
+        .doc-title h1 { font-size:22px; color:#1f2937; }
+        .doc-title p { font-size:13px; color:#666; margin-top:4px; }
+        .meta { display:flex; justify-content:space-between; gap:20px; margin-bottom:20px; }
+        .box { flex:1; background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:14px; }
+        .box h3 { font-size:13px; color:#7c3aed; margin-bottom:8px; }
+        .box p { font-size:13px; line-height:1.6; }
+        table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+        th { background:#7c3aed; color:#fff; padding:10px 12px; font-size:13px; text-align:left; }
+        td { padding:10px 12px; border-bottom:1px solid #e5e7eb; font-size:13px; vertical-align:top; }
+        .totals { margin-left:auto; width:280px; }
+        .totals .row { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; }
+        .totals .grand { border-top:2px solid #7c3aed; margin-top:6px; padding-top:10px; font-size:17px; font-weight:700; color:#7c3aed; }
+        .foot { margin-top:40px; text-align:center; color:#666; font-size:12px; border-top:1px solid #e5e7eb; padding-top:16px; }
+        @media print { body { padding:16px; } .noprint { display:none; } }
+    </style></head><body>
+    <div class="head">
+        <div class="brand">EKG Shops<small>ชุดพยาบาลคุณภาพ</small></div>
+        <div class="doc-title"><h1>ใบส่งสินค้า</h1><p>เลขที่: ${esc(orderNumber)}<br>วันที่: ${esc(orderDate)}</p></div>
+    </div>
+    <div class="meta">
+        <div class="box"><h3>ผู้รับสินค้า</h3><p><strong>${esc(recipientName)}</strong><br>โทร: ${esc(recipientPhone)}<br>${esc(recipientAddress)}</p></div>
+        <div class="box"><h3>ข้อมูลคำสั่งซื้อ</h3><p>เลขคำสั่งซื้อ: ${esc(orderNumber)}<br>${order.guest_email ? 'อีเมล: ' + esc(order.guest_email) + '<br>' : ''}ช่องทาง: ขายปลีกออนไลน์</p></div>
+    </div>
+    <table>
+        <thead><tr><th style="width:40px;text-align:center;">#</th><th>รายการสินค้า</th><th style="width:60px;text-align:center;">จำนวน</th><th style="width:100px;text-align:right;">ราคา/หน่วย</th><th style="width:110px;text-align:right;">รวม</th></tr></thead>
+        <tbody>${itemRows || '<tr><td colspan="5" style="text-align:center;color:#999;">ไม่มีรายการ</td></tr>'}</tbody>
+    </table>
+    <div class="totals">
+        <div class="row"><span>ยอดสินค้า</span><span>${baht(itemTotal)}</span></div>
+        ${discount > 0 ? `<div class="row"><span>ส่วนลด</span><span style="color:#10b981;">-${baht(discount)}</span></div>` : ''}
+        <div class="row"><span>ค่าจัดส่ง</span><span>${baht(shipping)}</span></div>
+        <div class="row grand"><span>ยอดรวมสุทธิ</span><span>${baht(final)}</span></div>
+    </div>
+    <div class="foot">เอกสารนี้เป็นใบส่งสินค้า ไม่ใช่ใบกำกับภาษี • ขอบคุณที่อุดหนุน EKG Shops</div>
+    <div class="noprint" style="text-align:center;margin-top:24px;"><button onclick="window.print()" style="padding:12px 32px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:inherit;">🖨️ พิมพ์</button></div>
+    <script>setTimeout(()=>window.print(),400);<\/script>
+    </body></html>`);
+    w.document.close();
 }
 
 function printShippingLabel(shipmentIndex) {

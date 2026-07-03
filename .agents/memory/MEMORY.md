@@ -1,0 +1,1 @@
+- [Order schema gotchas](order-schema-gotchas.md) — tracking_number lives on order_shipments not orders; shipping fee is match-or-zero (no heaviest-bracket fallback).

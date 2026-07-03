@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ร้านขายปลีกชุดพยาบาล EKG Shops — สั่งซื้อง่าย ไม่ต้องสมัครสมาชิก จัดส่งทั่วประเทศ">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192x192.png">
+    <title>ร้านค้าออนไลน์ | EKG Shops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary: #7c3aed; --primary-dark: #6d28d9; --accent: #ec4899;
+            --green: #10b981; --yellow: #fbbf24; --red: #ef4444;
+            --text: #1f2937; --text-muted: #6b7280; --border: #e5e7eb;
+            --bg: #f9fafb; --white: #ffffff;
+            --card-shadow: 0 2px 12px rgba(0,0,0,0.08); --radius: 14px;
+        }
+        body { font-family: 'Noto Sans Thai', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        a { color: inherit; }
+
+        /* HEADER */
+        .site-header { position: sticky; top: 0; z-index: 200; background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 16px; }
+        .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 12px; }
+        .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; flex-shrink: 0; }
+        .logo-text { font-size: 18px; font-weight: 700; color: var(--primary); }
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .btn-ghost { padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; border: 1.5px solid var(--border); color: var(--text); background: var(--white); transition: all .2s; }
+        .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+        .cart-btn { position: relative; cursor: pointer; background: none; border: 1.5px solid var(--border); border-radius: 10px; padding: 7px 14px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); transition: all .2s; font-family: inherit; }
+        .cart-btn.has-items { border-color: var(--primary); background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; }
+        .cart-badge { position: absolute; top: -7px; right: -7px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; display: none; align-items: center; justify-content: center; border: 2px solid #fff; }
+        .cart-badge.show { display: flex; }
+
+        /* HERO */
+        .hero { background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%); padding: 36px 20px 32px; text-align: center; color: #fff; }
+        .hero h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+        .hero p { font-size: 15px; color: rgba(255,255,255,0.92); max-width: 560px; margin: 0 auto; }
+        .hero-badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+        .hero-badge { background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 6px 14px; font-size: 12.5px; font-weight: 500; color: #fff; }
+
+        /* LAYOUT */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
+        .search-box { flex: 1; min-width: 200px; position: relative; }
+        .search-box input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; }
+        .search-box input:focus { outline: none; border-color: var(--primary); }
+        select.filter { padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; background: var(--white); cursor: pointer; }
+        select.filter:focus { outline: none; border-color: var(--primary); }
+
+        /* PRODUCT GRID */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+        .card { background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--card-shadow); cursor: pointer; transition: transform .2s, box-shadow .2s; display: flex; flex-direction: column; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .card-img { width: 100%; aspect-ratio: 1; background: #f3f4f6; object-fit: cover; }
+        .card-body { padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .card-brand { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+        .card-name { font-size: 13.5px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 37px; }
+        .card-price { margin-top: auto; padding-top: 6px; }
+        .price-old { font-size: 12px; color: var(--text-muted); text-decoration: line-through; }
+        .price-now { font-size: 16px; font-weight: 700; color: var(--primary); }
+        .discount-tag { display: inline-block; background: #fef2f2; color: var(--red); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; margin-left: 6px; }
+        .stock-out { font-size: 11px; color: var(--red); font-weight: 600; }
+        .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+
+        /* MODAL */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); z-index: 500; display: none; align-items: flex-end; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        @media(min-width: 640px){ .modal-overlay { align-items: center; } }
+        .modal { background: var(--white); width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; border-radius: 18px 18px 0 0; animation: slideUp .25s; }
+        @media(min-width: 640px){ .modal { border-radius: 18px; } }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: .5 } to { transform: translateY(0); opacity: 1 } }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--white); z-index: 2; }
+        .modal-header h3 { font-size: 16px; font-weight: 700; }
+        .modal-close { background: #f3f4f6; border: none; width: 32px; height: 32px; border-radius: 8px; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+        .modal-body { padding: 18px; }
+        .modal-img { width: 100%; max-height: 260px; object-fit: contain; border-radius: 12px; background: #f3f4f6; margin-bottom: 14px; }
+
+        /* SKU rows */
+        .sku-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1.5px solid var(--border); border-radius: 12px; margin-bottom: 10px; }
+        .sku-row.selected { border-color: var(--primary); background: #faf5ff; }
+        .sku-info { flex: 1; }
+        .sku-opts { font-size: 13.5px; font-weight: 600; }
+        .sku-price { font-size: 13px; margin-top: 2px; }
+        .qty-ctrl { display: flex; align-items: center; gap: 8px; }
+        .qty-btn { width: 30px; height: 30px; border: 1.5px solid var(--border); background: var(--white); border-radius: 8px; font-size: 16px; cursor: pointer; color: var(--primary); font-weight: 700; }
+        .qty-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .qty-val { min-width: 24px; text-align: center; font-weight: 600; }
+
+        /* Size chart */
+        .sizechart-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+        .sizechart-table th, .sizechart-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: center; }
+        .sizechart-table th { background: #faf5ff; color: var(--primary); font-weight: 600; }
+
+        /* Buttons */
+        .btn-primary { width: 100%; padding: 13px; border: none; border-radius: 12px; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .2s; }
+        .btn-primary:hover { box-shadow: 0 4px 16px rgba(124,58,237,0.4); }
+        .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-outline { width: 100%; padding: 12px; border: 1.5px solid var(--primary); border-radius: 12px; background: var(--white); color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+        /* CART DRAWER */
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 600; display: none; }
+        .drawer-overlay.show { display: block; }
+        .drawer { position: fixed; top: 0; right: 0; height: 100%; width: 100%; max-width: 420px; background: var(--white); z-index: 601; transform: translateX(100%); transition: transform .3s; display: flex; flex-direction: column; }
+        .drawer.show { transform: translateX(0); }
+        .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+        .drawer-header h3 { font-size: 17px; font-weight: 700; }
+        .drawer-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+        .drawer-footer { border-top: 1px solid var(--border); padding: 16px 18px; }
+        .cart-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .cart-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 10px; background: #f3f4f6; flex-shrink: 0; }
+        .cart-item-info { flex: 1; min-width: 0; }
+        .cart-item-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+        .cart-item-opts { font-size: 11.5px; color: var(--text-muted); margin: 2px 0; }
+        .cart-item-price { font-size: 13px; font-weight: 700; color: var(--primary); }
+        .cart-item-remove { background: none; border: none; color: var(--red); font-size: 12px; cursor: pointer; padding: 0; }
+        .summary-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+        .summary-row.total { font-size: 18px; font-weight: 700; color: var(--primary); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
+
+        /* FORM */
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+        .form-group label .req { color: var(--red); }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* QR / payment */
+        .qr-box { text-align: center; }
+        .qr-box img { width: 240px; height: 240px; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: #fff; }
+        .pay-amount { font-size: 26px; font-weight: 700; color: var(--primary); margin: 10px 0; }
+        .info-line { font-size: 13px; color: var(--text-muted); margin: 3px 0; }
+        .alert { padding: 12px 14px; border-radius: 10px; font-size: 13.5px; margin-bottom: 12px; line-height: 1.5; }
+        .alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+        .upload-area { border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; color: var(--text-muted); font-size: 13.5px; transition: all .2s; }
+        .upload-area:hover { border-color: var(--primary); color: var(--primary); }
+        .upload-preview { max-width: 180px; border-radius: 10px; margin: 10px auto 0; display: block; }
+
+        .step-done { text-align: center; padding: 20px 10px; }
+        .step-done .check { width: 64px; height: 64px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 14px; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1f2937; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 14px; z-index: 900; opacity: 0; transition: all .3s; }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* FOOTER */
+        .site-footer { background: var(--white); border-top: 1px solid var(--border); padding: 26px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .site-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .policy-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner">
+            <a href="/shop" class="logo">
+                <span class="logo-icon">E</span>
+                <span class="logo-text">EKG Shops</span>
+            </a>
+            <div class="header-actions">
+                <a href="/shop/track" class="btn-ghost">ติดตามคำสั่งซื้อ</a>
+                <button class="cart-btn" id="cartBtn" onclick="Shop.openCart()">
+                    🛒 <span>ตะกร้า</span>
+                    <span class="cart-badge" id="cartBadge">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>ชุดพยาบาลคุณภาพ พร้อมส่ง</h1>
+        <p>สั่งซื้อง่าย ไม่ต้องสมัครสมาชิก • ราคาพิเศษ • จัดส่งทั่วประเทศ</p>
+        <div class="hero-badges">
+            <span class="hero-badge">✓ ไม่ต้องสมัครสมาชิก</span>
+            <span class="hero-badge">✓ ราคาพิเศษ</span>
+            <span class="hero-badge">✓ จ่ายผ่าน PromptPay</span>
+        </div>
+    </section>
+
+    <div class="container">
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="ค้นหาชุดพยาบาล..." oninput="Shop.onSearch()">
+            </div>
+            <select class="filter" id="brandFilter" onchange="Shop.loadProducts()"><option value="">ทุกแบรนด์</option></select>
+            <select class="filter" id="categoryFilter" onchange="Shop.loadProducts()"><option value="">ทุกหมวดหมู่</option></select>
+        </div>
+        <div id="productGrid" class="grid"></div>
+        <div id="gridState"></div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="policy-links">
+            <a href="#" onclick="Shop.openPolicy();return false;">นโยบายการคืนสินค้า</a>
+            <a href="/shop/track">ติดตามคำสั่งซื้อ</a>
+        </div>
+        <div>© EKG Shops • สินค้ามีปัญหา? <a href="#" onclick="Shop.contactAdmin();return false;">ติดต่อแอดมิน</a></div>
+    </footer>
+
+    <!-- Product modal -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="pmTitle">สินค้า</h3>
+                <button class="modal-close" onclick="Shop.closeModal('productModal')">×</button>
+            </div>
+            <div class="modal-body" id="pmBody"></div>
+        </div>
+    </div>
+
+    <!-- Cart drawer -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="Shop.closeCart()"></div>
+    <div class="drawer" id="cartDrawer">
+        <div class="drawer-header">
+            <h3>ตะกร้าสินค้า</h3>
+            <button class="modal-close" onclick="Shop.closeCart()">×</button>
+        </div>
+        <div class="drawer-body" id="cartBody"></div>
+        <div class="drawer-footer" id="cartFooter"></div>
+    </div>
+
+    <!-- Checkout / payment modal -->
+    <div class="modal-overlay" id="checkoutModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="coTitle">ข้อมูลจัดส่ง</h3>
+                <button class="modal-close" onclick="Shop.closeModal('checkoutModal')">×</button>
+            </div>
+            <div class="modal-body" id="coBody"></div>
+        </div>
+    </div>
+
+    <!-- Generic info modal -->
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="imTitle"></h3>
+                <button class="modal-close" onclick="Shop.closeModal('infoModal')">×</button>
+            </div>
+            <div class="modal-body" id="imBody"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        window.EKG_CONTACT_PHONE = '083-668-2211';
+    </script>
+    <script src="/static/js/shop.js"></script>
+</body>
+</html>
