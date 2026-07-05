@@ -68,6 +68,19 @@
         .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .loading { text-align: center; padding: 60px; color: var(--text-muted); }
 
+        /* MEMBER BANNER */
+        .member-banner { background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 100%); border-bottom: 1px solid #f0abfc; padding: 14px 16px; }
+        .member-banner-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .member-banner-text { display: flex; align-items: center; gap: 10px; }
+        .member-banner-icon { font-size: 26px; flex-shrink: 0; }
+        .member-banner-title { font-size: 14px; font-weight: 700; color: #6d28d9; margin-bottom: 2px; }
+        .member-banner-sub { font-size: 12.5px; color: #7c3aed; opacity: .85; }
+        .member-banner-perks { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+        .member-perk { background: rgba(124,58,237,0.1); color: #6d28d9; font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+        .btn-member { flex-shrink: 0; padding: 10px 20px; background: linear-gradient(135deg, #7c3aed, #ec4899); color: #fff; border: none; border-radius: 22px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; text-decoration: none; white-space: nowrap; transition: box-shadow .2s, transform .15s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-member:hover { box-shadow: 0 4px 16px rgba(124,58,237,0.35); transform: translateY(-1px); }
+        @media(max-width:480px){ .member-banner-inner { flex-direction: column; align-items: flex-start; } .btn-member { width: 100%; justify-content: center; } }
+
         /* MODAL */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); z-index: 500; display: none; align-items: flex-end; justify-content: center; }
         .modal-overlay.show { display: flex; }
@@ -182,6 +195,23 @@
             <span class="hero-badge">✓ จ่ายผ่าน PromptPay</span>
         </div>
     </section>
+
+    <div class="member-banner">
+        <div class="member-banner-inner">
+            <div class="member-banner-text">
+                <div class="member-banner-icon">🎁</div>
+                <div>
+                    <div class="member-banner-title">สมัครสมาชิกฟรี! รับส่วนลดเพิ่มทันที</div>
+                    <div class="member-banner-perks">
+                        <span class="member-perk">💰 ยิ่งซื้อมาก ยิ่งได้ส่วนลดมาก</span>
+                        <span class="member-perk">🎯 ส่วนลดพิเศษจากยอดสะสม</span>
+                        <span class="member-perk">🚀 สิทธิ์ก่อนใคร</span>
+                    </div>
+                </div>
+            </div>
+            <a href="/register" class="btn-member">สมัครสมาชิกฟรี →</a>
+        </div>
+    </div>
 
     <div class="container">
         <div class="toolbar">
