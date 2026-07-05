@@ -153,8 +153,8 @@ const Shop = (() => {
     let sizeChartHtml = '';
     const scg = product.size_chart_group;
     if (scg && scg.columns && scg.columns.length) {
-      const head = scg.columns.map(c => `<th>${esc(c)}</th>`).join('');
-      const rows = (scg.rows || []).map(r => '<tr>' + scg.columns.map(c => `<td>${esc(r[c] || '')}</td>`).join('') + '</tr>').join('');
+      const head = scg.columns.map(c => `<th>${esc(c.name)}${c.unit ? ' (' + esc(c.unit) + ')' : ''}</th>`).join('');
+      const rows = (scg.rows || []).map(r => '<tr>' + scg.columns.map((c, i) => `<td>${esc(i === 0 ? (r.size || '') : (r.values ? r.values[i - 1] : '') || '')}</td>`).join('') + '</tr>').join('');
       sizeChartHtml = `<details style="margin:12px 0"><summary style="cursor:pointer;font-weight:600;color:var(--primary)">📏 ตารางขนาด (${esc(scg.name)})</summary>
         <table class="sizechart-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></details>`;
     } else if (product.size_chart_image_url) {
