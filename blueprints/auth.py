@@ -9,6 +9,7 @@ from blueprints.push_utils import send_push_notification, create_notification, n
 import psycopg2.extras
 import psycopg2
 import bcrypt
+import jwt as pyjwt
 import json, os, re, secrets, time
 from datetime import datetime, timedelta
 from replit.object_storage import Client
@@ -198,7 +199,9 @@ def login_page():
     """Render login page"""
     if 'user_id' in session:
         return redirect('/dashboard')
-    return render_template('login.html')
+    supabase_url = os.environ.get('SUPABASE_URL', '')
+    supabase_anon_key = os.environ.get('SUPABASE_ANON_KEY', '')
+    return render_template('login.html', supabase_url=supabase_url, supabase_anon_key=supabase_anon_key)
 
 @auth_bp.route('/register')
 def register_page():
@@ -207,7 +210,169 @@ def register_page():
     is_admin = role in ('Super Admin', 'Assistant Admin')
     if 'user_id' in session and not is_admin:
         return redirect('/dashboard')
-    return render_template('register.html', preview_mode=is_admin)
+    supabase_url = os.environ.get('SUPABASE_URL', '')
+    supabase_anon_key = os.environ.get('SUPABASE_ANON_KEY', '')
+    return render_template('register.html', preview_mode=is_admin,
+                           supabase_url=supabase_url, supabase_anon_key=supabase_anon_key)
+
+
+# ==================== SUPABASE AUTH ====================
+
+@auth_bp.route('/api/auth/supabase-callback', methods=['POST'])
+def supabase_callback():
+    """Exchange Supabase access_token for a Flask session.
+    Body: { access_token, provider }  (provider = 'email'|'google'|'facebook')
+    """
+    conn = None
+    cursor = None
+    try:
+        data = request.get_json() or {}
+        access_token = (data.get('access_token') or '').strip()
+        if not access_token:
+            return jsonify({'error': 'ไม่พบ access_token'}), 400
+
+        # ── Decode Supabase JWT (HS256 signed with SUPABASE_JWT_SECRET or verify via Supabase API) ──
+        # We use the Supabase REST endpoint to introspect the token safely (no secret required).
+        supabase_url = os.environ.get('SUPABASE_URL', '')
+        anon_key = os.environ.get('SUPABASE_ANON_KEY', '')
+        service_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+
+        import urllib.request as _req
+        import urllib.error as _uerr
+
+        # Call Supabase /auth/v1/user with the user's own token
+        api_req = _req.Request(
+            f'{supabase_url}/auth/v1/user',
+            headers={
+                'apikey': anon_key,
+                'Authorization': f'Bearer {access_token}',
+            }
+        )
+        try:
+            with _req.urlopen(api_req, timeout=10) as resp:
+                supa_user = json.loads(resp.read().decode())
+        except _uerr.HTTPError as e:
+            body = e.read().decode()
+            return jsonify({'error': f'Supabase token ไม่ถูกต้อง: {body}'}), 401
+
+        supabase_uid = supa_user.get('id')
+        email = supa_user.get('email') or ''
+        user_meta = supa_user.get('user_metadata') or {}
+        full_name = (user_meta.get('full_name') or user_meta.get('name') or email.split('@')[0])
+        provider = (supa_user.get('app_metadata') or {}).get('provider', 'email')
+
+        if not supabase_uid:
+            return jsonify({'error': 'ไม่สามารถดึงข้อมูลผู้ใช้จาก Supabase ได้'}), 401
+
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # ── Look up existing user by supabase_uid or email ──
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.username, u.email, u.supabase_uid,
+                   r.name as role, u.reseller_tier_id,
+                   rt.name as reseller_tier
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+            WHERE u.supabase_uid = %s OR (u.email = %s AND %s != '')
+            LIMIT 1
+        ''', (supabase_uid, email, email))
+        user = cursor.fetchone()
+
+        if user:
+            # Update supabase_uid if registered via email previously
+            if not user['supabase_uid']:
+                cursor.execute('UPDATE users SET supabase_uid=%s WHERE id=%s',
+                               (supabase_uid, user['id']))
+                conn.commit()
+        else:
+            # ── Create new Reseller account ──
+            cursor.execute('SELECT id FROM roles WHERE name=%s', ('Reseller',))
+            reseller_role = cursor.fetchone()
+            cursor.execute('SELECT id, name FROM reseller_tiers ORDER BY level_rank ASC LIMIT 1')
+            default_tier = cursor.fetchone()
+
+            # Generate a safe username from email/name
+            base_username = re.sub(r'[^a-z0-9_]', '', (email.split('@')[0]).lower()) or 'user'
+            username = base_username
+            suffix = 1
+            while True:
+                cursor.execute('SELECT id FROM users WHERE username=%s', (username,))
+                if not cursor.fetchone():
+                    break
+                username = f'{base_username}{suffix}'
+                suffix += 1
+
+            # Random password (user will login via Supabase; bcrypt required by schema)
+            rand_pw = secrets.token_hex(32)
+            pw_hash = bcrypt.hashpw(rand_pw.encode(), bcrypt.gensalt()).decode()
+
+            cursor.execute('''
+                INSERT INTO users (full_name, username, password, role_id, reseller_tier_id,
+                                   email, supabase_uid, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (full_name, username, pw_hash, reseller_role['id'],
+                  default_tier['id'] if default_tier else None,
+                  email, supabase_uid, f'[source: {provider}]'))
+            new_id = cursor.fetchone()['id']
+            conn.commit()
+
+            # Re-fetch with joins
+            cursor.execute('''
+                SELECT u.id, u.full_name, u.username, u.email, u.supabase_uid,
+                       r.name as role, u.reseller_tier_id,
+                       rt.name as reseller_tier
+                FROM users u
+                JOIN roles r ON u.role_id = r.id
+                LEFT JOIN reseller_tiers rt ON u.reseller_tier_id = rt.id
+                WHERE u.id = %s
+            ''', (new_id,))
+            user = cursor.fetchone()
+
+            # Notify admins + welcome (background)
+            try:
+                notify_admins_guest_lead(
+                    '🙋 Reseller ใหม่สมัครผ่าน Supabase',
+                    f'{full_name} ({provider}) สมัครสมาชิกใหม่',
+                    notification_type='lead', push_url='/admin',
+                    push_tag=f'new-reseller-{new_id}'
+                )
+                send_welcome_bot_chat(new_id, full_name)
+                if email:
+                    send_welcome_reseller_email(email, full_name)
+            except Exception:
+                pass
+
+        # ── Create Flask session (same as normal login) ──
+        session.clear()
+        session.permanent = True
+        session['user_id'] = user['id']
+        session['username'] = user['username']
+        session['full_name'] = user['full_name']
+        session['role'] = user['role']
+        session['reseller_tier'] = user['reseller_tier']
+        session['_csrf_token'] = secrets.token_hex(32)
+
+        redirect_url = '/admin' if user['role'] in ('Super Admin', 'Assistant Admin') else '/dashboard'
+
+        return jsonify({
+            'message': 'เข้าสู่ระบบสำเร็จ',
+            'redirect': redirect_url,
+            'user': {
+                'id': user['id'],
+                'full_name': user['full_name'],
+                'role': user['role'],
+                'reseller_tier': user['reseller_tier'],
+            }
+        }), 200
+
+    except Exception as e:
+        return handle_error(e)
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @auth_bp.route('/become-reseller')
 def fb_landing_page():

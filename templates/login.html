@@ -295,6 +295,16 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        .btn-facebook {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            width: 100%; padding: 16px 24px; background: #1877f2; color: #fff;
+            border: none; border-radius: 14px; font-size: 16px; font-weight: 600;
+            cursor: pointer; text-decoration: none; transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(24,119,242,0.3); margin-bottom: 16px;
+            font-family: inherit;
+        }
+        .btn-facebook:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(24,119,242,0.4); }
+
         @media (max-width: 480px) {
             .login-container { padding: 40px 28px; border-radius: 20px; }
             .login-header h1 { font-size: 24px; }
@@ -313,7 +323,9 @@
 
         <div id="errorBanner" class="error-banner" style="display:none;"></div>
 
-        <a href="/auth/google" class="btn-google">
+        <div id="authMsg" style="display:none; border-radius:10px; padding:10px 14px; font-size:13px; text-align:center; margin-bottom:14px;"></div>
+
+        <button class="btn-google" id="btnGoogle" onclick="handleGoogle()">
             <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -321,13 +333,18 @@
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
             เข้าสู่ระบบด้วย Google
-        </a>
+        </button>
 
-        <p style="text-align:center; color:rgba(255,255,255,0.65); font-size:13px; line-height:1.6; margin-bottom:4px;">
-            หากยังไม่มีบัญชี ระบบจะสร้างให้อัตโนมัติ<br>เมื่อ Login ด้วย Google ครั้งแรก
+        <button class="btn-facebook" id="btnFacebook" onclick="handleFacebook()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+            เข้าสู่ระบบด้วย Facebook
+        </button>
+
+        <p style="text-align:center; color:rgba(255,255,255,0.55); font-size:12px; margin: 8px 0 4px;">
+            ยังไม่มีบัญชี? <a href="/register" style="color:rgba(255,255,255,0.85);font-weight:600;">สมัครสมาชิกฟรี</a>
         </p>
 
-        <div class="divider"><span>สำหรับ Admin เท่านั้น</span></div>
+        <div class="divider"><span>สำหรับ Admin / เข้าด้วย Username</span></div>
 
         <div class="admin-toggle">
             <button class="admin-toggle-btn" onclick="toggleAdminForm()">
@@ -372,7 +389,64 @@
     </div>
 
     <script src="/static/js/global-alert.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
+        const SUPABASE_URL = {{ supabase_url | tojson }};
+        const SUPABASE_KEY = {{ supabase_anon_key | tojson }};
+        const { createClient } = supabase;
+        const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        function showAuthMsg(text, type) {
+            const el = document.getElementById('authMsg');
+            el.textContent = text;
+            el.style.display = 'block';
+            el.style.background = type === 'error' ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)';
+            el.style.color      = type === 'error' ? '#fca5a5' : '#86efac';
+            el.style.border     = type === 'error' ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(34,197,94,0.4)';
+            el.style.borderRadius = '10px';
+        }
+
+        async function exchangeToken(session) {
+            const res = await fetch('/api/auth/supabase-callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ access_token: session.access_token })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+            showAuthMsg('เข้าสู่ระบบสำเร็จ! กำลังพาไปยังระบบ…', 'success');
+            setTimeout(() => { window.location.href = data.redirect || '/dashboard'; }, 800);
+        }
+
+        // Handle OAuth redirect result on page load
+        sb.auth.onAuthStateChange(async (event, session) => {
+            if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+                try {
+                    showAuthMsg('กำลังตรวจสอบข้อมูล…', 'success');
+                    await exchangeToken(session);
+                } catch (err) {
+                    showAuthMsg(err.message, 'error');
+                }
+            }
+        });
+
+        async function handleGoogle() {
+            const { error } = await sb.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.href }
+            });
+            if (error) showAuthMsg(error.message, 'error');
+        }
+
+        async function handleFacebook() {
+            const { error } = await sb.auth.signInWithOAuth({
+                provider: 'facebook',
+                options: { redirectTo: window.location.href }
+            });
+            if (error) showAuthMsg(error.message, 'error');
+        }
+
         // Show error from URL params
         const params = new URLSearchParams(window.location.search);
         const errorMap = {
