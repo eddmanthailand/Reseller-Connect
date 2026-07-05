@@ -414,6 +414,37 @@
             }
         });
 
+        // Fallback: parse hash token directly on load
+        window.addEventListener('load', async () => {
+            const hash = window.location.hash;
+            if (!hash || !hash.includes('access_token')) return;
+            showMsg('กำลังตรวจสอบข้อมูล…', 'info');
+            try {
+                const { data, error } = await sb.auth.getSession();
+                if (error) { showMsg('❌ ' + error.message, 'error'); return; }
+                if (data && data.session) {
+                    await exchangeToken(data.session);
+                } else {
+                    const params = new URLSearchParams(hash.substring(1));
+                    const accessToken = params.get('access_token');
+                    if (accessToken) {
+                        const res = await fetch('/api/auth/supabase-callback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken })
+                        });
+                        const result = await res.json();
+                        if (!res.ok) { showMsg('❌ ' + (result.error || 'เกิดข้อผิดพลาด'), 'error'); return; }
+                        showMsg('สมัครสมาชิกสำเร็จ!', 'success');
+                        setTimeout(() => { window.location.href = result.redirect || '/dashboard'; }, 800);
+                    }
+                }
+            } catch (err) {
+                showMsg('❌ ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
+            }
+        });
+
         async function handleOAuth(provider) {
             try {
                 showMsg('กำลังเชื่อมต่อ ' + (provider === 'google' ? 'Google' : 'Facebook') + '…', 'info');

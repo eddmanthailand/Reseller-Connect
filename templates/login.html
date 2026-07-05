@@ -426,8 +426,40 @@
                     showAuthMsg('กำลังตรวจสอบข้อมูล…', 'success');
                     await exchangeToken(session);
                 } catch (err) {
-                    showAuthMsg(err.message, 'error');
+                    showAuthMsg('❌ ' + err.message, 'error');
                 }
+            }
+        });
+
+        // Fallback: detect hash-based token on page load (handles cases where onAuthStateChange fires too early)
+        window.addEventListener('load', async () => {
+            const hash = window.location.hash;
+            if (!hash || !hash.includes('access_token')) return;
+            showAuthMsg('กำลังตรวจสอบข้อมูล…', 'success');
+            try {
+                const { data, error } = await sb.auth.getSession();
+                if (error) { showAuthMsg('❌ ' + error.message, 'error'); return; }
+                if (data && data.session) {
+                    await exchangeToken(data.session);
+                } else {
+                    // Parse token directly from hash as last resort
+                    const params = new URLSearchParams(hash.substring(1));
+                    const accessToken = params.get('access_token');
+                    if (accessToken) {
+                        const res = await fetch('/api/auth/supabase-callback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken })
+                        });
+                        const result = await res.json();
+                        if (!res.ok) { showAuthMsg('❌ ' + (result.error || 'เกิดข้อผิดพลาด'), 'error'); return; }
+                        showAuthMsg('เข้าสู่ระบบสำเร็จ!', 'success');
+                        setTimeout(() => { window.location.href = result.redirect || '/dashboard'; }, 800);
+                    }
+                }
+            } catch (err) {
+                showAuthMsg('❌ ' + (err.message || 'เกิดข้อผิดพลาด'), 'error');
             }
         });
 
