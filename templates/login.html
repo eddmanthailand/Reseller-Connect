@@ -431,21 +431,29 @@
             }
         });
 
-        async function handleGoogle() {
-            const { error } = await sb.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.href }
-            });
-            if (error) showAuthMsg(error.message, 'error');
+        async function handleOAuth(provider) {
+            try {
+                showAuthMsg('กำลังเชื่อมต่อ ' + (provider === 'google' ? 'Google' : 'Facebook') + '…', 'success');
+                const redirectTo = window.location.origin + window.location.pathname;
+                const { data, error } = await sb.auth.signInWithOAuth({
+                    provider: provider,
+                    options: { redirectTo: redirectTo }
+                });
+                if (error) {
+                    showAuthMsg('❌ ' + error.message, 'error');
+                    return;
+                }
+                // signInWithOAuth triggers full-page redirect — if we reach here something went wrong
+                if (data && data.url) {
+                    window.location.href = data.url;
+                }
+            } catch (err) {
+                showAuthMsg('❌ ' + (err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่'), 'error');
+            }
         }
 
-        async function handleFacebook() {
-            const { error } = await sb.auth.signInWithOAuth({
-                provider: 'facebook',
-                options: { redirectTo: window.location.href }
-            });
-            if (error) showAuthMsg(error.message, 'error');
-        }
+        async function handleGoogle() { await handleOAuth('google'); }
+        async function handleFacebook() { await handleOAuth('facebook'); }
 
         // Show error from URL params
         const params = new URLSearchParams(window.location.search);

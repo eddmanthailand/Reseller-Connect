@@ -414,21 +414,23 @@
             }
         });
 
-        async function handleGoogle() {
-            const { error } = await sb.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.href }
-            });
-            if (error) showMsg(error.message, 'error');
+        async function handleOAuth(provider) {
+            try {
+                showMsg('กำลังเชื่อมต่อ ' + (provider === 'google' ? 'Google' : 'Facebook') + '…', 'info');
+                const redirectTo = window.location.origin + window.location.pathname;
+                const { data, error } = await sb.auth.signInWithOAuth({
+                    provider: provider,
+                    options: { redirectTo: redirectTo }
+                });
+                if (error) { showMsg('❌ ' + error.message, 'error'); return; }
+                if (data && data.url) { window.location.href = data.url; }
+            } catch (err) {
+                showMsg('❌ ' + (err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่'), 'error');
+            }
         }
 
-        async function handleFacebook() {
-            const { error } = await sb.auth.signInWithOAuth({
-                provider: 'facebook',
-                options: { redirectTo: window.location.href }
-            });
-            if (error) showMsg(error.message, 'error');
-        }
+        async function handleGoogle() { await handleOAuth('google'); }
+        async function handleFacebook() { await handleOAuth('facebook'); }
 
         function toggleEmail() {
             const sec = document.getElementById('emailSection');
